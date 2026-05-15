@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Cross-compile ARMhf
+        run: GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/zenpm
+
+      - name: Cross-compile ARMsf
+        run: GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 go build -o /dev/null ./cmd/zenpm
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: |
+          set -eu
+          find repos/default installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          echo build.sh >> /tmp/zenpm-shell-files.txt
+          xargs shellcheck -x < /tmp/zenpm-shell-files.txt
+
+  shell-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: |
+          set -eu
+          find repos/default installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          echo build.sh >> /tmp/zenpm-shell-files.txt
+          while IFS= read -r file; do sh -n "$file"; done < /tmp/zenpm-shell-files.txt
+

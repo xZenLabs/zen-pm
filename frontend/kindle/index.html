@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Zen Package Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="page">
+        <header class="topbar">
+            <div>
+                <h1>Zen Package Manager123</h1>
+                <p class="subtitle">Package browser</p>
+            </div>
+            <div id="runtimeStatus" class="status-pill">Detecting runtime</div>
+        </header>
+
+        <section class="panel controls">
+            <div class="row path-row">
+                <label for="cmdPath">API base URL</label>
+                <input id="cmdPath" type="text" spellcheck="false" autocomplete="off">
+                <button id="saveCmdBtn" type="button">Save</button>
+                <span id="busyState" class="busy-state">Idle</span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Packages</h2>
+            <p id="hint" class="hint">Connect to server to load packages.</p>
+            <div id="packages" class="package-grid"></div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

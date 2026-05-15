@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "id": "zenpm-kobo",
+  "name": "Zen Package Manager (Kobo Launcher)",
+  "version": "0.1.0",
+  "description": "Install Zen PM NickelMenu entry and Kobo helper scripts.",
+  "platforms": [
+    "kobo"
+  ],
+  "dependencies": [
+    "nickelmenu"
+  ],
+  "hooks": {
+    "install": "scripts/install.sh",
+    "uninstall": "scripts/uninstall.sh"
+  },
+  "launcher": {
+    "kobo": {
+      "type": "nickelmenu",
+      "entry_name": "Zen Package Manager",
+      "location": "main"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "id": "koreader-kindle",
+  "name": "KOReader (Kindle)",
+  "version": "2026.03.0",
+  "description": "Install KOReader and a Kindle launch scriptlet.",
+  "platforms": [
+    "kindle"
+  ],
+  "dependencies": [
+    "kual"
+  ],
+  "hooks": {
+    "install": "scripts/install.sh",
+    "uninstall": "scripts/uninstall.sh"
+  },
+  "constraints": {
+    "abi": [
+      "hf",
+      "sf"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "id": "koreader-kobo",
+  "name": "KOReader (Kobo)",
+  "version": "2026.03.0",
+  "description": "Install KOReader and NickelMenu launch entry on Kobo.",
+  "platforms": [
+    "kobo"
+  ],
+  "dependencies": [
+    "zenpm-kobo"
+  ],
+  "hooks": {
+    "install": "scripts/install.sh",
+    "uninstall": "scripts/uninstall.sh"
+  },
+  "launcher": {
+    "kobo": {
+      "type": "nickelmenu",
+      "entry_name": "KOReader",
+      "location": "main"
+    }
+  }
+}

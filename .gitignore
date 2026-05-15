@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local runtime state
+.zenpm/
+
+# Logs / temp
+*.log
+*.tmp
+
+# Build artifacts
+dist/

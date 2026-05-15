@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<widget id="com.zenpm.waf" version="0.1" viewmodes="application"
+    xmlns="http://www.w3.org/ns/widgets"
+    xmlns:kindle="http://kindle.amazon.com/ns/widget-extensions">
+    <name xml:lang="en">Zen Package Manager</name>
+    <description xml:lang="en">Kindle package manager frontend.</description>
+
+    <content src="index.html" />
+
+    <feature name="http://kindle.amazon.com/apis" required="true">
+        <param name="appmgr" value="yes" />
+        <param name="net" value="yes" />
+        <param name="messaging" value="yes" />
+        <param name="chrome" value="yes" />
+    </feature>
+
+    <!-- Declare which apps this WAF is allowed to message (required for system chrome). -->
+    <kindle:messaging>
+        <kindle:app name="com.lab126.pillow" value="yes" />
+        <kindle:app name="com.lab126.chromebar" value="yes" />
+    </kindle:messaging>
+
+    <!-- Enable the native OS search bar / 3-dot system menu. -->
+    <kindle:chrome>
+        <kindle:asset key="configureSearchBar" value="system" />
+    </kindle:chrome>
+
+    <kindle:permissions>
+        <kindle:permission name="local-port-access" />
+    </kindle:permissions>
+
+    <!-- Bypass Amazon proxy for local requests; disable DNS/caching overhead. -->
+    <kindle:network>
+        <kindle:asset key="overrideProxy" value="none" />
+        <kindle:asset key="initialDNS" value="false" />
+        <kindle:asset key="enableCaching" value="false" />
+        <kindle:asset key="maxConnections" value="6" />
+        <kindle:asset key="maxConnectionsPerHost" value="2" />
+    </kindle:network>
+
+    <kindle:settings>
+        <kindle:setting name="internetRequired" value="no" />
+        <kindle:setting name="saveContext" value="no" />
+        <kindle:setting name="disable-wua-features" value="yes" />
+    </kindle:settings>
+</widget>
