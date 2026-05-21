@@ -1,31 +1,15 @@
 (function () {
-    var APP_ID = "com.zenpm.waf";
-    var DEFAULT_API = "http://127.0.0.1:8080";
-    var STORAGE_KEY = "zenpm.api.base";
     var REFRESH_INTERVAL = 5000;
+    var postLog = ZenUtils.postLog;
 
-    var state = { apiBase: DEFAULT_API };
+    var el = { logOutput: document.getElementById("logOutput") };
 
-    var el = {
-        logStatus: document.getElementById("logStatus"),
-        logOutput: document.getElementById("logOutput")
+    window.onerror = function (msg, src, line) {
+        postLog("[log.js] JS ERROR: " + msg + " (" + (src || "?") + ":" + (line || "?") + ")");
+        return false;
     };
 
-    function xhrText(method, path, onSuccess, onError) {
-        var xhr = new XMLHttpRequest();
-        xhr.open(method, state.apiBase + path, true);
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                onSuccess(xhr.responseText || "");
-            } else if (xhr.status === 0) {
-                onError(new Error("Network error"));
-            } else {
-                onError(new Error("HTTP " + xhr.status));
-            }
-        };
-        xhr.send(null);
-    }
+    postLog("[log.js] script loaded");
 
     // Shorten ISO timestamps to HH:MM:SS for the small Kindle screen.
     function trimTimestamps(text) {
@@ -33,24 +17,22 @@
     }
 
     function refreshLog() {
-        xhrText("GET", "/log?tail=500",
+        ZenUtils.xhrText("GET", "/log?tail=500",
             function (log) {
                 var lines = trimTimestamps(log).split("\n");
                 lines.reverse();
                 el.logOutput.textContent = lines.join("\n") || "Log is empty.";
                 el.logOutput.scrollTop = 0;
-                el.logStatus.textContent = "Live";
             },
             function (err) {
-                el.logStatus.textContent = "Error";
                 el.logOutput.textContent = "Could not read log: " + String(err);
             }
         );
     }
 
     function setupChrome() {
-        var k;
-        try { k = window.kindle || top.kindle; } catch (_e) { k = window.kindle; }
+        var k = ZenUtils.getKindle();
+        postLog("[log.js] setupChrome: kindle=" + (k ? "yes" : "no") + " messaging=" + (k && k.messaging ? "yes" : "no"));
         if (!k || !k.messaging) return;
 
         var systemMenu = {
@@ -58,8 +40,9 @@
                 "profile": {
                     "name": "default",
                     "items": [
-                        { "id": "ZENLOG_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh Log",       "position": 0 },
-                        { "id": "ZENLOG_BACK",    "state": "enabled", "handling": "notifyApp", "label": "Back to Packages", "position": 1 }
+                        { "id": "ZENPM_PACKAGES",  "state": "enabled", "handling": "notifyApp", "label": "Packages",     "position": 0 },
+                        { "id": "ZENLOG_REPOS",    "state": "enabled", "handling": "notifyApp", "label": "Repositories", "position": 1 },
+                        { "id": "ZENLOG_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh Log",  "position": 2 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -67,14 +50,17 @@
             }
         };
 
-        k.messaging.receiveMessage("systemMenuItemSelected", function (eventType, id) {
-            if      (id === "ZENLOG_REFRESH") refreshLog();
-            else if (id === "ZENLOG_BACK")    window.location.href = "index.html";
+        k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
+            postLog("[log.js] systemMenuItemSelected: p=" + property + " d=" + data);
+            if (data === "ZENPM_PACKAGES") ZenUtils.goBack();
+            if (data === "ZENLOG_REPOS")    window.location.href = "repos.html";
+            if (data === "ZENLOG_REFRESH")  refreshLog();
         });
 
         if (k.chrome && k.chrome.isDecanterChromeEnabled) {
+            postLog("[log.js] setupChrome: decanter (KPP)");
             k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                "appId": APP_ID,
+                "appId": ZenUtils.APP_ID,
                 "topNavBar": {
                     "template": "title",
                     "title": "ZenPM \u2014 Logs",
@@ -86,8 +72,9 @@
                 "systemMenu": systemMenu
             });
         } else {
+            postLog("[log.js] setupChrome: pillow");
             k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                "appId": APP_ID,
+                "appId": ZenUtils.APP_ID,
                 "searchBar": {
                     "clientParams": {
                         "profile": {
@@ -103,23 +90,34 @@
         }
     }
 
+    var _inited = false;
     function init() {
-        try {
-            var saved = window.localStorage.getItem(STORAGE_KEY);
-            if (saved && saved.trim()) state.apiBase = saved.trim();
-        } catch (_e) {}
+        if (_inited) return;
+        _inited = true;
+        postLog("[log.js] init");
         refreshLog();
         setInterval(refreshLog, REFRESH_INTERVAL);
     }
 
-    var _k;
-    try { _k = window.kindle || top.kindle; } catch (_e) { _k = window.kindle; }
+    var _chromeSetup = false;
+    function trySetupChrome() {
+        if (_chromeSetup) return;
+        _chromeSetup = true;
+        try { setupChrome(); } catch (_e) { postLog("[log.js] setupChrome threw: " + _e); }
+    }
+
+    var _k = ZenUtils.getKindle();
     if (_k && _k.appmgr) {
+        postLog("[log.js] ongo registered");
         _k.appmgr.ongo = function () {
-            try { setupChrome(); } catch (_e) {}
+            postLog("[log.js] ongo fired");
+            trySetupChrome();
             init();
         };
     } else {
-        setTimeout(init, 0);
+        postLog("[log.js] no appmgr: " + (typeof _k));
     }
+
+    // Also attempt chrome setup at load time — ongo may not re-fire on sub-page navigation.
+    setTimeout(function () { trySetupChrome(); init(); }, 0);
 })();

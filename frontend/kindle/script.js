@@ -1,42 +1,24 @@
 (function () {
-    var APP_ID = "com.zenpm.waf";
-    var DEFAULT_API = "http://127.0.0.1:8080";
-    var STORAGE_KEY = "zenpm.api.base";
+    var postLog = ZenUtils.postLog;
+    var dbg     = ZenUtils.postLog;
     var POLL_DELAY = 3500;
 
     var state = {
-        packages: [],
-        busy: false,
-        apiBase: DEFAULT_API,
+        packages:  [],
+        busy:      false,
         connected: false
     };
 
     var el = {
-        runtimeStatus: document.getElementById("runtimeStatus"),
-        saveCmdBtn:    document.getElementById("saveCmdBtn"),
-        cmdPath:       document.getElementById("cmdPath"),
-        hint:          document.getElementById("hint"),
-        packages:      document.getElementById("packages"),
-        busyState:     document.getElementById("busyState")
+        runtimeStatus:   document.getElementById("runtimeStatus"),
+        hint:            document.getElementById("hint"),
+        packages:        document.getElementById("packages"),
+        busyState:       document.getElementById("busyState"),
+        packagesHeading: document.getElementById("packagesHeading"),
+        pkgSearch:       document.getElementById("pkgSearch"),
+        searchClear:     document.getElementById("searchClear")
     };
 
-    // Fire-and-forget POST to /log/client — bridges WAF diagnostics into zenpm.log.
-    // Wrapped in try/catch: old mesquite may reject XHR creation before ongo fires.
-    function postLog(msg) {
-        try {
-            var xhr = new XMLHttpRequest();
-            xhr.open("POST", state.apiBase + "/log/client", true);
-            xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify({"message": msg}));
-        } catch (_e) {}
-    }
-
-    // Mirror diagnostic events to server log (zenpm.log) via fire-and-forget POST.
-    function dbg(msg) {
-        postLog(msg);
-    }
-
-    // Surface uncaught JS errors into the hint element (no output panel on main page).
     window.onerror = function (msg, src, line) {
         var text = "JS ERROR: " + msg + " (" + (src || "?") + ":" + (line || "?") + ")";
         if (el.hint) el.hint.textContent = text;
@@ -48,33 +30,14 @@
 
     function setBusy(flag, message) {
         state.busy = flag;
-        el.busyState.textContent = message || (flag ? "Working" : "Idle");
+        el.busyState.textContent = flag ? (message || "Working") : "";
     }
 
-    // Pure callback XHR - no Promises, compatible with all Kindle WebKit versions.
-    function xhrJSON(method, path, body, onSuccess, onError) {
-        var xhr = new XMLHttpRequest();
-        xhr.open(method, state.apiBase + path, true);
-        if (body !== null && body !== undefined) {
-            xhr.setRequestHeader("Content-Type", "application/json");
-        }
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try { onSuccess(JSON.parse(xhr.responseText)); }
-                catch (_e) { onSuccess(xhr.responseText); }
-            } else if (xhr.status === 0) {
-                onError(new Error("Network error - is daemon running?"));
-            } else {
-                onError(new Error("HTTP " + xhr.status + ": " + xhr.responseText));
-            }
-        };
-        xhr.send(body !== null && body !== undefined ? JSON.stringify(body) : null);
-    }
+    var xhrJSON = ZenUtils.xhrJSON;
 
     function xhrText(method, path, onSuccess, onError) {
         var xhr = new XMLHttpRequest();
-        xhr.open(method, state.apiBase + path, true);
+        xhr.open(method, ZenUtils.API + path, true);
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) return;
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -109,7 +72,7 @@
 
     function detectRuntime() {
         setBusy(true, "Connecting...");
-        dbg("GET /health -> " + state.apiBase + " (attempt " + (_retryCount + 1) + ")");
+        dbg("GET /health -> " + ZenUtils.API + " (attempt " + (_retryCount + 1) + ")");
         xhrJSON("GET", "/health", null,
             function (data) {
                 _retryCount = 0;
@@ -134,27 +97,10 @@
         );
     }
 
-    function readSavedApiBase() {
-        try {
-            var saved = window.localStorage.getItem(STORAGE_KEY);
-            if (saved && saved.trim()) state.apiBase = saved.trim();
-        } catch (_e) {}
-        el.cmdPath.value = state.apiBase;
-    }
-
-    function saveApiBase() {
-        var value = (el.cmdPath.value || "").trim();
-        if (!value) return;
-        state.apiBase = value;
-        try { window.localStorage.setItem(STORAGE_KEY, value); } catch (_e) {}
-        postLog("API base saved: " + value);
-        detectRuntime();
-    }
-
     function refreshPackages() {
         if (state.busy) return;
         if (!state.connected) { detectRuntime(); return; }
-        setBusy(true, "Refreshing...");
+        state.busy = true;
         xhrJSON("POST", "/repo/refresh", null,
             function () {
                 loadPackages(function () { setBusy(false, "Idle"); });
@@ -191,12 +137,17 @@
 
     function renderPackages() {
         el.packages.innerHTML = "";
-        if (!state.packages.length) {
-            el.hint.textContent = "No packages found. Try Refresh Packages.";
+        var query = el.pkgSearch ? el.pkgSearch.value.toLowerCase().trim() : "";
+        var visible = query
+            ? state.packages.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; })
+            : state.packages;
+        el.packagesHeading.textContent = "Packages (" + visible.length + (query ? "/" + state.packages.length : "") + ")";
+        if (!visible.length) {
+            el.hint.textContent = query ? "No packages match \"" + query + "\"." : "No packages found. Try Refresh Packages.";
             return;
         }
-        el.hint.textContent = "Showing " + state.packages.length + " package(s).";
-        for (var _i = 0; _i < state.packages.length; _i++) {
+        el.hint.textContent = "";
+        for (var _i = 0; _i < visible.length; _i++) {
             (function (pkg) {
                 var card = document.createElement("article");
                 card.className = "package-card";
@@ -226,7 +177,7 @@
 
                 var actionBtn = document.createElement("button");
                 actionBtn.type = "button";
-                actionBtn.className = pkg.installed ? "danger" : "primary";
+                actionBtn.className = pkg.installed ? "danger" : "";
                 actionBtn.textContent = pkg.installed ? "Uninstall" : "Install";
                 actionBtn.disabled = state.busy;
                 actionBtn.onclick = function () { performPackageAction(pkg); };
@@ -236,15 +187,12 @@
                 card.appendChild(badges);
                 card.appendChild(actionBtn);
                 el.packages.appendChild(card);
-            })(state.packages[_i]);
+            })(visible[_i]);
         }
     }
 
-    // Register native Kindle OS system chrome (3-dot menu).
-    // Mirrors KindleForge: decanter (KPP/newer) vs pillow (older).
     function setupChrome() {
-        var k;
-        try { k = window.kindle || top.kindle; } catch (_e) { k = window.kindle; }
+        var k = ZenUtils.getKindle();
         if (!k) { dbg("setupChrome: no window.kindle"); return; }
         if (!k.messaging) { dbg("setupChrome: no kindle.messaging"); return; }
 
@@ -253,8 +201,9 @@
                 "profile": {
                     "name": "default",
                     "items": [
-                        { "id": "ZENPM_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh Packages", "position": 0 },
-                        { "id": "ZENPM_DEBUGLOG", "state": "enabled", "handling": "notifyApp", "label": "Debug Logs",        "position": 1 }
+                        { "id": "ZENPM_REPOS",    "state": "enabled", "handling": "notifyApp", "label": "Repositories",     "position": 0 },
+                        { "id": "ZENPM_DEBUGLOG", "state": "enabled", "handling": "notifyApp", "label": "Debug Logs",        "position": 1 },
+                        { "id": "ZENPM_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh Packages", "position": 2 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -262,15 +211,16 @@
             }
         };
 
-        k.messaging.receiveMessage("systemMenuItemSelected", function (eventType, id) {
-            if      (id === "ZENPM_REFRESH")  refreshPackages();
-            else if (id === "ZENPM_DEBUGLOG") window.location.href = "log.html";
+        k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
+            if      (data === "ZENPM_REFRESH")  refreshPackages();
+            else if (data === "ZENPM_REPOS")    window.location.href = "repos.html";
+            else if (data === "ZENPM_DEBUGLOG") window.location.href = "log.html";
         });
 
         if (k.chrome && k.chrome.isDecanterChromeEnabled) {
             dbg("setupChrome: decanter (KPP)");
             k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                "appId": APP_ID,
+                "appId": ZenUtils.APP_ID,
                 "topNavBar": {
                     "template": "title",
                     "title": "Zen Package Manager",
@@ -284,7 +234,7 @@
         } else {
             dbg("setupChrome: pillow");
             k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                "appId": APP_ID,
+                "appId": ZenUtils.APP_ID,
                 "searchBar": {
                     "clientParams": {
                         "profile": {
@@ -301,7 +251,20 @@
     }
 
     function bindEvents() {
-        el.saveCmdBtn.addEventListener("click", saveApiBase);
+        if (el.pkgSearch) {
+            el.pkgSearch.addEventListener("input", function () {
+                if (el.searchClear) el.searchClear.style.visibility = el.pkgSearch.value ? "visible" : "hidden";
+                renderPackages();
+            });
+        }
+        if (el.searchClear) {
+            el.searchClear.onclick = function () {
+                el.pkgSearch.value = "";
+                el.searchClear.style.visibility = "hidden";
+                renderPackages();
+                el.pkgSearch.focus();
+            };
+        }
     }
 
     // Guard so init() fires exactly once.
@@ -310,15 +273,13 @@
         if (_inited) return;
         _inited = true;
         dbg("init");
-        readSavedApiBase();
         bindEvents();
         detectRuntime();
     }
 
     // setupChrome MUST run inside ongo — the messaging bridge isn't live until
     // the WAF framework calls ongo. Sending configureChrome before that silently drops.
-    var _k;
-    try { _k = window.kindle || top.kindle; } catch (_e) { _k = window.kindle; }
+    var _k = ZenUtils.getKindle();
     if (_k && _k.appmgr) {
         dbg("ongo registered");
         _k.appmgr.ongo = function () {

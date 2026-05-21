@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>ZenPM — Repositories</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="page">
+        <section class="panel">
+            <h2>Configured Repositories</h2>
+            <div id="repoList" class="repo-list">
+                <p class="hint">Loading...</p>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2 id="formTitle">Add Repository</h2>
+            <div class="repo-form">
+                <label for="repoName">Name</label>
+                <input id="repoName" type="text" placeholder="my-repo" spellcheck="false" autocomplete="off">
+                <label for="repoURL">URL</label>
+                <input id="repoURL" type="text" placeholder="https://example.com/repos/default" spellcheck="false" autocomplete="off">
+                <label for="repoPriority">Priority</label>
+                <input id="repoPriority" type="number" value="100" min="0" max="999">
+                <div class="row" style="gap:10px;display:flex;align-items:center;flex-wrap:wrap;">
+                    <button id="saveRepoBtn" type="button" class="primary">Add Repository</button>
+                    <button id="cancelEditBtn" type="button" style="display:none">Cancel</button>
+                    <span id="repoStatus" class="busy-state"></span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="repos.js"></script>
+</body>
+</html>

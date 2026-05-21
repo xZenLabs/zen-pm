@@ -33,6 +33,8 @@ func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Ser
 func (s *Server) ListenAndServe() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.wrap(s.handleHealth))
+	mux.HandleFunc("/repos", s.wrap(s.handleRepos))
+	mux.HandleFunc("/repos/", s.wrap(s.handleRepoByName))
 	mux.HandleFunc("/repo/refresh", s.wrap(s.handleRepoRefresh))
 	mux.HandleFunc("/packages", s.wrap(s.handlePackageList))
 	mux.HandleFunc("/packages/", s.wrap(s.handlePackageAction))
@@ -101,6 +103,95 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "version": Version})
+}
+
+func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		repos, err := s.repos.List()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		type repoJSON struct {
+			Name     string `json:"name"`
+			URL      string `json:"url"`
+			Priority int    `json:"priority"`
+			Trust    string `json:"trust"`
+		}
+		result := make([]repoJSON, len(repos))
+		for i, e := range repos {
+			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust}
+		}
+		writeJSON(w, http.StatusOK, result)
+	case http.MethodPost:
+		var body struct {
+			Name     string `json:"name"`
+			URL      string `json:"url"`
+			Priority int    `json:"priority"`
+			Trust    string `json:"trust"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" || body.URL == "" {
+			http.Error(w, "name and url required", http.StatusBadRequest)
+			return
+		}
+		if body.Priority == 0 {
+			body.Priority = 100
+		}
+		if body.Trust == "" {
+			body.Trust = "warn-unsigned"
+		}
+		if err := s.repos.Add(body.Name, body.URL, body.Priority, body.Trust); err != nil {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]bool{"ok": true})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/repos/")
+	if name == "" {
+		http.Error(w, "missing name", http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var body struct {
+			URL      string `json:"url"`
+			Priority int    `json:"priority"`
+			Trust    string `json:"trust"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
+			http.Error(w, "url required", http.StatusBadRequest)
+			return
+		}
+		if body.Priority == 0 {
+			body.Priority = 100
+		}
+		if body.Trust == "" {
+			body.Trust = "warn-unsigned"
+		}
+		if err := s.repos.Remove(name); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		if err := s.repos.Add(name, body.URL, body.Priority, body.Trust); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case http.MethodDelete:
+		if err := s.repos.Remove(name); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
