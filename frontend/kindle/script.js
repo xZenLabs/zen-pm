@@ -30,37 +30,17 @@
         state.busy = flag;
     }
 
-    var xhrJSON = ZenUtils.xhrJSON;
+    var fetchJSON = ZenUtils.fetchJSON;
+    var fetchText = ZenUtils.fetchText;
 
-    function xhrText(method, path, onSuccess, onError) {
-        var xhr = new XMLHttpRequest();
-        xhr.open(method, ZenUtils.API + path, true);
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                onSuccess(xhr.responseText || "");
-            } else if (xhr.status === 0) {
-                onError(new Error("Network error"));
-            } else {
-                onError(new Error("HTTP " + xhr.status));
-            }
-        };
-        xhr.send(null);
-    }
-
-    function loadPackages(onDone) {
-        xhrJSON("GET", "/packages?platform=kindle", null,
-            function (data) {
-                state.packages = Array.isArray(data) ? data : [];
-                renderPackages();
-                if (onDone) onDone();
-            },
-            function (err) {
-                el.hint.textContent = "Failed to load packages.";
-                postLog("Error loading packages: " + String(err));
-                if (onDone) onDone();
-            }
-        );
+    function loadPackages() {
+        return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
+            state.packages = Array.isArray(data) ? data : [];
+            renderPackages();
+        }).catch(function (err) {
+            el.hint.textContent = "Failed to load packages.";
+            postLog("Error loading packages: " + String(err));
+        });
     }
 
     var _retryCount = 0;
@@ -69,49 +49,52 @@
 
     function detectRuntime() {
         setBusy(true, "Connecting...");
+        _retryCount = 0;
+        _tryConnect();
+    }
+
+    function _tryConnect() {
         dbg("GET /health -> " + ZenUtils.API + " (attempt " + (_retryCount + 1) + ")");
-        xhrJSON("GET", "/health", null,
-            function (data) {
+        fetchJSON("GET", "/health", null).then(function (data) {
+            _retryCount = 0;
+            state.connected = true;
+            dbg("ZenPM v" + (data.version || "?"));
+            return loadPackages();
+        }).then(function () {
+            setBusy(false, "Idle");
+        }).catch(function (err) {
+            if (_retryCount < MAX_RETRIES) {
+                _retryCount++;
+                dbg("Connecting (" + _retryCount + "/" + MAX_RETRIES + ")...");
+                dbg("Retry in " + (RETRY_DELAY / 1000) + "s: " + String(err));
+                setTimeout(_tryConnect, RETRY_DELAY);
+            } else {
                 _retryCount = 0;
-                state.connected = true;
-                dbg("ZenPM v" + (data.version || "?"));
-                loadPackages(function () { setBusy(false, "Idle"); });
-            },
-            function (err) {
-                if (_retryCount < MAX_RETRIES) {
-                    _retryCount++;
-                    dbg("Connecting (" + _retryCount + "/" + MAX_RETRIES + ")...");
-                    dbg("Retry in " + (RETRY_DELAY / 1000) + "s: " + String(err));
-                    setTimeout(detectRuntime, RETRY_DELAY);
-                } else {
-                    _retryCount = 0;
-                    setBusy(false, "Idle");
-                    el.hint.textContent = "ZenPM daemon not found. Re-run ZenPM.sh to start it.";
-                    postLog("Daemon unreachable after " + MAX_RETRIES + " retries: " + String(err));
-                }
+                setBusy(false, "Idle");
+                el.hint.textContent = "ZenPM daemon not found. Re-run ZenPM.sh to start it.";
+                postLog("Daemon unreachable after " + MAX_RETRIES + " retries: " + String(err));
             }
-        );
+        });
     }
 
     function refreshPackages() {
         if (state.busy) return;
         if (!state.connected) { detectRuntime(); return; }
         state.busy = true;
-        xhrJSON("POST", "/repo/refresh", null,
-            function () {
-                loadPackages(function () { setBusy(false, "Idle"); });
-            },
-            function (err) {
-                postLog("Refresh failed: " + String(err));
-                el.hint.textContent = "Refresh failed.";
-                setBusy(false, "Idle");
-            }
-        );
+        fetchJSON("POST", "/repo/refresh", null).then(function () {
+            return loadPackages();
+        }).then(function () {
+            setBusy(false, "Idle");
+        }).catch(function (err) {
+            postLog("Refresh failed: " + String(err));
+            el.hint.textContent = "Refresh failed.";
+            setBusy(false, "Idle");
+        });
     }
 
     function pollAfterOp() {
         setTimeout(function () {
-            loadPackages(function () { setBusy(false, "Idle"); });
+            loadPackages().then(function () { setBusy(false, "Idle"); });
         }, POLL_DELAY);
     }
 
@@ -119,16 +102,13 @@
         if (!state.connected || state.busy) return;
         var action = pkg.installed ? "uninstall" : "install";
         setBusy(true, (action === "install" ? "Installing " : "Uninstalling ") + pkg.name);
-        xhrJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + action, null,
-            function () {
-                pollAfterOp();
-            },
-            function (err) {
-                postLog("Failed to start " + action + ": " + String(err));
-                el.hint.textContent = "Failed to " + action + " " + pkg.name + ".";
-                setBusy(false, "Idle");
-            }
-        );
+        fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + action, null).then(function () {
+            pollAfterOp();
+        }).catch(function (err) {
+            postLog("Failed to start " + action + ": " + String(err));
+            el.hint.textContent = "Failed to " + action + " " + pkg.name + ".";
+            setBusy(false, "Idle");
+        });
     }
 
     function renderPackages() {

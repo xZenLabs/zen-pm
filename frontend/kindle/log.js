@@ -17,17 +17,14 @@
     }
 
     function refreshLog() {
-        ZenUtils.xhrText("GET", "/log?tail=500",
-            function (log) {
-                var lines = trimTimestamps(log).split("\n");
-                lines.reverse();
-                el.logOutput.textContent = lines.join("\n") || "Log is empty.";
-                el.logOutput.scrollTop = 0;
-            },
-            function (err) {
-                el.logOutput.textContent = "Could not read log: " + String(err);
-            }
-        );
+        ZenUtils.fetchText("GET", "/log?tail=500").then(function (log) {
+            var lines = trimTimestamps(log).split("\n");
+            lines.reverse();
+            el.logOutput.textContent = lines.join("\n") || "Log is empty.";
+            el.logOutput.scrollTop = 0;
+        }).catch(function (err) {
+            el.logOutput.textContent = "Could not read log: " + String(err);
+        });
     }
 
     function setupChrome() {

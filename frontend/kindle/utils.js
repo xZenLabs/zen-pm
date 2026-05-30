@@ -10,47 +10,48 @@ var ZenUtils = (function () {
     // Fire-and-forget POST to /log/client — bridges WAF diagnostics into ZenPM.log.
     function postLog(msg) {
         try {
-            var xhr = new XMLHttpRequest();
-            xhr.open("POST", API + "/log/client", true);
-            xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify({ message: msg }));
+            fetch(API + "/log/client", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: msg })
+            });
         } catch (_e) {}
     }
 
-    function xhrJSON(method, path, body, onSuccess, onError) {
-        var xhr = new XMLHttpRequest();
-        xhr.open(method, API + path, true);
+    // Returns a Promise that resolves with parsed JSON (or raw text on parse error).
+    function fetchJSON(method, path, body) {
+        var opts = { method: method, headers: {} };
         if (body !== null && body !== undefined) {
-            xhr.setRequestHeader("Content-Type", "application/json");
+            opts.headers["Content-Type"] = "application/json";
+            opts.body = JSON.stringify(body);
         }
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try { onSuccess(JSON.parse(xhr.responseText)); }
-                catch (_e) { onSuccess(xhr.responseText); }
-            } else if (xhr.status === 0) {
-                onError(new Error("Network error - is daemon running?"));
-            } else {
-                onError(new Error("HTTP " + xhr.status + ": " + xhr.responseText));
+        return fetch(API + path, opts).then(function (resp) {
+            if (!resp.ok) {
+                return resp.text().then(function (t) {
+                    throw new Error("HTTP " + resp.status + ": " + t);
+                });
             }
-        };
-        xhr.send(body !== null && body !== undefined ? JSON.stringify(body) : null);
+            return resp.text().then(function (t) {
+                try { return JSON.parse(t); }
+                catch (_e) { return t; }
+            });
+        });
     }
 
+    // Returns a Promise that resolves with the response body text.
+    function fetchText(method, path) {
+        return fetch(API + path, { method: method }).then(function (resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.text();
+        });
+    }
+
+    // Backward-compatible callback wrappers — used by pages not yet refactored.
+    function xhrJSON(method, path, body, onSuccess, onError) {
+        fetchJSON(method, path, body).then(onSuccess, onError);
+    }
     function xhrText(method, path, onSuccess, onError) {
-        var xhr = new XMLHttpRequest();
-        xhr.open(method, API + path, true);
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState !== 4) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                onSuccess(xhr.responseText || "");
-            } else if (xhr.status === 0) {
-                onError(new Error("Network error"));
-            } else {
-                onError(new Error("HTTP " + xhr.status));
-            }
-        };
-        xhr.send(null);
+        fetchText(method, path).then(onSuccess, onError);
     }
 
     function goBack() {
@@ -60,16 +61,14 @@ var ZenUtils = (function () {
     // About dialog — triggers native Kindle alert via POST /dialog, falls back to HTML overlay.
     function showAboutModal() {
         postLog("[utils] showAboutModal called");
-        xhrJSON("GET", "/health", null, function (data) {
+        fetchJSON("GET", "/health", null).then(function (data) {
             var version = data && data.version ? 'v' + data.version : 'v?';
             postLog("[utils] got version: " + version + ", sending /dialog");
-            xhrJSON("POST", "/dialog",
-                { title: "Zen PM", message: version },
-                function () { postLog("[utils] native dialog shown"); },
-                function (err) { postLog("[utils] native dialog failed: " + (err && err.message)); _renderAboutOverlay(version); }
-            );
-        }, function (err) {
-            postLog("[utils] /health failed: " + (err && err.message));
+            return fetchJSON("POST", "/dialog", { title: "Zen PM", message: version });
+        }).then(function () {
+            postLog("[utils] native dialog shown");
+        }).catch(function (err) {
+            postLog("[utils] dialog/health failed: " + (err && err.message));
             _renderAboutOverlay('v?');
         });
     }
@@ -214,6 +213,8 @@ var ZenUtils = (function () {
         APP_ID:          APP_ID,
         getKindle:       getKindle,
         postLog:         postLog,
+        fetchJSON:       fetchJSON,
+        fetchText:       fetchText,
         xhrJSON:         xhrJSON,
         xhrText:         xhrText,
         goBack:          goBack,

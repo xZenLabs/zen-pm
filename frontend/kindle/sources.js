@@ -29,13 +29,12 @@
     function loadRepos() {
         postLog("[sources.js] loadRepos");
         el.repoList.innerHTML = "<p class='hint'>Loading\u2026</p>";
-        ZenUtils.xhrJSON("GET", "/repos", null,
-            function (data) { renderRepos(Array.isArray(data) ? data : []); },
-            function (err) {
-                postLog("[sources.js] loadRepos error: " + String(err));
-                el.repoList.innerHTML = "<p class='hint'>Failed to load: " + String(err) + "</p>";
-            }
-        );
+        ZenUtils.fetchJSON("GET", "/repos", null).then(function (data) {
+            renderRepos(Array.isArray(data) ? data : []);
+        }).catch(function (err) {
+            postLog("[sources.js] loadRepos error: " + String(err));
+            el.repoList.innerHTML = "<p class='hint'>Failed to load: " + String(err) + "</p>";
+        });
     }
 
     function renderRepos(repos) {
@@ -136,30 +135,25 @@
             setStatus("Error: " + String(err), true);
         }
 
+        var promise;
         if (state.editingName) {
-            ZenUtils.xhrJSON("PUT", "/repos/" + encodeURIComponent(state.editingName),
-                { url: url, priority: priority, trust: "warn-unsigned" },
-                function () { setStatus("Saved."); onDone(); },
-                onFail
-            );
+            promise = ZenUtils.fetchJSON("PUT", "/repos/" + encodeURIComponent(state.editingName),
+                { url: url, priority: priority, trust: "warn-unsigned" });
         } else {
-            ZenUtils.xhrJSON("POST", "/repos",
-                { name: name, url: url, priority: priority, trust: "warn-unsigned" },
-                function () { setStatus("Added."); onDone(); },
-                onFail
-            );
+            promise = ZenUtils.fetchJSON("POST", "/repos",
+                { name: name, url: url, priority: priority, trust: "warn-unsigned" });
         }
+        promise.then(function () { setStatus("Saved."); onDone(); }).catch(onFail);
     }
 
     function removeRepo(name) {
         postLog("[sources.js] removeRepo: " + name);
-        ZenUtils.xhrJSON("DELETE", "/repos/" + encodeURIComponent(name), null,
-            function () { loadRepos(); },
-            function (err) {
-                postLog("[sources.js] removeRepo error: " + String(err));
-                setStatus("Error: " + String(err), true);
-            }
-        );
+        ZenUtils.fetchJSON("DELETE", "/repos/" + encodeURIComponent(name), null).then(function () {
+            loadRepos();
+        }).catch(function (err) {
+            postLog("[sources.js] removeRepo error: " + String(err));
+            setStatus("Error: " + String(err), true);
+        });
     }
 
     function setupChrome() {
