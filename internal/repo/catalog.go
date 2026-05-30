@@ -96,23 +96,50 @@ type indexJSON struct {
 	} `json:"packages"`
 }
 
-// FetchCatalog downloads index.json from a repo URL and returns its entries.
+// kfRegistryEntry mirrors the KindleForge registry.json format (flat JSON array).
+type kfRegistryEntry struct {
+	Name         string   `json:"name"`
+	URI          string   `json:"uri"`
+	Description  string   `json:"description"`
+	Author       string   `json:"author"`
+	ABI          []string `json:"ABI"`
+	Dependencies []string `json:"dependencies"`
+	Tags         []string `json:"tags"`
+}
+
+// FetchCatalog downloads the repo catalog, auto-detecting between ZenPM index.json
+// and KindleForge registry.json formats.
 func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	// Try ZenPM index.json first.
 	indexURL := joinURL(repoURL, "index.json")
 	log.Infof("Fetching %s", indexURL)
 	data, err := fetchBytes(indexURL)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", indexURL, err)
+		// Fall back to KindleForge registry.json.
+		log.Infof("index.json failed (%v), trying registry.json", err)
+		return fetchKindleForgeCatalog(repoName, repoURL, priority, cacheDir)
 	}
 
 	// Cache raw index for debugging.
 	os.WriteFile(filepath.Join(cacheDir, "index-"+repoName+".json"), data, 0644)
 
+	// Try ZenPM format first (object with "packages" key).
 	var idx indexJSON
-	if err := json.Unmarshal(data, &idx); err != nil {
-		return nil, fmt.Errorf("parse index.json from %s: %w", repoName, err)
+	if err := json.Unmarshal(data, &idx); err == nil && len(idx.Packages) > 0 {
+		return parseZenPMCatalog(repoName, repoURL, priority, idx), nil
 	}
 
+	// Try KindleForge format (top-level array).
+	var kfEntries []kfRegistryEntry
+	if err := json.Unmarshal(data, &kfEntries); err == nil && len(kfEntries) > 0 {
+		return parseKindleForgeCatalog(repoName, repoURL, priority, kfEntries), nil
+	}
+
+	return nil, fmt.Errorf("unrecognized catalog format from %s", repoName)
+}
+
+// parseZenPMCatalog converts the ZenPM index.json format to CatalogEntry list.
+func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []*CatalogEntry {
 	var entries []*CatalogEntry
 	for _, p := range idx.Packages {
 		entries = append(entries, &CatalogEntry{
@@ -130,10 +157,52 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 			Size:         p.Size,
 		})
 	}
-	return entries, nil
+	return entries
 }
 
-// MergeCatalogs deduplicates by package ID, preferring lower priority number (higher priority).
+// parseKindleForgeCatalog converts the KindleForge registry.json flat array to CatalogEntry list.
+func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []kfRegistryEntry) []*CatalogEntry {
+	var result []*CatalogEntry
+	for _, e := range entries {
+		if e.URI == "" {
+			continue
+		}
+		result = append(result, &CatalogEntry{
+			Repo:         repoName,
+			Priority:     priority,
+			ID:           e.URI,
+			Name:         e.Name,
+			Version:      "0.0.0", // KindleForge registry has no version field
+			Platforms:    []string{"kindle"}, // KindleForge is Kindle-only
+			Deps:         e.Dependencies,
+			InstallURL:   resolveURL(repoURL, e.URI+"/install.sh"),
+			UninstallURL: resolveURL(repoURL, e.URI+"/uninstall.sh"),
+			ManifestURL:  "",
+			SHA256:       "",
+			Size:         "",
+		})
+	}
+	return result
+}
+
+// fetchKindleForgeCatalog fetches registry.json from the repo URL.
+func fetchKindleForgeCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	regURL := joinURL(repoURL, "registry.json")
+	log.Infof("Fetching KindleForge registry: %s", regURL)
+	data, err := fetchBytes(regURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", regURL, err)
+	}
+
+	os.WriteFile(filepath.Join(cacheDir, "index-"+repoName+".json"), data, 0644)
+
+	var entries []kfRegistryEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("parse registry.json from %s: %w", repoName, err)
+	}
+	log.Infof("KindleForge registry %s: %d packages", repoName, len(entries))
+	return parseKindleForgeCatalog(repoName, repoURL, priority, entries), nil
+}
 func MergeCatalogs(all []*CatalogEntry) []*CatalogEntry {
 	sort.SliceStable(all, func(i, j int) bool {
 		if all[i].Priority != all[j].Priority {

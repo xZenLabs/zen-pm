@@ -17,77 +17,18 @@
     }
 
     function refreshLog() {
-        ZenUtils.xhrText("GET", "/log?tail=500",
-            function (log) {
-                var lines = trimTimestamps(log).split("\n");
-                lines.reverse();
-                el.logOutput.textContent = lines.join("\n") || "Log is empty.";
-                el.logOutput.scrollTop = 0;
-            },
-            function (err) {
-                el.logOutput.textContent = "Could not read log: " + String(err);
-            }
-        );
+        ZenUtils.fetchText("GET", "/log?tail=500").then(function (log) {
+            var lines = trimTimestamps(log).split("\n");
+            lines.reverse();
+            el.logOutput.textContent = lines.join("\n") || "Log is empty.";
+            el.logOutput.scrollTop = 0;
+        }).catch(function (err) {
+            el.logOutput.textContent = "Could not read log: " + String(err);
+        });
     }
 
     function setupChrome() {
-        var k = ZenUtils.getKindle();
-        postLog("[log.js] setupChrome: kindle=" + (k ? "yes" : "no") + " messaging=" + (k && k.messaging ? "yes" : "no"));
-        if (!k || !k.messaging) return;
-
-        var systemMenu = {
-            "clientParams": {
-                "profile": {
-                    "name": "default",
-                    "items": [
-                        { "id": "ZENPM_PACKAGES",  "state": "enabled", "handling": "notifyApp", "label": "Packages",     "position": 0 },
-                        { "id": "ZENLOG_REPOS",    "state": "enabled", "handling": "notifyApp", "label": "Repositories", "position": 1 },
-                        { "id": "ZENLOG_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh Log",  "position": 2 }
-                    ],
-                    "selectionMode": "none",
-                    "closeOnUse": true
-                }
-            }
-        };
-
-        k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            postLog("[log.js] systemMenuItemSelected: p=" + property + " d=" + data);
-            if (data === "ZENPM_PACKAGES") ZenUtils.goBack();
-            if (data === "ZENLOG_REPOS")    window.location.href = "repos.html";
-            if (data === "ZENLOG_REFRESH")  refreshLog();
-        });
-
-        if (k.chrome && k.chrome.isDecanterChromeEnabled) {
-            postLog("[log.js] setupChrome: decanter (KPP)");
-            k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "topNavBar": {
-                    "template": "title",
-                    "title": "ZenPM \u2014 Logs",
-                    "buttons": [
-                        { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
-                        { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
-                    ]
-                },
-                "systemMenu": systemMenu
-            });
-        } else {
-            postLog("[log.js] setupChrome: pillow");
-            k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "searchBar": {
-                    "clientParams": {
-                        "profile": {
-                            "name": "default",
-                            "buttons": [
-                                { "id": "menu", "state": "enabled", "handling": "system" }
-                            ]
-                        }
-                    }
-                },
-                "systemMenu": systemMenu
-            });
-        }
+        ZenUtils.setupPageChrome('Zen PM - Debug', refreshLog);
     }
 
     var _inited = false;

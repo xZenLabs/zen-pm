@@ -3,7 +3,7 @@ set -eu
 
 ONBOARD_DIR="/mnt/onboard"
 ADDS_DIR="$ONBOARD_DIR/.adds"
-ZENPM_DIR="$ADDS_DIR/zenpm"
+ZENPM_DIR="$ADDS_DIR/ZenPM"
 NM_DIR="$ADDS_DIR/nm"
 
 if [ ! -d "$ONBOARD_DIR" ]; then
@@ -11,7 +11,7 @@ if [ ! -d "$ONBOARD_DIR" ]; then
     exit 1
 fi
 
-rm -f "$NM_DIR/zenpm-main"
+rm -f "$NM_DIR/ZenPM-main"
 rm -rf "$ZENPM_DIR"
 sync
 

@@ -5,39 +5,25 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Zen Package Manager</title>
+    <title>Zen PM - Home</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="page">
-        <header class="topbar">
-            <div class="search-pill">
-                <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="8"/>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                <div class="search-row">
-                    <span class="search-input-wrap">
-                        <input id="pkgSearch" type="text" placeholder="Search..." autocomplete="off" spellcheck="false">
-                    </span>
-                    <span id="searchClear" class="search-clear" role="button" tabindex="0" aria-label="Clear search">&times;</span>
-                </div>
-            </div>
-        </header>
-
         <section class="panel">
-            <h2 id="packagesHeading">Packages</h2>
-            <p id="hint" class="hint">Connect to server to load packages.</p>
-            <div id="packages" class="package-grid"></div>
+            <h2>Featured</h2>
+            <p id="featuredHint" class="hint">Featured packages coming soon.</p>
+            <div id="featuredList" class="package-grid"></div>
         </section>
-
-        <footer class="page-footer">
-            <span id="busyState" class="busy-state"></span>
-            <span id="runtimeStatus">Detecting runtime…</span>
-        </footer>
     </div>
 
+    <script src="polyfill.js"></script>
     <script src="utils.js"></script>
-    <script src="script.js"></script>
+    <script>
+        ZenUtils.postLog("[home] script loaded");
+        ZenUtils.renderNavbar('home');
+
+        ZenUtils.setupPageChrome('Zen PM - Home', function () { location.reload(); });
+    </script>
 </body>
 </html>

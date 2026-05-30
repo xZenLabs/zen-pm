@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	defaultKindleHome = "/mnt/us/zenpm"
-	defaultKoboHome   = "/mnt/onboard/.adds/zenpm"
+	defaultKindleHome = "/mnt/us/ZenPM"
+	defaultKoboHome   = "/mnt/onboard/.adds/ZenPM"
 )
 
 // State holds all resolved paths for ZenPM's working directories.
@@ -53,7 +53,7 @@ func Init(platform string) (*State, error) {
 		TmpDir:      filepath.Join(home, "tmp"),
 		LockDir:     filepath.Join(home, "locks"),
 		JournalDir:  filepath.Join(home, "journal"),
-		LogFile:     filepath.Join(home, "zenpm.log"),
+		LogFile:     filepath.Join(home, "ZenPM.log"),
 	}
 
 	for _, dir := range []string{
@@ -78,23 +78,29 @@ func seedReposDB(s *State) error {
 	if _, err := os.Stat(s.ReposDB); err == nil {
 		return nil // already exists
 	}
-	url := os.Getenv("ZENPM_DEFAULT_REPO_URL")
-	if url == "" {
-		// Derive repos path relative to binary: binary at <root>/backend/zenpm,
-		// repos at <root>/repos/default.
-		if exe, err := os.Executable(); err == nil {
-			candidate := filepath.Join(filepath.Dir(filepath.Dir(exe)), "repos", "default")
-			if _, err := os.Stat(candidate); err == nil {
-				url = "file://" + candidate
-			}
+
+	// Default repos seeded on first run.
+	defaults := []RepoEntry{
+		{Name: "kindle-forge", URL: "https://kf.penguins184.xyz/", Priority: 10, Trust: "warn-unsigned", Default: true},
+	}
+
+	// Allow override via env var for custom setups.
+	if url := os.Getenv("ZENPM_DEFAULT_REPO_URL"); url != "" {
+		defaults = append(defaults, RepoEntry{
+			Name: "default", URL: url, Priority: 100, Trust: "warn-unsigned", Default: true,
+		})
+	}
+
+	s.SeededRepoURL = defaults[0].URL
+	var sb strings.Builder
+	for _, r := range defaults {
+		defFlag := ""
+		if r.Default {
+			defFlag = "default"
 		}
+		fmt.Fprintf(&sb, "%s|%s|%d|%s|%s\n", r.Name, r.URL, r.Priority, r.Trust, defFlag)
 	}
-	if url == "" {
-		url = "file://repos/default"
-	}
-	// Write before logging since log may not be initialized yet; caller logs after Init.
-	s.SeededRepoURL = url
-	return os.WriteFile(s.ReposDB, []byte("default|"+url+"|100|warn-unsigned\n"), 0644)
+	return os.WriteFile(s.ReposDB, []byte(sb.String()), 0644)
 }
 
 func seedInstalledDB(s *State) error {
@@ -120,11 +126,14 @@ func (s *State) LockRelease(name string) {
 // --- Repo entries ---
 
 // RepoEntry represents one line in repos.db.
+// Format: name|url|priority|trust|default
+// The "default" field is "default" for built-in repos, "" for user-added.
 type RepoEntry struct {
 	Name     string
 	URL      string
 	Priority int
 	Trust    string
+	Default  bool
 }
 
 func (s *State) ReadRepos() ([]RepoEntry, error) {
@@ -138,14 +147,16 @@ func (s *State) ReadRepos() ([]RepoEntry, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		parts := strings.SplitN(line, "|", 4)
+		parts := strings.SplitN(line, "|", 5)
 		if len(parts) < 4 {
 			continue
 		}
 		var priority int
 		fmt.Sscanf(parts[2], "%d", &priority)
+		isDefault := len(parts) >= 5 && parts[4] == "default"
 		repos = append(repos, RepoEntry{
 			Name: parts[0], URL: parts[1], Priority: priority, Trust: parts[3],
+			Default: isDefault,
 		})
 	}
 	return repos, nil
@@ -154,7 +165,11 @@ func (s *State) ReadRepos() ([]RepoEntry, error) {
 func (s *State) WriteRepos(repos []RepoEntry) error {
 	var sb strings.Builder
 	for _, r := range repos {
-		fmt.Fprintf(&sb, "%s|%s|%d|%s\n", r.Name, r.URL, r.Priority, r.Trust)
+		defFlag := ""
+		if r.Default {
+			defFlag = "default"
+		}
+		fmt.Fprintf(&sb, "%s|%s|%d|%s|%s\n", r.Name, r.URL, r.Priority, r.Trust, defFlag)
 	}
 	return os.WriteFile(s.ReposDB, []byte(sb.String()), 0644)
 }

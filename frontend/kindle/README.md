@@ -4,9 +4,16 @@ This folder contains the first Zen PM Kindle frontend shell.
 
 ## Files
 
-- index.html - package browser shell.
-- style.css - basic responsive styling.
-- script.js - package loading and action wiring.
+- index.html - home page with featured packages placeholder.
+- packages.html - package browser shell (install/uninstall).
+- sources.html - repository source management.
+- log.html - debug log viewer.
+- style.css - shared styling including bottom navbar.
+- script.js - package loading and action wiring (used by packages.html).
+- sources.js - repository CRUD logic.
+- log.js - log viewer logic.
+- utils.js - shared utilities and navbar rendering.
+- navbar.js - (deprecated; merged into utils.js).
 - config.xml - WAF metadata and Kindle API permissions.
 
 ## Runtime assumptions

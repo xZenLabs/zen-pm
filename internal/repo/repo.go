@@ -35,6 +35,9 @@ func (m *Manager) Add(name, url string, priority int, trust string) error {
 	}
 	for _, r := range repos {
 		if r.Name == name {
+			if r.Default {
+				return fmt.Errorf("cannot replace default repo %q", name)
+			}
 			return fmt.Errorf("repo %q already exists", name)
 		}
 	}
@@ -51,6 +54,9 @@ func (m *Manager) Remove(name string) error {
 	found := false
 	for _, r := range repos {
 		if r.Name == name {
+			if r.Default {
+				return fmt.Errorf("cannot remove default repo %q", name)
+			}
 			found = true
 		} else {
 			out = append(out, r)

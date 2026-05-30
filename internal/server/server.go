@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -40,6 +41,7 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/packages/", s.wrap(s.handlePackageAction))
 	mux.HandleFunc("/log", s.wrap(s.handleLog))
 	mux.HandleFunc("/log/client", s.wrap(s.handleClientLog))
+	mux.HandleFunc("/dialog", s.wrap(s.handleDialog))
 
 	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
 	if _, err := s.repos.ReadCatalog(); err != nil {
@@ -118,10 +120,11 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 			URL      string `json:"url"`
 			Priority int    `json:"priority"`
 			Trust    string `json:"trust"`
+			Default  bool   `json:"default"`
 		}
 		result := make([]repoJSON, len(repos))
 		for i, e := range repos {
-			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust}
+			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust, Default: e.Default}
 		}
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodPost:
@@ -157,8 +160,23 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
+
+	// Check if this is a default repo before allowing mutation.
+	repos, _ := s.repos.List()
+	isDefault := false
+	for _, repo := range repos {
+		if repo.Name == name && repo.Default {
+			isDefault = true
+			break
+		}
+	}
+
 	switch r.Method {
 	case http.MethodPut:
+		if isDefault {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot modify default repo"})
+			return
+		}
 		var body struct {
 			URL      string `json:"url"`
 			Priority int    `json:"priority"`
@@ -184,6 +202,10 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	case http.MethodDelete:
+		if isDefault {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot remove default repo"})
+			return
+		}
 		if err := s.repos.Remove(name); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
@@ -334,4 +356,47 @@ func tailLog(path string, n int) (string, error) {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// handleDialog shows a native Kindle UI alert dialog via LIPC pillowAlert.
+// Uses the same shell-based approach as KindleForge's KFPM.
+func (s *Server) handleDialog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Title   string `json:"title"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" {
+		http.Error(w, "title required", http.StatusBadRequest)
+		return
+	}
+
+	log.Infof("Dialog requested: title=%q message=%q", body.Title, body.Message)
+
+	titleEsc := strings.ReplaceAll(body.Title, `"`, `\"`)
+	msgEsc := strings.ReplaceAll(body.Message, `"`, `\"`)
+
+	script := fmt.Sprintf(
+		`JSON='{"clientParams":{"alertId":"appAlert1","show":true,"customStrings":[{"matchStr":"alertTitle","replaceStr":"%s"},{"matchStr":"alertText","replaceStr":"%s"}]}}'
+lipc-set-prop com.lab126.pillow pillowAlert "$JSON"`,
+		titleEsc, msgEsc,
+	)
+
+	log.Infof("Running dialog script: %s", script)
+
+	cmd := exec.Command("/bin/sh", "-c", script)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Warnf("Native dialog failed: %v — output: %s", err, string(out))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if len(out) > 0 {
+		log.Infof("Dialog command output: %s", string(out))
+	}
+	log.Infof("Dialog shown successfully")
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

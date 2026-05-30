@@ -241,7 +241,7 @@ func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, args []st
 }
 
 func die(msg string) {
-	fmt.Fprintln(os.Stderr, "[zenpm] "+msg)
+	fmt.Fprintln(os.Stderr, "[ZenPM] "+msg)
 	os.Exit(1)
 }
 
