@@ -7,15 +7,13 @@
         packages:  [],
         busy:      false,
         connected: false,
-        pendingOp: null  // { id, action, wasInstalled }
+        pendingOp: null
     };
 
     var el = {
         hint:            document.getElementById("hint"),
-        packages:        document.getElementById("packages"),
-        packagesHeading: document.getElementById("packagesHeading"),
-        pkgSearch:       document.getElementById("pkgSearch"),
-        searchClear:     document.getElementById("searchClear")
+        installedList:   document.getElementById("installedList"),
+        installedHeading: document.getElementById("installedHeading")
     };
 
     window.onerror = function (msg, src, line) {
@@ -25,7 +23,7 @@
         return false;
     };
 
-    dbg("script loaded");
+    dbg("[installed] script loaded");
 
     function setBusy(flag, message) {
         state.busy = flag;
@@ -70,15 +68,14 @@
     }
 
     var fetchJSON = ZenUtils.fetchJSON;
-    var fetchText = ZenUtils.fetchText;
 
     function loadPackages() {
         return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
             state.packages = Array.isArray(data) ? data : [];
-            renderPackages();
+            renderInstalled();
         }).catch(function (err) {
             el.hint.textContent = "Failed to load packages.";
-            postLog("Error loading packages: " + String(err));
+            postLog("[installed] Error loading packages: " + String(err));
         });
     }
 
@@ -93,41 +90,24 @@
     }
 
     function _tryConnect() {
-        dbg("GET /health -> " + ZenUtils.API + " (attempt " + (_retryCount + 1) + ")");
+        dbg("[installed] GET /health (attempt " + (_retryCount + 1) + ")");
         fetchJSON("GET", "/health", null).then(function (data) {
             _retryCount = 0;
             state.connected = true;
-            dbg("ZenPM v" + (data.version || "?"));
+            dbg("[installed] ZenPM v" + (data.version || "?"));
             return loadPackages();
         }).then(function () {
             setBusy(false, "");
         }).catch(function (err) {
             if (_retryCount < MAX_RETRIES) {
                 _retryCount++;
-                dbg("Connecting (" + _retryCount + "/" + MAX_RETRIES + ")...");
-                dbg("Retry in " + (RETRY_DELAY / 1000) + "s: " + String(err));
                 setTimeout(_tryConnect, RETRY_DELAY);
             } else {
                 _retryCount = 0;
                 setBusy(false, "");
                 el.hint.textContent = "ZenPM daemon not found. Re-run ZenPM.sh to start it.";
-                postLog("Daemon unreachable after " + MAX_RETRIES + " retries: " + String(err));
+                postLog("[installed] Daemon unreachable after " + MAX_RETRIES + " retries");
             }
-        });
-    }
-
-    function refreshPackages() {
-        if (state.busy) return;
-        if (!state.connected) { detectRuntime(); return; }
-        state.busy = true;
-        fetchJSON("POST", "/repo/refresh", null).then(function () {
-            return loadPackages();
-        }).then(function () {
-            setBusy(false, "");
-        }).catch(function (err) {
-            postLog("Refresh failed: " + String(err));
-            el.hint.textContent = "Refresh failed.";
-            setBusy(false, "");
         });
     }
 
@@ -154,7 +134,7 @@
     }
 
     function performPackageAction(pkg) {
-        dbg("performPackageAction: " + pkg.id + " connected=" + state.connected + " busy=" + state.busy);
+        dbg("[installed] performPackageAction: " + pkg.id + " connected=" + state.connected + " busy=" + state.busy);
         if (!state.connected) {
             el.hint.textContent = "Not connected to daemon. Try reopening the page.";
             return;
@@ -164,85 +144,79 @@
             return;
         }
         var action = pkg.installed ? "uninstall" : "install";
-        dbg("POST /packages/" + pkg.id + "/" + action);
+        dbg("[installed] POST /packages/" + pkg.id + "/" + action);
         setBusy(true, (action === "install" ? "Installing " : "Uninstalling ") + pkg.name);
         state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
         var actionLabel = action === "install" ? "Installing" : "Uninstalling";
         showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", false);
         fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + action, null).then(function () {
-            dbg(action + " started for " + pkg.id);
+            dbg("[installed] " + action + " started for " + pkg.id);
             pollAfterOp();
         }).catch(function (err) {
-            postLog("Failed to start " + action + ": " + String(err));
+            postLog("[installed] Failed to start " + action + ": " + String(err));
             showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err), true);
             state.pendingOp = null;
             setBusy(false, "");
         });
     }
 
-    function renderPackages() {
-        el.packages.innerHTML = "";
-        var query = el.pkgSearch ? el.pkgSearch.value.toLowerCase().trim() : "";
-        var visible = query
-            ? state.packages.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; })
-            : state.packages;
-        el.packagesHeading.textContent = "Search (" + visible.length + (query ? "/" + state.packages.length : "") + ")";
-        if (!visible.length) {
-            el.hint.textContent = query ? "No packages match \"" + query + "\"." : "No packages found. Try Refresh Packages.";
+    function renderInstalled() {
+        el.installedList.innerHTML = "";
+        var installed = [];
+        for (var _i = 0; _i < state.packages.length; _i++) {
+            if (state.packages[_i].installed) {
+                installed.push(state.packages[_i]);
+            }
+        }
+        el.installedHeading.textContent = "Installed (" + installed.length + ")";
+        if (!installed.length) {
+            el.hint.textContent = "No packages installed. Use Search to find and install packages.";
             return;
         }
         el.hint.textContent = "";
-        for (var _i = 0; _i < visible.length; _i++) {
-            el.packages.appendChild(ZenUtils.renderPackageCard(visible[_i], performPackageAction));
+        for (var _j = 0; _j < installed.length; _j++) {
+            el.installedList.appendChild(ZenUtils.renderPackageCard(installed[_j], performPackageAction));
         }
+    }
+
+    function refreshPackages() {
+        if (state.busy) return;
+        if (!state.connected) { detectRuntime(); return; }
+        state.busy = true;
+        fetchJSON("POST", "/repo/refresh", null).then(function () {
+            return loadPackages();
+        }).then(function () {
+            setBusy(false, "");
+        }).catch(function (err) {
+            postLog("[installed] Refresh failed: " + String(err));
+            el.hint.textContent = "Refresh failed.";
+            setBusy(false, "");
+        });
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('Zen PM - Search', refreshPackages);
+        ZenUtils.setupPageChrome('Zen PM - Installed', refreshPackages);
     }
 
-    function bindEvents() {
-        if (el.pkgSearch) {
-            el.pkgSearch.addEventListener("input", function () {
-                if (el.searchClear) el.searchClear.style.visibility = el.pkgSearch.value ? "visible" : "hidden";
-                renderPackages();
-            });
-        }
-        if (el.searchClear) {
-            el.searchClear.onclick = function () {
-                el.pkgSearch.value = "";
-                el.searchClear.style.visibility = "hidden";
-                renderPackages();
-                el.pkgSearch.focus();
-            };
-        }
-    }
-
-    // Guard so init() fires exactly once.
     var _inited = false;
     function init() {
         if (_inited) return;
         _inited = true;
-        dbg("init");
-        bindEvents();
+        dbg("[installed] init");
         detectRuntime();
     }
 
-    // setupChrome MUST run inside ongo — the messaging bridge isn't live until
-    // the WAF framework calls ongo. Sending configureChrome before that silently drops.
     var _k = ZenUtils.getKindle();
     if (_k && _k.appmgr) {
-        dbg("ongo registered");
+        dbg("[installed] ongo registered");
         _k.appmgr.ongo = function () {
-            dbg("ongo fired");
-            try { setupChrome(); } catch (_e) { dbg("setupChrome threw: " + _e); }
+            dbg("[installed] ongo fired");
+            try { setupChrome(); } catch (_e) { dbg("[installed] setupChrome threw: " + _e); }
             init();
         };
     } else {
-        dbg("no appmgr: " + (typeof _k));
+        dbg("[installed] no appmgr: " + (typeof _k));
     }
 
-    // Fallback for browser/non-Kindle context: init data loading without chrome.
-    // Does NOT call setupChrome — messaging is unavailable outside of ongo.
     setTimeout(init, 0);
 })();

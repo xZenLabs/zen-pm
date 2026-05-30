@@ -120,10 +120,11 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 			URL      string `json:"url"`
 			Priority int    `json:"priority"`
 			Trust    string `json:"trust"`
+			Default  bool   `json:"default"`
 		}
 		result := make([]repoJSON, len(repos))
 		for i, e := range repos {
-			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust}
+			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust, Default: e.Default}
 		}
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodPost:
@@ -159,8 +160,23 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing name", http.StatusBadRequest)
 		return
 	}
+
+	// Check if this is a default repo before allowing mutation.
+	repos, _ := s.repos.List()
+	isDefault := false
+	for _, repo := range repos {
+		if repo.Name == name && repo.Default {
+			isDefault = true
+			break
+		}
+	}
+
 	switch r.Method {
 	case http.MethodPut:
+		if isDefault {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot modify default repo"})
+			return
+		}
 		var body struct {
 			URL      string `json:"url"`
 			Priority int    `json:"priority"`
@@ -186,6 +202,10 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	case http.MethodDelete:
+		if isDefault {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot remove default repo"})
+			return
+		}
 		if err := s.repos.Remove(name); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return

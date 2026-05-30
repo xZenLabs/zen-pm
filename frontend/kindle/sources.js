@@ -51,8 +51,20 @@
                 var info = document.createElement("div");
                 info.className = "repo-info";
 
+                var nameWrap = document.createElement("div");
+                nameWrap.className = "repo-name-wrap";
+
                 var name = document.createElement("strong");
                 name.textContent = r.name;
+
+                nameWrap.appendChild(name);
+
+                if (r.default) {
+                    var badge = document.createElement("span");
+                    badge.className = "badge default-badge";
+                    badge.textContent = "default";
+                    nameWrap.appendChild(badge);
+                }
 
                 var urlEl = document.createElement("div");
                 urlEl.className = "repo-url";
@@ -62,27 +74,29 @@
                 meta.className = "repo-meta";
                 meta.textContent = "priority: " + r.priority + " \u2022 trust: " + r.trust;
 
-                info.appendChild(name);
+                info.appendChild(nameWrap);
                 info.appendChild(urlEl);
                 info.appendChild(meta);
 
                 var actions = document.createElement("div");
                 actions.className = "repo-actions";
 
-                var editBtn = document.createElement("button");
-                editBtn.type = "button";
-                editBtn.className = "warn";
-                editBtn.textContent = "Edit";
-                editBtn.onclick = function () { startEdit(r); };
+                if (!r.default) {
+                    var editBtn = document.createElement("button");
+                    editBtn.type = "button";
+                    editBtn.className = "warn";
+                    editBtn.textContent = "Edit";
+                    editBtn.onclick = function () { startEdit(r); };
+                    actions.appendChild(editBtn);
 
-                var removeBtn = document.createElement("button");
-                removeBtn.type = "button";
-                removeBtn.className = "danger";
-                removeBtn.textContent = "Remove";
-                removeBtn.onclick = function () { removeRepo(r.name); };
+                    var removeBtn = document.createElement("button");
+                    removeBtn.type = "button";
+                    removeBtn.className = "danger";
+                    removeBtn.textContent = "Remove";
+                    removeBtn.onclick = function () { removeRepo(r.name); };
+                    actions.appendChild(removeBtn);
+                }
 
-                actions.appendChild(editBtn);
-                actions.appendChild(removeBtn);
                 row.appendChild(info);
                 row.appendChild(actions);
                 el.repoList.appendChild(row);

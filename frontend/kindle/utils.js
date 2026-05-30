@@ -168,14 +168,15 @@ var ZenUtils = (function () {
     }
 
     // Render universal bottom navbar. Call once per page with the active tab id:
-    // 'home', 'sources', 'debug', or 'packages'.
+    // 'home', 'search', 'installed', 'sources', or 'debug'.
     function renderNavbar(activeTab) {
         postLog("[utils] renderNavbar: " + activeTab);
         var tabs = [
-            { id: 'home',     label: 'Home',     icon: 'assets/home.svg',     href: 'index.html' },
-            { id: 'packages', label: 'Packages', icon: 'assets/packages.svg', href: 'packages.html' },
-            { id: 'sources',  label: 'Sources',  icon: 'assets/sources.svg',  href: 'sources.html' },
-            { id: 'debug',    label: 'Debug',    icon: 'assets/debug.svg',    href: 'log.html' }
+            { id: 'home',      label: 'Home',      icon: 'assets/home.svg',      href: 'index.html' },
+            { id: 'sources',   label: 'Sources',    icon: 'assets/sources.svg',   href: 'sources.html' },
+            { id: 'installed', label: 'Installed',  icon: 'assets/packages.svg',  href: 'installed.html' },
+            { id: 'debug',     label: 'Debug',      icon: 'assets/debug.svg',     href: 'log.html' },
+            { id: 'search',    label: 'Search',     icon: 'assets/search.svg',    href: 'packages.html' }
         ];
 
         var nav = document.createElement('nav');
@@ -208,6 +209,49 @@ var ZenUtils = (function () {
         postLog("[utils] navbar appended to body, childCount=" + nav.childElementCount);
     }
 
+    // Shared package card — returns a DOM element. clickHandler receives the pkg object.
+    function renderPackageCard(pkg, clickHandler) {
+        var card = document.createElement("article");
+        card.className = "package-card";
+
+        var title = document.createElement("h3");
+        title.className = "package-name";
+        title.textContent = pkg.name;
+
+        var meta = document.createElement("p");
+        meta.className = "package-meta";
+        meta.textContent = pkg.id + " | v" + pkg.version + " | " + (pkg.repo || "?");
+
+        var badges = document.createElement("div");
+        badges.className = "badges";
+
+        var platBadge = document.createElement("span");
+        platBadge.className = "badge";
+        platBadge.textContent = Array.isArray(pkg.platforms)
+            ? pkg.platforms.join(", ")
+            : String(pkg.platforms || "");
+        badges.appendChild(platBadge);
+
+        var instBadge = document.createElement("span");
+        instBadge.className = "badge " + (pkg.installed ? "installed" : "missing");
+        instBadge.textContent = pkg.installed ? "installed" : "not installed";
+        badges.appendChild(instBadge);
+
+        var actionBtn = document.createElement("button");
+        actionBtn.type = "button";
+        actionBtn.className = pkg.installed ? "danger" : "";
+        actionBtn.textContent = pkg.installed ? "Uninstall" : "Install";
+        if (clickHandler) {
+            actionBtn.addEventListener("click", function () { clickHandler(pkg); }, false);
+        }
+
+        card.appendChild(title);
+        card.appendChild(meta);
+        card.appendChild(badges);
+        card.appendChild(actionBtn);
+        return card;
+    }
+
     return {
         API:             API,
         APP_ID:          APP_ID,
@@ -219,6 +263,7 @@ var ZenUtils = (function () {
         xhrText:         xhrText,
         goBack:          goBack,
         renderNavbar:    renderNavbar,
+        renderPackageCard: renderPackageCard,
         showAboutModal:  showAboutModal,
         setupPageChrome: setupPageChrome
     };
