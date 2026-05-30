@@ -40,9 +40,7 @@
                 "profile": {
                     "name": "default",
                     "items": [
-                        { "id": "ZENPM_PACKAGES",  "state": "enabled", "handling": "notifyApp", "label": "Packages",     "position": 0 },
-                        { "id": "ZENLOG_REPOS",    "state": "enabled", "handling": "notifyApp", "label": "Repositories", "position": 1 },
-                        { "id": "ZENLOG_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh Log",  "position": 2 }
+                        { "id": "ZENLOG_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -52,9 +50,7 @@
 
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
             postLog("[log.js] systemMenuItemSelected: p=" + property + " d=" + data);
-            if (data === "ZENPM_PACKAGES") ZenUtils.goBack();
-            if (data === "ZENLOG_REPOS")    window.location.href = "repos.html";
-            if (data === "ZENLOG_REFRESH")  refreshLog();
+            if (data === "ZENLOG_REFRESH") refreshLog();
         });
 
         if (k.chrome && k.chrome.isDecanterChromeEnabled) {
@@ -63,7 +59,7 @@
                 "appId": ZenUtils.APP_ID,
                 "topNavBar": {
                     "template": "title",
-                    "title": "ZenPM \u2014 Logs",
+                    "title": "Zen PM - Debug",
                     "buttons": [
                         { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
                         { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }

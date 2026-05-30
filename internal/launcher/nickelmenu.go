@@ -13,9 +13,9 @@ func nickelMenuDir() string {
 	return "/mnt/onboard/.adds/nm"
 }
 
-// NickelMenuEntryPath returns the config file path for a zenpm-managed NickelMenu entry.
+// NickelMenuEntryPath returns the config file path for a ZenPM-managed NickelMenu entry.
 func NickelMenuEntryPath(id string) string {
-	return filepath.Join(nickelMenuDir(), "zenpm-"+safeName(id))
+	return filepath.Join(nickelMenuDir(), "ZenPM-"+safeName(id))
 }
 
 // NickelMenuWriteEntry writes a NickelMenu cmd_spawn entry.

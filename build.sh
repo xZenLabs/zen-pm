@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+# shellcheck disable=SC1007
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 ROOT_DIR="$SCRIPT_DIR"
 DIST_DIR="$ROOT_DIR/dist"
@@ -150,7 +151,7 @@ write_index_from_catalog() {
         printf '{\n'
         printf '  "schema_version": "1",\n'
         printf '  "repo": {\n'
-        printf '    "id": "zenpm-default",\n'
+        printf '    "id": "ZenPM-default",\n'
         printf '    "name": "Zen PM Default Repository",\n'
         printf '    "url": "file://repos/default"\n'
         printf '  },\n'
@@ -202,11 +203,11 @@ write_index_from_catalog() {
 }
 
 prune_platform_content() {
-    zenpm_root="$1"
+    ZenPM_root="$1"
     platform="$2"
 
-    installers_dir="$zenpm_root/installers"
-    repo_default_dir="$zenpm_root/repos/default"
+    installers_dir="$ZenPM_root/installers"
+    repo_default_dir="$ZenPM_root/repos/default"
 
     case "$platform" in
         kindle)
@@ -245,44 +246,44 @@ mkdir -p "$KINDLE_STAGE" "$KOBO_STAGE" "$DIST_DIR"
 
 build_go
 
-# Payload staged at zenpm/ (zip root) so it extracts to /mnt/us/zenpm/ — the final install
+# Payload staged at ZenPM/ (zip root) so it extracts to /mnt/us/ZenPM/ — the final install
 # location. Shell scripts outside documents/ are never indexed as Kindle books.
 # Only one .sh file lives in documents/ (the scriptlet the user taps to install).
-mkdir -p "$KINDLE_STAGE/documents" "$KINDLE_STAGE/zenpm/backend"
-cp "$BUILD_DIR/zenpm-hf" "$KINDLE_STAGE/zenpm/backend/zenpm-hf"
-cp "$BUILD_DIR/zenpm-sf" "$KINDLE_STAGE/zenpm/backend/zenpm-sf"
-copy_tree "$ROOT_DIR/frontend" "$KINDLE_STAGE/zenpm"
-copy_tree "$ROOT_DIR/repos"    "$KINDLE_STAGE/zenpm"
+mkdir -p "$KINDLE_STAGE/documents" "$KINDLE_STAGE/ZenPM/backend"
+cp "$BUILD_DIR/zenpm-hf" "$KINDLE_STAGE/ZenPM/backend/zenpm-hf"
+cp "$BUILD_DIR/zenpm-sf" "$KINDLE_STAGE/ZenPM/backend/zenpm-sf"
+copy_tree "$ROOT_DIR/frontend" "$KINDLE_STAGE/ZenPM"
+copy_tree "$ROOT_DIR/repos"    "$KINDLE_STAGE/ZenPM"
 cp "$ROOT_DIR/installers/kindle/ZenPM.sh" "$KINDLE_STAGE/documents/ZenPM.sh"
 
 # Inject version into asset URLs so WebKit cache is busted on each release.
-_waf_html="$KINDLE_STAGE/zenpm/frontend/kindle/index.html"
+_waf_html="$KINDLE_STAGE/ZenPM/frontend/kindle/index.html"
 sed "s/script\.js\"/script.js?v=$VERSION\"/g; s/style\.css\"/style.css?v=$VERSION\"/g" \
     "$_waf_html" > "$_waf_html.tmp" && mv "$_waf_html.tmp" "$_waf_html"
 
-prune_platform_content "$KINDLE_STAGE/zenpm" "kindle"
+prune_platform_content "$KINDLE_STAGE/ZenPM" "kindle"
 
-ensure_exec "$KINDLE_STAGE/zenpm"
+ensure_exec "$KINDLE_STAGE/ZenPM"
 ensure_exec "$KINDLE_STAGE/documents"
 
-# Kobo package layout: unzip to Kobo root, then run .adds/zenpm/installers/kobo/install-zenpm.sh
-mkdir -p "$KOBO_STAGE/.adds/zenpm/backend"
-cp "$BUILD_DIR/zenpm-hf" "$KOBO_STAGE/.adds/zenpm/backend/zenpm-hf"
-cp "$BUILD_DIR/zenpm-sf" "$KOBO_STAGE/.adds/zenpm/backend/zenpm-sf"
-copy_tree "$ROOT_DIR/repos" "$KOBO_STAGE/.adds/zenpm"
-copy_tree "$ROOT_DIR/docs" "$KOBO_STAGE/.adds/zenpm"
-copy_tree "$ROOT_DIR/installers" "$KOBO_STAGE/.adds/zenpm"
+# Kobo package layout: unzip to Kobo root, then run .adds/ZenPM/installers/kobo/ZenPM.sh
+mkdir -p "$KOBO_STAGE/.adds/ZenPM/backend"
+cp "$BUILD_DIR/zenpm-hf" "$KOBO_STAGE/.adds/ZenPM/backend/zenpm-hf"
+cp "$BUILD_DIR/zenpm-sf" "$KOBO_STAGE/.adds/ZenPM/backend/zenpm-sf"
+copy_tree "$ROOT_DIR/repos" "$KOBO_STAGE/.adds/ZenPM"
+copy_tree "$ROOT_DIR/docs" "$KOBO_STAGE/.adds/ZenPM"
+copy_tree "$ROOT_DIR/installers" "$KOBO_STAGE/.adds/ZenPM"
 
-prune_platform_content "$KOBO_STAGE/.adds/zenpm" "kobo"
+prune_platform_content "$KOBO_STAGE/.adds/ZenPM" "kobo"
 
-ensure_exec "$KOBO_STAGE/.adds/zenpm"
+ensure_exec "$KOBO_STAGE/.adds/ZenPM"
 
-KINDLE_ZIP="$DIST_DIR/zenpm-kindle-$VERSION.zip"
-KOBO_ZIP="$DIST_DIR/zenpm-kobo-$VERSION.zip"
+KINDLE_ZIP="$DIST_DIR/ZenPM-kindle-$VERSION.zip"
+KOBO_ZIP="$DIST_DIR/ZenPM-kobo-$VERSION.zip"
 
 (
     cd "$KINDLE_STAGE"
-    zip -qr "$KINDLE_ZIP" documents zenpm
+    zip -qr "$KINDLE_ZIP" documents ZenPM
 )
 
 (

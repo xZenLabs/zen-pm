@@ -3,7 +3,7 @@ set -eu
 
 ONBOARD_DIR="/mnt/onboard"
 ADDS_DIR="$ONBOARD_DIR/.adds"
-ZENPM_DIR="$ADDS_DIR/zenpm"
+ZENPM_DIR="$ADDS_DIR/ZenPM"
 BIN_DIR="$ZENPM_DIR/bin"
 LOG_DIR="$ZENPM_DIR/logs"
 NM_DIR="$ADDS_DIR/nm"
@@ -34,12 +34,12 @@ if [ ! -f /usr/local/Kobo/imageformats/libnm.so ]; then
     exit 1
 fi
 
-cat > "$BIN_DIR/zenpm-menu.sh" <<'EOF'
+cat > "$BIN_DIR/ZenPM-menu.sh" <<'EOF'
 #!/bin/sh
 set -eu
 
-BACKEND="/mnt/onboard/.adds/zenpm/backend/zenpm"
-LOG_FILE="/mnt/onboard/.adds/zenpm/logs/menu.log"
+BACKEND="/mnt/onboard/.adds/ZenPM/backend/zenpm"
+LOG_FILE="/mnt/onboard/.adds/ZenPM/logs/menu.log"
 
 if [ ! -x "$BACKEND" ]; then
     echo "ZenPM backend missing at $BACKEND" > "$LOG_FILE"
@@ -70,19 +70,19 @@ case "$action" in
         ;;
 esac
 EOF
-chmod +x "$BIN_DIR/zenpm-menu.sh"
+chmod +x "$BIN_DIR/ZenPM-menu.sh"
 
-cat > "$NM_DIR/zenpm-main" <<'EOF'
-menu_item:main:ZenPM Refresh Repos:cmd_spawn:quiet:exec /mnt/onboard/.adds/zenpm/bin/zenpm-menu.sh refresh
-menu_item:main:ZenPM List Kobo Packages:cmd_spawn:quiet:exec /mnt/onboard/.adds/zenpm/bin/zenpm-menu.sh list
-menu_item:main:ZenPM Install KOReader:cmd_spawn:quiet:exec /mnt/onboard/.adds/zenpm/bin/zenpm-menu.sh install-koreader
-menu_item:main:ZenPM Update Packages:cmd_spawn:quiet:exec /mnt/onboard/.adds/zenpm/bin/zenpm-menu.sh update
-menu_item:main:ZenPM Show Last Log:cmd_spawn:quiet:exec /mnt/onboard/.adds/zenpm/bin/zenpm-menu.sh logs
+cat > "$NM_DIR/ZenPM-main" <<'EOF'
+menu_item:main:ZenPM Refresh Repos:cmd_spawn:quiet:exec /mnt/onboard/.adds/ZenPM/bin/ZenPM-menu.sh refresh
+menu_item:main:ZenPM List Kobo Packages:cmd_spawn:quiet:exec /mnt/onboard/.adds/ZenPM/bin/ZenPM-menu.sh list
+menu_item:main:ZenPM Install KOReader:cmd_spawn:quiet:exec /mnt/onboard/.adds/ZenPM/bin/ZenPM-menu.sh install-koreader
+menu_item:main:ZenPM Update Packages:cmd_spawn:quiet:exec /mnt/onboard/.adds/ZenPM/bin/ZenPM-menu.sh update
+menu_item:main:ZenPM Show Last Log:cmd_spawn:quiet:exec /mnt/onboard/.adds/ZenPM/bin/ZenPM-menu.sh logs
 EOF
 
 ZENPM_PLATFORM=kobo "$BACKEND" repo refresh > "$LOG_DIR/install-refresh.log" 2>&1 || true
 sync
 
 echo "ZenPM Kobo install complete"
-echo "NickelMenu entry file: $NM_DIR/zenpm-main"
+echo "NickelMenu entry file: $NM_DIR/ZenPM-main"
 echo "Action log: $LOG_DIR/menu.log"

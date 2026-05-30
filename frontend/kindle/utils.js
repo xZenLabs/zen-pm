@@ -1,13 +1,13 @@
 // Shared WAF utilities — loaded before every page script.
 var ZenUtils = (function () {
     var API    = "http://127.0.0.1:8080";
-    var APP_ID = "com.zenpm.waf";
+    var APP_ID = "com.ZenPM.waf";
 
     function getKindle() {
         try { return window.kindle || top.kindle; } catch (_e) { return window.kindle; }
     }
 
-    // Fire-and-forget POST to /log/client — bridges WAF diagnostics into zenpm.log.
+    // Fire-and-forget POST to /log/client — bridges WAF diagnostics into ZenPM.log.
     function postLog(msg) {
         try {
             var xhr = new XMLHttpRequest();
@@ -53,9 +53,49 @@ var ZenUtils = (function () {
         xhr.send(null);
     }
 
-    // Navigate back to index — same mechanism as forward navigation from index.
     function goBack() {
-        window.location.href = "index.html";
+        window.location.href = "packages.html";
+    }
+
+    // Render universal bottom navbar. Call once per page with the active tab id:
+    // 'home', 'sources', 'debug', or 'packages'.
+    function renderNavbar(activeTab) {
+        postLog("[utils] renderNavbar: " + activeTab);
+        var tabs = [
+            { id: 'home',     label: 'Home',     icon: 'assets/home.svg',     href: 'index.html' },
+            { id: 'sources',  label: 'Sources',  icon: 'assets/sources.svg',  href: 'sources.html' },
+            { id: 'debug',    label: 'Debug',    icon: 'assets/debug.svg',    href: 'log.html' },
+            { id: 'packages', label: 'Packages', icon: 'assets/packages.svg', href: 'packages.html' }
+        ];
+
+        var nav = document.createElement('nav');
+        nav.className = 'bottom-nav';
+
+        for (var _i = 0; _i < tabs.length; _i++) {
+            var t = tabs[_i];
+            var link = document.createElement('a');
+            link.href = t.href;
+            link.className = 'nav-tab' + (t.id === activeTab ? ' active' : '');
+            if (t.id === activeTab) link.setAttribute('aria-current', 'page');
+
+            var img = document.createElement('img');
+            img.src = t.icon;
+            img.alt = '';
+            img.className = 'nav-icon';
+            img.width = 32;
+            img.height = 32;
+
+            var span = document.createElement('span');
+            span.className = 'nav-label';
+            span.textContent = t.label;
+
+            link.appendChild(img);
+            link.appendChild(span);
+            nav.appendChild(link);
+        }
+
+        document.body.appendChild(nav);
+        postLog("[utils] navbar appended to body, childCount=" + nav.childElementCount);
     }
 
     return {
@@ -65,6 +105,7 @@ var ZenUtils = (function () {
         postLog:    postLog,
         xhrJSON:    xhrJSON,
         xhrText:    xhrText,
-        goBack:     goBack
+        goBack:     goBack,
+        renderNavbar: renderNavbar
     };
 })();

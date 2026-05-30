@@ -21,15 +21,19 @@
 
 body {
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
     font-family: "Avenir Next", "Segoe UI", sans-serif;
     color: var(--ink);
     background: linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
 }
 
 .page {
+    flex: 1;
     width: min(980px, 100%);
     margin: 0 auto;
-    padding: 16px 16px 48px;
+    padding: 16px 16px 0;
 }
 
 .topbar {
@@ -137,18 +141,6 @@ body {
 }
 
 .search-btn:hover { background: transparent; color: var(--ink); }
-
-.page-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.78rem;
-    padding: 6px 0 8px;
-    background: linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
-}
 
 h1 {
     margin: 0;
@@ -332,6 +324,42 @@ input {
 
 .nav-link:hover { color: var(--ink); background: rgba(0,0,0,0.05); }
 .nav-link.active { color: var(--accent); font-weight: 600; }
+
+/* --- Bottom nav bar --- */
+.bottom-nav {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+    align-items: center;
+    height: 52px;
+    background: #fffcf4;
+    background: var(--panel);
+    border-top: 1px solid #cbc0ae;
+    border-top: 1px solid var(--border);
+    padding: 0 4px;
+}
+
+.nav-tab {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: var(--muted);
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+.nav-tab.active {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.nav-icon { display: block; }
+
+.nav-label { white-space: nowrap; }
 
 /* --- Repos page --- */
 .repo-list { display: flex; flex-direction: column; gap: 8px; }

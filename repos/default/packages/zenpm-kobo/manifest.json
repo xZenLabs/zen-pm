@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "id": "zenpm-kobo",
+  "id": "ZenPM-kobo",
   "name": "Zen Package Manager (Kobo Launcher)",
   "version": "0.1.0",
   "description": "Install Zen PM NickelMenu entry and Kobo helper scripts.",

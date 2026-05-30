@@ -10,10 +10,8 @@
     };
 
     var el = {
-        runtimeStatus:   document.getElementById("runtimeStatus"),
         hint:            document.getElementById("hint"),
         packages:        document.getElementById("packages"),
-        busyState:       document.getElementById("busyState"),
         packagesHeading: document.getElementById("packagesHeading"),
         pkgSearch:       document.getElementById("pkgSearch"),
         searchClear:     document.getElementById("searchClear")
@@ -30,7 +28,6 @@
 
     function setBusy(flag, message) {
         state.busy = flag;
-        el.busyState.textContent = flag ? (message || "Working") : "";
     }
 
     var xhrJSON = ZenUtils.xhrJSON;
@@ -77,19 +74,18 @@
             function (data) {
                 _retryCount = 0;
                 state.connected = true;
-                el.runtimeStatus.textContent = "ZenPM v" + (data.version || "?");
+                dbg("ZenPM v" + (data.version || "?"));
                 loadPackages(function () { setBusy(false, "Idle"); });
             },
             function (err) {
                 if (_retryCount < MAX_RETRIES) {
                     _retryCount++;
-                    el.runtimeStatus.textContent = "Connecting (" + _retryCount + "/" + MAX_RETRIES + ")...";
+                    dbg("Connecting (" + _retryCount + "/" + MAX_RETRIES + ")...");
                     dbg("Retry in " + (RETRY_DELAY / 1000) + "s: " + String(err));
                     setTimeout(detectRuntime, RETRY_DELAY);
                 } else {
                     _retryCount = 0;
                     setBusy(false, "Idle");
-                    el.runtimeStatus.textContent = "Server not running";
                     el.hint.textContent = "ZenPM daemon not found. Re-run ZenPM.sh to start it.";
                     postLog("Daemon unreachable after " + MAX_RETRIES + " retries: " + String(err));
                 }
@@ -201,9 +197,7 @@
                 "profile": {
                     "name": "default",
                     "items": [
-                        { "id": "ZENPM_REPOS",    "state": "enabled", "handling": "notifyApp", "label": "Repositories",     "position": 0 },
-                        { "id": "ZENPM_DEBUGLOG", "state": "enabled", "handling": "notifyApp", "label": "Debug Logs",        "position": 1 },
-                        { "id": "ZENPM_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh Packages", "position": 2 }
+                        { "id": "ZENPM_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -212,9 +206,7 @@
         };
 
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            if      (data === "ZENPM_REFRESH")  refreshPackages();
-            else if (data === "ZENPM_REPOS")    window.location.href = "repos.html";
-            else if (data === "ZENPM_DEBUGLOG") window.location.href = "log.html";
+            if (data === "ZENPM_REFRESH") refreshPackages();
         });
 
         if (k.chrome && k.chrome.isDecanterChromeEnabled) {
@@ -223,7 +215,7 @@
                 "appId": ZenUtils.APP_ID,
                 "topNavBar": {
                     "template": "title",
-                    "title": "Zen Package Manager",
+                    "title": "Zen PM - Packages",
                     "buttons": [
                         { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
                         { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }

@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "repo": {
-    "id": "zenpm-default",
+    "id": "ZenPM-default",
     "name": "Zen PM Default Repository",
     "url": "file://repos/default"
   },
@@ -51,7 +51,7 @@
       "size": "0"
     },
     {
-      "id": "zenpm-kobo",
+      "id": "ZenPM-kobo",
       "name": "Zen Package Manager (Kobo Launcher)",
       "version": "0.1.0",
       "platforms": [
@@ -60,9 +60,9 @@
       "dependencies": [
         "nickelmenu"
       ],
-      "install_url": "packages/zenpm-kobo/scripts/install.sh",
-      "uninstall_url": "packages/zenpm-kobo/scripts/uninstall.sh",
-      "manifest_url": "packages/zenpm-kobo/manifest.json",
+      "install_url": "packages/ZenPM-kobo/scripts/install.sh",
+      "uninstall_url": "packages/ZenPM-kobo/scripts/uninstall.sh",
+      "manifest_url": "packages/ZenPM-kobo/manifest.json",
       "sha256": "",
       "size": "0"
     },
@@ -74,7 +74,7 @@
         "kobo"
       ],
       "dependencies": [
-        "zenpm-kobo"
+        "ZenPM-kobo"
       ],
       "install_url": "packages/koreader-kobo/scripts/install.sh",
       "uninstall_url": "packages/koreader-kobo/scripts/uninstall.sh",

@@ -5,39 +5,78 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Zen Package Manager</title>
+    <title>Zen PM - Home</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="page">
-        <header class="topbar">
-            <div class="search-pill">
-                <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="8"/>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                <div class="search-row">
-                    <span class="search-input-wrap">
-                        <input id="pkgSearch" type="text" placeholder="Search..." autocomplete="off" spellcheck="false">
-                    </span>
-                    <span id="searchClear" class="search-clear" role="button" tabindex="0" aria-label="Clear search">&times;</span>
-                </div>
-            </div>
-        </header>
-
         <section class="panel">
-            <h2 id="packagesHeading">Packages</h2>
-            <p id="hint" class="hint">Connect to server to load packages.</p>
-            <div id="packages" class="package-grid"></div>
+            <h2>Featured</h2>
+            <p id="featuredHint" class="hint">Featured packages coming soon.</p>
+            <div id="featuredList" class="package-grid"></div>
         </section>
-
-        <footer class="page-footer">
-            <span id="busyState" class="busy-state"></span>
-            <span id="runtimeStatus">Detecting runtime…</span>
-        </footer>
     </div>
 
     <script src="utils.js"></script>
-    <script src="script.js"></script>
+    <script>
+        ZenUtils.postLog("[home] script loaded");
+        ZenUtils.renderNavbar('home');
+
+        (function setupHomeChrome() {
+            var k = ZenUtils.getKindle();
+            if (!k || !k.messaging) return;
+
+            var systemMenu = {
+                "clientParams": {
+                    "profile": {
+                        "name": "default",
+                        "items": [
+                            { "id": "ZENHOME_PACKAGES", "state": "enabled", "handling": "notifyApp", "label": "Packages", "position": 0 },
+                            { "id": "ZENHOME_SOURCES",  "state": "enabled", "handling": "notifyApp", "label": "Sources",  "position": 1 },
+                            { "id": "ZENHOME_DEBUG",    "state": "enabled", "handling": "notifyApp", "label": "Debug",    "position": 2 }
+                        ],
+                        "selectionMode": "none",
+                        "closeOnUse": true
+                    }
+                }
+            };
+
+            k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
+                if (data === "ZENHOME_PACKAGES") window.location.href = "packages.html";
+                if (data === "ZENHOME_SOURCES")  window.location.href = "sources.html";
+                if (data === "ZENHOME_DEBUG")    window.location.href = "log.html";
+            });
+
+            if (k.chrome && k.chrome.isDecanterChromeEnabled) {
+                k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
+                    "appId": ZenUtils.APP_ID,
+                    "topNavBar": {
+                        "template": "title",
+                        "title": "Zen PM - Home",
+                        "buttons": [
+                            { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
+                            { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
+                        ]
+                    },
+                    "systemMenu": systemMenu
+                });
+            } else {
+                k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
+                    "appId": ZenUtils.APP_ID,
+                    "searchBar": {
+                        "clientParams": {
+                            "profile": {
+                                "name": "default",
+                                "buttons": [
+                                    { "id": "menu", "state": "enabled", "handling": "system" }
+                                ]
+                            }
+                        }
+                    },
+                    "systemMenu": systemMenu
+                });
+            }
+        })();
+    </script>
 </body>
 </html>

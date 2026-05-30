@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	defaultKindleHome = "/mnt/us/zenpm"
-	defaultKoboHome   = "/mnt/onboard/.adds/zenpm"
+	defaultKindleHome = "/mnt/us/ZenPM"
+	defaultKoboHome   = "/mnt/onboard/.adds/ZenPM"
 )
 
 // State holds all resolved paths for ZenPM's working directories.
@@ -53,7 +53,7 @@ func Init(platform string) (*State, error) {
 		TmpDir:      filepath.Join(home, "tmp"),
 		LockDir:     filepath.Join(home, "locks"),
 		JournalDir:  filepath.Join(home, "journal"),
-		LogFile:     filepath.Join(home, "zenpm.log"),
+		LogFile:     filepath.Join(home, "ZenPM.log"),
 	}
 
 	for _, dir := range []string{

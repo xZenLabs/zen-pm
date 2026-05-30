@@ -15,11 +15,11 @@
     };
 
     window.onerror = function (msg, src, line) {
-        postLog("[repos.js] JS ERROR: " + msg + " (" + (src || "?") + ":" + (line || "?") + ")");
+        postLog("[sources.js] JS ERROR: " + msg + " (" + (src || "?") + ":" + (line || "?") + ")");
         return false;
     };
 
-    postLog("[repos.js] script loaded");
+    postLog("[sources.js] script loaded");
 
     function setStatus(msg, isError) {
         el.repoStatus.textContent = msg;
@@ -27,12 +27,12 @@
     }
 
     function loadRepos() {
-        postLog("[repos.js] loadRepos");
+        postLog("[sources.js] loadRepos");
         el.repoList.innerHTML = "<p class='hint'>Loading\u2026</p>";
         ZenUtils.xhrJSON("GET", "/repos", null,
             function (data) { renderRepos(Array.isArray(data) ? data : []); },
             function (err) {
-                postLog("[repos.js] loadRepos error: " + String(err));
+                postLog("[sources.js] loadRepos error: " + String(err));
                 el.repoList.innerHTML = "<p class='hint'>Failed to load: " + String(err) + "</p>";
             }
         );
@@ -92,7 +92,7 @@
     }
 
     function startEdit(r) {
-        postLog("[repos.js] startEdit: " + r.name);
+        postLog("[sources.js] startEdit: " + r.name);
         state.editingName = r.name;
         el.repoName.value = r.name;
         el.repoName.disabled = true; // name is the key, cannot be changed
@@ -125,13 +125,13 @@
 
         if (!name || !url) { setStatus("Name and URL are required.", true); return; }
 
-        postLog("[repos.js] saveRepo: " + (state.editingName ? "PUT " + state.editingName : "POST " + name));
+        postLog("[sources.js] saveRepo: " + (state.editingName ? "PUT " + state.editingName : "POST " + name));
         setStatus("Saving\u2026");
         el.saveRepoBtn.disabled = true;
 
         function onDone() { el.saveRepoBtn.disabled = false; cancelEdit(); loadRepos(); }
         function onFail(err) {
-            postLog("[repos.js] saveRepo error: " + String(err));
+            postLog("[sources.js] saveRepo error: " + String(err));
             el.saveRepoBtn.disabled = false;
             setStatus("Error: " + String(err), true);
         }
@@ -152,11 +152,11 @@
     }
 
     function removeRepo(name) {
-        postLog("[repos.js] removeRepo: " + name);
+        postLog("[sources.js] removeRepo: " + name);
         ZenUtils.xhrJSON("DELETE", "/repos/" + encodeURIComponent(name), null,
             function () { loadRepos(); },
             function (err) {
-                postLog("[repos.js] removeRepo error: " + String(err));
+                postLog("[sources.js] removeRepo error: " + String(err));
                 setStatus("Error: " + String(err), true);
             }
         );
@@ -164,7 +164,7 @@
 
     function setupChrome() {
         var k = ZenUtils.getKindle();
-        postLog("[repos.js] setupChrome: kindle=" + (k ? "yes" : "no") + " messaging=" + (k && k.messaging ? "yes" : "no"));
+        postLog("[sources.js] setupChrome: kindle=" + (k ? "yes" : "no") + " messaging=" + (k && k.messaging ? "yes" : "no"));
         if (!k || !k.messaging) return;
 
         var systemMenu = {
@@ -172,9 +172,7 @@
                 "profile": {
                     "name": "default",
                     "items": [
-                        { "id": "ZENPM_PACKAGES",  "state": "enabled", "handling": "notifyApp", "label": "Packages",  "position": 0 },
-                        { "id": "ZENREPO_DEBUGLOG","state": "enabled", "handling": "notifyApp", "label": "Debug Log", "position": 1 },
-                        { "id": "ZENREPO_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh",   "position": 2 }
+                        { "id": "ZENREPO_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -183,19 +181,17 @@
         };
 
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            postLog("[repos.js] systemMenuItemSelected: p=" + property + " d=" + data);
-            if (data === "ZENPM_PACKAGES")  ZenUtils.goBack();
+            postLog("[sources.js] systemMenuItemSelected: p=" + property + " d=" + data);
             if (data === "ZENREPO_REFRESH") loadRepos();
-            if (data === "ZENREPO_DEBUGLOG") window.location.href = "log.html";
         });
 
         if (k.chrome && k.chrome.isDecanterChromeEnabled) {
-            postLog("[repos.js] setupChrome: decanter (KPP)");
+            postLog("[sources.js] setupChrome: decanter (KPP)");
             k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
                 "appId": ZenUtils.APP_ID,
                 "topNavBar": {
                     "template": "title",
-                    "title": "ZenPM \u2014 Repositories",
+                    "title": "Zen PM - Sources",
                     "buttons": [
                         { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
                         { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
@@ -204,7 +200,7 @@
                 "systemMenu": systemMenu
             });
         } else {
-            postLog("[repos.js] setupChrome: pillow");
+            postLog("[sources.js] setupChrome: pillow");
             k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
                 "appId": ZenUtils.APP_ID,
                 "searchBar": {
@@ -229,7 +225,7 @@
     function init() {
         if (_inited) return;
         _inited = true;
-        postLog("[repos.js] init");
+        postLog("[sources.js] init");
         bindEvents();
         loadRepos();
     }
@@ -238,19 +234,19 @@
     function trySetupChrome() {
         if (_chromeSetup) return;
         _chromeSetup = true;
-        try { setupChrome(); } catch (_e) { postLog("[repos.js] setupChrome threw: " + _e); }
+        try { setupChrome(); } catch (_e) { postLog("[sources.js] setupChrome threw: " + _e); }
     }
 
     var _k = ZenUtils.getKindle();
     if (_k && _k.appmgr) {
-        postLog("[repos.js] ongo registered");
+        postLog("[sources.js] ongo registered");
         _k.appmgr.ongo = function () {
-            postLog("[repos.js] ongo fired");
+            postLog("[sources.js] ongo fired");
             trySetupChrome();
             init();
         };
     } else {
-        postLog("[repos.js] no appmgr: " + (typeof _k));
+        postLog("[sources.js] no appmgr: " + (typeof _k));
     }
 
     // Also attempt chrome setup at load time — ongo may not re-fire on sub-page navigation.
