@@ -163,57 +163,7 @@
     }
 
     function setupChrome() {
-        var k = ZenUtils.getKindle();
-        postLog("[sources.js] setupChrome: kindle=" + (k ? "yes" : "no") + " messaging=" + (k && k.messaging ? "yes" : "no"));
-        if (!k || !k.messaging) return;
-
-        var systemMenu = {
-            "clientParams": {
-                "profile": {
-                    "name": "default",
-                    "items": [
-                        { "id": "ZENREPO_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 }
-                    ],
-                    "selectionMode": "none",
-                    "closeOnUse": true
-                }
-            }
-        };
-
-        k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            postLog("[sources.js] systemMenuItemSelected: p=" + property + " d=" + data);
-            if (data === "ZENREPO_REFRESH") loadRepos();
-        });
-
-        if (k.chrome && k.chrome.isDecanterChromeEnabled) {
-            postLog("[sources.js] setupChrome: decanter (KPP)");
-            k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "topNavBar": {
-                    "template": "title",
-                    "title": "Zen PM - Sources",
-                    "buttons": [
-                        { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
-                        { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
-                    ]
-                },
-                "systemMenu": systemMenu
-            });
-        } else {
-            postLog("[sources.js] setupChrome: pillow");
-            k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "searchBar": {
-                    "clientParams": {
-                        "profile": {
-                            "name": "default",
-                            "buttons": [{ "id": "menu", "state": "enabled", "handling": "system" }]
-                        }
-                    }
-                },
-                "systemMenu": systemMenu
-            });
-        }
+        ZenUtils.setupPageChrome('Zen PM - Sources', loadRepos);
     }
 
     function bindEvents() {

@@ -22,61 +22,7 @@
         ZenUtils.postLog("[home] script loaded");
         ZenUtils.renderNavbar('home');
 
-        (function setupHomeChrome() {
-            var k = ZenUtils.getKindle();
-            if (!k || !k.messaging) return;
-
-            var systemMenu = {
-                "clientParams": {
-                    "profile": {
-                        "name": "default",
-                        "items": [
-                            { "id": "ZENHOME_PACKAGES", "state": "enabled", "handling": "notifyApp", "label": "Packages", "position": 0 },
-                            { "id": "ZENHOME_SOURCES",  "state": "enabled", "handling": "notifyApp", "label": "Sources",  "position": 1 },
-                            { "id": "ZENHOME_DEBUG",    "state": "enabled", "handling": "notifyApp", "label": "Debug",    "position": 2 }
-                        ],
-                        "selectionMode": "none",
-                        "closeOnUse": true
-                    }
-                }
-            };
-
-            k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-                if (data === "ZENHOME_PACKAGES") window.location.href = "packages.html";
-                if (data === "ZENHOME_SOURCES")  window.location.href = "sources.html";
-                if (data === "ZENHOME_DEBUG")    window.location.href = "log.html";
-            });
-
-            if (k.chrome && k.chrome.isDecanterChromeEnabled) {
-                k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                    "appId": ZenUtils.APP_ID,
-                    "topNavBar": {
-                        "template": "title",
-                        "title": "Zen PM - Home",
-                        "buttons": [
-                            { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
-                            { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
-                        ]
-                    },
-                    "systemMenu": systemMenu
-                });
-            } else {
-                k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                    "appId": ZenUtils.APP_ID,
-                    "searchBar": {
-                        "clientParams": {
-                            "profile": {
-                                "name": "default",
-                                "buttons": [
-                                    { "id": "menu", "state": "enabled", "handling": "system" }
-                                ]
-                            }
-                        }
-                    },
-                    "systemMenu": systemMenu
-                });
-            }
-        })();
+        ZenUtils.setupPageChrome('Zen PM - Home', function () { location.reload(); });
     </script>
 </body>
 </html>

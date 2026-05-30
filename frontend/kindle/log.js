@@ -31,59 +31,7 @@
     }
 
     function setupChrome() {
-        var k = ZenUtils.getKindle();
-        postLog("[log.js] setupChrome: kindle=" + (k ? "yes" : "no") + " messaging=" + (k && k.messaging ? "yes" : "no"));
-        if (!k || !k.messaging) return;
-
-        var systemMenu = {
-            "clientParams": {
-                "profile": {
-                    "name": "default",
-                    "items": [
-                        { "id": "ZENLOG_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 }
-                    ],
-                    "selectionMode": "none",
-                    "closeOnUse": true
-                }
-            }
-        };
-
-        k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            postLog("[log.js] systemMenuItemSelected: p=" + property + " d=" + data);
-            if (data === "ZENLOG_REFRESH") refreshLog();
-        });
-
-        if (k.chrome && k.chrome.isDecanterChromeEnabled) {
-            postLog("[log.js] setupChrome: decanter (KPP)");
-            k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "topNavBar": {
-                    "template": "title",
-                    "title": "Zen PM - Debug",
-                    "buttons": [
-                        { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
-                        { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
-                    ]
-                },
-                "systemMenu": systemMenu
-            });
-        } else {
-            postLog("[log.js] setupChrome: pillow");
-            k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "searchBar": {
-                    "clientParams": {
-                        "profile": {
-                            "name": "default",
-                            "buttons": [
-                                { "id": "menu", "state": "enabled", "handling": "system" }
-                            ]
-                        }
-                    }
-                },
-                "systemMenu": systemMenu
-            });
-        }
+        ZenUtils.setupPageChrome('Zen PM - Debug', refreshLog);
     }
 
     var _inited = false;

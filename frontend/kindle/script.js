@@ -188,58 +188,7 @@
     }
 
     function setupChrome() {
-        var k = ZenUtils.getKindle();
-        if (!k) { dbg("setupChrome: no window.kindle"); return; }
-        if (!k.messaging) { dbg("setupChrome: no kindle.messaging"); return; }
-
-        var systemMenu = {
-            "clientParams": {
-                "profile": {
-                    "name": "default",
-                    "items": [
-                        { "id": "ZENPM_REFRESH",  "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 }
-                    ],
-                    "selectionMode": "none",
-                    "closeOnUse": true
-                }
-            }
-        };
-
-        k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            if (data === "ZENPM_REFRESH") refreshPackages();
-        });
-
-        if (k.chrome && k.chrome.isDecanterChromeEnabled) {
-            dbg("setupChrome: decanter (KPP)");
-            k.messaging.sendMessage("com.lab126.chromebar", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "topNavBar": {
-                    "template": "title",
-                    "title": "Zen PM - Packages",
-                    "buttons": [
-                        { "id": "KPP_MORE",  "state": "enabled", "handling": "system" },
-                        { "id": "KPP_CLOSE", "state": "enabled", "handling": "system" }
-                    ]
-                },
-                "systemMenu": systemMenu
-            });
-        } else {
-            dbg("setupChrome: pillow");
-            k.messaging.sendMessage("com.lab126.pillow", "configureChrome", {
-                "appId": ZenUtils.APP_ID,
-                "searchBar": {
-                    "clientParams": {
-                        "profile": {
-                            "name": "default",
-                            "buttons": [
-                                { "id": "menu", "state": "enabled", "handling": "system" }
-                            ]
-                        }
-                    }
-                },
-                "systemMenu": systemMenu
-            });
-        }
+        ZenUtils.setupPageChrome('Zen PM - Packages', refreshPackages);
     }
 
     function bindEvents() {
