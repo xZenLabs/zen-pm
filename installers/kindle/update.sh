@@ -33,9 +33,9 @@ semver_cmp() {
     _b=$(printf '%s' "$2" | sed 's/^v//')
     _OFS="$IFS"
     IFS='.'
-    # intentional word splitting on IFS='.'
     # shellcheck disable=SC2086
     set -- $_a; _a1=${1:-0}; _a2=${2:-0}; _a3=${3:-0}
+    # shellcheck disable=SC2086
     set -- $_b; _b1=${1:-0}; _b2=${2:-0}; _b3=${3:-0}
     IFS="$_OFS"
     if [ "$_a1" -gt "$_b1" ]; then echo 1; return; fi
