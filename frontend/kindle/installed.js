@@ -32,41 +32,8 @@
         }
     }
 
-    function showModal(title, message, isError) {
-        hideModal();
-        var overlay = document.createElement("div");
-        overlay.className = "modal-overlay";
-        overlay.id = "zenpm-modal-overlay";
-
-        var box = document.createElement("div");
-        box.className = "modal-box";
-
-        var h = document.createElement("h3");
-        h.textContent = title;
-        box.appendChild(h);
-
-        var p = document.createElement("p");
-        p.textContent = message;
-        box.appendChild(p);
-
-        var btn = document.createElement("button");
-        btn.textContent = "Close";
-        btn.onclick = hideModal;
-        box.appendChild(btn);
-
-        overlay.appendChild(box);
-        document.body.appendChild(overlay);
-
-        overlay.onclick = function (e) {
-            if (e.target === overlay) hideModal();
-        };
-    }
-
-    function hideModal() {
-        var ov = document.getElementById("zenpm-modal-overlay");
-        if (ov) ov.parentNode.removeChild(ov);
-    }
-
+    var showModal = ZenUtils.showModal;
+    var hideModal = ZenUtils.hideModal;
     var fetchJSON = ZenUtils.fetchJSON;
 
     function loadPackages() {
@@ -124,9 +91,9 @@
                 var succeeded = pkg && pkg.installed !== op.wasInstalled;
                 if (succeeded) {
                     var doneAction = op.action === "install" ? "installed" : "uninstalled";
-                    showModal("Done", pkg.name + " " + doneAction + " successfully.", false);
+                    showModal("Done", pkg.name + " " + doneAction + " successfully.");
                 } else {
-                    showModal("Failed", op.action + " of " + op.id + " did not complete.\n\nCheck the debug log for details.", true);
+                    showModal("Failed", op.action + " of " + op.id + " did not complete.\n\nCheck the debug log for details.");
                 }
                 setBusy(false, "");
             });
@@ -148,13 +115,13 @@
         setBusy(true, (action === "install" ? "Installing " : "Uninstalling ") + pkg.name);
         state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
         var actionLabel = action === "install" ? "Installing" : "Uninstalling";
-        showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", false);
+        showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.");
         fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + action, null).then(function () {
             dbg("[installed] " + action + " started for " + pkg.id);
             pollAfterOp();
         }).catch(function (err) {
             postLog("[installed] Failed to start " + action + ": " + String(err));
-            showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err), true);
+            showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err));
             state.pendingOp = null;
             setBusy(false, "");
         });
@@ -195,7 +162,7 @@
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('Zen PM - Installed', refreshPackages);
+        ZenUtils.setupPageChrome('ZenPM - Installed', refreshPackages);
     }
 
     var _inited = false;

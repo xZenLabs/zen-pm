@@ -171,7 +171,7 @@
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('Zen PM - Sources', loadRepos);
+        ZenUtils.setupPageChrome('ZenPM - Sources', loadRepos);
     }
 
     function bindEvents() {

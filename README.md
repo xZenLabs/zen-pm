@@ -15,7 +15,6 @@ Package manager for jailbroken Kindle devices, with Kobo support. Browse and ins
 cmd/zenpm/          CLI entry point (serve, repo, package, doctor, logs)
 internal/           Go packages (server, state, repo, pkg, platform, launcher, log, tx)
 frontend/kindle/    Kindle WAF frontend (HTML/CSS/JS)
-repos/default/      Default static package repository
 installers/kindle/  ZenPM.sh — on-device installer
 installers/kobo/    ZenPM.sh / uninstall-zenpm.sh
 docs/architecture/  Schema and behavior contracts
@@ -95,6 +94,32 @@ sh /mnt/onboard/.adds/zenpm/installers/kobo/ZenPM.sh
 4. If NickelMenu is absent, the installer stages it and prompts for reboot. Re-run after reboot.
 5. ZenPM entries appear in the NickelMenu main menu.
 
+## Updating ZenPM (Kindle)
+
+ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Update**. The updater:
+
+1. Reads the current version from `/mnt/us/ZenPM/VERSION`
+2. Queries the GitHub Releases API for the latest tag
+3. If the latest version is ≤ current, shows "up to date" and exits
+4. Downloads the latest `zenpm-kindle.zip`
+5. Validates the download (size + SHA256 digest from the GitHub API release metadata)
+6. Stops the daemon and WAF, replaces the payload
+7. Restarts the daemon and relaunches ZenPM
+
+State databases (`/mnt/us/.ZenPM/`) are preserved across updates.
+
+The update can also be triggered manually:
+
+```sh
+sh /mnt/us/ZenPM/installers/kindle/update.sh
+```
+
+Or via the API:
+
+```sh
+curl -s -X POST http://127.0.0.1:8080/update
+```
+
 ## Logs
 
 All runtime output — daemon, package operations, repo refresh — goes to a single log file.
@@ -104,6 +129,37 @@ All runtime output — daemon, package operations, repo refresh — goes to a si
 | Kindle | `/mnt/us/zenpm/zenpm.log` |
 | Kobo | `/mnt/onboard/.adds/zenpm/zenpm.log` |
 | Host (dev) | `~/.zenpm/zenpm.log` |
+
+## Data persistence
+
+State databases live outside the ZenPM payload directory so they survive app updates and re-installs.
+
+| Platform | State directory |
+|---|---|
+| Kindle | `/mnt/us/.ZenPM/` |
+| Kobo | `/mnt/onboard/.adds/.ZenPM/` |
+| Host (dev) | `~/.zenpm/state/` |
+
+Files in the state directory:
+
+| File | Purpose |
+|---|---|
+| `repos.db` | Configured repositories |
+| `installed.db` | Installed package tracking |
+
+On first startup, the daemon scans for known apps already on the device and tracks them automatically:
+
+| App | Detection path |
+|---|---|
+| KOReader | `/mnt/us/koreader` directory |
+| KUAL | `/mnt/us/extensions/kual` directory |
+| Zen Reader | `/mnt/us/documents/ZenReader.sh` |
+| Zen MTP | `/mnt/us/documents/ZenMTP` directory |
+| Kindle Browser | `/mnt/us/documents/Browser.sh` |
+
+Detected apps are added to `installed.db` with version `0.0.0` and repo `"device"`. This ensures they appear as installed in the WAF UI even though they were not installed through ZenPM. Re-running the scan on subsequent starts is a no-op.
+
+## Logs (terminal)
 
 SSH commands:
 
@@ -128,14 +184,289 @@ The log includes: startup info (platform, home dir, log path), every HTTP reques
 | `ZENPM_PLATFORM` | auto-detected | Force `kindle`, `kobo`, or `host` |
 | `ZENPM_DRY_RUN` | unset | Set to `1` for no-op installs |
 | `ZENPM_DEFAULT_REPO_URL` | derived from binary path | Override default repo URL |
+| `ZENPM_REPO_PUBKEY` | ZenLabs key | Override Ed25519 public key for sig verification (hex-encoded 32 bytes) |
 
 ## Repository format
 
-Static repository hosting. Each repo needs:
+ZenPM supports two registry formats with auto-detection:
 
-- `index.json` — package metadata (fetched by the Go client)
+- **ZenPM native** — `index.json` at the repo root (preferred for custom repos)
+- **KindleForge** — `registry.json` flat array (for compatibility with existing KindleForge registries)
 
-Hosted repos work on GitHub Pages or any static file server.
+### Hosting a ZenPM repository
+
+Each package lives in a `packages/<id>/scripts/` directory. The repo root exposes an `index.json` catalog that contains ALL package metadata — there is no separate manifest file.
+
+#### Directory structure
+
+```
+my-repo/
+  index.json
+  packages/
+    my-package/
+      scripts/
+        install.sh
+        uninstall.sh
+```
+
+#### `index.json` — package catalog (single source of truth)
+
+Top-level JSON object listing every package in the repo. Fetched on every `repo refresh`. All per-package metadata (description, author, launcher config, ABI constraints) lives here — not in a separate manifest.
+
+```json
+{
+  "schema_version": "1",
+  "repo": {
+    "id": "my-repo",
+    "name": "My Package Repository",
+    "url": "https://example.com/my-repo/"
+  },
+  "packages": [
+    {
+      "id": "my-package",
+      "name": "My Package",
+      "version": "1.0.0",
+      "description": "What this package does.",
+      "author": "Your Name",
+      "platforms": ["kindle"],
+      "dependencies": [],
+      "install_url": "packages/my-package/scripts/install.sh",
+      "uninstall_url": "packages/my-package/scripts/uninstall.sh",
+      "constraints": {
+        "abi": ["hf", "sf"]
+      },
+      "launcher": {
+        "kindle": {
+          "type": "kual",
+          "entry_name": "My Package"
+        }
+      },
+      "sha256": "",
+      "size": "0"
+    }
+  ]
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `schema_version` | yes | Must be `"1"` |
+| `repo.id` | yes | Unique repo identifier |
+| `repo.name` | yes | Human-readable repo name |
+| `repo.url` | yes | Base URL of the repo (used to resolve relative paths) |
+| `packages[].id` | yes | Unique package identifier |
+| `packages[].name` | yes | Display name |
+| `packages[].version` | yes | SemVer string (e.g. `"1.2.3"`) |
+| `packages[].description` | no | Short description shown on the package card |
+| `packages[].author` | no | Author/ maintainer name |
+| `packages[].platforms` | yes | Array of `"kindle"` and/or `"kobo"` |
+| `packages[].dependencies` | no | Array of package `id` strings required before install |
+| `packages[].install_url` | yes | Path to install script (relative to repo URL) |
+| `packages[].uninstall_url` | no | Path to uninstall script |
+| `packages[].constraints.abi` | no | Restrict to ARMhf (`hf`) or ARMsf (`sf`) — planned, not yet enforced |
+| `packages[].launcher` | no | Auto-create a launcher entry after install — planned, not yet implemented |
+| `packages[].sha256` | no | SHA-256 of package archive (future use) |
+| `packages[].size` | no | Size in bytes (future use) |
+
+**Launcher config (planned):**
+
+```json
+"launcher": {
+  "kindle": { "type": "kual", "entry_name": "My App" },
+  "kobo":   { "type": "nickelmenu", "entry_name": "My App", "location": "main" }
+}
+```
+
+Currently launcher entries must be created manually in install scripts. Automatic launcher registration is planned for a future release.
+
+#### `install.sh` / `uninstall.sh` — shell scripts
+
+Scripts run on-device via `/bin/sh`. They receive no arguments. Exit 0 for success, non-zero for failure.
+
+Example install script:
+
+```sh
+#!/bin/sh
+set -e
+cp -r /mnt/us/my-package-data /mnt/us/extensions/my-package/
+exit 0
+```
+
+#### Hosting options
+
+A ZenPM repo is just static files — host it on any static file server:
+
+- **GitHub Pages** — push to a `gh-pages` branch or configure Pages on `main`. URL pattern: `https://<user>.github.io/<repo>/`
+- **Raw GitHub** — use `https://raw.githubusercontent.com/<user>/<repo>/main/`
+- **Any static host** — Netlify, Cloudflare Pages, or a simple nginx/Apache directory
+
+#### Adding a repo to ZenPM
+
+Once hosted, users can add the repo to their device. Repo maintainers can provide one of these methods in their README or install instructions.
+
+**Option 1 — ZenPM CLI (SSH or on-device terminal)**
+
+```sh
+zenpm repo add my-repo https://example.com/my-repo/
+zenpm repo refresh
+```
+
+Priority and trust level are determined automatically by the backend — callers cannot set them.
+
+**Option 2 — HTTP API (from any HTTP client on the device)**
+
+The ZenPM daemon listens on `127.0.0.1:8080`. Any process on the device can add a repo by POSTing to `/repos`:
+
+```sh
+curl -s -X POST http://127.0.0.1:8080/repos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"my-repo","url":"https://example.com/my-repo/"}'
+```
+
+Priority and trust are backend-determined — only `name` and `url` are accepted.
+
+Then trigger a refresh:
+
+```sh
+curl -s -X POST http://127.0.0.1:8080/repo/refresh
+```
+
+**Option 3 — From a repo's own install script**
+
+A repo's `install.sh` can register itself with ZenPM during installation, so the user gets automatic updates:
+
+```sh
+#!/bin/sh
+set -e
+
+# Install the package
+cp -r /mnt/us/my-package /mnt/us/extensions/my-package/
+
+# Register this repo with ZenPM for future updates
+curl -s -X POST http://127.0.0.1:8080/repos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"my-repo","url":"https://example.com/my-repo/"}'
+curl -s -X POST http://127.0.0.1:8080/repo/refresh
+
+exit 0
+```
+
+Since ZenPM binds to loopback only, these requests can only originate from the device itself — remote servers cannot trigger repo additions.
+
+**Option 4 — WAF Sources page**
+
+Users can also add repos interactively from the ZenPM Sources tab in the Kindle WAF UI by entering the name and URL.
+
+**API reference — `POST /repos`**
+
+| Field | Required | Notes |
+|---|---|---|
+| `name` | yes | Unique repo identifier |
+| `url` | yes | Base URL of the repo (trailing slash recommended) |
+
+Priority is always `100` for user-added repos (default repos use `10` for higher precedence). Trust level is auto-detected:
+
+- `signed` — repo has a valid `index.json.sig` Ed25519 signature
+- `warn-unsigned` — no valid signature found, or repo uses plain HTTP
+- `trusted` — built-in default repos (KindleForge, ZenLabs)
+
+Callers cannot override priority or trust via the API.
+
+Response on success (HTTP 201):
+
+```json
+{"ok": true}
+```
+
+Response on conflict (HTTP 409) — name already exists or collides with a default repo:
+
+```json
+{"error": "repo \"kindle-forge\" already exists"}
+```
+
+#### Adding a repo via the Kindle browser
+
+The Kindle experimental browser may not open custom URL schemes. The recommended approach for repo maintainers is a **JavaScript button** that POSTs directly to the ZenPM daemon running on the device. CORS is already enabled on the daemon.
+
+**Copy-paste this into your repo's webpage (GitHub Pages, etc.):**
+
+```html
+<button id="zenpm-add-btn" style="padding:12px 24px;font-size:1rem;cursor:pointer;">
+  Add to ZenPM
+</button>
+
+<script>
+document.getElementById('zenpm-add-btn').onclick = function() {
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+
+  fetch('http://127.0.0.1:8080/repos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'my-repo',
+      url: 'https://example.com/my-repo/'
+    })
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return fetch('http://127.0.0.1:8080/repo/refresh', { method: 'POST' });
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return fetch('http://127.0.0.1:8080/foreground', { method: 'POST' });
+  }).then(function() {
+    btn.textContent = 'Added! Open ZenPM.';
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Add to ZenPM';
+    alert('Could not reach ZenPM daemon. Is it running?\n\n' + err.message);
+  });
+};
+</script>
+```
+
+**How it works:**
+
+1. Kindle browser loads your repo's GitHub Pages page
+2. User taps "Add to ZenPM" — JavaScript POSTs to `127.0.0.1:8080/repos` (CORS allowed)
+3. On success: refreshes catalog then foregrounds the ZenPM app via `/foreground`
+4. Priority and trust are backend-determined — the caller only provides `name` and `url`
+5. If daemon isn't running, shows a clear error message
+
+This works because the Kindle browser can make HTTP requests to localhost — no URL scheme needed.
+
+#### Auto-detection notes
+
+ZenPM fetches `index.json` first. If that returns 404 or isn't a valid ZenPM catalog object, it falls back to trying `registry.json` as a KindleForge-format flat array. This means a single repo URL can serve both formats — or you can host exclusively one format and ZenPM will detect it automatically.
+
+#### Repo signing with `index.json.sig`
+
+Repos can include an Ed25519 detached signature to earn the `signed` trust level. Place an `index.json.sig` file alongside `index.json` at the repo root:
+
+```
+my-repo/
+  index.json
+  index.json.sig    ← hex-encoded Ed25519 signature of SHA-256(index.json)
+```
+
+The `.sig` file contains the raw 64-byte Ed25519 signature of `index.json`'s raw bytes (or hex-encoded — both are accepted). ZenPM uses the ZenLabs public key by default; override via `ZENPM_REPO_PUBKEY` (hex-encoded 32-byte key).
+
+```sh
+# Sign index.json with your Ed25519 private key (raw binary output):
+openssl pkeyutl -sign -inkey private.pem -rawin -in index.json -out index.json.sig
+```
+
+**Trust levels:**
+
+| Trust | Meaning |
+|---|---|
+| `trusted` | Built-in default repo (KindleForge, ZenLabs) |
+| `signed` | Valid `index.json.sig` found and verified |
+| `warn-unsigned` | No valid signature, or plain HTTP repo |
+
+#### HTTPS requirement
+
+Repos served over plain HTTP will be set to `warn-unsigned` regardless of signature status — signatures are meaningless over unencrypted transport. The API response includes a `warning` field for HTTP repos. Localhost and `file://` URLs are exempt from this check.
 
 ## Safety notes
 

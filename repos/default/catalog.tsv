@@ -1,7 +1,0 @@
-# zenpm-catalog-v1
-id	name	version	platforms	dependencies	install_url	uninstall_url	manifest_url	sha256	size
-kual	KUAL	2.7.37	kindle		packages/kual/scripts/install.sh	packages/kual/scripts/uninstall.sh	packages/kual/manifest.json		0
-koreader-kindle	KOReader (Kindle)	2026.03.0	kindle	kual	packages/koreader-kindle/scripts/install.sh	packages/koreader-kindle/scripts/uninstall.sh	packages/koreader-kindle/manifest.json		0
-nickelmenu	NickelMenu	0.6.0	kobo		packages/nickelmenu/scripts/install.sh	packages/nickelmenu/scripts/uninstall.sh	packages/nickelmenu/manifest.json		0
-ZenPM-kobo	Zen Package Manager (Kobo Launcher)	0.1.0	kobo	nickelmenu	packages/ZenPM-kobo/scripts/install.sh	packages/ZenPM-kobo/scripts/uninstall.sh	packages/ZenPM-kobo/manifest.json		0
-koreader-kobo	KOReader (Kobo)	2026.03.0	kobo	ZenPM-kobo	packages/koreader-kobo/scripts/install.sh	packages/koreader-kobo/scripts/uninstall.sh	packages/koreader-kobo/manifest.json		0

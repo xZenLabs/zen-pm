@@ -28,7 +28,7 @@
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('Zen PM - Debug', refreshLog);
+        ZenUtils.setupPageChrome('ZenPM - Debug', refreshLog);
     }
 
     var _inited = false;

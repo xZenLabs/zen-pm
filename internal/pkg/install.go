@@ -69,7 +69,7 @@ func (m *Manager) Install(id string) error {
 		}
 
 		if err := m.st.AppendInstalled(state.InstalledEntry{
-			ID: pkgID, Version: entry.Version, Repo: entry.Repo,
+			ID: pkgID, Name: entry.Name, Version: entry.Version, Repo: entry.Repo,
 		}); err != nil {
 			j.Abort("record failed: " + err.Error())
 			return err

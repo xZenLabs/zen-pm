@@ -58,13 +58,23 @@ var ZenUtils = (function () {
         window.location.href = "packages.html";
     }
 
+    // Trigger self-update via POST /update. The update script handles native alerts.
+    function startUpdate() {
+        postLog("[utils] startUpdate: triggering update");
+        fetchJSON("POST", "/update", null).then(function () {
+            postLog("[utils] update accepted, daemon restarting");
+        }).catch(function (err) {
+            postLog("[utils] update failed: " + (err && err.message));
+        });
+    }
+
     // About dialog — triggers native Kindle alert via POST /dialog, falls back to HTML overlay.
     function showAboutModal() {
         postLog("[utils] showAboutModal called");
         fetchJSON("GET", "/health", null).then(function (data) {
             var version = data && data.version ? 'v' + data.version : 'v?';
             postLog("[utils] got version: " + version + ", sending /dialog");
-            return fetchJSON("POST", "/dialog", { title: "Zen PM", message: version });
+            return fetchJSON("POST", "/dialog", { title: "ZenPM", message: version });
         }).then(function () {
             postLog("[utils] native dialog shown");
         }).catch(function (err) {
@@ -90,7 +100,7 @@ var ZenUtils = (function () {
 
         var name = document.createElement('span');
         name.className = 'about-app-name';
-        name.textContent = 'Zen PM';
+        name.textContent = 'ZenPM';
 
         logoRow.appendChild(img);
         logoRow.appendChild(name);
@@ -125,7 +135,8 @@ var ZenUtils = (function () {
                     "name": "default",
                     "items": [
                         { "id": "ZEN_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 },
-                        { "id": "ZEN_ABOUT",   "state": "enabled", "handling": "notifyApp", "label": "About",   "position": 1 }
+                        { "id": "ZEN_UPDATE",  "state": "enabled", "handling": "notifyApp", "label": "Update",  "position": 1 },
+                        { "id": "ZEN_ABOUT",   "state": "enabled", "handling": "notifyApp", "label": "About",   "position": 2 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -135,6 +146,7 @@ var ZenUtils = (function () {
 
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
             if (data === "ZEN_REFRESH" && refreshHandler) refreshHandler();
+            if (data === "ZEN_UPDATE") startUpdate();
             if (data === "ZEN_ABOUT") showAboutModal();
         });
 
@@ -209,6 +221,42 @@ var ZenUtils = (function () {
         postLog("[utils] navbar appended to body, childCount=" + nav.childElementCount);
     }
 
+    // Shared modal overlay — shows a centered box with title + message + Close button.
+    function showModal(title, message) {
+        hideModal();
+        var overlay = document.createElement("div");
+        overlay.className = "modal-overlay";
+        overlay.id = "zenpm-modal-overlay";
+
+        var box = document.createElement("div");
+        box.className = "modal-box";
+
+        var h = document.createElement("h3");
+        h.textContent = title;
+        box.appendChild(h);
+
+        var p = document.createElement("p");
+        p.textContent = message;
+        box.appendChild(p);
+
+        var btn = document.createElement("button");
+        btn.textContent = "Close";
+        btn.onclick = hideModal;
+        box.appendChild(btn);
+
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        overlay.onclick = function (e) {
+            if (e.target === overlay) hideModal();
+        };
+    }
+
+    function hideModal() {
+        var ov = document.getElementById("zenpm-modal-overlay");
+        if (ov) ov.parentNode.removeChild(ov);
+    }
+
     // Shared package card — returns a DOM element. clickHandler receives the pkg object.
     function renderPackageCard(pkg, clickHandler) {
         var card = document.createElement("article");
@@ -220,7 +268,22 @@ var ZenUtils = (function () {
 
         var meta = document.createElement("p");
         meta.className = "package-meta";
-        meta.textContent = pkg.id + " | v" + pkg.version + " | " + (pkg.repo || "?");
+        var repoDisplay = pkg.repo || "?";
+        if (pkg.version && pkg.version !== "0.0.0") {
+            meta.textContent = repoDisplay + " | v" + pkg.version;
+        } else {
+            meta.textContent = repoDisplay;
+        }
+
+        card.appendChild(title);
+        card.appendChild(meta);
+
+        if (pkg.description) {
+            var desc = document.createElement("p");
+            desc.className = "package-desc";
+            desc.textContent = pkg.description;
+            card.appendChild(desc);
+        }
 
         var badges = document.createElement("div");
         badges.className = "badges";
@@ -232,10 +295,19 @@ var ZenUtils = (function () {
             : String(pkg.platforms || "");
         badges.appendChild(platBadge);
 
-        var instBadge = document.createElement("span");
-        instBadge.className = "badge " + (pkg.installed ? "installed" : "missing");
-        instBadge.textContent = pkg.installed ? "installed" : "not installed";
-        badges.appendChild(instBadge);
+        card.appendChild(badges);
+
+        if (pkg.tags && pkg.tags.length) {
+            var tagBadges = document.createElement("div");
+            tagBadges.className = "tag-badges";
+            for (var _t = 0; _t < pkg.tags.length; _t++) {
+                var tagBadge = document.createElement("span");
+                tagBadge.className = "badge tag-badge";
+                tagBadge.textContent = pkg.tags[_t];
+                tagBadges.appendChild(tagBadge);
+            }
+            card.appendChild(tagBadges);
+        }
 
         var actionBtn = document.createElement("button");
         actionBtn.type = "button";
@@ -245,9 +317,6 @@ var ZenUtils = (function () {
             actionBtn.addEventListener("click", function () { clickHandler(pkg); }, false);
         }
 
-        card.appendChild(title);
-        card.appendChild(meta);
-        card.appendChild(badges);
         card.appendChild(actionBtn);
         return card;
     }
@@ -264,6 +333,8 @@ var ZenUtils = (function () {
         goBack:          goBack,
         renderNavbar:    renderNavbar,
         renderPackageCard: renderPackageCard,
+        showModal:       showModal,
+        hideModal:       hideModal,
         showAboutModal:  showAboutModal,
         setupPageChrome: setupPageChrome
     };

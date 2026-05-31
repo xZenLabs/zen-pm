@@ -15,6 +15,10 @@ type Manager struct {
 	st *state.State
 }
 
+// UserAddedPriority is the fixed priority assigned to all user-added repos.
+// Lower numbers = higher priority. Default repos use priority 10.
+const UserAddedPriority = 100
+
 func New(st *state.State) *Manager {
 	return &Manager{st: st}
 }
