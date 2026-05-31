@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ZenPM - Sources</title>
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="sources-page-body">
+    <div class="page sources-page">
+        <header class="sources-header">
+            <h2>Sources</h2>
+            <button id="addSourceBtn" type="button" class="add-source-btn">+ Add source</button>
+        </header>
+
+        <div class="sources-scroll">
+            <div id="repoList" class="repo-list">
+                <p class="hint">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add-source modal (hidden by default) -->
+    <div id="addSourceModal" class="modal-overlay" style="display:none">
+        <div class="modal-box">
+            <h3>Add Source</h3>
+            <p id="addSourceMsg" class="hint"></p>
+            <input id="sourceUrlInput" type="text" placeholder="https://example.com/repos/default" spellcheck="false" autocomplete="off">
+            <div style="margin-top:14px">
+                <button id="confirmAddBtn" type="button" class="primary">Add</button>
+                <button id="cancelAddBtn" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../polyfill.js"></script>
+    <script src="../../utils.js"></script>
+    <script src="sources.js"></script>
+    <script>ZenUtils.renderNavbar('sources');</script>
+</body>
+</html>

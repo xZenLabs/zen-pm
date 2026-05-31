@@ -42,7 +42,7 @@ jobs:
       - name: Run shellcheck
         run: |
           set -eu
-          find repos/default installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          find installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
           echo build.sh >> /tmp/zenpm-shell-files.txt
           xargs shellcheck -x < /tmp/zenpm-shell-files.txt
 
@@ -54,7 +54,7 @@ jobs:
       - name: Validate shell syntax
         run: |
           set -eu
-          find repos/default installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          find installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
           echo build.sh >> /tmp/zenpm-shell-files.txt
           while IFS= read -r file; do sh -n "$file"; done < /tmp/zenpm-shell-files.txt
 

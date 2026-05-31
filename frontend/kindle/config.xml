@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
-<widget id="com.zenpm.waf" version="0.1" viewmodes="application"
+<widget id="com.zenlabs.zenpm" version="0.1" viewmodes="application"
     xmlns="http://www.w3.org/ns/widgets"
     xmlns:kindle="http://kindle.amazon.com/ns/widget-extensions">
-    <name xml:lang="en">Zen Package Manager</name>
+    <name xml:lang="en">ZenPM</name>
     <description xml:lang="en">Kindle package manager frontend.</description>
 
     <content src="index.html" />
@@ -39,7 +39,7 @@
     </kindle:network>
 
     <kindle:settings>
-        <kindle:setting name="internetRequired" value="no" />
+        <kindle:setting name="internetRequired" value="yes" />
         <kindle:setting name="saveContext" value="no" />
         <kindle:setting name="disable-wua-features" value="yes" />
     </kindle:settings>

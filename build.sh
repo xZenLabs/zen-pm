@@ -99,9 +99,18 @@ copy_tree "$ROOT_DIR/installers" "$KINDLE_STAGE/ZenPM"
 cp "$ROOT_DIR/installers/kindle/ZenPM.sh" "$KINDLE_STAGE/documents/ZenPM.sh"
 
 # Inject version into asset URLs so WebKit cache is busted on each release.
-_waf_html="$KINDLE_STAGE/ZenPM/frontend/kindle/index.html"
-sed "s/script\.js\"/script.js?v=$VERSION\"/g; s/style\.css\"/style.css?v=$VERSION\"/g" \
-    "$_waf_html" > "$_waf_html.tmp" && mv "$_waf_html.tmp" "$_waf_html"
+# Process all HTML files under the pages/ directory.
+find "$KINDLE_STAGE/ZenPM/frontend/kindle/pages" -name '*.html' | while IFS= read -r f; do
+    sed -E \
+        -e "s/(polyfill\.js)\"/\1?v=$VERSION\"/g" \
+        -e "s/(utils\.js)\"/\1?v=$VERSION\"/g" \
+        -e "s/(style\.css)\"/\1?v=$VERSION\"/g" \
+        -e "s/(script\.js)\"/\1?v=$VERSION\"/g" \
+        -e "s/(sources\.js)\"/\1?v=$VERSION\"/g" \
+        -e "s/(installed\.js)\"/\1?v=$VERSION\"/g" \
+        -e "s/(log\.js)\"/\1?v=$VERSION\"/g" \
+        "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 
 ensure_exec "$KINDLE_STAGE/ZenPM"
 ensure_exec "$KINDLE_STAGE/documents"

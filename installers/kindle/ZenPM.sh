@@ -5,7 +5,7 @@
 # DontUseFBInk
 set -eu
 
-APP_ID="com.ZenPM.waf"
+APP_ID="com.zenlabs.zenpm"
 APP_NAME="Zen Package Manager"
 APPREG_DB="/var/local/appreg.db"
 MESQUITE_TARGET="/var/local/mesquite/ZenPM"

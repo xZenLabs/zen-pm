@@ -2,7 +2,7 @@
 # ZenPM self-update — checks latest GitHub release, validates SHA, installs if newer.
 set -e
 
-APP_ID="com.ZenPM.waf"
+APP_ID="com.zenlabs.zenpm"
 TMPDIR="/mnt/us/ZPM-Update-Temp"
 PAYLOAD_DIR="/mnt/us/ZenPM"
 VERSION_FILE="$PAYLOAD_DIR/VERSION"

@@ -1,7 +1,7 @@
 // Shared WAF utilities — loaded before every page script.
 var ZenUtils = (function () {
     var API    = "http://127.0.0.1:8080";
-    var APP_ID = "com.ZenPM.waf";
+    var APP_ID = "com.zenlabs.zenpm";
 
     function getKindle() {
         try { return window.kindle || top.kindle; } catch (_e) { return window.kindle; }
@@ -55,7 +55,8 @@ var ZenUtils = (function () {
     }
 
     function goBack() {
-        window.location.href = "packages.html";
+        var isSub = window.location.pathname.indexOf('/pages/') !== -1;
+        window.location.href = (isSub ? '../..' : '.') + '/pages/search/index.html';
     }
 
     // Trigger self-update via POST /update. The update script handles native alerts.
@@ -72,14 +73,15 @@ var ZenUtils = (function () {
     function showAboutModal() {
         postLog("[utils] showAboutModal called");
         fetchJSON("GET", "/health", null).then(function (data) {
-            var version = data && data.version ? 'v' + data.version : 'v?';
+            var raw = data && data.version ? data.version : '?';
+            var version = raw.replace(/^v/, '');
             postLog("[utils] got version: " + version + ", sending /dialog");
-            return fetchJSON("POST", "/dialog", { title: "ZenPM", message: version });
+            return fetchJSON("POST", "/dialog", { title: "ZenPM", message: "Version: " + version + "\nAuthor: Anthony Gress (ZenLabs)\n2026" });
         }).then(function () {
             postLog("[utils] native dialog shown");
         }).catch(function (err) {
             postLog("[utils] dialog/health failed: " + (err && err.message));
-            _renderAboutOverlay('v?');
+            _renderAboutOverlay('?');
         });
     }
 
@@ -107,7 +109,15 @@ var ZenUtils = (function () {
 
         var ver = document.createElement('p');
         ver.className = 'about-version';
-        ver.textContent = versionText;
+        ver.textContent = 'Version: ' + versionText;
+
+        var author = document.createElement('p');
+        author.className = 'about-author';
+        author.textContent = 'Author: Anthony Gress (ZenLabs)';
+
+        var year = document.createElement('p');
+        year.className = 'about-year';
+        year.textContent = '2026';
 
         var btn = document.createElement('button');
         btn.textContent = 'Close';
@@ -115,6 +125,8 @@ var ZenUtils = (function () {
 
         box.appendChild(logoRow);
         box.appendChild(ver);
+        box.appendChild(author);
+        box.appendChild(year);
         box.appendChild(btn);
         overlay.appendChild(box);
         document.body.appendChild(overlay);
@@ -183,12 +195,17 @@ var ZenUtils = (function () {
     // 'home', 'search', 'installed', 'sources', or 'debug'.
     function renderNavbar(activeTab) {
         postLog("[utils] renderNavbar: " + activeTab);
+
+        // Pages inside pages/ are two levels deep — prefix with ../.. for root assets.
+        var isSub = window.location.pathname.indexOf('/pages/') !== -1;
+        var bp = isSub ? '../..' : '.';
+
         var tabs = [
-            { id: 'home',      label: 'Home',      icon: 'assets/home.svg',      href: 'index.html' },
-            { id: 'sources',   label: 'Sources',    icon: 'assets/sources.svg',   href: 'sources.html' },
-            { id: 'installed', label: 'Installed',  icon: 'assets/packages.svg',  href: 'installed.html' },
-            { id: 'debug',     label: 'Debug',      icon: 'assets/debug.svg',     href: 'log.html' },
-            { id: 'search',    label: 'Search',     icon: 'assets/search.svg',    href: 'packages.html' }
+            { id: 'home',      label: 'Featured',  icon: bp + '/assets/star.svg',      href: bp + '/index.html' },
+            { id: 'sources',   label: 'Sources',    icon: bp + '/assets/sources.svg',   href: bp + '/pages/sources/index.html' },
+            { id: 'installed', label: 'Installed',  icon: bp + '/assets/packages.svg',  href: bp + '/pages/installed/index.html' },
+            { id: 'debug',     label: 'Debug',      icon: bp + '/assets/debug.svg',     href: bp + '/pages/debug/index.html' },
+            { id: 'search',    label: 'Search',     icon: bp + '/assets/search.svg',    href: bp + '/pages/search/index.html' }
         ];
 
         var nav = document.createElement('nav');
@@ -262,9 +279,54 @@ var ZenUtils = (function () {
         var card = document.createElement("article");
         card.className = "package-card";
 
+        // Header row: icon (left) + title (right), inline like home header.
+        var headerRow = document.createElement("div");
+        headerRow.className = "package-card-header";
+
         var title = document.createElement("h3");
         title.className = "package-name";
         title.textContent = pkg.name;
+        headerRow.appendChild(title);
+
+        // Tag badges inline next to the title.
+        if (pkg.tags && pkg.tags.length) {
+            for (var _t = 0; _t < pkg.tags.length; _t++) {
+                var tagBadge = document.createElement("span");
+                tagBadge.className = "badge tag-badge";
+                tagBadge.textContent = pkg.tags[_t];
+                headerRow.appendChild(tagBadge);
+            }
+        }
+
+        // Preload icon — only insert into DOM if it actually loads.
+        // KindleForge repo has no favicon — use bundled local SVG.
+        var iconSrc = pkg.icon_url;
+        if (pkg.repo === "KindleForge") {
+            var isSub = window.location.pathname.indexOf('/pages/') !== -1;
+            iconSrc = (isSub ? '../..' : '.') + '/assets/kindleforge.svg';
+        }
+
+        if (iconSrc) {
+            var preload = new Image();
+            preload.onload = function () {
+                var iconImg = document.createElement("img");
+                iconImg.src = iconSrc;
+                iconImg.alt = "";
+                iconImg.className = "package-card-icon";
+                iconImg.width = 64;
+                iconImg.height = 64;
+                headerRow.insertBefore(iconImg, headerRow.firstChild);
+            };
+            preload.onerror = function () {
+                if (preload.src.indexOf('/favicon.svg') !== -1) {
+                    preload.src = preload.src.replace('/favicon.svg', '/favicon.ico');
+                    return;
+                }
+            };
+            preload.src = iconSrc;
+        }
+
+        card.appendChild(headerRow);
 
         var meta = document.createElement("p");
         meta.className = "package-meta";
@@ -275,7 +337,6 @@ var ZenUtils = (function () {
             meta.textContent = repoDisplay;
         }
 
-        card.appendChild(title);
         card.appendChild(meta);
 
         if (pkg.description) {
@@ -285,40 +346,56 @@ var ZenUtils = (function () {
             card.appendChild(desc);
         }
 
-        var badges = document.createElement("div");
-        badges.className = "badges";
-
-        var platBadge = document.createElement("span");
-        platBadge.className = "badge";
-        platBadge.textContent = Array.isArray(pkg.platforms)
-            ? pkg.platforms.join(", ")
-            : String(pkg.platforms || "");
-        badges.appendChild(platBadge);
-
-        card.appendChild(badges);
-
-        if (pkg.tags && pkg.tags.length) {
-            var tagBadges = document.createElement("div");
-            tagBadges.className = "tag-badges";
-            for (var _t = 0; _t < pkg.tags.length; _t++) {
-                var tagBadge = document.createElement("span");
-                tagBadge.className = "badge tag-badge";
-                tagBadge.textContent = pkg.tags[_t];
-                tagBadges.appendChild(tagBadge);
-            }
-            card.appendChild(tagBadges);
-        }
+        var DOWNLOAD_ICON = "<svg class='btn-icon' viewBox='0 0 24 24'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'></path><polyline points='7 10 12 15 17 10'></polyline><line x1='12' y1='15' x2='12' y2='3'></line></svg>";
+        var X_ICON       = "<svg class='btn-icon' viewBox='0 0 24 24'><line x1='18' y1='6' x2='6' y2='18'></line><line x1='6' y1='6' x2='18' y2='18'></line></svg>";
 
         var actionBtn = document.createElement("button");
         actionBtn.type = "button";
-        actionBtn.className = pkg.installed ? "danger" : "";
-        actionBtn.textContent = pkg.installed ? "Uninstall" : "Install";
+        actionBtn.className = pkg.installed ? "package-action danger" : "package-action";
+        actionBtn.innerHTML = (pkg.installed ? X_ICON : DOWNLOAD_ICON) + "<span class='btn-label'>" + (pkg.installed ? "Uninstall" : "Install") + "</span>";
+        actionBtn.addEventListener("touchstart", function () { this.blur(); }, false);
+        actionBtn.addEventListener("touchend", function () { this.blur(); }, false);
+        actionBtn.addEventListener("mouseup", function () { this.blur(); }, false);
         if (clickHandler) {
-            actionBtn.addEventListener("click", function () { clickHandler(pkg); }, false);
+            actionBtn.addEventListener("click", function () {
+                this.blur();
+                clickHandler(pkg);
+            }, false);
         }
 
         card.appendChild(actionBtn);
         return card;
+    }
+
+    // Card-based scroll navigation — intercepts mousewheel to move one card per
+    // swipe, matching KindleForge behavior.  Native scroll on Kindle WAF is too
+    // sluggish and requires multiple swipes per item.
+    function setupCardScroll(scrollSelector, cardClass) {
+        var cards = [];
+        var cIndex = 0;
+        var scrollEl = null;
+
+        function rebuild() {
+            cards = [];
+            var elems = document.getElementsByClassName(cardClass);
+            for (var i = 0; i < elems.length; i++) cards.push(elems[i]);
+            if (!scrollEl) scrollEl = document.querySelector(scrollSelector);
+        }
+
+        function goCard(index) {
+            if (cards.length === 0) return;
+            cIndex = Math.max(0, Math.min(cards.length - 1, index));
+            if (scrollEl) scrollEl.scrollTop = cards[cIndex].offsetTop - 10;
+        }
+
+        window.addEventListener("mousewheel", function (e) {
+            if (cards.length === 0) return;
+            e.preventDefault();
+            if (e.wheelDeltaY > 0) goCard(cIndex - 1);
+            else if (e.wheelDeltaY < 0) goCard(cIndex + 1);
+        }, false);
+
+        return { rebuild: rebuild, goCard: goCard };
     }
 
     return {
@@ -336,6 +413,7 @@ var ZenUtils = (function () {
         showModal:       showModal,
         hideModal:       hideModal,
         showAboutModal:  showAboutModal,
-        setupPageChrome: setupPageChrome
+        setupPageChrome: setupPageChrome,
+        setupCardScroll: setupCardScroll
     };
 })();

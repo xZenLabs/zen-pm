@@ -4,17 +4,23 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
-    <title>ZenPM - Home</title>
+    <title>ZenPM - Featured</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class="page">
-        <section class="panel">
-            <h2>Featured</h2>
-            <p id="featuredHint" class="hint">Featured packages coming soon.</p>
-            <div id="featuredList" class="package-grid"></div>
-        </section>
+<body class="home-page-body">
+    <div class="page home-page">
+        <!-- Header with zen.svg + ZenPM title -->
+        <header class="home-header">
+            <img src="assets/zen.svg" alt="" class="home-logo" width="100" height="100">
+            <h1 class="home-title">Welcome to ZenPM</h1>
+        </header>
+
+        <div class="package-scroll">
+            <section class="panel">
+                <p id="featuredHint" class="hint">Loading featured packages&hellip;</p>
+                <div id="featuredList" class="package-grid"></div>
+            </section>
+        </div>
     </div>
 
     <script src="polyfill.js"></script>
@@ -23,7 +29,47 @@
         ZenUtils.postLog("[home] script loaded");
         ZenUtils.renderNavbar('home');
 
-        ZenUtils.setupPageChrome('ZenPM - Home', function () { location.reload(); });
+        ZenUtils.setupPageChrome('ZenPM - Featured', function () { location.reload(); });
+
+        // Featured packages — hardcoded until the server can push featured entries.
+        // These IDs match the default ZenLabs repo catalog.
+        var FEATURED_IDS = ["zen-reader", "kindle-browser", "zen-mtp"];
+
+        var fetchJSON = ZenUtils.fetchJSON;
+
+        function loadFeatured() {
+            fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
+                var all = Array.isArray(data) ? data : [];
+                var featured = [];
+                for (var _f = 0; _f < FEATURED_IDS.length; _f++) {
+                    for (var _a = 0; _a < all.length; _a++) {
+                        if (all[_a].id === FEATURED_IDS[_f]) {
+                            featured.push(all[_a]);
+                            break;
+                        }
+                    }
+                }
+                renderFeatured(featured);
+            }).catch(function () {
+                document.getElementById("featuredHint").textContent = "Featured packages coming soon.";
+            });
+        }
+
+        function renderFeatured(pkgs) {
+            var list = document.getElementById("featuredList");
+            var hint = document.getElementById("featuredHint");
+            list.innerHTML = "";
+            if (!pkgs.length) {
+                hint.textContent = "Featured packages coming soon.";
+                return;
+            }
+            hint.textContent = "";
+            for (var _i = 0; _i < pkgs.length; _i++) {
+                list.appendChild(ZenUtils.renderPackageCard(pkgs[_i], null));
+            }
+        }
+
+        loadFeatured();
     </script>
 </body>
 </html>

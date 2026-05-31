@@ -4,12 +4,11 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
-    <title>ZenPM - Search</title>
-    <link rel="stylesheet" href="style.css">
+    <title>ZenPM - Installed</title>
+    <link rel="stylesheet" href="../../style.css">
 </head>
-<body class="search-page-body">
-    <div class="page search-page">
+<body class="installed-page-body">
+    <div class="page installed-page">
         <header class="topbar">
             <div class="search-pill">
                 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -18,23 +17,24 @@
                 </svg>
                 <div class="search-row">
                     <span class="search-input-wrap">
-                        <input id="pkgSearch" type="text" placeholder="Search..." autocomplete="off" spellcheck="false">
+                        <input id="installedSearch" type="text" placeholder="Filter installed..." autocomplete="off" spellcheck="false">
                     </span>
-                    <span id="searchClear" class="search-clear" role="button" tabindex="0" aria-label="Clear search">&times;</span>
+                    <span id="installedSearchClear" class="search-clear" role="button" tabindex="0" aria-label="Clear search">&times;</span>
                 </div>
             </div>
         </header>
 
+        <h2 id="installedHeading">Installed</h2>
+
         <div class="package-scroll">
-            <h2 id="packagesHeading">Search</h2>
             <p id="hint" class="hint">Connect to server to load packages.</p>
-            <div id="packages" class="package-grid"></div>
+            <div id="installedList" class="package-grid"></div>
         </div>
     </div>
 
-    <script src="polyfill.js"></script>
-    <script src="utils.js"></script>
-    <script src="script.js"></script>
-    <script>ZenUtils.renderNavbar('search');</script>
+    <script src="../../polyfill.js"></script>
+    <script src="../../utils.js"></script>
+    <script src="installed.js"></script>
+    <script>ZenUtils.renderNavbar('installed');</script>
 </body>
 </html>
