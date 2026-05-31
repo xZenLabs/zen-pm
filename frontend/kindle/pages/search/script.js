@@ -38,6 +38,9 @@
     var hideModal = ZenUtils.hideModal;
     var fetchJSON = ZenUtils.fetchJSON;
     var fetchText = ZenUtils.fetchText;
+    var setupCardScroll = ZenUtils.setupCardScroll;
+
+    var cardScroll = null;
 
     function loadPackages() {
         return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
@@ -156,12 +159,14 @@
         el.packagesHeading.textContent = "Search (" + visible.length + (query ? "/" + state.packages.length : "") + ")";
         if (!visible.length) {
             el.hint.textContent = query ? "No packages match \"" + query + "\"." : "No packages found. Try Refresh Packages.";
+            if (cardScroll) cardScroll.rebuild();
             return;
         }
         el.hint.textContent = "";
         for (var _i = 0; _i < visible.length; _i++) {
             el.packages.appendChild(ZenUtils.renderPackageCard(visible[_i], performPackageAction));
         }
+        if (cardScroll) cardScroll.rebuild();
     }
 
     function setupChrome() {
@@ -192,6 +197,7 @@
         _inited = true;
         dbg("init");
         bindEvents();
+        cardScroll = setupCardScroll(".package-scroll", "package-card");
         detectRuntime();
     }
 

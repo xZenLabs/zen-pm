@@ -11,9 +11,11 @@
     };
 
     var el = {
-        hint:            document.getElementById("hint"),
-        installedList:   document.getElementById("installedList"),
-        installedHeading: document.getElementById("installedHeading")
+        hint:               document.getElementById("hint"),
+        installedList:      document.getElementById("installedList"),
+        installedHeading:   document.getElementById("installedHeading"),
+        installedSearch:    document.getElementById("installedSearch"),
+        installedSearchClear: document.getElementById("installedSearchClear")
     };
 
     window.onerror = function (msg, src, line) {
@@ -35,6 +37,9 @@
     var showModal = ZenUtils.showModal;
     var hideModal = ZenUtils.hideModal;
     var fetchJSON = ZenUtils.fetchJSON;
+    var setupCardScroll = ZenUtils.setupCardScroll;
+
+    var cardScroll = null;
 
     function loadPackages() {
         return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
@@ -129,61 +134,73 @@
 
     function renderInstalled() {
         el.installedList.innerHTML = "";
-        var installed = [];
-        for (var _i = 0; _i < state.packages.length; _i++) {
-            if (state.packages[_i].installed) {
-                installed.push(state.packages[_i]);
-            }
-        }
-        el.installedHeading.textContent = "Installed (" + installed.length + ")";
-        if (!installed.length) {
-            el.hint.textContent = "No packages installed. Use Search to find and install packages.";
+        var query = el.installedSearch ? el.installedSearch.value.toLowerCase().trim() : "";
+        var installed = state.packages.filter(function (p) { return p.installed; });
+        var visible = query
+            ? installed.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; })
+            : installed;
+        el.installedHeading.textContent = "Installed (" + visible.length + (query ? "/" + installed.length : "") + ")";
+        if (!visible.length) {
+            el.hint.textContent = query ? "No installed packages match \"" + query + "\"." : "No packages installed. Browse Search to find packages.";
+            if (cardScroll) cardScroll.rebuild();
             return;
         }
         el.hint.textContent = "";
-        for (var _j = 0; _j < installed.length; _j++) {
-            el.installedList.appendChild(ZenUtils.renderPackageCard(installed[_j], performPackageAction));
+        for (var _i = 0; _i < visible.length; _i++) {
+            el.installedList.appendChild(ZenUtils.renderPackageCard(visible[_i], performPackageAction));
         }
-    }
-
-    function refreshPackages() {
-        if (state.busy) return;
-        if (!state.connected) { detectRuntime(); return; }
-        state.busy = true;
-        fetchJSON("POST", "/repo/refresh", null).then(function () {
-            return loadPackages();
-        }).then(function () {
-            setBusy(false, "");
-        }).catch(function (err) {
-            postLog("[installed] Refresh failed: " + String(err));
-            el.hint.textContent = "Refresh failed.";
-            setBusy(false, "");
-        });
+        if (cardScroll) cardScroll.rebuild();
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('ZenPM - Installed', refreshPackages);
+        ZenUtils.setupPageChrome('ZenPM - Installed', loadPackages);
+    }
+
+    var _chromeSetup = false;
+    function trySetupChrome() {
+        if (_chromeSetup) return;
+        _chromeSetup = true;
+        try { setupChrome(); } catch (_e) { postLog("[installed] setupChrome threw: " + _e); }
+    }
+
+    function bindEvents() {
+        if (el.installedSearch) {
+            el.installedSearch.addEventListener("input", function () {
+                if (el.installedSearchClear) el.installedSearchClear.style.visibility = el.installedSearch.value ? "visible" : "hidden";
+                renderInstalled();
+            });
+        }
+        if (el.installedSearchClear) {
+            el.installedSearchClear.onclick = function () {
+                el.installedSearch.value = "";
+                el.installedSearchClear.style.visibility = "hidden";
+                renderInstalled();
+                el.installedSearch.focus();
+            };
+        }
     }
 
     var _inited = false;
     function init() {
         if (_inited) return;
         _inited = true;
-        dbg("[installed] init");
+        postLog("[installed] init");
+        bindEvents();
+        cardScroll = setupCardScroll(".package-scroll", "package-card");
         detectRuntime();
     }
 
     var _k = ZenUtils.getKindle();
     if (_k && _k.appmgr) {
-        dbg("[installed] ongo registered");
+        postLog("[installed] ongo registered");
         _k.appmgr.ongo = function () {
-            dbg("[installed] ongo fired");
-            try { setupChrome(); } catch (_e) { dbg("[installed] setupChrome threw: " + _e); }
+            postLog("[installed] ongo fired");
+            trySetupChrome();
             init();
         };
     } else {
-        dbg("[installed] no appmgr: " + (typeof _k));
+        postLog("[installed] no appmgr: " + (typeof _k));
     }
 
-    setTimeout(init, 0);
+    setTimeout(function () { trySetupChrome(); init(); }, 0);
 })();

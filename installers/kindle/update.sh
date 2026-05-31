@@ -1,8 +1,8 @@
 #!/bin/sh
 # ZenPM self-update — checks latest GitHub release, validates SHA, installs if newer.
-set -e
+set -eu
 
-APP_ID="com.ZenPM.waf"
+APP_ID="com.zenlabs.zenpm"
 TMPDIR="/mnt/us/ZPM-Update-Temp"
 PAYLOAD_DIR="/mnt/us/ZenPM"
 VERSION_FILE="$PAYLOAD_DIR/VERSION"
@@ -19,6 +19,8 @@ alert() {
     lipc-set-prop com.lab126.pillow pillowAlert "$JSON"
 }
 
+# cleanup() only invoked via trap
+# shellcheck disable=SC2317
 cleanup() {
     rm -rf "$TMPDIR"
 }
@@ -31,7 +33,9 @@ semver_cmp() {
     _b=$(printf '%s' "$2" | sed 's/^v//')
     _OFS="$IFS"
     IFS='.'
+    # shellcheck disable=SC2086
     set -- $_a; _a1=${1:-0}; _a2=${2:-0}; _a3=${3:-0}
+    # shellcheck disable=SC2086
     set -- $_b; _b1=${1:-0}; _b2=${2:-0}; _b3=${3:-0}
     IFS="$_OFS"
     if [ "$_a1" -gt "$_b1" ]; then echo 1; return; fi

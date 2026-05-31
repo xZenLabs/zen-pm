@@ -290,6 +290,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		Platforms   []string `json:"platforms"`
 		Repo        string   `json:"repo"`
 		Installed   bool     `json:"installed"`
+		IconURL     string   `json:"icon_url,omitempty"`
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
@@ -302,6 +303,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Description: e.Description, Author: e.Author,
 			Tags: e.Tags,
 			Platforms: e.Platforms, Repo: e.Repo, Installed: installedSet[e.ID],
+			IconURL: e.IconURL,
 		})
 	}
 
@@ -425,7 +427,9 @@ func (s *Server) handleDialog(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Dialog requested: title=%q message=%q", body.Title, body.Message)
 
 	titleEsc := strings.ReplaceAll(body.Title, `"`, `\"`)
-	msgEsc := strings.ReplaceAll(body.Message, `"`, `\"`)
+	msgEsc := strings.ReplaceAll(body.Message, `\`, `\\`)
+	msgEsc = strings.ReplaceAll(msgEsc, "\n", `\n`)
+	msgEsc = strings.ReplaceAll(msgEsc, `"`, `\"`)
 
 	script := fmt.Sprintf(
 		`JSON='{"clientParams":{"alertId":"appAlert1","show":true,"customStrings":[{"matchStr":"alertTitle","replaceStr":"%s"},{"matchStr":"alertText","replaceStr":"%s"}]}}'
@@ -461,7 +465,7 @@ func (s *Server) handleForeground(w http.ResponseWriter, r *http.Request) {
 
 // foreground brings the ZenPM WAF to the foreground via LIPC.
 func (s *Server) foreground() {
-	cmd := exec.Command("lipc-set-prop", "com.lab126.appmgrd", "start", "app://com.ZenPM.waf")
+	cmd := exec.Command("lipc-set-prop", "com.lab126.appmgrd", "start", "app://com.zenlabs.zenpm")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Warnf("Foreground failed: %v — output: %s", err, string(out))

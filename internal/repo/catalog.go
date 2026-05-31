@@ -20,7 +20,7 @@ import (
 )
 
 // CatalogEntry is the internal merged-catalog representation.
-// Pipe-separated on disk (15 fields): repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags
+// Pipe-separated on disk (17 fields): repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags|icon_url|manifest_url
 type CatalogEntry struct {
 	Repo         string
 	Priority     int
@@ -37,6 +37,7 @@ type CatalogEntry struct {
 	Description  string
 	Author       string
 	Tags         []string
+	IconURL      string
 }
 
 func (e *CatalogEntry) HasPlatform(p string) bool {
@@ -59,11 +60,12 @@ func (e *CatalogEntry) serialize() string {
 		e.SHA256, e.Size,
 		e.Description, e.Author,
 		strings.Join(e.Tags, ","),
+		e.IconURL,
 	}, "|")
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
-	parts := strings.SplitN(line, "|", 15)
+	parts := strings.SplitN(line, "|", 17)
 	if len(parts) < 12 {
 		return nil, fmt.Errorf("invalid catalog line (got %d fields): %q", len(parts), line)
 	}
@@ -90,6 +92,9 @@ func parseCatalogLine(line string) (*CatalogEntry, error) {
 	if len(parts) >= 15 && parts[14] != "" {
 		e.Tags = strings.Split(parts[14], ",")
 	}
+	if len(parts) >= 16 {
+		e.IconURL = parts[15]
+	}
 	return e, nil
 }
 
@@ -113,6 +118,7 @@ type indexJSON struct {
 		UninstallURL string   `json:"uninstall_url"`
 		SHA256       string   `json:"sha256"`
 		Size         string   `json:"size"`
+		IconURL      string   `json:"icon_url,omitempty"`
 	} `json:"packages"`
 }
 
@@ -160,8 +166,15 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 
 // parseZenPMCatalog converts the ZenPM index.json format to CatalogEntry list.
 func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []*CatalogEntry {
+	repoIcon := joinURL(repoURL, "favicon.svg")
 	var entries []*CatalogEntry
 	for _, p := range idx.Packages {
+		iconURL := p.IconURL
+		if iconURL == "" {
+			iconURL = repoIcon
+		} else {
+			iconURL = resolveURL(repoURL, iconURL)
+		}
 		entries = append(entries, &CatalogEntry{
 			Repo:         repoName,
 			Priority:     priority,
@@ -176,6 +189,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 			UninstallURL: resolveURL(repoURL, p.UninstallURL),
 			SHA256:       p.SHA256,
 			Size:         p.Size,
+			IconURL:      iconURL,
 		})
 	}
 	return entries
@@ -183,6 +197,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 
 // parseKindleForgeCatalog converts the KindleForge registry.json flat array to CatalogEntry list.
 func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []kfRegistryEntry) []*CatalogEntry {
+	repoIcon := joinURL(repoURL, "favicon.svg")
 	var result []*CatalogEntry
 	for _, e := range entries {
 		if e.URI == "" {
@@ -204,6 +219,7 @@ func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []k
 			ManifestURL:  "",
 			SHA256:       "",
 			Size:         "",
+			IconURL:      repoIcon,
 		})
 	}
 	return result
