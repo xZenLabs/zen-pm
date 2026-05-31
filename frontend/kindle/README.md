@@ -1,6 +1,6 @@
 # Kindle WAF Frontend Shell
 
-This folder contains the first Zen PM Kindle frontend shell.
+This folder contains the first ZenPM Kindle frontend shell.
 
 ## Files
 
@@ -19,7 +19,7 @@ This folder contains the first Zen PM Kindle frontend shell.
 ## Runtime assumptions
 
 - A command bridge service is available at com.kindlemodding.utild using runCMD.
-- Zen PM backend command exists at /mnt/us/zenpm/backend/zenpm.sh.
+- ZenPM backend command exists at /mnt/us/zenpm/backend/zenpm.sh.
 - Output files are written to /mnt/us/.zenpm/waf/.
 
 You can change the backend command path in the UI and save it.

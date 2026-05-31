@@ -42,6 +42,8 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/log", s.wrap(s.handleLog))
 	mux.HandleFunc("/log/client", s.wrap(s.handleClientLog))
 	mux.HandleFunc("/dialog", s.wrap(s.handleDialog))
+	mux.HandleFunc("/foreground", s.wrap(s.handleForeground))
+	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
 
 	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
 	if _, err := s.repos.ReadCatalog(); err != nil {
@@ -129,26 +131,47 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodPost:
 		var body struct {
-			Name     string `json:"name"`
-			URL      string `json:"url"`
-			Priority int    `json:"priority"`
-			Trust    string `json:"trust"`
+			Name string `json:"name"`
+			URL  string `json:"url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" || body.URL == "" {
 			http.Error(w, "name and url required", http.StatusBadRequest)
 			return
 		}
-		if body.Priority == 0 {
-			body.Priority = 100
+
+		// Priority and trust are backend-determined — callers cannot set them.
+		priority := repo.UserAddedPriority
+
+		// Auto-detect trust via index.json.sig signature.
+		trust, sigErr := repo.VerifyRepoSignature(body.URL)
+		if sigErr != nil {
+			trust = "warn-unsigned"
+			log.Infof("Repo %s: %v — trust=%s", body.Name, sigErr, trust)
+		} else {
+			log.Infof("Repo %s signature: trust=%s", body.Name, trust)
 		}
-		if body.Trust == "" {
-			body.Trust = "warn-unsigned"
+
+		// Warn on plain-HTTP repos (signatures are meaningless over HTTP).
+		var warning string
+		if safety := repo.CheckRepoURLSafety(body.URL); safety != "" {
+			log.Warnf("Repo %s: %s", body.Name, safety)
+			warning = safety
+			if trust == "signed" {
+				trust = "warn-unsigned"
+			}
 		}
-		if err := s.repos.Add(body.Name, body.URL, body.Priority, body.Trust); err != nil {
+
+		if err := s.repos.Add(body.Name, body.URL, priority, trust); err != nil {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]bool{"ok": true})
+		// Bring ZenPM WAF to foreground so the user sees the newly added repo.
+		s.foreground()
+		resp := map[string]interface{}{"ok": true}
+		if warning != "" {
+			resp["warning"] = warning
+		}
+		writeJSON(w, http.StatusCreated, resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -251,27 +274,52 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 
 	installed, _ := s.st.ReadInstalled()
 	installedSet := make(map[string]bool, len(installed))
+	installedName := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
+		installedName[e.ID] = e.Name
 	}
 
 	type pkgJSON struct {
-		ID        string   `json:"id"`
-		Name      string   `json:"name"`
-		Version   string   `json:"version"`
-		Platforms []string `json:"platforms"`
-		Repo      string   `json:"repo"`
-		Installed bool     `json:"installed"`
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Version     string   `json:"version"`
+		Description string   `json:"description"`
+		Author      string   `json:"author"`
+		Tags        []string `json:"tags"`
+		Platforms   []string `json:"platforms"`
+		Repo        string   `json:"repo"`
+		Installed   bool     `json:"installed"`
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
-	result := make([]pkgJSON, 0, len(filtered))
+	seen := make(map[string]bool, len(filtered))
+	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
+		seen[e.ID] = true
 		result = append(result, pkgJSON{
 			ID: e.ID, Name: e.Name, Version: e.Version,
+			Description: e.Description, Author: e.Author,
+			Tags: e.Tags,
 			Platforms: e.Platforms, Repo: e.Repo, Installed: installedSet[e.ID],
 		})
 	}
+
+	// Include device-installed packages not in any catalog (e.g. detected via scanKnownApps).
+	for _, e := range installed {
+		if !seen[e.ID] {
+			name := e.Name
+			if name == "" {
+				name = e.ID
+			}
+			result = append(result, pkgJSON{
+				ID: e.ID, Name: name, Version: e.Version,
+				Repo: e.Repo, Installed: true,
+				Platforms: []string{plat},
+			})
+		}
+	}
+
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -399,4 +447,53 @@ lipc-set-prop com.lab126.pillow pillowAlert "$JSON"`,
 	}
 	log.Infof("Dialog shown successfully")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleForeground brings the ZenPM WAF to the foreground via LIPC.
+func (s *Server) handleForeground(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	s.foreground()
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// foreground brings the ZenPM WAF to the foreground via LIPC.
+func (s *Server) foreground() {
+	cmd := exec.Command("lipc-set-prop", "com.lab126.appmgrd", "start", "app://com.ZenPM.waf")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Warnf("Foreground failed: %v — output: %s", err, string(out))
+		return
+	}
+	log.Info("Foreground requested")
+}
+
+// handleUpdate spawns the self-update script. The script kills and restarts the
+// daemon, so we fire-and-forget and return immediately.
+func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	script := "/mnt/us/ZenPM/installers/kindle/update.sh"
+	if _, err := os.Stat(script); err != nil {
+		log.Warnf("Update script not found: %s", script)
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "update script not found"})
+		return
+	}
+
+	log.Info("Starting self-update")
+	cmd := exec.Command("/bin/sh", script)
+	// Detach — the script will kill and restart this process.
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		log.Errorf("Failed to start update: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
 }

@@ -1,6 +1,6 @@
 # Transaction Model (v1)
 
-Zen PM uses lock files and journals to make package operations recoverable.
+ZenPM uses lock files and journals to make package operations recoverable.
 
 ## Goals
 

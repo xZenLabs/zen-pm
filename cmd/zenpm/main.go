@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"ZPM/internal/log"
@@ -80,18 +79,23 @@ func runRepo(repos *repo.Manager, args []string) {
 		}
 	case "add":
 		if len(args) < 3 {
-			die("Usage: zenpm repo add <name> <url> [priority] [trust]")
+			die("Usage: zenpm repo add <name> <url>")
 		}
-		priority := 100
-		trust := "warn-unsigned"
-		if len(args) > 3 {
-			priority, _ = strconv.Atoi(args[3])
+		// Priority and trust are backend-determined.
+		priority := repo.UserAddedPriority
+		trust, sigErr := repo.VerifyRepoSignature(args[2])
+		if sigErr != nil {
+			trust = "warn-unsigned"
 		}
-		if len(args) > 4 {
-			trust = args[4]
+		// Warn on plain-HTTP repos.
+		if safety := repo.CheckRepoURLSafety(args[2]); safety != "" {
+			fmt.Fprintf(os.Stderr, "WARNING: %s\n", safety)
+			if trust == "signed" {
+				trust = "warn-unsigned"
+			}
 		}
 		dieOnErr(repos.Add(args[1], args[2], priority, trust))
-		fmt.Printf("Added repo: %s\n", args[1])
+		fmt.Printf("Added repo: %s (trust: %s)\n", args[1], trust)
 	case "remove":
 		if len(args) < 2 {
 			die("Usage: zenpm repo remove <name>")

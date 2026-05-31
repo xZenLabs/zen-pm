@@ -1,10 +1,15 @@
 package repo
 
 import (
+	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,7 +20,7 @@ import (
 )
 
 // CatalogEntry is the internal merged-catalog representation.
-// Pipe-separated on disk (12 fields): repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size
+// Pipe-separated on disk (15 fields): repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags
 type CatalogEntry struct {
 	Repo         string
 	Priority     int
@@ -29,6 +34,9 @@ type CatalogEntry struct {
 	ManifestURL  string
 	SHA256       string
 	Size         string
+	Description  string
+	Author       string
+	Tags         []string
 }
 
 func (e *CatalogEntry) HasPlatform(p string) bool {
@@ -49,11 +57,13 @@ func (e *CatalogEntry) serialize() string {
 		strings.Join(e.Deps, ","),
 		e.InstallURL, e.UninstallURL, e.ManifestURL,
 		e.SHA256, e.Size,
+		e.Description, e.Author,
+		strings.Join(e.Tags, ","),
 	}, "|")
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
-	parts := strings.SplitN(line, "|", 12)
+	parts := strings.SplitN(line, "|", 15)
 	if len(parts) < 12 {
 		return nil, fmt.Errorf("invalid catalog line (got %d fields): %q", len(parts), line)
 	}
@@ -71,6 +81,15 @@ func parseCatalogLine(line string) (*CatalogEntry, error) {
 	if parts[6] != "" {
 		e.Deps = strings.Split(parts[6], ",")
 	}
+	if len(parts) >= 13 {
+		e.Description = parts[12]
+	}
+	if len(parts) >= 14 {
+		e.Author = parts[13]
+	}
+	if len(parts) >= 15 && parts[14] != "" {
+		e.Tags = strings.Split(parts[14], ",")
+	}
 	return e, nil
 }
 
@@ -86,11 +105,12 @@ type indexJSON struct {
 		ID           string   `json:"id"`
 		Name         string   `json:"name"`
 		Version      string   `json:"version"`
+		Description  string   `json:"description"`
+		Author       string   `json:"author"`
 		Platforms    []string `json:"platforms"`
 		Dependencies []string `json:"dependencies"`
 		InstallURL   string   `json:"install_url"`
 		UninstallURL string   `json:"uninstall_url"`
-		ManifestURL  string   `json:"manifest_url"`
 		SHA256       string   `json:"sha256"`
 		Size         string   `json:"size"`
 	} `json:"packages"`
@@ -148,11 +168,12 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 			ID:           p.ID,
 			Name:         p.Name,
 			Version:      p.Version,
+			Description:  p.Description,
+			Author:       p.Author,
 			Platforms:    p.Platforms,
 			Deps:         p.Dependencies,
 			InstallURL:   resolveURL(repoURL, p.InstallURL),
 			UninstallURL: resolveURL(repoURL, p.UninstallURL),
-			ManifestURL:  resolveURL(repoURL, p.ManifestURL),
 			SHA256:       p.SHA256,
 			Size:         p.Size,
 		})
@@ -173,6 +194,9 @@ func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []k
 			ID:           e.URI,
 			Name:         e.Name,
 			Version:      "0.0.0", // KindleForge registry has no version field
+			Description:  e.Description,
+			Author:       e.Author,
+			Tags:         e.Tags,
 			Platforms:    []string{"kindle"}, // KindleForge is Kindle-only
 			Deps:         e.Dependencies,
 			InstallURL:   resolveURL(repoURL, e.URI+"/install.sh"),
@@ -299,4 +323,124 @@ func resolveURL(base, rel string) string {
 		return rel
 	}
 	return joinURL(base, rel)
+}
+
+// KnownRepoPubKey is the Ed25519 public key used to verify index.json.sig.
+// Defaults to the ZenLabs repo signing key. Override via ZENPM_REPO_PUBKEY env var
+// (hex-encoded 32-byte Ed25519 key).
+var KnownRepoPubKey = func() ed25519.PublicKey {
+	if key := os.Getenv("ZENPM_REPO_PUBKEY"); key != "" {
+		b, err := hex.DecodeString(key)
+		if err == nil && len(b) == ed25519.PublicKeySize {
+			return ed25519.PublicKey(b)
+		}
+	}
+	return parsePEMPubKey(zenLabsPubKeyPEM)
+}()
+
+// zenLabsPubKeyPEM is the ZenLabs repo Ed25519 public key in PKIX/SPKI PEM format.
+const zenLabsPubKeyPEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAsWdhAiVzFSIr8yYgFRHWWwAp2NAh/WKXMqaOkYXVN3k=
+-----END PUBLIC KEY-----`
+
+func parsePEMPubKey(pemData string) ed25519.PublicKey {
+	block, _ := pem.Decode([]byte(pemData))
+	if block == nil {
+		return nil
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil
+	}
+	edKey, ok := pub.(ed25519.PublicKey)
+	if !ok {
+		return nil
+	}
+	return edKey
+}
+
+// VerifyRepoSignature fetches index.json and index.json.sig from repoURL and verifies
+// the Ed25519 signature. Returns "signed" if valid, "warn-unsigned" otherwise.
+func VerifyRepoSignature(repoURL string) (string, error) {
+	if KnownRepoPubKey == nil {
+		log.Warnf("VerifyRepoSignature: no public key configured")
+		return "warn-unsigned", fmt.Errorf("no public key configured")
+	}
+
+	indexURL := joinURL(repoURL, "index.json")
+	sigURL := joinURL(repoURL, "index.json.sig")
+
+	indexData, err := fetchBytes(indexURL)
+	if err != nil {
+		log.Infof("VerifyRepoSignature: fetch index.json failed: %v", err)
+		return "warn-unsigned", fmt.Errorf("fetch index.json: %w", err)
+	}
+	log.Infof("VerifyRepoSignature: fetched index.json (%d bytes)", len(indexData))
+
+	sigHex, err := fetchBytes(sigURL)
+	if err != nil {
+		log.Infof("VerifyRepoSignature: no index.json.sig: %v", err)
+		return "warn-unsigned", fmt.Errorf("no index.json.sig: %w", err)
+	}
+	log.Infof("VerifyRepoSignature: fetched index.json.sig (%d bytes)", len(sigHex))
+
+	// The .sig file may be raw binary (64-byte Ed25519 signature) or hex-encoded.
+	// Try raw binary first — it's the standard openssl pkeyutl output.
+	var sig []byte
+	raw := sigHex
+	// Trim trailing newline that some editors add to binary files.
+	if len(raw) > 0 && raw[len(raw)-1] == '\n' {
+		raw = raw[:len(raw)-1]
+	}
+	if len(raw) == ed25519.SignatureSize {
+		sig = raw
+		log.Infof("VerifyRepoSignature: using raw binary signature")
+	} else {
+		// Fall back to hex-encoded.
+		sigStr := strings.TrimSpace(string(sigHex))
+		var err error
+		sig, err = hex.DecodeString(sigStr)
+		if err != nil {
+			preview := sigStr
+			if len(preview) > 40 {
+				preview = preview[:40]
+			}
+			log.Warnf("VerifyRepoSignature: invalid sig (len=%d preview=%q): %v", len(sigStr), preview, err)
+			return "warn-unsigned", fmt.Errorf("invalid signature: %w", err)
+		}
+		log.Infof("VerifyRepoSignature: using hex-encoded signature")
+	}
+
+	if len(sig) != ed25519.SignatureSize {
+		log.Warnf("VerifyRepoSignature: sig wrong size: got %d, want %d", len(sig), ed25519.SignatureSize)
+		return "warn-unsigned", fmt.Errorf("sig wrong size: %d", len(sig))
+	}
+
+	if !ed25519.Verify(KnownRepoPubKey, indexData, sig) {
+		log.Warnf("VerifyRepoSignature: signature verification failed (index=%d bytes, sig=%d bytes, pubkey=%d bytes)", len(indexData), len(sig), len(KnownRepoPubKey))
+		return "warn-unsigned", fmt.Errorf("signature verification failed")
+	}
+
+	log.Infof("VerifyRepoSignature: signature valid")
+	return "signed", nil
+}
+
+// CheckRepoURLSafety verifies the repo URL uses HTTPS. Returns a warning message
+// for plain-HTTP URLs (excluding localhost and file://), or empty string if safe.
+func CheckRepoURLSafety(repoURL string) string {
+	if strings.HasPrefix(repoURL, "https://") || strings.HasPrefix(repoURL, "file://") {
+		return ""
+	}
+	if strings.HasPrefix(repoURL, "http://") {
+		u, err := url.Parse(repoURL)
+		if err != nil {
+			return "cannot parse repo URL"
+		}
+		host := u.Hostname()
+		if host == "127.0.0.1" || host == "localhost" || host == "::1" {
+			return ""
+		}
+		return "repo URL uses plain HTTP — consider using HTTPS for security"
+	}
+	return ""
 }

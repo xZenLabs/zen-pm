@@ -1,6 +1,6 @@
 # Repository Index Contract (v1)
 
-Zen PM repositories are static-hostable and contain two index formats.
+ZenPM repositories are static-hostable and contain two index formats.
 
 ## Required files
 
@@ -22,7 +22,7 @@ Example:
   "schema_version": "1",
   "repo": {
     "id": "zenpm-default",
-    "name": "Zen PM Default Repository",
+    "name": "ZenPM Repository",
     "url": "https://example.invalid/zenpm/default"
   },
   "packages": [
