@@ -19,7 +19,8 @@ alert() {
     lipc-set-prop com.lab126.pillow pillowAlert "$JSON"
 }
 
-# shellcheck disable=SC2317  -- only invoked via trap
+# cleanup() only invoked via trap
+# shellcheck disable=SC2317
 cleanup() {
     rm -rf "$TMPDIR"
 }
@@ -32,7 +33,8 @@ semver_cmp() {
     _b=$(printf '%s' "$2" | sed 's/^v//')
     _OFS="$IFS"
     IFS='.'
-    # shellcheck disable=SC2086  -- intentional word splitting on IFS='.'
+    # intentional word splitting on IFS='.'
+    # shellcheck disable=SC2086
     set -- $_a; _a1=${1:-0}; _a2=${2:-0}; _a3=${3:-0}
     set -- $_b; _b1=${1:-0}; _b2=${2:-0}; _b3=${3:-0}
     IFS="$_OFS"
