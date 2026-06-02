@@ -85,13 +85,21 @@ func Init(platform string) (*State, error) {
 	// Scan for known apps already on the device and ensure they're tracked.
 	scanKnownApps(s, platform)
 
-	// Clean up stale temp dirs from interrupted updates or previous runs.
-	cleanupStaleDirs(platform)
+	// Clean up stale temp dirs and locks from interrupted operations.
+	cleanupStaleDirs(platform, s.LockDir)
 
 	return s, nil
 }
 
-func cleanupStaleDirs(platform string) {
+func cleanupStaleDirs(platform, lockDir string) {
+	// Remove stale lock directories from previous crashed runs.
+	if entries, err := os.ReadDir(lockDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				_ = os.RemoveAll(filepath.Join(lockDir, e.Name()))
+			}
+		}
+	}
 	switch platform {
 	case "kindle":
 		_ = os.RemoveAll("/mnt/us/ZPM-Update-Temp")
@@ -132,7 +140,7 @@ func seedReposDB(s *State) error {
 
 	// Default repos seeded on first run.
 	defaults := []RepoEntry{
-		{Name: "ZenLabs", URL: "https://zen-labs-x.github.io/repo/", Priority: 10, Trust: "trusted", Default: true},
+		{Name: "ZenLabs", URL: "https://xzenlabs.github.io/repo/", Priority: 10, Trust: "trusted", Default: true},
 		{Name: "KindleForge", URL: "https://kf.penguins184.xyz/", Priority: 10, Trust: "trusted", Default: true},
 	}
 

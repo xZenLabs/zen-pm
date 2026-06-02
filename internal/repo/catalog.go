@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"ZPM/internal/log"
@@ -341,23 +342,40 @@ func resolveURL(base, rel string) string {
 	return joinURL(base, rel)
 }
 
-// KnownRepoPubKey is the Ed25519 public key used to verify index.json.sig.
-// Defaults to the ZenLabs repo signing key. Override via ZENPM_REPO_PUBKEY env var
-// (hex-encoded 32-byte Ed25519 key).
-var KnownRepoPubKey = func() ed25519.PublicKey {
-	if key := os.Getenv("ZENPM_REPO_PUBKEY"); key != "" {
-		b, err := hex.DecodeString(key)
-		if err == nil && len(b) == ed25519.PublicKeySize {
-			return ed25519.PublicKey(b)
-		}
-	}
-	return parsePEMPubKey(zenLabsPubKeyPEM)
-}()
+// KnownPubKeyURL is the URL where the ZenLabs Ed25519 public key is hosted.
+const KnownPubKeyURL = "https://xzenlabs.github.io/zenpm-key.pub"
 
-// zenLabsPubKeyPEM is the ZenLabs repo Ed25519 public key in PKIX/SPKI PEM format.
-const zenLabsPubKeyPEM = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAsWdhAiVzFSIr8yYgFRHWWwAp2NAh/WKXMqaOkYXVN3k=
------END PUBLIC KEY-----`
+var (
+	knownRepoPubKey     ed25519.PublicKey
+	knownRepoPubKeyOnce sync.Once
+)
+
+// KnownRepoPubKey fetches and returns the Ed25519 public key from KnownPubKeyURL.
+// Supports PEM and raw hex formats. Cached after first successful fetch.
+func KnownRepoPubKey() ed25519.PublicKey {
+	knownRepoPubKeyOnce.Do(func() {
+		data, err := fetchBytes(KnownPubKeyURL)
+		if err != nil {
+			log.Warnf("KnownRepoPubKey: fetch %s failed: %v", KnownPubKeyURL, err)
+			return
+		}
+		// Try PEM format first.
+		if key := parsePEMPubKey(string(data)); key != nil {
+			knownRepoPubKey = key
+			log.Infof("KnownRepoPubKey: loaded key from %s (PEM)", KnownPubKeyURL)
+			return
+		}
+		// Try raw hex.
+		trimmed := strings.TrimSpace(string(data))
+		if b, err := hex.DecodeString(trimmed); err == nil && len(b) == ed25519.PublicKeySize {
+			knownRepoPubKey = ed25519.PublicKey(b)
+			log.Infof("KnownRepoPubKey: loaded key from %s (hex)", KnownPubKeyURL)
+			return
+		}
+		log.Warnf("KnownRepoPubKey: unrecognized key format from %s", KnownPubKeyURL)
+	})
+	return knownRepoPubKey
+}
 
 func parsePEMPubKey(pemData string) ed25519.PublicKey {
 	block, _ := pem.Decode([]byte(pemData))
@@ -378,7 +396,8 @@ func parsePEMPubKey(pemData string) ed25519.PublicKey {
 // VerifyRepoSignature fetches index.json and index.json.sig from repoURL and verifies
 // the Ed25519 signature. Returns "signed" if valid, "warn-unsigned" otherwise.
 func VerifyRepoSignature(repoURL string) (string, error) {
-	if KnownRepoPubKey == nil {
+	pk := KnownRepoPubKey()
+	if pk == nil {
 		log.Warnf("VerifyRepoSignature: no public key configured")
 		return "warn-unsigned", fmt.Errorf("no public key configured")
 	}
@@ -432,8 +451,8 @@ func VerifyRepoSignature(repoURL string) (string, error) {
 		return "warn-unsigned", fmt.Errorf("sig wrong size: %d", len(sig))
 	}
 
-	if !ed25519.Verify(KnownRepoPubKey, indexData, sig) {
-		log.Warnf("VerifyRepoSignature: signature verification failed (index=%d bytes, sig=%d bytes, pubkey=%d bytes)", len(indexData), len(sig), len(KnownRepoPubKey))
+	if !ed25519.Verify(pk, indexData, sig) {
+		log.Warnf("VerifyRepoSignature: signature verification failed (index=%d bytes, sig=%d bytes, pubkey=%d bytes)", len(indexData), len(sig), len(pk))
 		return "warn-unsigned", fmt.Errorf("signature verification failed")
 	}
 

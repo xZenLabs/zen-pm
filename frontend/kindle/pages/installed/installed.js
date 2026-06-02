@@ -2,6 +2,7 @@
     var postLog = ZenUtils.postLog;
     var dbg     = ZenUtils.postLog;
     var POLL_DELAY = 3500;
+    var MAX_POLL_RETRIES = 20;
 
     var state = {
         packages:  [],
@@ -85,24 +86,31 @@
 
     function pollAfterOp() {
         var op = state.pendingOp;
-        setTimeout(function () {
+        var attempt = 0;
+        function tryPoll() {
+            attempt += 1;
             loadPackages().then(function () {
-                if (!op) { setBusy(false, ""); return; }
-                state.pendingOp = null;
+                if (!state.pendingOp || state.pendingOp.id !== op.id) { return; }
                 var pkg = null;
                 for (var _j = 0; _j < state.packages.length; _j++) {
                     if (state.packages[_j].id === op.id) { pkg = state.packages[_j]; break; }
                 }
                 var succeeded = pkg && pkg.installed !== op.wasInstalled;
                 if (succeeded) {
+                    state.pendingOp = null;
                     var doneAction = op.action === "install" ? "installed" : "uninstalled";
                     showModal("Done", pkg.name + " " + doneAction + " successfully.");
-                } else {
+                    setBusy(false, "");
+                } else if (attempt >= MAX_POLL_RETRIES) {
+                    state.pendingOp = null;
                     showModal("Failed", op.action + " of " + op.id + " did not complete.\n\nCheck the debug log for details.");
+                    setBusy(false, "");
+                } else {
+                    setTimeout(tryPoll, POLL_DELAY);
                 }
-                setBusy(false, "");
             });
-        }, POLL_DELAY);
+        }
+        setTimeout(tryPoll, POLL_DELAY);
     }
 
     function performPackageAction(pkg) {
