@@ -550,7 +550,6 @@ input {
 .package-meta-repo {
     display: inline-block;
     vertical-align: middle;
-    max-width: 170px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -562,21 +561,12 @@ input {
 .package-repo-verification-cell {
     display: inline-block;
     vertical-align: middle;
-    width: 30px;
-    margin-left: 4px;
+    width: 38px;
+    margin-left: 8px;
 }
 
 .package-repo-verification {
     display: block;
-    width: 26px;
-    height: 26px;
-}
-
-.package-details-card .package-repo-verification-cell {
-    width: 38px;
-}
-
-.package-details-card .package-repo-verification {
     width: 34px;
     height: 34px;
 }
@@ -608,11 +598,11 @@ input {
 }
 
 .package-details-card-featured .package-action {
-    top: 276px;
+    top: 456px;
 }
 
 .package-details-card-featured .package-check {
-    top: 180px;
+    top: 360px;
 }
 
 .btn-icon {
@@ -1588,7 +1578,7 @@ body.source-details-page-body {
     -webkit-background-size: contain;
     background-size: contain;
     overflow: hidden;
-    height: 180px;
+    height: 360px;
 }
 
 .package-details-page .details-scroll > .details-description {
@@ -1630,6 +1620,7 @@ body.source-details-page-body {
     margin: 0;
     color: var(--ink);
     line-height: 1.4;
+    font-size: 0.92rem;
 }
 
 .package-details-card .details-images {

@@ -619,8 +619,8 @@ var ZenUtils = (function () {
             verify.className = "package-repo-verification";
             verify.src = packageRepoVerificationIcon(pkg);
             verify.alt = packageRepoVerificationLabel(pkg);
-            verify.width = 28;
-            verify.height = 28;
+            verify.width = 34;
+            verify.height = 34;
             verifyCell.appendChild(verify);
             metaRow.appendChild(verifyCell);
 

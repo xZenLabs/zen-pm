@@ -243,6 +243,12 @@
             card.className += " package-details-card-featured";
             card.insertBefore(renderFeaturedImage(state.pkg.featured_image), card.firstChild);
         }
+        // Show author on the second line instead of description (description is in the box below)
+        var descLine = card.querySelector(".package-card-description");
+        if (descLine && state.pkg.author) {
+            descLine.textContent = state.pkg.author;
+        }
+
         el.top.appendChild(card);
 
         var h = document.createElement("h3");
