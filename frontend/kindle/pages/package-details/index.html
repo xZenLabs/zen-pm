@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ZenPM - Package Details</title>
+    <link rel="stylesheet" href="../../style.css">
+</head>
+<body class="package-details-page-body">
+    <div class="page package-details-page">
+        <header class="details-header">
+            <button id="backBtn" type="button" class="details-back-btn" aria-label="Back">
+                <img src="../../assets/chevron.left.svg" alt="" class="details-back-icon">
+            </button>
+            <h2 id="detailsHeading">Package Details</h2>
+        </header>
+
+        <div class="details-scroll">
+            <p id="detailsHint" class="hint">Loading package...</p>
+            <div id="detailsTop" class="package-details-card-wrap"></div>
+            <div id="detailsImages" class="details-images"></div>
+            <section id="detailsDescription" class="details-description"></section>
+        </div>
+    </div>
+
+    <script src="../../polyfill.js"></script>
+    <script src="../../utils.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

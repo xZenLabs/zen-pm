@@ -2,6 +2,10 @@
 var ZenUtils = (function () {
     var API    = "http://127.0.0.1:8080";
     var APP_ID = "com.zenlabs.zenpm";
+    var REPO_ZENLABS_NAME = "ZenLabs";
+    var REPO_ZENLABS_URL = "https://xzenlabs.github.io/repo";
+    var REPO_KINDLEFORGE_NAME = "KindleForge";
+    var REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz";
 
     function getKindle() {
         try { return window.kindle || top.kindle; } catch (_e) { return window.kindle; }
@@ -57,6 +61,10 @@ var ZenUtils = (function () {
     function goBack() {
         var isSub = window.location.pathname.indexOf('/pages/') !== -1;
         window.location.href = (isSub ? '../..' : '.') + '/pages/search/index.html';
+    }
+
+    function daemonUnavailableMessage() {
+        return "ZenPM daemon not reachable. Re-run ZenPM.sh if it is not running. If Airplane Mode is on, Kindle WAF may block local HTTP.";
     }
 
     // Trigger self-update via POST /update. The update script handles native alerts.
@@ -238,28 +246,62 @@ var ZenUtils = (function () {
         postLog("[utils] navbar appended to body, childCount=" + nav.childElementCount);
     }
 
-    // Shared modal overlay — shows a centered box with title + message + Close button.
-    function showModal(title, message) {
+    // Shared modal overlay with optional actions.
+    function showBaseModal(options) {
         hideModal();
+        options = options || {};
         var overlay = document.createElement("div");
         overlay.className = "modal-overlay";
+        if (options.className) overlay.className += " " + options.className;
         overlay.id = "zenpm-modal-overlay";
 
         var box = document.createElement("div");
         box.className = "modal-box";
+        if (options.boxClassName) box.className += " " + options.boxClassName;
+
+        if (options.closeButton !== false) {
+            var closeBtn = document.createElement("button");
+            closeBtn.type = "button";
+            closeBtn.className = "modal-close-btn";
+            closeBtn.setAttribute("aria-label", "Close");
+            closeBtn.innerHTML = "<svg class='modal-close-icon' viewBox='0 0 24 24' aria-hidden='true'><line x1='18' y1='6' x2='6' y2='18'></line><line x1='6' y1='6' x2='18' y2='18'></line></svg>";
+            closeBtn.onclick = hideModal;
+            box.appendChild(closeBtn);
+        }
 
         var h = document.createElement("h3");
-        h.textContent = title;
+        h.textContent = options.title || "";
         box.appendChild(h);
 
-        var p = document.createElement("p");
-        p.textContent = message;
-        box.appendChild(p);
+        if (options.message) {
+            var p = document.createElement("p");
+            p.textContent = options.message;
+            box.appendChild(p);
+        }
 
-        var btn = document.createElement("button");
-        btn.textContent = "Close";
-        btn.onclick = hideModal;
-        box.appendChild(btn);
+        if (options.content) {
+            box.appendChild(options.content);
+        }
+
+        if (options.actions && options.actions.length) {
+            var actions = document.createElement("div");
+            actions.className = "modal-actions";
+            for (var i = 0; i < options.actions.length; i++) {
+                (function (action) {
+                    var btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.textContent = action.label;
+                    btn.className = action.primary ? "primary" : "";
+                    if (action.danger) btn.className += (btn.className ? " " : "") + "danger";
+                    btn.onclick = function () {
+                        if (action.close !== false) hideModal();
+                        if (action.onClick) action.onClick();
+                    };
+                    actions.appendChild(btn);
+                })(options.actions[i]);
+            }
+            box.appendChild(actions);
+        }
 
         overlay.appendChild(box);
         document.body.appendChild(overlay);
@@ -269,102 +311,363 @@ var ZenUtils = (function () {
         };
     }
 
+    // Shared status modal — shows a centered box with title + message + Close button.
+    function showModal(title, message, options) {
+        options = options || {};
+        showBaseModal({
+            title: title,
+            message: message,
+            className: options.className,
+            boxClassName: options.boxClassName,
+            closeButton: options.closeButton,
+            actions: [{ label: "Close", primary: true }]
+        });
+    }
+
+    function showConfirmModal(title, message, confirmLabel, onConfirm, danger) {
+        showBaseModal({
+            title: title,
+            message: message,
+            className: "add-source-modal-overlay",
+            boxClassName: "confirm-modal-box add-source-modal-box",
+            actions: [
+                { label: "Cancel" },
+                { label: confirmLabel || "OK", primary: true, danger: danger, onClick: onConfirm }
+            ]
+        });
+    }
+
+    function showPackageActionConfirm(pkg, action, onConfirm) {
+        var title = "Get Package";
+        var question = "Are you sure you want to download " + pkg.name + "?";
+        var label = "Get";
+        var danger = false;
+        if (action === "reinstall") {
+            title = "Reinstall Package";
+            question = "Are you sure you want to reinstall " + pkg.name + "?";
+            label = "Reinstall";
+        } else if (action === "uninstall") {
+            title = "Uninstall Package";
+            question = "Are you sure you want to uninstall " + pkg.name + "?";
+            label = "Uninstall";
+            danger = true;
+        }
+        showConfirmModal(title, question, label, onConfirm, danger);
+    }
+
+    function showPackageModifyModal(pkg, handlers) {
+        handlers = handlers || {};
+        var content = document.createElement("div");
+        content.className = "modify-options";
+
+        function addOption(label, className, handler) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "modify-option" + (className ? " " + className : "");
+            btn.textContent = label;
+            btn.onclick = function () {
+                hideModal();
+                if (handler) handler();
+            };
+            content.appendChild(btn);
+        }
+
+        addOption("Info", "", handlers.info);
+        addOption("Reinstall", "", handlers.reinstall);
+        addOption("Uninstall", "danger", handlers.uninstall);
+
+        showBaseModal({
+            title: pkg.name,
+            message: "Modify package",
+            className: "add-source-modal-overlay",
+            boxClassName: "modify-modal-box add-source-modal-box",
+            content: content
+        });
+    }
+
     function hideModal() {
         var ov = document.getElementById("zenpm-modal-overlay");
         if (ov) ov.parentNode.removeChild(ov);
     }
 
-    // Shared package card — returns a DOM element. clickHandler receives the pkg object.
-    function renderPackageCard(pkg, clickHandler) {
-        var card = document.createElement("article");
-        card.className = "package-card";
+    function basePath() {
+        return window.location.pathname.indexOf('/pages/') !== -1 ? '../..' : '.';
+    }
 
-        // Header row: icon (left) + title (right), inline like home header.
-        var headerRow = document.createElement("div");
-        headerRow.className = "package-card-header";
+    function bundledRepoIcon(pkg) {
+        if (pkg && pkg.repo === REPO_KINDLEFORGE_NAME) {
+            return basePath() + '/assets/kindleforge.svg';
+        }
+        return pkg && pkg.repo_icon_url ? pkg.repo_icon_url : basePath() + '/assets/packages.svg';
+    }
 
-        var title = document.createElement("h3");
-        title.className = "package-name";
-        title.textContent = pkg.name;
-        headerRow.appendChild(title);
+    function firstPackageImage(pkg) {
+        if (!pkg) return "";
+        if (pkg.image_url) return pkg.image_url;
+        if (pkg.images && pkg.images.length) return pkg.images[0];
+        if (pkg.image) return pkg.image;
+        if (pkg.icon) return pkg.icon;
+        if (pkg.icon_url) return pkg.icon_url;
+        return bundledRepoIcon(pkg);
+    }
 
-        // Tag badges inline next to the title.
-        if (pkg.tags && pkg.tags.length) {
-            for (var _t = 0; _t < pkg.tags.length; _t++) {
-                var tagBadge = document.createElement("span");
-                tagBadge.className = "badge tag-badge";
-                tagBadge.textContent = pkg.tags[_t];
-                headerRow.appendChild(tagBadge);
+    function setImageWithFallback(img, primary, fallback) {
+        var triedPrimary = false;
+        var triedIco = false;
+        img.onerror = function () {
+            if (!triedPrimary && fallback && img.src !== fallback) {
+                triedPrimary = true;
+                img.src = fallback;
+                return;
             }
-        }
+            if (!triedIco && img.src && img.src.indexOf('/favicon.svg') !== -1) {
+                triedIco = true;
+                img.src = img.src.replace('/favicon.svg', '/favicon.ico');
+            }
+        };
+        img.src = primary || fallback || "";
+    }
 
-        // Preload icon — only insert into DOM if it actually loads.
-        // KindleForge repo has no favicon — use bundled local SVG.
-        var iconSrc = pkg.icon_url;
-        if (pkg.repo === "KindleForge") {
-            var isSub = window.location.pathname.indexOf('/pages/') !== -1;
-            iconSrc = (isSub ? '../..' : '.') + '/assets/kindleforge.svg';
-        }
-
-        if (iconSrc) {
-            var preload = new Image();
-            preload.onload = function () {
-                var iconImg = document.createElement("img");
-                iconImg.src = iconSrc;
-                iconImg.alt = "";
-                iconImg.className = "package-card-icon";
-                iconImg.width = 64;
-                iconImg.height = 64;
-                headerRow.insertBefore(iconImg, headerRow.firstChild);
-            };
-            preload.onerror = function () {
-                if (preload.src.indexOf('/favicon.svg') !== -1) {
-                    preload.src = preload.src.replace('/favicon.svg', '/favicon.ico');
-                    return;
-                }
-            };
-            preload.src = iconSrc;
-        }
-
-        card.appendChild(headerRow);
-
-        var meta = document.createElement("p");
-        meta.className = "package-meta";
+    function packageVersionRepoText(pkg) {
         var repoDisplay = pkg.repo || "?";
         if (pkg.version && pkg.version !== "0.0.0") {
-            meta.textContent = repoDisplay + " | v" + pkg.version;
-        } else {
-            meta.textContent = repoDisplay;
+            return "v" + pkg.version + " \u2022 " + repoDisplay;
+        }
+        return repoDisplay;
+    }
+
+    function packageDetailsURL(pkg) {
+        var from = "search";
+        if (window.location.pathname.indexOf('/pages/installed/') !== -1) from = "installed";
+        if (window.location.pathname.indexOf('/pages/source-details/') !== -1) from = "sources";
+        if (window.location.pathname.indexOf('/index.html') !== -1 && window.location.pathname.indexOf('/pages/') === -1) from = "home";
+        return basePath() + "/pages/package-details/index.html?id=" + encodeURIComponent(pkg.id || pkg.name || "") + "&from=" + encodeURIComponent(from);
+    }
+
+    function renderMediaCard(options) {
+        options = options || {};
+        var card = document.createElement(options.tagName || "article");
+        card.className = "media-card";
+        if (options.className) card.className += " " + options.className;
+        if (options.clickHandler) {
+            card.className += " media-card-clickable";
+            card.onclick = options.clickHandler;
         }
 
-        card.appendChild(meta);
+        var table = document.createElement("div");
+        table.className = "media-card-table";
 
-        if (pkg.description) {
-            var desc = document.createElement("p");
-            desc.className = "package-desc";
-            desc.textContent = pkg.description;
-            card.appendChild(desc);
+        var iconCell = document.createElement("div");
+        iconCell.className = "media-card-icon-cell";
+
+        var icon = document.createElement("img");
+        icon.alt = "";
+        icon.className = "media-card-icon";
+        icon.width = options.iconSize || 96;
+        icon.height = options.iconSize || 96;
+        setImageWithFallback(icon, options.imageSrc, options.imageFallback);
+        iconCell.appendChild(icon);
+        table.appendChild(iconCell);
+
+        var textCell = document.createElement("div");
+        textCell.className = "media-card-text-cell";
+
+        var titleRow = document.createElement("div");
+        titleRow.className = "media-card-title-row";
+
+        var title = document.createElement("h3");
+        title.className = "media-card-title";
+        title.textContent = options.title || "";
+        titleRow.appendChild(title);
+
+        if (options.check) {
+            var checkCell = document.createElement("div");
+            checkCell.className = "media-card-check-cell";
+            var check = document.createElement("img");
+            check.className = "media-card-check";
+            check.src = basePath() + "/assets/checkmark.svg";
+            check.alt = "";
+            check.width = 36;
+            check.height = 36;
+            checkCell.appendChild(check);
+            titleRow.appendChild(checkCell);
         }
 
-        var DOWNLOAD_ICON = "<svg class='btn-icon' viewBox='0 0 24 24'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'></path><polyline points='7 10 12 15 17 10'></polyline><line x1='12' y1='15' x2='12' y2='3'></line></svg>";
-        var X_ICON       = "<svg class='btn-icon' viewBox='0 0 24 24'><line x1='18' y1='6' x2='6' y2='18'></line><line x1='6' y1='6' x2='18' y2='18'></line></svg>";
+        textCell.appendChild(titleRow);
 
+        if (options.line2) {
+            var line2 = document.createElement("p");
+            line2.className = "media-card-line media-card-line-2";
+            line2.textContent = options.line2;
+            textCell.appendChild(line2);
+        }
+
+        if (options.line3) {
+            var line3 = document.createElement("p");
+            line3.className = "media-card-line media-card-line-3";
+            line3.textContent = options.line3;
+            textCell.appendChild(line3);
+        }
+        table.appendChild(textCell);
+
+        if (options.action) {
+            var actionCell = document.createElement("div");
+            actionCell.className = "media-card-action-cell";
+            actionCell.appendChild(options.action);
+            table.appendChild(actionCell);
+        }
+
+        card.appendChild(table);
+
+        return card;
+    }
+
+    // Shared package card — returns a DOM element. clickHandler receives the pkg object.
+    function renderPackageCard(pkg, actionHandler, detailHandler) {
         var actionBtn = document.createElement("button");
         actionBtn.type = "button";
-        actionBtn.className = pkg.installed ? "package-action danger" : "package-action";
-        actionBtn.innerHTML = (pkg.installed ? X_ICON : DOWNLOAD_ICON) + "<span class='btn-label'>" + (pkg.installed ? "Uninstall" : "Install") + "</span>";
+        actionBtn.className = pkg.installed ? "package-action modify" : "package-action";
+        actionBtn.textContent = pkg.installed ? "Modify" : "Get";
         actionBtn.addEventListener("touchstart", function () { this.blur(); }, false);
         actionBtn.addEventListener("touchend", function () { this.blur(); }, false);
         actionBtn.addEventListener("mouseup", function () { this.blur(); }, false);
-        if (clickHandler) {
-            actionBtn.addEventListener("click", function () {
+        if (actionHandler) {
+            actionBtn.addEventListener("click", function (e) {
+                if (e && e.stopPropagation) e.stopPropagation();
                 this.blur();
-                clickHandler(pkg);
+                actionHandler(pkg);
             }, false);
         }
 
-        card.appendChild(actionBtn);
+        var card = renderMediaCard({
+            className: "package-card",
+            imageSrc: firstPackageImage(pkg),
+            imageFallback: bundledRepoIcon(pkg),
+            title: "",
+            clickHandler: detailHandler ? function () { detailHandler(pkg); } : null
+        });
+
+        var textCell = card.getElementsByClassName("media-card-text-cell")[0];
+        if (textCell) {
+            textCell.innerHTML = "";
+
+            var titleRow = document.createElement("div");
+            titleRow.className = "package-title-row";
+
+            var title = document.createElement("h3");
+            title.className = "package-title";
+            title.textContent = pkg.name;
+            titleRow.appendChild(title);
+
+            if (pkg.installed) {
+                var checkCell = document.createElement("div");
+                checkCell.className = "package-check-cell";
+                var check = document.createElement("img");
+                check.className = "package-check";
+                check.src = basePath() + "/assets/checkmark.svg";
+                check.alt = "";
+                check.width = 58;
+                check.height = 58;
+                checkCell.appendChild(check);
+                titleRow.appendChild(checkCell);
+            }
+            textCell.appendChild(titleRow);
+
+            var authorRow = document.createElement("div");
+            authorRow.className = "package-author-row";
+
+            var author = document.createElement("p");
+            author.className = "package-author";
+            author.textContent = pkg.author || "Unknown author";
+            authorRow.appendChild(author);
+            var actionCell = document.createElement("div");
+            actionCell.className = "package-action-cell";
+            actionCell.appendChild(actionBtn);
+            authorRow.appendChild(actionCell);
+            textCell.appendChild(authorRow);
+
+            var meta = document.createElement("p");
+            meta.className = "package-meta";
+            meta.textContent = packageVersionRepoText(pkg);
+            textCell.appendChild(meta);
+        }
+
         return card;
+    }
+
+    function signatureValue(value) {
+        var text = (value === null || typeof value === "undefined") ? "" : String(value);
+        return text.length + ":" + text;
+    }
+
+    function packageCardSignature(pkg) {
+        var tags = "";
+        if (pkg.tags && pkg.tags.length) {
+            tags = pkg.tags.join(",");
+        }
+        var parts = [
+            pkg.id || "",
+            pkg.name || "",
+            pkg.repo || "",
+            pkg.version || "",
+            pkg.description || "",
+            pkg.author || "",
+            pkg.icon_url || "",
+            pkg.repo_icon_url || "",
+            pkg.image_url || "",
+            pkg.images ? pkg.images.join(",") : "",
+            pkg.installed ? "1" : "0",
+            tags
+        ];
+        var sig = "";
+        for (var i = 0; i < parts.length; i++) {
+            sig += signatureValue(parts[i]);
+        }
+        return sig;
+    }
+
+    function reconcilePackageCards(container, packages, actionHandler, detailHandler) {
+        var existing = {};
+        var children = container.children;
+        var i;
+        for (i = 0; i < children.length; i++) {
+            var childKey = children[i].getAttribute("data-package-id");
+            if (childKey) existing["pkg:" + childKey] = children[i];
+        }
+
+        for (i = 0; i < packages.length; i++) {
+            var pkg = packages[i];
+            var key = String(pkg.id || pkg.name || i);
+            var mapKey = "pkg:" + key;
+            var sig = packageCardSignature(pkg);
+            var card = existing[mapKey];
+
+            if (!card || card._zenpmPackageSignature !== sig) {
+                var newCard = renderPackageCard(pkg, actionHandler, detailHandler);
+                newCard.setAttribute("data-package-id", key);
+                newCard._zenpmPackageSignature = sig;
+                if (card && card.parentNode === container) {
+                    container.replaceChild(newCard, card);
+                }
+                card = newCard;
+            }
+
+            if (card.parentNode !== container) {
+                container.appendChild(card);
+            }
+
+            if (container.children[i] !== card) {
+                container.insertBefore(card, container.children[i] || null);
+            }
+
+            existing[mapKey] = null;
+        }
+
+        for (var oldKey in existing) {
+            if (Object.prototype.hasOwnProperty.call(existing, oldKey) && existing[oldKey] && existing[oldKey].parentNode === container) {
+                container.removeChild(existing[oldKey]);
+            }
+        }
     }
 
     // Card-based scroll navigation — intercepts mousewheel to move one card per
@@ -401,6 +704,10 @@ var ZenUtils = (function () {
     return {
         API:             API,
         APP_ID:          APP_ID,
+        REPO_ZENLABS_NAME: REPO_ZENLABS_NAME,
+        REPO_ZENLABS_URL: REPO_ZENLABS_URL,
+        REPO_KINDLEFORGE_NAME: REPO_KINDLEFORGE_NAME,
+        REPO_KINDLEFORGE_URL: REPO_KINDLEFORGE_URL,
         getKindle:       getKindle,
         postLog:         postLog,
         fetchJSON:       fetchJSON,
@@ -408,12 +715,20 @@ var ZenUtils = (function () {
         xhrJSON:         xhrJSON,
         xhrText:         xhrText,
         goBack:          goBack,
+        daemonUnavailableMessage: daemonUnavailableMessage,
         renderNavbar:    renderNavbar,
+        renderMediaCard: renderMediaCard,
         renderPackageCard: renderPackageCard,
+        reconcilePackageCards: reconcilePackageCards,
+        showBaseModal:   showBaseModal,
         showModal:       showModal,
+        showConfirmModal: showConfirmModal,
+        showPackageActionConfirm: showPackageActionConfirm,
+        showPackageModifyModal: showPackageModifyModal,
         hideModal:       hideModal,
         showAboutModal:  showAboutModal,
         setupPageChrome: setupPageChrome,
-        setupCardScroll: setupCardScroll
+        setupCardScroll: setupCardScroll,
+        packageDetailsURL: packageDetailsURL
     };
 })();

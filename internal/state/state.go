@@ -9,10 +9,14 @@ import (
 )
 
 const (
-	defaultKindleHome     = "/mnt/us/ZenPM"
-	defaultKoboHome       = "/mnt/onboard/.adds/ZenPM"
-	kindlePersistDir      = "/mnt/us/.ZenPM"
-	koboPersistDir        = "/mnt/onboard/.adds/.ZenPM"
+	defaultKindleHome          = "/mnt/us/ZenPM"
+	defaultKoboHome            = "/mnt/onboard/.adds/ZenPM"
+	kindlePersistDir           = "/mnt/us/.ZenPM"
+	koboPersistDir             = "/mnt/onboard/.adds/.ZenPM"
+	DefaultZenLabsRepoName     = "ZenLabs"
+	DefaultZenLabsRepoURL      = "https://xzenlabs.github.io/repo"
+	DefaultKindleForgeRepoName = "KindleForge"
+	DefaultKindleForgeRepoURL  = "https://kf.penguins184.xyz"
 )
 
 // State holds all resolved paths for ZenPM's working directories.
@@ -21,6 +25,7 @@ type State struct {
 	ReposDB       string
 	InstalledDB   string
 	CacheDir      string
+	ScriptDir     string
 	TmpDir        string
 	LockDir       string
 	JournalDir    string
@@ -54,6 +59,7 @@ func Init(platform string) (*State, error) {
 		Home:        home,
 		ReposDB:     filepath.Join(persistDir, "repos.db"),
 		InstalledDB: filepath.Join(persistDir, "installed.db"),
+		ScriptDir:   filepath.Join(persistDir, "scripts"),
 		CacheDir:    filepath.Join(home, "cache"),
 		TmpDir:      filepath.Join(home, "tmp"),
 		LockDir:     filepath.Join(home, "locks"),
@@ -62,7 +68,7 @@ func Init(platform string) (*State, error) {
 	}
 
 	for _, dir := range []string{
-		s.CacheDir, s.TmpDir, s.LockDir, s.JournalDir,
+		s.CacheDir, s.ScriptDir, s.TmpDir, s.LockDir, s.JournalDir,
 		persistDir,
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -78,6 +84,9 @@ func Init(platform string) (*State, error) {
 	if err := seedReposDB(s); err != nil {
 		return nil, err
 	}
+	if err := reconcileDefaultRepos(s); err != nil {
+		return nil, err
+	}
 	if err := seedInstalledDB(s); err != nil {
 		return nil, err
 	}
@@ -85,13 +94,21 @@ func Init(platform string) (*State, error) {
 	// Scan for known apps already on the device and ensure they're tracked.
 	scanKnownApps(s, platform)
 
-	// Clean up stale temp dirs from interrupted updates or previous runs.
-	cleanupStaleDirs(platform)
+	// Clean up stale temp dirs and locks from interrupted operations.
+	cleanupStaleDirs(platform, s.LockDir)
 
 	return s, nil
 }
 
-func cleanupStaleDirs(platform string) {
+func cleanupStaleDirs(platform, lockDir string) {
+	// Remove stale lock directories from previous crashed runs.
+	if entries, err := os.ReadDir(lockDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				_ = os.RemoveAll(filepath.Join(lockDir, e.Name()))
+			}
+		}
+	}
 	switch platform {
 	case "kindle":
 		_ = os.RemoveAll("/mnt/us/ZPM-Update-Temp")
@@ -132,8 +149,8 @@ func seedReposDB(s *State) error {
 
 	// Default repos seeded on first run.
 	defaults := []RepoEntry{
-		{Name: "ZenLabs", URL: "https://zen-labs-x.github.io/repo/", Priority: 10, Trust: "trusted", Default: true},
-		{Name: "KindleForge", URL: "https://kf.penguins184.xyz/", Priority: 10, Trust: "trusted", Default: true},
+		{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true},
+		{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true},
 	}
 
 	// Allow override via env var for custom setups.
@@ -153,6 +170,57 @@ func seedReposDB(s *State) error {
 		fmt.Fprintf(&sb, "%s|%s|%d|%s|%s\n", r.Name, r.URL, r.Priority, r.Trust, defFlag)
 	}
 	return os.WriteFile(s.ReposDB, []byte(sb.String()), 0644)
+}
+
+func reconcileDefaultRepos(s *State) error {
+	repos, err := s.ReadRepos()
+	if err != nil {
+		return err
+	}
+	changed := false
+	hasZenLabs := false
+	hasKindleForge := false
+
+	for i := range repos {
+		if repos[i].Name == DefaultZenLabsRepoName {
+			hasZenLabs = true
+			if repos[i].URL != DefaultZenLabsRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
+				repos[i].URL = DefaultZenLabsRepoURL
+				repos[i].Priority = 10
+				repos[i].Trust = "trusted"
+				repos[i].Default = true
+				changed = true
+			}
+		}
+		if repos[i].Name == DefaultKindleForgeRepoName {
+			hasKindleForge = true
+			if repos[i].URL != DefaultKindleForgeRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
+				repos[i].URL = DefaultKindleForgeRepoURL
+				repos[i].Priority = 10
+				repos[i].Trust = "trusted"
+				repos[i].Default = true
+				changed = true
+			}
+		}
+	}
+
+	if !hasZenLabs {
+		repos = append([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true}}, repos...)
+		changed = true
+	}
+	if !hasKindleForge {
+		repos = append(repos, RepoEntry{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true})
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := s.WriteRepos(repos); err != nil {
+		return err
+	}
+	_ = os.Remove(filepath.Join(s.CacheDir, "catalog.merged"))
+	s.SeededRepoURL = DefaultZenLabsRepoURL
+	return nil
 }
 
 func seedInstalledDB(s *State) error {
@@ -289,6 +357,25 @@ func (s *State) WriteRepos(repos []RepoEntry) error {
 		fmt.Fprintf(&sb, "%s|%s|%d|%s|%s\n", r.Name, r.URL, r.Priority, r.Trust, defFlag)
 	}
 	return os.WriteFile(s.ReposDB, []byte(sb.String()), 0644)
+}
+
+func (s *State) CachedUninstallScriptPath(id string) string {
+	return filepath.Join(s.ScriptDir, safePackageID(id)+"-uninstall.sh")
+}
+
+func safePackageID(id string) string {
+	var b strings.Builder
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "package"
+	}
+	return b.String()
 }
 
 // --- Installed entries ---

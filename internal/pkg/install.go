@@ -2,6 +2,8 @@ package pkg
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"ZPM/internal/log"
 	"ZPM/internal/platform"
@@ -48,7 +50,7 @@ func (m *Manager) Install(id string) error {
 	}
 
 	for _, pkgID := range plan {
-		if installedSet[pkgID] {
+		if installedSet[pkgID] && pkgID != id {
 			log.Infof("Already installed: %s", pkgID)
 			continue
 		}
@@ -68,6 +70,11 @@ func (m *Manager) Install(id string) error {
 			return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 		}
 
+		if err := m.cacheUninstallScript(entry); err != nil {
+			log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
+		}
+
+		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
 			ID: pkgID, Name: entry.Name, Version: entry.Version, Repo: entry.Repo,
 		}); err != nil {
@@ -101,12 +108,25 @@ func (m *Manager) Uninstall(id string) error {
 		return err
 	}
 
+	scriptPath := ""
 	if entry != nil && entry.UninstallURL != "" {
 		scriptPath, err := m.repos.FetchScript(entry.UninstallURL)
 		if err != nil {
-			j.Abort("fetch failed: " + err.Error())
-			return fmt.Errorf("fetch uninstall script: %w", err)
+			log.Warnf("Fetch uninstall script failed for %s, trying cached script: %v", id, err)
+			scriptPath = m.st.CachedUninstallScriptPath(id)
+			if _, statErr := os.Stat(scriptPath); statErr != nil {
+				j.Abort("fetch failed: " + err.Error())
+				return fmt.Errorf("fetch uninstall script: %w", err)
+			}
 		}
+	} else {
+		scriptPath = m.st.CachedUninstallScriptPath(id)
+		if _, err := os.Stat(scriptPath); err != nil {
+			scriptPath = ""
+		}
+	}
+
+	if scriptPath != "" {
 		if err := platform.ExecuteScript(scriptPath); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("uninstall script failed: %w", err)
@@ -117,10 +137,26 @@ func (m *Manager) Uninstall(id string) error {
 		j.Abort("remove from db failed: " + err.Error())
 		return err
 	}
+	_ = os.Remove(m.st.CachedUninstallScriptPath(id))
 
 	log.Infof("Uninstalled: %s", id)
 	j.Commit()
 	return nil
+}
+
+func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
+	if entry == nil || entry.UninstallURL == "" {
+		return nil
+	}
+	data, err := repo.FetchBytes(entry.UninstallURL)
+	if err != nil {
+		return err
+	}
+	path := m.st.CachedUninstallScriptPath(entry.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0755)
 }
 
 func (m *Manager) Update(id string) error {
