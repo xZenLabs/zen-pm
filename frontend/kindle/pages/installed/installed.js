@@ -160,6 +160,7 @@
 
     function showPackageDetails(pkg) {
         if (!pkg || (!pkg.id && !pkg.name)) return;
+        if (cardScroll) cardScroll.savePosition();
         window.location.href = ZenUtils.packageDetailsURL(pkg);
     }
 
@@ -172,13 +173,15 @@
         el.installedHeading.textContent = "Installed (" + visible.length + (query ? "/" + installed.length : "") + ")";
         if (!visible.length) {
             el.hint.textContent = query ? "No installed packages match \"" + query + "\"." : "No packages installed. Browse Search to find packages.";
+            el.hint.style.display = "";
             ZenUtils.reconcilePackageCards(el.installedList, [], performPackageAction, showPackageDetails);
             if (cardScroll) cardScroll.rebuild();
             return;
         }
         el.hint.textContent = "";
+        el.hint.style.display = "none";
         ZenUtils.reconcilePackageCards(el.installedList, visible, performPackageAction, showPackageDetails);
-        if (cardScroll) cardScroll.rebuild();
+        if (cardScroll) { cardScroll.rebuild(); cardScroll.restorePosition(); }
     }
 
     function setupChrome() {

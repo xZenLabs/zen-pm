@@ -178,6 +178,7 @@
 
     function showPackageDetails(pkg) {
         if (!pkg || (!pkg.id && !pkg.name)) return;
+        if (cardScroll) cardScroll.savePosition();
         window.location.href = ZenUtils.packageDetailsURL(pkg);
     }
 
@@ -190,12 +191,12 @@
         if (!visible.length) {
             el.hint.textContent = query ? "No packages match \"" + query + "\"." : "No packages found. Try Refresh Packages.";
             ZenUtils.reconcilePackageCards(el.packages, [], performPackageAction, showPackageDetails);
-            if (cardScroll) cardScroll.rebuild();
+            if (cardScroll) { cardScroll.rebuild(); cardScroll.restorePosition(); }
             return;
         }
         el.hint.textContent = "";
         ZenUtils.reconcilePackageCards(el.packages, visible, performPackageAction, showPackageDetails);
-        if (cardScroll) cardScroll.rebuild();
+        if (cardScroll) { cardScroll.rebuild(); cardScroll.restorePosition(); }
     }
 
     function setupChrome() {

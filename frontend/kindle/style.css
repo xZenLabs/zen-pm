@@ -311,7 +311,6 @@ input {
 
 .package-grid {
     display: block;
-    margin-top: 12px;
 }
 
 .media-card {
@@ -814,7 +813,7 @@ body.installed-page-body {
 .search-page h2,
 .installed-page h2 {
     flex-shrink: 0;
-    padding: 8px 16px 8px;
+    padding: 8px 16px 20px;
     margin: 0;
 }
 
@@ -933,7 +932,7 @@ body.sources-page-body {
     align-items: center;
     -webkit-box-pack: justify;
     justify-content: space-between;
-    padding: 22px 16px 14px;
+    padding: 22px 16px 22px;
 }
 
 .sources-header h2 {
@@ -975,7 +974,6 @@ body.sources-page-body {
     -webkit-box-orient: vertical;
     display: flex;
     flex-direction: column;
-    margin-top: 8px;
 }
 
 .repo-list > * + * { margin-top: 8px; }
@@ -1521,7 +1519,8 @@ body.source-details-page-body {
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 12px 16px 156px;
+    padding: 0 16px 156px;
+    position: relative;
 }
 
 .package-details-page .details-scroll {
@@ -1681,7 +1680,7 @@ body.source-details-page-body {
 
 .source-packages-heading {
     flex-shrink: 0;
-    padding: 14px 16px 6px;
+    padding: 14px 16px 18px;
     margin: 0;
     font-size: 1.05rem;
 }
