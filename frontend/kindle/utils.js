@@ -728,21 +728,44 @@ var ZenUtils = (function () {
         var cards = [];
         var cIndex = 0;
         var scrollEl = null;
+        var _clickSuppressUntil = 0;     // prevent taps during/after scroll
+        var _guardInstalled = false;
+
+        function suppressClicks(ms) {
+            _clickSuppressUntil = new Date().getTime() + ms;
+        }
+
+        function installClickGuard() {
+            if (_guardInstalled || !scrollEl) return;
+            _guardInstalled = true;
+            scrollEl.addEventListener("click", function (e) {
+                if (new Date().getTime() < _clickSuppressUntil) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true);
+        }
 
         function rebuild() {
             cards = [];
             var elems = document.getElementsByClassName(cardClass);
             for (var i = 0; i < elems.length; i++) cards.push(elems[i]);
             if (!scrollEl) scrollEl = document.querySelector(scrollSelector);
+            installClickGuard();
+            // Force layout so the first scroll doesn't trigger a deferred
+            // layout pass that visibly shifts content (old WebKit quirk).
+            if (scrollEl) { var _force = scrollEl.offsetHeight; }
         }
 
         function goCard(index) {
             if (cards.length === 0) return;
             cIndex = Math.max(0, Math.min(cards.length - 1, index));
             if (!scrollEl) return;
-            // Ensure scrollTop=0 for first card so the top of the list
-            // isn't clipped (offsetTop includes container padding).
-            scrollEl.scrollTop = cIndex === 0 ? 0 : cards[cIndex].offsetTop - 10;
+            // Snap each card flush to the top; card 0 always at scrollTop=0
+            // so the top of the list is never clipped.
+            scrollEl.scrollTop = cIndex === 0 ? 0 : cards[cIndex].offsetTop;
         }
 
         // Derive current card from actual scrollTop — keeps scrollbar
@@ -759,6 +782,7 @@ var ZenUtils = (function () {
         window.addEventListener("mousewheel", function (e) {
             if (cards.length === 0) return;
             e.preventDefault();
+            suppressClicks(700);  // prevent accidental taps after scrolling
             var cur = currentCardIndex();
             if (e.wheelDeltaY > 0) goCard(cur - 1);
             else if (e.wheelDeltaY < 0) goCard(cur + 1);

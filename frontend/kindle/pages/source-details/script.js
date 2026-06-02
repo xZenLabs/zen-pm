@@ -198,10 +198,12 @@
 
         if (!sourceName) {
             el.hint.textContent = "No source selected.";
+            el.hint.style.display = "";
             return;
         }
         if (!state.repo) {
             el.hint.textContent = "Source not found.";
+            el.hint.style.display = "";
             return;
         }
 
@@ -211,7 +213,13 @@
             }
         }
 
-        el.hint.textContent = state.visible.length ? "" : "No packages found for this source.";
+        if (state.visible.length) {
+            el.hint.textContent = "";
+            el.hint.style.display = "none";
+        } else {
+            el.hint.textContent = "No packages found for this source.";
+            el.hint.style.display = "";
+        }
         renderSourceHeader();
         ZenUtils.reconcilePackageCards(el.packages, state.visible, performPackageAction, showPackageDetails);
         if (cardScroll) { cardScroll.rebuild(); cardScroll.restorePosition(); }
