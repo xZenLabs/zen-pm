@@ -1,5 +1,7 @@
 (function () {
     var postLog = ZenUtils.postLog;
+    var REPO_KINDLEFORGE_NAME = ZenUtils.REPO_KINDLEFORGE_NAME;
+    var REPO_KINDLEFORGE_HOST = ZenUtils.REPO_KINDLEFORGE_URL.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 
     var state = {};
 
@@ -11,7 +13,7 @@
         addSourceModal: document.getElementById("addSourceModal"),
         sourceUrlInput: document.getElementById("sourceUrlInput"),
         confirmAddBtn:  document.getElementById("confirmAddBtn"),
-        cancelAddBtn:   document.getElementById("cancelAddBtn"),
+        closeAddBtn:    document.getElementById("closeAddBtn"),
         addSourceMsg:   document.getElementById("addSourceMsg")
     };
 
@@ -30,6 +32,7 @@
 
     function hideAddModal() {
         el.addSourceModal.style.display = "none";
+        el.confirmAddBtn.disabled = false;
     }
 
     function addSource() {
@@ -63,8 +66,8 @@
                 }).then(function (text) {
                     var arr = JSON.parse(text);
                     // Only default to "KindleForge" for the known source.
-                    if (url.indexOf("penguins184.xyz") !== -1) {
-                        return "KindleForge";
+                    if (url.indexOf(REPO_KINDLEFORGE_HOST) !== -1) {
+                        return REPO_KINDLEFORGE_NAME;
                     }
                     if (Array.isArray(arr) && arr.length && arr[0].uri) {
                         return arr[0].uri.split("/")[0];
@@ -107,11 +110,20 @@
     }
 
     function repoIconURL(repo) {
-        if (repo.name === "KindleForge") {
+        if (repo.name === REPO_KINDLEFORGE_NAME) {
             return "../../assets/kindleforge.svg";
         }
         var base = repo.url.replace(/\/+$/, "");
         return base + "/favicon.svg";
+    }
+
+    function repoLine2(repo) {
+        var kind = repo.default ? "default" : "user";
+        return kind + " | " + (repo.trust || "unknown");
+    }
+
+    function sourceDetailsURL(repo) {
+        return "../source-details/index.html?name=" + encodeURIComponent(repo.name);
     }
 
     function renderRepos(repos) {
@@ -123,85 +135,30 @@
         }
         for (var _i = 0; _i < repos.length; _i++) {
             (function (r) {
-                var row = document.createElement("div");
-                row.className = "repo-row";
-
-                var info = document.createElement("div");
-                info.className = "repo-info";
-
-                var nameRow = document.createElement("div");
-                nameRow.className = "repo-name-row";
-
-                var iconWrap = document.createElement("div");
-                iconWrap.className = "repo-icon-wrap";
-
-                var preload = new Image();
-                preload.onload = function () {
-                    var iconImg = document.createElement("img");
-                    iconImg.src = repoIconURL(r);
-                    iconImg.alt = "";
-                    iconImg.className = "repo-icon";
-                    iconImg.width = 64;
-                    iconImg.height = 64;
-                    iconWrap.appendChild(iconImg);
-                };
-                preload.onerror = function () {
-                    if (preload.src.indexOf('/favicon.svg') !== -1) {
-                        preload.src = preload.src.replace('/favicon.svg', '/favicon.ico');
-                        return;
-                    }
-                };
-                preload.src = repoIconURL(r);
-
-                nameRow.appendChild(iconWrap);
-
-                var name = document.createElement("strong");
-                name.textContent = r.name;
-                nameRow.appendChild(name);
-
-                if (r.default) {
-                    var defBadge = document.createElement("span");
-                    defBadge.className = "badge default-badge";
-                    defBadge.textContent = "default";
-                    nameRow.appendChild(defBadge);
-                } else {
-                    var userBadge = document.createElement("span");
-                    userBadge.className = "badge user-badge";
-                    userBadge.textContent = "user";
-                    nameRow.appendChild(userBadge);
-                }
-
-                var trustLabel = r.trust || "unknown";
-                var trustBadge = document.createElement("span");
-                trustBadge.className = "badge trust-badge";
-                if (trustLabel === "trusted" || trustLabel === "signed") {
-                    trustBadge.className = "badge trust-badge trusted";
-                }
-                trustBadge.textContent = trustLabel;
-                nameRow.appendChild(trustBadge);
-
-                info.appendChild(nameRow);
-
-                var urlEl = document.createElement("div");
-                urlEl.className = "repo-url";
-                urlEl.textContent = r.url;
-
-                info.appendChild(urlEl);
-
-                var actions = document.createElement("div");
-                actions.className = "repo-actions";
+                var actionBtn = null;
 
                 if (!r.default) {
-                    var removeBtn = document.createElement("button");
-                    removeBtn.type = "button";
-                    removeBtn.className = "danger";
-                    removeBtn.textContent = "Remove";
-                    removeBtn.onclick = function () { removeRepo(r.name); };
-                    actions.appendChild(removeBtn);
+                    actionBtn = document.createElement("button");
+                    actionBtn.type = "button";
+                    actionBtn.className = "repo-action danger";
+                    actionBtn.textContent = "Remove";
+                    actionBtn.onclick = function (e) {
+                        if (e && e.stopPropagation) e.stopPropagation();
+                        removeRepo(r.name);
+                    };
                 }
 
-                row.appendChild(info);
-                row.appendChild(actions);
+                var row = ZenUtils.renderMediaCard({
+                    tagName: "div",
+                    className: "repo-row",
+                    imageSrc: repoIconURL(r),
+                    imageFallback: "../../assets/sources.svg",
+                    title: r.name,
+                    line2: repoLine2(r),
+                    line3: r.url,
+                    action: actionBtn,
+                    clickHandler: function () { window.location.href = sourceDetailsURL(r); }
+                });
                 el.repoList.appendChild(row);
             })(repos[_i]);
         }
@@ -224,7 +181,7 @@
     function bindEvents() {
         el.addSourceBtn.addEventListener("click", showAddModal);
         el.confirmAddBtn.addEventListener("click", addSource);
-        el.cancelAddBtn.addEventListener("click", hideAddModal);
+        el.closeAddBtn.addEventListener("click", hideAddModal);
         el.addSourceModal.addEventListener("click", function (e) {
             if (e.target === el.addSourceModal) hideAddModal();
         });

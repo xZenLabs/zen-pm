@@ -78,7 +78,7 @@
             } else {
                 _retryCount = 0;
                 setBusy(false, "");
-                el.hint.textContent = "ZenPM daemon not found. Re-run ZenPM.sh to start it.";
+                el.hint.textContent = ZenUtils.daemonUnavailableMessage();
                 postLog("[installed] Daemon unreachable after " + MAX_RETRIES + " retries");
             }
         });
@@ -95,10 +95,10 @@
                 for (var _j = 0; _j < state.packages.length; _j++) {
                     if (state.packages[_j].id === op.id) { pkg = state.packages[_j]; break; }
                 }
-                var succeeded = pkg && pkg.installed !== op.wasInstalled;
+                var succeeded = op.action === "reinstall" ? (pkg && pkg.installed) : (pkg && pkg.installed !== op.wasInstalled);
                 if (succeeded) {
                     state.pendingOp = null;
-                    var doneAction = op.action === "install" ? "installed" : "uninstalled";
+                    var doneAction = op.action === "install" ? "installed" : (op.action === "reinstall" ? "reinstalled" : "uninstalled");
                     showModal("Done", pkg.name + " " + doneAction + " successfully.");
                     setBusy(false, "");
                 } else if (attempt >= MAX_POLL_RETRIES) {
@@ -113,23 +113,14 @@
         setTimeout(tryPoll, POLL_DELAY);
     }
 
-    function performPackageAction(pkg) {
-        dbg("[installed] performPackageAction: " + pkg.id + " connected=" + state.connected + " busy=" + state.busy);
-        if (!state.connected) {
-            el.hint.textContent = "Not connected to daemon. Try reopening the page.";
-            return;
-        }
-        if (state.busy) {
-            el.hint.textContent = "Another operation is in progress. Please wait.";
-            return;
-        }
-        var action = pkg.installed ? "uninstall" : "install";
-        dbg("[installed] POST /packages/" + pkg.id + "/" + action);
-        setBusy(true, (action === "install" ? "Installing " : "Uninstalling ") + pkg.name);
+    function startPackageAction(pkg, action) {
+        var backendAction = action === "reinstall" ? "install" : action;
+        dbg("[installed] POST /packages/" + pkg.id + "/" + backendAction);
+        setBusy(true, (action === "uninstall" ? "Uninstalling " : (action === "reinstall" ? "Reinstalling " : "Installing ")) + pkg.name);
         state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
-        var actionLabel = action === "install" ? "Installing" : "Uninstalling";
-        showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.");
-        fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + action, null).then(function () {
+        var actionLabel = action === "uninstall" ? "Uninstalling" : (action === "reinstall" ? "Reinstalling" : "Installing");
+        showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", { className: "modal-overlay-clear" });
+        fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction, null).then(function () {
             dbg("[installed] " + action + " started for " + pkg.id);
             pollAfterOp();
         }).catch(function (err) {
@@ -140,8 +131,39 @@
         });
     }
 
+    function performPackageAction(pkg) {
+        dbg("[installed] performPackageAction: " + pkg.id + " connected=" + state.connected + " busy=" + state.busy);
+        if (!state.connected) {
+            el.hint.textContent = "Not connected to daemon. Try reopening the page.";
+            return;
+        }
+        if (state.busy) {
+            el.hint.textContent = "Another operation is in progress. Please wait.";
+            return;
+        }
+        if (pkg.installed) {
+            ZenUtils.showPackageModifyModal(pkg, {
+                info: function () { showPackageDetails(pkg); },
+                reinstall: function () {
+                    ZenUtils.showPackageActionConfirm(pkg, "reinstall", function () { startPackageAction(pkg, "reinstall"); });
+                },
+                uninstall: function () {
+                    ZenUtils.showPackageActionConfirm(pkg, "uninstall", function () { startPackageAction(pkg, "uninstall"); });
+                }
+            });
+            return;
+        }
+        ZenUtils.showPackageActionConfirm(pkg, "install", function () {
+            startPackageAction(pkg, "install");
+        });
+    }
+
+    function showPackageDetails(pkg) {
+        if (!pkg || (!pkg.id && !pkg.name)) return;
+        window.location.href = ZenUtils.packageDetailsURL(pkg);
+    }
+
     function renderInstalled() {
-        el.installedList.innerHTML = "";
         var query = el.installedSearch ? el.installedSearch.value.toLowerCase().trim() : "";
         var installed = state.packages.filter(function (p) { return p.installed; });
         var visible = query
@@ -150,13 +172,12 @@
         el.installedHeading.textContent = "Installed (" + visible.length + (query ? "/" + installed.length : "") + ")";
         if (!visible.length) {
             el.hint.textContent = query ? "No installed packages match \"" + query + "\"." : "No packages installed. Browse Search to find packages.";
+            ZenUtils.reconcilePackageCards(el.installedList, [], performPackageAction, showPackageDetails);
             if (cardScroll) cardScroll.rebuild();
             return;
         }
         el.hint.textContent = "";
-        for (var _i = 0; _i < visible.length; _i++) {
-            el.installedList.appendChild(ZenUtils.renderPackageCard(visible[_i], performPackageAction));
-        }
+        ZenUtils.reconcilePackageCards(el.installedList, visible, performPackageAction, showPackageDetails);
         if (cardScroll) cardScroll.rebuild();
     }
 

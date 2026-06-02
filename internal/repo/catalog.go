@@ -21,7 +21,8 @@ import (
 )
 
 // CatalogEntry is the internal merged-catalog representation.
-// Pipe-separated on disk (17 fields): repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags|icon_url|manifest_url
+// Pipe-separated on disk:
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags|icon_url|repo_icon_url|images
 type CatalogEntry struct {
 	Repo         string
 	Priority     int
@@ -39,6 +40,8 @@ type CatalogEntry struct {
 	Author       string
 	Tags         []string
 	IconURL      string
+	RepoIconURL  string
+	Images       []string
 }
 
 func (e *CatalogEntry) HasPlatform(p string) bool {
@@ -62,11 +65,13 @@ func (e *CatalogEntry) serialize() string {
 		e.Description, e.Author,
 		strings.Join(e.Tags, ","),
 		e.IconURL,
+		e.RepoIconURL,
+		strings.Join(e.Images, ","),
 	}, "|")
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
-	parts := strings.SplitN(line, "|", 17)
+	parts := strings.SplitN(line, "|", 19)
 	if len(parts) < 12 {
 		return nil, fmt.Errorf("invalid catalog line (got %d fields): %q", len(parts), line)
 	}
@@ -96,6 +101,12 @@ func parseCatalogLine(line string) (*CatalogEntry, error) {
 	if len(parts) >= 16 {
 		e.IconURL = parts[15]
 	}
+	if len(parts) >= 17 {
+		e.RepoIconURL = parts[16]
+	}
+	if len(parts) >= 18 && parts[17] != "" {
+		e.Images = strings.Split(parts[17], ",")
+	}
 	return e, nil
 }
 
@@ -120,6 +131,9 @@ type indexJSON struct {
 		SHA256       string   `json:"sha256"`
 		Size         string   `json:"size"`
 		IconURL      string   `json:"icon_url,omitempty"`
+		ImageURL     string   `json:"image_url,omitempty"`
+		Images       []string `json:"images,omitempty"`
+		Screenshots  []string `json:"screenshots,omitempty"`
 	} `json:"packages"`
 }
 
@@ -176,6 +190,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 		} else {
 			iconURL = resolveURL(repoURL, iconURL)
 		}
+		images := resolveURLList(repoURL, appendURLLists([]string{p.ImageURL}, p.Images, p.Screenshots))
 		entries = append(entries, &CatalogEntry{
 			Repo:         repoName,
 			Priority:     priority,
@@ -191,6 +206,8 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 			SHA256:       p.SHA256,
 			Size:         p.Size,
 			IconURL:      iconURL,
+			RepoIconURL:  repoIcon,
+			Images:       images,
 		})
 	}
 	return entries
@@ -221,9 +238,40 @@ func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []k
 			SHA256:       "",
 			Size:         "",
 			IconURL:      repoIcon,
+			RepoIconURL:  repoIcon,
 		})
 	}
 	return result
+}
+
+func appendURLLists(first []string, rest ...[]string) []string {
+	out := make([]string, 0)
+	for _, value := range first {
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	for _, values := range rest {
+		for _, value := range values {
+			if value != "" {
+				out = append(out, value)
+			}
+		}
+	}
+	return out
+}
+
+func resolveURLList(base string, values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			out = append(out, resolveURL(base, value))
+		}
+	}
+	return out
 }
 
 // fetchKindleForgeCatalog fetches registry.json from the repo URL.

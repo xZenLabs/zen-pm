@@ -53,6 +53,12 @@ func (s *Server) ListenAndServe() error {
 				log.Warnf("Initial refresh failed: %v", err)
 			}
 		}()
+	} else {
+		go func() {
+			if catalog, err := s.repos.ReadCatalog(); err == nil {
+				s.repos.CacheInstalledUninstallScripts(catalog)
+			}
+		}()
 	}
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
@@ -291,6 +297,9 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		Repo        string   `json:"repo"`
 		Installed   bool     `json:"installed"`
 		IconURL     string   `json:"icon_url,omitempty"`
+		RepoIconURL string   `json:"repo_icon_url,omitempty"`
+		ImageURL    string   `json:"image_url,omitempty"`
+		Images      []string `json:"images,omitempty"`
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
@@ -301,9 +310,12 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		result = append(result, pkgJSON{
 			ID: e.ID, Name: e.Name, Version: e.Version,
 			Description: e.Description, Author: e.Author,
-			Tags: e.Tags,
+			Tags:      e.Tags,
 			Platforms: e.Platforms, Repo: e.Repo, Installed: installedSet[e.ID],
-			IconURL: e.IconURL,
+			IconURL:     e.IconURL,
+			RepoIconURL: e.RepoIconURL,
+			ImageURL:    firstString(e.Images),
+			Images:      e.Images,
 		})
 	}
 
@@ -323,6 +335,13 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {

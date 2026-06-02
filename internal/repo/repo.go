@@ -95,8 +95,41 @@ func (m *Manager) Refresh() error {
 	if err := WriteMergedCatalog(m.catalogPath(), merged); err != nil {
 		return fmt.Errorf("write merged catalog: %w", err)
 	}
+	m.CacheInstalledUninstallScripts(merged)
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
 	return nil
+}
+
+func (m *Manager) CacheInstalledUninstallScripts(catalog []*CatalogEntry) {
+	installed, err := m.st.ReadInstalled()
+	if err != nil || len(installed) == 0 {
+		return
+	}
+	installedSet := make(map[string]bool, len(installed))
+	for _, e := range installed {
+		installedSet[e.ID] = true
+	}
+	for _, e := range catalog {
+		if !installedSet[e.ID] || e.UninstallURL == "" {
+			continue
+		}
+		path := m.st.CachedUninstallScriptPath(e.ID)
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		data, err := fetchBytes(e.UninstallURL)
+		if err != nil {
+			log.Warnf("Could not cache uninstall script for %s: %v", e.ID, err)
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			log.Warnf("Could not create script cache dir for %s: %v", e.ID, err)
+			continue
+		}
+		if err := os.WriteFile(path, data, 0755); err != nil {
+			log.Warnf("Could not write uninstall script cache for %s: %v", e.ID, err)
+		}
+	}
 }
 
 func (m *Manager) catalogPath() string {

@@ -65,8 +65,13 @@
             }
             hint.textContent = "";
             for (var _i = 0; _i < pkgs.length; _i++) {
-                list.appendChild(ZenUtils.renderPackageCard(pkgs[_i], null));
+                list.appendChild(ZenUtils.renderPackageCard(pkgs[_i], null, showPackageDetails));
             }
+        }
+
+        function showPackageDetails(pkg) {
+            if (!pkg || (!pkg.id && !pkg.name)) return;
+            window.location.href = ZenUtils.packageDetailsURL(pkg);
         }
 
         loadFeatured();

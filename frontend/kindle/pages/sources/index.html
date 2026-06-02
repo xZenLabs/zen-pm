@@ -22,14 +22,19 @@
     </div>
 
     <!-- Add-source modal (hidden by default) -->
-    <div id="addSourceModal" class="modal-overlay" style="display:none">
-        <div class="modal-box">
+    <div id="addSourceModal" class="modal-overlay add-source-modal-overlay" style="display:none">
+        <div class="modal-box add-source-modal-box">
+            <button id="closeAddBtn" type="button" class="modal-close-btn" aria-label="Close">
+                <svg class="modal-close-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
             <h3>Add Source</h3>
             <p id="addSourceMsg" class="hint"></p>
             <input id="sourceUrlInput" type="text" placeholder="https://example.com/repos/default" spellcheck="false" autocomplete="off">
-            <div style="margin-top:14px">
-                <button id="confirmAddBtn" type="button" class="primary">Add</button>
-                <button id="cancelAddBtn" type="button">Cancel</button>
+            <div class="add-source-actions">
+                <button id="confirmAddBtn" type="button" class="primary">+ Add</button>
             </div>
         </div>
     </div>
