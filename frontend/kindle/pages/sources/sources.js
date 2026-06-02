@@ -130,16 +130,6 @@
         return repoIsVerified(repo) ? "Verified" : "Unverified";
     }
 
-    function appendRepoVerificationIcon(row, repo) {
-        var icon = document.createElement("img");
-        icon.className = "package-check verification-check";
-        icon.src = repoVerificationIcon(repo);
-        icon.alt = repoVerificationLabel(repo);
-        icon.width = 38;
-        icon.height = 38;
-        row.appendChild(icon);
-    }
-
     function sourceDetailsURL(repo) {
         return "../source-details/index.html?name=" + encodeURIComponent(repo.name);
     }
@@ -176,7 +166,32 @@
                     action: actionBtn,
                     clickHandler: function () { window.location.href = sourceDetailsURL(r); }
                 });
-                appendRepoVerificationIcon(row, r);
+
+                // Inline verification icon after the title, matching source-details pattern
+                var titleEl = row.querySelector(".media-card-title");
+                if (titleEl) {
+                    titleEl.textContent = "";
+                    var titleSpan = document.createElement("span");
+                    titleSpan.textContent = r.name;
+                    titleSpan.style.display = "inline-block";
+                    titleSpan.style.verticalAlign = "middle";
+                    titleEl.appendChild(titleSpan);
+
+                    // Spacer for breathing room between title and icon
+                    var spacer = document.createElement("span");
+                    spacer.style.display = "inline-block";
+                    spacer.style.width = "6px";
+                    titleEl.appendChild(spacer);
+
+                    var verifyIcon = document.createElement("img");
+                    verifyIcon.src = repoVerificationIcon(r);
+                    verifyIcon.alt = repoVerificationLabel(r);
+                    verifyIcon.className = "source-title-verification";
+                    verifyIcon.width = 38;
+                    verifyIcon.height = 38;
+                    titleEl.appendChild(verifyIcon);
+                }
+
                 el.repoList.appendChild(row);
             })(repos[_i]);
         }

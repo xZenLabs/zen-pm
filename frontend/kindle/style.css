@@ -422,13 +422,14 @@ input {
     height: 38px;
 }
 
-.repo-row .media-card-title,
-.repo-row .media-card-line {
-    padding-right: 68px;
-}
+
 
 .repo-row .media-card-line-2 {
     font-size: 0.78rem;
+}
+
+.repo-row .source-title-verification {
+    margin-left: 6px;
 }
 
 .package-action {
@@ -483,12 +484,6 @@ input {
     height: 54px;
 }
 
-.verification-check {
-    top: 8px;
-    right: 16px;
-    width: 38px;
-    height: 38px;
-}
 
 .package-author-row {
     display: table;
@@ -1148,12 +1143,12 @@ body.sources-page-body {
 }
 
 .modal-box h3 {
-    margin: 0 78px 12px 0;
+    margin: 0 0 12px 0;
     font-size: 1.2rem;
 }
 
 .modal-box p {
-    margin: 0 0 18px;
+    margin: 0 0 18px 0;
     white-space: pre-line;
     color: var(--muted);
     font-size: 0.95rem;
@@ -1575,8 +1570,8 @@ body.source-details-page-body {
     background: #ffffff;
     background-repeat: no-repeat;
     background-position: center center;
-    -webkit-background-size: contain;
-    background-size: contain;
+    -webkit-background-size: cover;
+    background-size: cover;
     overflow: hidden;
     height: 360px;
 }
@@ -1662,7 +1657,7 @@ body.source-details-page-body {
 .source-header-title-row h2 {
     display: inline-block;
     vertical-align: middle;
-    padding-right: 8px;
+    padding-right: 6px;
 }
 
 .source-title-verification {

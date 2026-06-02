@@ -36,6 +36,8 @@ func write(level, msg string) {
 
 func Info(msg string)                              { write("INFO", msg) }
 func Warn(msg string)                              { write("WARN", msg) }
+func Debug(msg string)                             { write("DBG", msg) }
 func Infof(format string, args ...interface{})     { Info(fmt.Sprintf(format, args...)) }
 func Warnf(format string, args ...interface{})     { Warn(fmt.Sprintf(format, args...)) }
+func Debugf(format string, args ...interface{})    { Debug(fmt.Sprintf(format, args...)) }
 func Errorf(format string, args ...interface{})    { write("ERR", fmt.Sprintf(format, args...)) }

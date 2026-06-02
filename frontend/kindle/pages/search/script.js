@@ -117,11 +117,11 @@
                 if (succeeded) {
                     state.pendingOp = null;
                     var doneAction = op.action === "install" ? "installed" : (op.action === "reinstall" ? "reinstalled" : "uninstalled");
-                    showModal("Done", pkg.name + " " + doneAction + " successfully.");
+                    showModal("Done", pkg.name + " " + doneAction + " successfully.", { className: "modal-overlay-clear" });
                     setBusy(false, "");
                 } else if (attempt >= MAX_POLL_RETRIES) {
                     state.pendingOp = null;
-                    showModal("Failed", op.action + " of " + op.id + " did not complete.\n\nCheck the debug log for details.");
+                    showModal("Failed", op.action + " of " + op.id + " did not complete.\n\nCheck the debug log for details.", { className: "modal-overlay-clear" });
                     setBusy(false, "");
                 } else {
                     setTimeout(tryPoll, POLL_DELAY);
@@ -143,7 +143,7 @@
             pollAfterOp();
         }).catch(function (err) {
             postLog("Failed to start " + action + ": " + String(err));
-            showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err));
+            showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err), { className: "modal-overlay-clear" });
             state.pendingOp = null;
             setBusy(false, "");
         });

@@ -424,7 +424,12 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	log.Infof("[WAF] %s", body.Message)
+	// Route noisy per-package-card and image-fallback logs to debug level.
+	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") {
+		log.Debugf("[WAF] %s", body.Message)
+	} else {
+		log.Infof("[WAF] %s", body.Message)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
