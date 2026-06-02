@@ -16,9 +16,12 @@
 
     var el = {
         backBtn: document.getElementById("backBtn"),
+        icon: document.getElementById("sourceIcon"),
         heading: document.getElementById("sourceHeading"),
+        verificationIcon: document.getElementById("sourceVerificationIcon"),
+        url: document.getElementById("sourceUrl"),
+        packagesHeading: document.getElementById("sourcePackagesHeading"),
         hint: document.getElementById("sourceHint"),
-        summary: document.getElementById("sourceSummary"),
         packages: document.getElementById("sourcePackages")
     };
 
@@ -159,54 +162,37 @@
         return repo.url.replace(/\/+$/, "") + "/favicon.svg";
     }
 
-    function renderSourceSummary() {
-        el.summary.innerHTML = "";
+    function repoIsVerified(repo) {
+        var trust = repo.trust || "";
+        return !!repo.default || trust === "trusted" || trust === "signed";
+    }
+
+    function repoVerificationIcon(repo) {
+        return repoIsVerified(repo) ? "../../assets/verified.svg" : "../../assets/unverified.svg";
+    }
+
+    function repoVerificationLabel(repo) {
+        return repoIsVerified(repo) ? "Verified" : "Unverified";
+    }
+
+    function renderSourceHeader() {
         if (!state.repo) return;
 
-        var top = document.createElement("div");
-        top.className = "source-summary-main";
-
-        var iconWrap = document.createElement("div");
-        iconWrap.className = "source-summary-icon-wrap";
-
-        var icon = document.createElement("img");
-        icon.className = "source-summary-icon";
-        icon.alt = "";
-        icon.width = 96;
-        icon.height = 96;
-        icon.onerror = function () {
-            if (icon.src && icon.src.indexOf('/favicon.svg') !== -1) {
-                icon.src = icon.src.replace('/favicon.svg', '/favicon.ico');
+        el.heading.textContent = state.repo.name;
+        el.url.textContent = state.repo.url;
+        el.packagesHeading.textContent = "Packages (" + state.visible.length + ")";
+        el.verificationIcon.src = repoVerificationIcon(state.repo);
+        el.verificationIcon.alt = repoVerificationLabel(state.repo);
+        el.icon.onerror = function () {
+            if (el.icon.src && el.icon.src.indexOf('/favicon.svg') !== -1) {
+                el.icon.src = el.icon.src.replace('/favicon.svg', '/favicon.ico');
             }
         };
-        icon.src = repoIconURL(state.repo);
-        iconWrap.appendChild(icon);
-        top.appendChild(iconWrap);
-
-        var text = document.createElement("div");
-        text.className = "source-summary-text";
-
-        var name = document.createElement("h3");
-        name.textContent = state.repo.name;
-        text.appendChild(name);
-
-        var url = document.createElement("p");
-        url.className = "source-summary-url";
-        url.textContent = state.repo.url;
-        text.appendChild(url);
-
-        var meta = document.createElement("p");
-        meta.className = "source-summary-meta";
-        meta.textContent = state.visible.length + " package" + (state.visible.length === 1 ? "" : "s") + " \u2022 " + (state.repo.trust || "unknown");
-        text.appendChild(meta);
-
-        top.appendChild(text);
-        el.summary.appendChild(top);
+        el.icon.src = repoIconURL(state.repo);
     }
 
     function renderSourceDetails() {
         el.packages.innerHTML = "";
-        el.summary.innerHTML = "";
         state.visible = [];
 
         if (!sourceName) {
@@ -224,9 +210,8 @@
             }
         }
 
-        el.heading.textContent = state.repo.name;
         el.hint.textContent = state.visible.length ? "" : "No packages found for this source.";
-        renderSourceSummary();
+        renderSourceHeader();
         ZenUtils.reconcilePackageCards(el.packages, state.visible, performPackageAction, showPackageDetails);
         if (cardScroll) cardScroll.rebuild();
     }

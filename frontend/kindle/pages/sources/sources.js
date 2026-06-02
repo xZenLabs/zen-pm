@@ -117,9 +117,27 @@
         return base + "/favicon.svg";
     }
 
-    function repoLine2(repo) {
-        var kind = repo.default ? "default" : "user";
-        return kind + " | " + (repo.trust || "unknown");
+    function repoIsVerified(repo) {
+        var trust = repo.trust || "";
+        return !!repo.default || trust === "trusted" || trust === "signed";
+    }
+
+    function repoVerificationIcon(repo) {
+        return repoIsVerified(repo) ? "../../assets/verified.svg" : "../../assets/unverified.svg";
+    }
+
+    function repoVerificationLabel(repo) {
+        return repoIsVerified(repo) ? "Verified" : "Unverified";
+    }
+
+    function appendRepoVerificationIcon(row, repo) {
+        var icon = document.createElement("img");
+        icon.className = "package-check verification-check";
+        icon.src = repoVerificationIcon(repo);
+        icon.alt = repoVerificationLabel(repo);
+        icon.width = 38;
+        icon.height = 38;
+        row.appendChild(icon);
     }
 
     function sourceDetailsURL(repo) {
@@ -154,11 +172,11 @@
                     imageSrc: repoIconURL(r),
                     imageFallback: "../../assets/sources.svg",
                     title: r.name,
-                    line2: repoLine2(r),
-                    line3: r.url,
+                    line2: r.url,
                     action: actionBtn,
                     clickHandler: function () { window.location.href = sourceDetailsURL(r); }
                 });
+                appendRepoVerificationIcon(row, r);
                 el.repoList.appendChild(row);
             })(repos[_i]);
         }

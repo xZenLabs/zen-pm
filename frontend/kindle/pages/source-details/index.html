@@ -13,12 +13,20 @@
             <button id="backBtn" type="button" class="details-back-btn" aria-label="Back">
                 <img src="../../assets/chevron.left.svg" alt="" class="details-back-icon">
             </button>
-            <h2 id="sourceHeading">Source Details</h2>
+            <img id="sourceIcon" src="../../assets/sources.svg" alt="" class="source-header-icon" width="96" height="96">
+            <div class="source-header-text">
+                <div class="source-header-title-row">
+                    <h2 id="sourceHeading">Source Details</h2>
+                    <img id="sourceVerificationIcon" src="../../assets/unverified.svg" alt="" class="source-title-verification" width="38" height="38">
+                </div>
+                <p id="sourceUrl" class="source-header-url"></p>
+            </div>
         </header>
+
+        <h2 id="sourcePackagesHeading" class="source-packages-heading">Packages (0)</h2>
 
         <div class="source-details-scroll">
             <p id="sourceHint" class="hint">Loading source...</p>
-            <section id="sourceSummary" class="source-summary"></section>
             <div id="sourcePackages" class="package-grid"></div>
         </div>
     </div>

@@ -228,6 +228,8 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
       "version": "1.0.0",
       "description": "What this package does.",
       "author": "Your Name",
+      "featured": true,
+      "featured_image": "packages/my-package/featured.png",
       "platforms": ["kindle"],
       "dependencies": [],
       "install_url": "packages/my-package/scripts/install.sh",
@@ -259,6 +261,8 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].version` | yes | SemVer string (e.g. `"1.2.3"`) |
 | `packages[].description` | no | Short description shown on the package card |
 | `packages[].author` | no | Author/ maintainer name |
+| `packages[].featured` | no | Mark this package for the Featured page |
+| `packages[].featured_image` | no | Large Featured-page banner image; relative paths resolve against `repo.url` |
 | `packages[].platforms` | yes | Array of `"kindle"` and/or `"kobo"` |
 | `packages[].dependencies` | no | Array of package `id` strings required before install |
 | `packages[].install_url` | yes | Path to install script (relative to repo URL) |

@@ -60,10 +60,63 @@
         return null;
     }
 
+    function resolveRepoURL(base, value) {
+        if (!value) return "";
+        if (/^https?:\/\//.test(value) || value.indexOf("file://") === 0) return value;
+        return base.replace(/\/+$/, "") + "/" + value.replace(/^\/+/, "");
+    }
+
+    function mergeRepoMetadata(pkg, repoPkg, repoURL) {
+        if (!pkg || !repoPkg) return pkg;
+        if (repoPkg.name) pkg.name = repoPkg.name;
+        if (repoPkg.description) pkg.description = repoPkg.description;
+        if (repoPkg.author) pkg.author = repoPkg.author;
+        if (repoPkg.version) pkg.version = repoPkg.version;
+        if (repoPkg.icon_url) pkg.icon_url = resolveRepoURL(repoURL, repoPkg.icon_url);
+        if (repoPkg.featured_image) pkg.featured_image = resolveRepoURL(repoURL, repoPkg.featured_image);
+        if (repoPkg.featured) pkg.featured = true;
+        postLog("[details] merged repo metadata id=" + (pkg.id || "") + " name=" + (pkg.name || "") + " featured_image=" + (pkg.featured_image || "") + " icon_url=" + (pkg.icon_url || ""));
+        return pkg;
+    }
+
+    function findRepoURL(repos, repoName) {
+        for (var i = 0; i < repos.length; i++) {
+            if (repos[i].name === repoName) return repos[i].url;
+        }
+        return "";
+    }
+
+    function enrichPackageFromRepoIndex(pkg) {
+        if (!pkg || !pkg.repo) return Promise.resolve(pkg);
+        return fetchJSON("GET", "/repos", null).then(function (repos) {
+            var repoURL = findRepoURL(Array.isArray(repos) ? repos : [], pkg.repo);
+            if (!repoURL) throw new Error("repo URL not found for " + pkg.repo);
+            return fetch(repoURL.replace(/\/+$/, "") + "/index.json").then(function (resp) {
+                postLog("[details] repo index " + repoURL + "/index.json status=" + resp.status);
+                if (!resp.ok) throw new Error("repo index unavailable");
+                return resp.json();
+            }).then(function (idx) {
+                var repoPackages = idx && Array.isArray(idx.packages) ? idx.packages : [];
+                for (var i = 0; i < repoPackages.length; i++) {
+                    if (repoPackages[i].id === pkg.id) {
+                        return mergeRepoMetadata(pkg, repoPackages[i], repoURL);
+                    }
+                }
+                return pkg;
+            });
+        }).catch(function (err) {
+            postLog("[details] repo metadata fallback: " + String(err));
+            return pkg;
+        });
+    }
+
     function loadPackage() {
         return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
             state.packages = Array.isArray(data) ? data : [];
             state.pkg = findPackage(state.packages);
+            return enrichPackageFromRepoIndex(state.pkg);
+        }).then(function (pkg) {
+            state.pkg = pkg;
             renderDetails();
         }).catch(function (err) {
             el.hint.textContent = "Failed to load package.";
@@ -125,7 +178,6 @@
         }
         if (pkg.installed) {
             ZenUtils.showPackageModifyModal(pkg, {
-                info: function () {},
                 reinstall: function () {
                     ZenUtils.showPackageActionConfirm(pkg, "reinstall", function () { startPackageAction(pkg, "reinstall"); });
                 },
@@ -156,6 +208,13 @@
         return wrap;
     }
 
+    function renderFeaturedImage(url) {
+        var wrap = document.createElement("div");
+        wrap.className = "details-featured-image-wrap";
+        wrap.style.backgroundImage = "url(\"" + url.replace(/"/g, "%22") + "\")";
+        return wrap;
+    }
+
     function renderImages(pkg) {
         el.images.innerHTML = "";
         if (!pkg.images || !pkg.images.length) {
@@ -180,6 +239,10 @@
         el.heading.textContent = state.pkg.name;
         var card = ZenUtils.renderPackageCard(state.pkg, performPackageAction, null);
         card.className += " package-details-card";
+        if (state.pkg.featured_image) {
+            card.className += " package-details-card-featured";
+            card.insertBefore(renderFeaturedImage(state.pkg.featured_image), card.firstChild);
+        }
         el.top.appendChild(card);
 
         var h = document.createElement("h3");
