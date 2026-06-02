@@ -9,39 +9,130 @@
 </head>
 <body class="home-page-body">
     <div class="page home-page">
-        <!-- Header with zen.svg + ZenPM title -->
+        <!-- Header with zenpm.svg + ZenPM title -->
         <header class="home-header">
-            <img src="assets/zen.svg" alt="" class="home-logo" width="100" height="100">
+            <img src="assets/zenpm.svg" alt="" class="home-logo" width="120" height="120">
             <h1 class="home-title">Welcome to ZenPM</h1>
         </header>
 
-        <div class="package-scroll">
-            <section class="panel">
-                <p id="featuredHint" class="hint">Loading featured packages&hellip;</p>
-                <div id="featuredList" class="package-grid"></div>
-            </section>
+        <div class="package-scroll featured-scroll">
+            <p id="featuredHint" class="hint">Loading featured packages&hellip;</p>
+            <div id="featuredList" class="featured-grid"></div>
         </div>
     </div>
 
     <script src="polyfill.js"></script>
     <script src="utils.js"></script>
     <script>
-        ZenUtils.postLog("[home] script loaded");
-        ZenUtils.renderNavbar('home');
+        (function () {
+            ZenUtils.postLog("[home] script loaded");
+            ZenUtils.renderNavbar('home');
 
-        ZenUtils.setupPageChrome('ZenPM - Featured', function () { location.reload(); });
+            var FEATURED_IDS = ["zen-reader", "kindle-browser", "zen-mtp"];
+            var POLL_DELAY = 3500;
+            var MAX_POLL_RETRIES = 20;
 
-        // Featured packages — hardcoded until the server can push featured entries.
-        // These IDs match the default ZenLabs repo catalog.
-        var FEATURED_IDS = ["zen-reader", "kindle-browser", "zen-mtp"];
+            var state = {
+                packages: [],
+                busy: false,
+                connected: false,
+                pendingOp: null
+            };
 
-        var fetchJSON = ZenUtils.fetchJSON;
+            var el = {
+                hint: document.getElementById("featuredHint"),
+                list: document.getElementById("featuredList")
+            };
 
-        function loadFeatured() {
-            fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
-                var all = Array.isArray(data) ? data : [];
+            var fetchJSON = ZenUtils.fetchJSON;
+            var showModal = ZenUtils.showModal;
+            var featuredScroll = null;
+            var featuredClickSuppressUntil = 0;
+
+            function suppressFeaturedClick(ms) {
+                featuredClickSuppressUntil = new Date().getTime() + ms;
+            }
+
+            function loadFeatured() {
+                return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
+                    state.packages = Array.isArray(data) ? data : [];
+                    ZenUtils.postLog("[home] API packages count=" + state.packages.length);
+                    return loadZenLabsFeatured(state.packages);
+                }).then(function (featured) {
+                    ZenUtils.postLog("[home] render featured count=" + featured.length);
+                    renderFeatured(featured);
+                }).catch(function (err) {
+                    ZenUtils.postLog("[home] loadFeatured error: " + String(err));
+                    el.hint.textContent = "Featured packages coming soon.";
+                });
+            }
+
+            function resolveRepoURL(base, value) {
+                if (!value) return "";
+                if (/^https?:\/\//.test(value) || value.indexOf("file://") === 0) return value;
+                return base.replace(/\/+$/, "") + "/" + value.replace(/^\/+/, "");
+            }
+
+            function mergeFeaturedMetadata(pkg, repoPkg, repoURL) {
+                if (!pkg) return pkg;
+                if (repoPkg.name) pkg.name = repoPkg.name;
+                if (repoPkg.description) pkg.description = repoPkg.description;
+                if (repoPkg.author) pkg.author = repoPkg.author;
+                if (repoPkg.version) pkg.version = repoPkg.version;
+                if (repoPkg.icon_url) pkg.icon_url = resolveRepoURL(repoURL, repoPkg.icon_url);
+                if (repoPkg.featured_image) pkg.featured_image = resolveRepoURL(repoURL, repoPkg.featured_image);
+                if (repoPkg.featured) pkg.featured = true;
+                ZenUtils.postLog("[home] merge featured id=" + (pkg.id || "") + " name=" + (pkg.name || "") + " description=" + (pkg.description || "") + " icon_url=" + (pkg.icon_url || "") + " featured_image=" + (pkg.featured_image || "") + " repo_icon_url=" + (pkg.repo_icon_url || ""));
+                return pkg;
+            }
+
+            function findPackage(all, id) {
+                for (var i = 0; i < all.length; i++) {
+                    if (all[i].id === id) return all[i];
+                }
+                return null;
+            }
+
+            function loadZenLabsFeatured(all) {
+                var repoURL = ZenUtils.REPO_ZENLABS_URL;
+                var indexURL = repoURL.replace(/\/+$/, "") + "/index.json";
+                ZenUtils.postLog("[home] fetching ZenLabs index " + indexURL);
+                return fetch(indexURL).then(function (resp) {
+                    ZenUtils.postLog("[home] ZenLabs index status=" + resp.status);
+                    if (!resp.ok) throw new Error("no ZenLabs index");
+                    return resp.json();
+                }).then(function (idx) {
+                    var repoPackages = idx && Array.isArray(idx.packages) ? idx.packages : [];
+                    ZenUtils.postLog("[home] ZenLabs repo packages count=" + repoPackages.length);
+                    var featured = [];
+                    for (var i = 0; i < repoPackages.length; i++) {
+                        if (repoPackages[i].featured) {
+                            var pkg = findPackage(all, repoPackages[i].id);
+                            if (pkg) {
+                                featured.push(mergeFeaturedMetadata(pkg, repoPackages[i], repoURL));
+                            } else {
+                                ZenUtils.postLog("[home] featured package missing from API id=" + repoPackages[i].id);
+                            }
+                        }
+                    }
+                    ZenUtils.postLog("[home] ZenLabs featured matched count=" + featured.length);
+                    return featured.length ? featured : selectFeatured(all);
+                }).catch(function (err) {
+                    ZenUtils.postLog("[home] ZenLabs featured fallback: " + String(err));
+                    return selectFeatured(all);
+                });
+            }
+
+            function selectFeatured(all) {
                 var featured = [];
-                for (var _f = 0; _f < FEATURED_IDS.length; _f++) {
+                var i;
+                for (i = 0; i < all.length; i++) {
+                    if (all[i].featured) {
+                        featured.push(all[i]);
+                        if (featured.length >= 4) return featured;
+                    }
+                }
+                for (var _f = 0; _f < FEATURED_IDS.length && featured.length < 4; _f++) {
                     for (var _a = 0; _a < all.length; _a++) {
                         if (all[_a].id === FEATURED_IDS[_f]) {
                             featured.push(all[_a]);
@@ -49,32 +140,306 @@
                         }
                     }
                 }
-                renderFeatured(featured);
-            }).catch(function () {
-                document.getElementById("featuredHint").textContent = "Featured packages coming soon.";
-            });
-        }
-
-        function renderFeatured(pkgs) {
-            var list = document.getElementById("featuredList");
-            var hint = document.getElementById("featuredHint");
-            list.innerHTML = "";
-            if (!pkgs.length) {
-                hint.textContent = "Featured packages coming soon.";
-                return;
+                return featured;
             }
-            hint.textContent = "";
-            for (var _i = 0; _i < pkgs.length; _i++) {
-                list.appendChild(ZenUtils.renderPackageCard(pkgs[_i], null, showPackageDetails));
+
+            function repoIcon(pkg) {
+                return pkg.repo_icon_url || "assets/packages.svg";
             }
-        }
 
-        function showPackageDetails(pkg) {
-            if (!pkg || (!pkg.id && !pkg.name)) return;
-            window.location.href = ZenUtils.packageDetailsURL(pkg);
-        }
+            function featuredImageURL(pkg) {
+                var value = pkg.featured_image || pkg.icon_url || repoIcon(pkg);
+                ZenUtils.postLog("[home] featured image id=" + (pkg.id || "") + " value=" + value + " featured_image=" + (pkg.featured_image || "") + " icon_url=" + (pkg.icon_url || "") + " repo_icon_url=" + (pkg.repo_icon_url || ""));
+                return value;
+            }
 
-        loadFeatured();
+            function installFeaturedTapGuard(card) {
+                var startX = 0;
+                var startY = 0;
+                var dragging = false;
+                var suppressUntil = 0;
+
+                function point(e) {
+                    var t = e && e.touches && e.touches.length ? e.touches[0] : (e && e.changedTouches && e.changedTouches.length ? e.changedTouches[0] : e);
+                    return {
+                        x: t && typeof t.clientX !== "undefined" ? t.clientX : 0,
+                        y: t && typeof t.clientY !== "undefined" ? t.clientY : 0
+                    };
+                }
+
+                function suppressTap(ms) {
+                    suppressUntil = new Date().getTime() + ms;
+                    suppressFeaturedClick(ms);
+                }
+
+                card.addEventListener("touchstart", function (e) {
+                    var p = point(e);
+                    startX = p.x;
+                    startY = p.y;
+                    dragging = false;
+                }, false);
+
+                card.addEventListener("touchmove", function (e) {
+                    var p = point(e);
+                    if (Math.abs(p.x - startX) > 8 || Math.abs(p.y - startY) > 8) {
+                        dragging = true;
+                        suppressTap(700);
+                    }
+                }, false);
+
+                card.addEventListener("touchend", function (e) {
+                    if (dragging) {
+                        suppressTap(700);
+                        if (e && e.preventDefault) e.preventDefault();
+                    }
+                }, false);
+
+                card.addEventListener("mousewheel", function () {
+                    suppressTap(700);
+                }, false);
+
+                card.addEventListener("click", function (e) {
+                    if (dragging || new Date().getTime() < suppressUntil) {
+                        ZenUtils.postLog("[home] suppressed featured click after scroll gesture");
+                        if (e && e.preventDefault) e.preventDefault();
+                        if (e && e.stopPropagation) e.stopPropagation();
+                        if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
+                        dragging = false;
+                        return false;
+                    }
+                }, true);
+            }
+
+            function installFeaturedScrollGuard() {
+                var scrollEl = document.querySelector(".featured-scroll");
+                if (!scrollEl || scrollEl._zenpmFeaturedGuard) return;
+                scrollEl._zenpmFeaturedGuard = true;
+
+                var startX = 0;
+                var startY = 0;
+                var startScrollTop = 0;
+
+                function point(e) {
+                    var t = e && e.touches && e.touches.length ? e.touches[0] : (e && e.changedTouches && e.changedTouches.length ? e.changedTouches[0] : e);
+                    return {
+                        x: t && typeof t.clientX !== "undefined" ? t.clientX : 0,
+                        y: t && typeof t.clientY !== "undefined" ? t.clientY : 0
+                    };
+                }
+
+                scrollEl.addEventListener("touchstart", function (e) {
+                    var p = point(e);
+                    startX = p.x;
+                    startY = p.y;
+                    startScrollTop = scrollEl.scrollTop;
+                }, false);
+
+                scrollEl.addEventListener("touchmove", function (e) {
+                    var p = point(e);
+                    if (Math.abs(p.x - startX) > 6 || Math.abs(p.y - startY) > 6) {
+                        suppressFeaturedClick(900);
+                    }
+                }, false);
+
+                scrollEl.addEventListener("touchend", function () {
+                    if (Math.abs(scrollEl.scrollTop - startScrollTop) > 4) {
+                        suppressFeaturedClick(900);
+                    }
+                }, false);
+
+                scrollEl.addEventListener("scroll", function () {
+                    suppressFeaturedClick(450);
+                }, false);
+
+                window.addEventListener("mousewheel", function () {
+                    suppressFeaturedClick(900);
+                }, false);
+
+                scrollEl.addEventListener("click", function (e) {
+                    if (new Date().getTime() < featuredClickSuppressUntil) {
+                        ZenUtils.postLog("[home] suppressed featured click at scroll container");
+                        if (e && e.preventDefault) e.preventDefault();
+                        if (e && e.stopPropagation) e.stopPropagation();
+                        if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
+                        return false;
+                    }
+                }, true);
+            }
+
+            function renderFeaturedCard(pkg, index) {
+                var card = document.createElement("article");
+                card.className = "featured-card " + (index % 2 === 0 ? "featured-card-left" : "featured-card-right");
+                installFeaturedTapGuard(card);
+
+                var art = document.createElement("div");
+                art.className = "featured-art";
+                art.style.backgroundImage = "url(\"" + featuredImageURL(pkg).replace(/"/g, "%22") + "\")";
+                art.onclick = function () { showPackageDetails(pkg); };
+                card.appendChild(art);
+
+                var packageCard = ZenUtils.renderPackageCard(pkg, performPackageAction, showPackageDetails);
+                var checks = packageCard.getElementsByClassName("package-check");
+                if (checks.length) {
+                    card.appendChild(checks[0]);
+                }
+                card.appendChild(packageCard);
+                return card;
+            }
+
+            function renderFeatured(pkgs) {
+                el.list.innerHTML = "";
+                if (!pkgs.length) {
+                    el.hint.textContent = "Featured packages coming soon.";
+                    return;
+                }
+                el.hint.textContent = "";
+                for (var _i = 0; _i < pkgs.length; _i++) {
+                    el.list.appendChild(renderFeaturedCard(pkgs[_i], _i));
+                }
+                sizeFeaturedCards();
+                if (featuredScroll) featuredScroll.rebuild();
+            }
+
+            function sizeFeaturedCards() {
+                var scrollEl = document.querySelector(".featured-scroll");
+                var header = document.getElementsByClassName("home-header")[0];
+                var nav = document.getElementsByClassName("bottom-nav")[0];
+                var viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
+                var headerH = header ? header.offsetHeight : 132;
+                var navH = nav ? nav.offsetHeight : 175;
+                var topPad = 8;
+                var bottomPad = 190;
+                var rowGap = 12;
+                var available = scrollEl ? (scrollEl.clientHeight - bottomPad - topPad - rowGap) : (viewportH - headerH - navH - topPad - rowGap);
+                var cardH = Math.floor(available / 2);
+                if (cardH < 220) cardH = 220;
+                var packageH = cardH > 330 ? 144 : 132;
+                var cards = document.getElementsByClassName("featured-card");
+                for (var i = 0; i < cards.length; i++) {
+                    cards[i].style.height = cardH + "px";
+                    var art = cards[i].getElementsByClassName("featured-art")[0];
+                    var pkgCard = cards[i].getElementsByClassName("package-card")[0];
+                    if (art) art.style.bottom = packageH + "px";
+                    if (pkgCard) {
+                        pkgCard.style.height = packageH + "px";
+                        pkgCard.style.minHeight = packageH + "px";
+                    }
+                }
+                if (scrollEl) {
+                    ZenUtils.postLog("[home] featured card size cardH=" + cardH + " packageH=" + packageH + " scrollH=" + scrollEl.clientHeight + " viewportH=" + viewportH + " headerH=" + headerH + " navH=" + navH);
+                }
+            }
+
+            function pollAfterOp() {
+                var op = state.pendingOp;
+                var attempt = 0;
+                function tryPoll() {
+                    attempt += 1;
+                    loadFeatured().then(function () {
+                        if (!state.pendingOp || state.pendingOp.id !== op.id) { return; }
+                        var pkg = null;
+                        for (var i = 0; i < state.packages.length; i++) {
+                            if (state.packages[i].id === op.id) {
+                                pkg = state.packages[i];
+                                break;
+                            }
+                        }
+                        var succeeded = op.action === "reinstall" ? (pkg && pkg.installed) : (pkg && pkg.installed !== op.wasInstalled);
+                        if (succeeded) {
+                            state.pendingOp = null;
+                            var doneAction = op.action === "install" ? "installed" : (op.action === "reinstall" ? "reinstalled" : "uninstalled");
+                            showModal("Done", pkg.name + " " + doneAction + " successfully.");
+                            state.busy = false;
+                        } else if (attempt >= MAX_POLL_RETRIES) {
+                            state.pendingOp = null;
+                            showModal("Failed", op.action + " of " + op.id + " did not complete.\n\nCheck the debug log for details.");
+                            state.busy = false;
+                        } else {
+                            setTimeout(tryPoll, POLL_DELAY);
+                        }
+                    });
+                }
+                setTimeout(tryPoll, POLL_DELAY);
+            }
+
+            function startPackageAction(pkg, action) {
+                var backendAction = action === "reinstall" ? "install" : action;
+                state.busy = true;
+                state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
+                var actionLabel = action === "uninstall" ? "Uninstalling" : (action === "reinstall" ? "Reinstalling" : "Installing");
+                showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", { className: "modal-overlay-clear" });
+                fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction, null).then(function () {
+                    pollAfterOp();
+                }).catch(function (err) {
+                    showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err));
+                    state.pendingOp = null;
+                    state.busy = false;
+                });
+            }
+
+            function performPackageAction(pkg) {
+                if (!state.connected) {
+                    el.hint.textContent = "Not connected to daemon. Try reopening the page.";
+                    return;
+                }
+                if (state.busy) {
+                    el.hint.textContent = "Another operation is in progress. Please wait.";
+                    return;
+                }
+                if (pkg.installed) {
+                    ZenUtils.showPackageModifyModal(pkg, {
+                        info: function () { showPackageDetails(pkg); },
+                        reinstall: function () {
+                            ZenUtils.showPackageActionConfirm(pkg, "reinstall", function () { startPackageAction(pkg, "reinstall"); });
+                        },
+                        uninstall: function () {
+                            ZenUtils.showPackageActionConfirm(pkg, "uninstall", function () { startPackageAction(pkg, "uninstall"); });
+                        }
+                    });
+                    return;
+                }
+                ZenUtils.showPackageActionConfirm(pkg, "install", function () {
+                    startPackageAction(pkg, "install");
+                });
+            }
+
+            function showPackageDetails(pkg) {
+                if (!pkg || (!pkg.id && !pkg.name)) return;
+                window.location.href = ZenUtils.packageDetailsURL(pkg);
+            }
+
+            function setupChrome() {
+                ZenUtils.setupPageChrome('ZenPM - Featured', loadFeatured);
+            }
+
+            var _inited = false;
+            function init() {
+                if (_inited) return;
+                _inited = true;
+                installFeaturedScrollGuard();
+                featuredScroll = ZenUtils.setupCardScroll(".featured-scroll", "featured-card");
+                window.addEventListener("resize", function () {
+                    sizeFeaturedCards();
+                    if (featuredScroll) featuredScroll.rebuild();
+                }, false);
+                fetchJSON("GET", "/health", null).then(function () {
+                    state.connected = true;
+                    return loadFeatured();
+                }).catch(function () {
+                    state.connected = false;
+                    loadFeatured();
+                });
+            }
+
+            var _k = ZenUtils.getKindle();
+            if (_k && _k.appmgr) {
+                _k.appmgr.ongo = function () {
+                    try { setupChrome(); } catch (_e) {}
+                    init();
+                };
+            }
+            setTimeout(init, 0);
+        })();
     </script>
 </body>
 </html>

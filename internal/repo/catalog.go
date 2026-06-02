@@ -22,26 +22,28 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags|icon_url|repo_icon_url|images
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image
 type CatalogEntry struct {
-	Repo         string
-	Priority     int
-	ID           string
-	Name         string
-	Version      string
-	Platforms    []string
-	Deps         []string
-	InstallURL   string
-	UninstallURL string
-	ManifestURL  string
-	SHA256       string
-	Size         string
-	Description  string
-	Author       string
-	Tags         []string
-	IconURL      string
-	RepoIconURL  string
-	Images       []string
+	Repo          string
+	Priority      int
+	ID            string
+	Name          string
+	Version       string
+	Platforms     []string
+	Deps          []string
+	InstallURL    string
+	UninstallURL  string
+	ManifestURL   string
+	SHA256        string
+	Size          string
+	Description   string
+	Author        string
+	Tags          []string
+	IconURL       string
+	RepoIconURL   string
+	Images        []string
+	Featured      bool
+	FeaturedImage string
 }
 
 func (e *CatalogEntry) HasPlatform(p string) bool {
@@ -67,11 +69,13 @@ func (e *CatalogEntry) serialize() string {
 		e.IconURL,
 		e.RepoIconURL,
 		strings.Join(e.Images, ","),
+		boolField(e.Featured),
+		e.FeaturedImage,
 	}, "|")
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
-	parts := strings.SplitN(line, "|", 19)
+	parts := strings.SplitN(line, "|", 20)
 	if len(parts) < 12 {
 		return nil, fmt.Errorf("invalid catalog line (got %d fields): %q", len(parts), line)
 	}
@@ -107,7 +111,20 @@ func parseCatalogLine(line string) (*CatalogEntry, error) {
 	if len(parts) >= 18 && parts[17] != "" {
 		e.Images = strings.Split(parts[17], ",")
 	}
+	if len(parts) >= 19 {
+		e.Featured = parts[18] == "featured" || parts[18] == "true" || parts[18] == "1"
+	}
+	if len(parts) >= 20 {
+		e.FeaturedImage = parts[19]
+	}
 	return e, nil
+}
+
+func boolField(value bool) string {
+	if value {
+		return "featured"
+	}
+	return ""
 }
 
 // indexJSON mirrors the repos/default/index.json schema.
@@ -119,21 +136,23 @@ type indexJSON struct {
 		URL  string `json:"url"`
 	} `json:"repo"`
 	Packages []struct {
-		ID           string   `json:"id"`
-		Name         string   `json:"name"`
-		Version      string   `json:"version"`
-		Description  string   `json:"description"`
-		Author       string   `json:"author"`
-		Platforms    []string `json:"platforms"`
-		Dependencies []string `json:"dependencies"`
-		InstallURL   string   `json:"install_url"`
-		UninstallURL string   `json:"uninstall_url"`
-		SHA256       string   `json:"sha256"`
-		Size         string   `json:"size"`
-		IconURL      string   `json:"icon_url,omitempty"`
-		ImageURL     string   `json:"image_url,omitempty"`
-		Images       []string `json:"images,omitempty"`
-		Screenshots  []string `json:"screenshots,omitempty"`
+		ID            string   `json:"id"`
+		Name          string   `json:"name"`
+		Version       string   `json:"version"`
+		Description   string   `json:"description"`
+		Author        string   `json:"author"`
+		Platforms     []string `json:"platforms"`
+		Dependencies  []string `json:"dependencies"`
+		InstallURL    string   `json:"install_url"`
+		UninstallURL  string   `json:"uninstall_url"`
+		SHA256        string   `json:"sha256"`
+		Size          string   `json:"size"`
+		IconURL       string   `json:"icon_url,omitempty"`
+		ImageURL      string   `json:"image_url,omitempty"`
+		Featured      bool     `json:"featured,omitempty"`
+		FeaturedImage string   `json:"featured_image,omitempty"`
+		Images        []string `json:"images,omitempty"`
+		Screenshots   []string `json:"screenshots,omitempty"`
 	} `json:"packages"`
 }
 
@@ -191,23 +210,29 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 			iconURL = resolveURL(repoURL, iconURL)
 		}
 		images := resolveURLList(repoURL, appendURLLists([]string{p.ImageURL}, p.Images, p.Screenshots))
+		featuredImage := ""
+		if p.FeaturedImage != "" {
+			featuredImage = resolveURL(repoURL, p.FeaturedImage)
+		}
 		entries = append(entries, &CatalogEntry{
-			Repo:         repoName,
-			Priority:     priority,
-			ID:           p.ID,
-			Name:         p.Name,
-			Version:      p.Version,
-			Description:  p.Description,
-			Author:       p.Author,
-			Platforms:    p.Platforms,
-			Deps:         p.Dependencies,
-			InstallURL:   resolveURL(repoURL, p.InstallURL),
-			UninstallURL: resolveURL(repoURL, p.UninstallURL),
-			SHA256:       p.SHA256,
-			Size:         p.Size,
-			IconURL:      iconURL,
-			RepoIconURL:  repoIcon,
-			Images:       images,
+			Repo:          repoName,
+			Priority:      priority,
+			ID:            p.ID,
+			Name:          p.Name,
+			Version:       p.Version,
+			Description:   p.Description,
+			Author:        p.Author,
+			Platforms:     p.Platforms,
+			Deps:          p.Dependencies,
+			InstallURL:    resolveURL(repoURL, p.InstallURL),
+			UninstallURL:  resolveURL(repoURL, p.UninstallURL),
+			SHA256:        p.SHA256,
+			Size:          p.Size,
+			IconURL:       iconURL,
+			RepoIconURL:   repoIcon,
+			Images:        images,
+			Featured:      p.Featured,
+			FeaturedImage: featuredImage,
 		})
 	}
 	return entries

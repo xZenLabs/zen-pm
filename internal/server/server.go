@@ -287,22 +287,33 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type pkgJSON struct {
-		ID          string   `json:"id"`
-		Name        string   `json:"name"`
-		Version     string   `json:"version"`
-		Description string   `json:"description"`
-		Author      string   `json:"author"`
-		Tags        []string `json:"tags"`
-		Platforms   []string `json:"platforms"`
-		Repo        string   `json:"repo"`
-		Installed   bool     `json:"installed"`
-		IconURL     string   `json:"icon_url,omitempty"`
-		RepoIconURL string   `json:"repo_icon_url,omitempty"`
-		ImageURL    string   `json:"image_url,omitempty"`
-		Images      []string `json:"images,omitempty"`
+		ID            string   `json:"id"`
+		Name          string   `json:"name"`
+		Version       string   `json:"version"`
+		Description   string   `json:"description"`
+		Author        string   `json:"author"`
+		Tags          []string `json:"tags"`
+		Platforms     []string `json:"platforms"`
+		Repo          string   `json:"repo"`
+		RepoTrust     string   `json:"repo_trust,omitempty"`
+		RepoDefault   bool     `json:"repo_default,omitempty"`
+		Installed     bool     `json:"installed"`
+		IconURL       string   `json:"icon_url,omitempty"`
+		RepoIconURL   string   `json:"repo_icon_url,omitempty"`
+		ImageURL      string   `json:"image_url,omitempty"`
+		Images        []string `json:"images,omitempty"`
+		Featured      bool     `json:"featured,omitempty"`
+		FeaturedImage string   `json:"featured_image,omitempty"`
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
+	repoEntries, _ := s.repos.List()
+	repoTrust := make(map[string]string, len(repoEntries))
+	repoDefault := make(map[string]bool, len(repoEntries))
+	for _, r := range repoEntries {
+		repoTrust[r.Name] = r.Trust
+		repoDefault[r.Name] = r.Default
+	}
 	seen := make(map[string]bool, len(filtered))
 	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
@@ -311,11 +322,13 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			ID: e.ID, Name: e.Name, Version: e.Version,
 			Description: e.Description, Author: e.Author,
 			Tags:      e.Tags,
-			Platforms: e.Platforms, Repo: e.Repo, Installed: installedSet[e.ID],
-			IconURL:     e.IconURL,
-			RepoIconURL: e.RepoIconURL,
-			ImageURL:    firstString(e.Images),
-			Images:      e.Images,
+			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID],
+			IconURL:       e.IconURL,
+			RepoIconURL:   e.RepoIconURL,
+			ImageURL:      firstString(e.Images),
+			Images:        e.Images,
+			Featured:      e.Featured,
+			FeaturedImage: e.FeaturedImage,
 		})
 	}
 

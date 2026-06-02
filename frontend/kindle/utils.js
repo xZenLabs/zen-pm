@@ -372,7 +372,9 @@ var ZenUtils = (function () {
             content.appendChild(btn);
         }
 
-        addOption("Info", "", handlers.info);
+        if (handlers.info) {
+            addOption("Info", "", handlers.info);
+        }
         addOption("Reinstall", "", handlers.reinstall);
         addOption("Uninstall", "danger", handlers.uninstall);
 
@@ -403,11 +405,11 @@ var ZenUtils = (function () {
 
     function firstPackageImage(pkg) {
         if (!pkg) return "";
+        if (pkg.icon_url) return pkg.icon_url;
+        if (pkg.icon) return pkg.icon;
         if (pkg.image_url) return pkg.image_url;
         if (pkg.images && pkg.images.length) return pkg.images[0];
         if (pkg.image) return pkg.image;
-        if (pkg.icon) return pkg.icon;
-        if (pkg.icon_url) return pkg.icon_url;
         return bundledRepoIcon(pkg);
     }
 
@@ -415,13 +417,16 @@ var ZenUtils = (function () {
         var triedPrimary = false;
         var triedIco = false;
         img.onerror = function () {
+            postLog("[image] load failed src=" + (img.src || "") + " primary=" + (primary || "") + " fallback=" + (fallback || ""));
             if (!triedPrimary && fallback && img.src !== fallback) {
                 triedPrimary = true;
+                postLog("[image] falling back to " + fallback);
                 img.src = fallback;
                 return;
             }
             if (!triedIco && img.src && img.src.indexOf('/favicon.svg') !== -1) {
                 triedIco = true;
+                postLog("[image] trying favicon.ico fallback for " + img.src);
                 img.src = img.src.replace('/favicon.svg', '/favicon.ico');
             }
         };
@@ -434,6 +439,26 @@ var ZenUtils = (function () {
             return "v" + pkg.version + " \u2022 " + repoDisplay;
         }
         return repoDisplay;
+    }
+
+    function packageVersionPrefixText(pkg) {
+        if (pkg.version && pkg.version !== "0.0.0") {
+            return "v" + pkg.version + " \u2022 ";
+        }
+        return "";
+    }
+
+    function packageRepoVerified(pkg) {
+        var trust = pkg.repo_trust || "";
+        return !!pkg.repo_default || trust === "trusted" || trust === "signed" || pkg.repo === REPO_ZENLABS_NAME || pkg.repo === REPO_KINDLEFORGE_NAME;
+    }
+
+    function packageRepoVerificationIcon(pkg) {
+        return basePath() + (packageRepoVerified(pkg) ? "/assets/verified.svg" : "/assets/unverified.svg");
+    }
+
+    function packageRepoVerificationLabel(pkg) {
+        return packageRepoVerified(pkg) ? "Verified" : "Unverified";
     }
 
     function packageDetailsURL(pkg) {
@@ -480,15 +505,16 @@ var ZenUtils = (function () {
         title.textContent = options.title || "";
         titleRow.appendChild(title);
 
-        if (options.check) {
+        if (options.check || options.titleIconSrc) {
             var checkCell = document.createElement("div");
             checkCell.className = "media-card-check-cell";
             var check = document.createElement("img");
             check.className = "media-card-check";
-            check.src = basePath() + "/assets/checkmark.svg";
-            check.alt = "";
-            check.width = 36;
-            check.height = 36;
+            if (options.titleIconClass) check.className += " " + options.titleIconClass;
+            check.src = options.titleIconSrc || (basePath() + "/assets/checkmark.svg");
+            check.alt = options.titleIconAlt || "";
+            check.width = options.titleIconSize || 36;
+            check.height = options.titleIconSize || 36;
             checkCell.appendChild(check);
             titleRow.appendChild(checkCell);
         }
@@ -539,10 +565,14 @@ var ZenUtils = (function () {
             }, false);
         }
 
+        var packageImage = firstPackageImage(pkg);
+        var packageFallback = bundledRepoIcon(pkg);
+        postLog("[package-card] id=" + (pkg.id || pkg.name || "?") + " icon_url=" + (pkg.icon_url || "") + " image_url=" + (pkg.image_url || "") + " imageSrc=" + (packageImage || "") + " fallback=" + (packageFallback || ""));
+
         var card = renderMediaCard({
             className: "package-card",
-            imageSrc: firstPackageImage(pkg),
-            imageFallback: bundledRepoIcon(pkg),
+            imageSrc: packageImage,
+            imageFallback: packageFallback,
             title: "",
             clickHandler: detailHandler ? function () { detailHandler(pkg); } : null
         });
@@ -558,39 +588,56 @@ var ZenUtils = (function () {
             title.className = "package-title";
             title.textContent = pkg.name;
             titleRow.appendChild(title);
-
-            if (pkg.installed) {
-                var checkCell = document.createElement("div");
-                checkCell.className = "package-check-cell";
-                var check = document.createElement("img");
-                check.className = "package-check";
-                check.src = basePath() + "/assets/checkmark.svg";
-                check.alt = "";
-                check.width = 58;
-                check.height = 58;
-                checkCell.appendChild(check);
-                titleRow.appendChild(checkCell);
-            }
             textCell.appendChild(titleRow);
 
-            var authorRow = document.createElement("div");
-            authorRow.className = "package-author-row";
+            var descRow = document.createElement("div");
+            descRow.className = "package-description-row";
 
-            var author = document.createElement("p");
-            author.className = "package-author";
-            author.textContent = pkg.author || "Unknown author";
-            authorRow.appendChild(author);
-            var actionCell = document.createElement("div");
-            actionCell.className = "package-action-cell";
-            actionCell.appendChild(actionBtn);
-            authorRow.appendChild(actionCell);
-            textCell.appendChild(authorRow);
+            var desc = document.createElement("p");
+            desc.className = "package-card-description";
+            desc.textContent = pkg.description || "No description";
+            descRow.appendChild(desc);
+            textCell.appendChild(descRow);
+
+            var metaRow = document.createElement("div");
+            metaRow.className = "package-meta-row";
 
             var meta = document.createElement("p");
             meta.className = "package-meta";
-            meta.textContent = packageVersionRepoText(pkg);
-            textCell.appendChild(meta);
+            meta.textContent = packageVersionPrefixText(pkg);
+            metaRow.appendChild(meta);
+
+            var repoName = document.createElement("span");
+            repoName.className = "package-meta-repo";
+            repoName.textContent = pkg.repo || "?";
+            metaRow.appendChild(repoName);
+
+            var verifyCell = document.createElement("span");
+            verifyCell.className = "package-repo-verification-cell";
+
+            var verify = document.createElement("img");
+            verify.className = "package-repo-verification";
+            verify.src = packageRepoVerificationIcon(pkg);
+            verify.alt = packageRepoVerificationLabel(pkg);
+            verify.width = 34;
+            verify.height = 34;
+            verifyCell.appendChild(verify);
+            metaRow.appendChild(verifyCell);
+
+            textCell.appendChild(metaRow);
         }
+
+        if (pkg.installed) {
+            var check = document.createElement("img");
+            check.className = "package-check";
+            check.src = basePath() + "/assets/checkmark.svg";
+            check.alt = "";
+            check.width = 54;
+            check.height = 54;
+            card.appendChild(check);
+        }
+
+        card.appendChild(actionBtn);
 
         return card;
     }
@@ -614,8 +661,12 @@ var ZenUtils = (function () {
             pkg.author || "",
             pkg.icon_url || "",
             pkg.repo_icon_url || "",
+            pkg.repo_trust || "",
+            pkg.repo_default ? "1" : "0",
             pkg.image_url || "",
             pkg.images ? pkg.images.join(",") : "",
+            pkg.featured ? "1" : "0",
+            pkg.featured_image || "",
             pkg.installed ? "1" : "0",
             tags
         ];

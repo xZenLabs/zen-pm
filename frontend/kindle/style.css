@@ -345,7 +345,8 @@ input {
 }
 
 .media-card-icon-cell {
-    width: 108px;
+    width: 140px;
+    padding: 0 24px 0 8px;
 }
 
 .media-card-action-cell {
@@ -358,10 +359,15 @@ input {
     display: none;
 }
 
+.package-card {
+    min-height: 156px;
+}
+
 .media-card-icon {
     display: block;
     width: 96px;
     height: 96px;
+    margin: 0 auto;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -416,24 +422,36 @@ input {
     height: 38px;
 }
 
+.repo-row .media-card-title,
+.repo-row .media-card-line {
+    padding-right: 68px;
+}
+
+.repo-row .media-card-line-2 {
+    font-size: 0.78rem;
+}
+
 .package-action {
     -webkit-appearance: none;
-    display: inline-block;
+    display: block;
+    position: absolute;
+    right: 18px;
+    top: 50%;
     width: 236px;
     min-width: 236px;
-    height: 66px;
-    min-height: 66px;
+    height: 78px;
+    min-height: 78px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     text-align: center;
-    line-height: 62px;
-    padding: 0;
+    line-height: 74px;
+    padding: 0 18px;
     font-size: 1rem;
     border-radius: 999px;
     border-color: #242220;
     background: #fff;
     color: #111827;
-    margin: 0;
+    margin: -39px 0 0;
     white-space: nowrap;
 }
 
@@ -447,7 +465,7 @@ input {
     display: table-cell;
     vertical-align: middle;
     margin: 0;
-    padding-right: 8px;
+    padding-right: 68px;
     font-weight: 600;
     font-size: 1.05rem;
     line-height: 1.25;
@@ -456,19 +474,30 @@ input {
     white-space: nowrap;
 }
 
-.package-check-cell {
-    display: table-cell;
-    vertical-align: middle;
-    width: 58px;
-}
-
 .package-check {
     display: block;
-    width: 58px;
-    height: 58px;
+    position: absolute;
+    top: 0;
+    right: 8px;
+    width: 54px;
+    height: 54px;
+}
+
+.verification-check {
+    top: 8px;
+    right: 16px;
+    width: 38px;
+    height: 38px;
 }
 
 .package-author-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    margin-top: 2px;
+}
+
+.package-description-row {
     display: table;
     width: 100%;
     table-layout: fixed;
@@ -479,7 +508,7 @@ input {
     display: table-cell;
     vertical-align: middle;
     margin: 0;
-    padding-right: 10px;
+    padding-right: 260px;
     color: var(--muted);
     font-size: 0.92rem;
     line-height: 1.2;
@@ -488,16 +517,66 @@ input {
     white-space: nowrap;
 }
 
-.package-action-cell {
+.package-card-description {
     display: table-cell;
     vertical-align: middle;
-    width: 252px;
-    text-align: right;
-    overflow: visible;
+    margin: 0;
+    padding-right: 260px;
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-meta-row {
+    display: block;
+    margin-top: 4px;
+    padding-right: 260px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.package-meta-row .package-meta {
+    display: inline;
+    vertical-align: middle;
+    margin: 0;
+    padding-right: 0;
+}
+
+.package-meta-repo {
+    display: inline-block;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.2;
+}
+
+.package-repo-verification-cell {
+    display: inline-block;
+    vertical-align: middle;
+    width: 38px;
+    margin-left: 8px;
+}
+
+.package-repo-verification {
+    display: block;
+    width: 34px;
+    height: 34px;
+}
+
+.package-action-cell {
+    display: none;
 }
 
 .package-action-cell .package-action {
-    display: inline-block;
+    display: block;
 }
 
 .package-action:focus,
@@ -512,6 +591,18 @@ input {
 .package-action.danger:active {
     border-color: #242220;
     color: #111827;
+}
+
+.package-details-card .package-action {
+    top: 96px;
+}
+
+.package-details-card-featured .package-action {
+    top: 456px;
+}
+
+.package-details-card-featured .package-check {
+    top: 360px;
 }
 
 .btn-icon {
@@ -571,12 +662,18 @@ input {
 
 .package-meta {
     margin: 4px 0 0;
+    padding-right: 260px;
     color: var(--muted);
     font-size: 0.82rem;
     line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.package-meta-row .package-meta {
+    margin: 0;
+    padding-right: 6px;
 }
 
 .package-desc {
@@ -1238,7 +1335,7 @@ body.home-page-body {
     padding: 0;
 }
 
-/* --- Home header (zen.svg + ZenPM title) --- */
+/* --- Home header (zenpm.svg + ZenPM title) --- */
 .home-header {
     display: -webkit-box;
     display: flex;
@@ -1251,14 +1348,83 @@ body.home-page-body {
 
 .home-logo {
     margin-right: 18px;
-    width: 100px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
 }
 
 .home-title {
     margin: 0;
     font-family: "Roboto", sans-serif;
     font-size: 1.8rem;
+    text-align: left;
+}
+
+.featured-scroll {
+    padding: 8px 16px 190px;
+}
+
+.featured-grid {
+    display: block;
+    margin-top: 0;
+    font-size: 0;
+}
+
+.featured-card {
+    display: block;
+    vertical-align: top;
+    position: relative;
+    width: 100%;
+    height: 300px;
+    border: 2px solid #504c46;
+    border-radius: 8px;
+    background: var(--card-bg);
+    margin-bottom: 12px;
+    overflow: hidden;
+    font-size: 1rem;
+}
+
+.featured-card-left {
+    margin-right: 0;
+}
+
+.featured-art {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 132px;
+    background-color: #ffffff;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    border-bottom: 2px solid #504c46;
+}
+
+.featured-card .package-card {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    min-height: 132px;
+    height: 132px;
+    padding: 12px 18px 10px 14px;
+    background: var(--card-bg);
+}
+
+.featured-card .package-card .media-card-icon-cell {
+    display: none;
+}
+
+.featured-card .package-card .package-action {
+    right: 18px;
+}
+
+.featured-card > .package-check {
+    z-index: 3;
 }
 
 /* --- Package card icon (repo favicon) --- */
@@ -1402,6 +1568,19 @@ body.source-details-page-body {
     margin-bottom: 14px;
 }
 
+.details-featured-image-wrap {
+    display: block;
+    border-bottom: 2px solid #504c46;
+    margin: -18px -28px 16px -24px;
+    background: #ffffff;
+    background-repeat: no-repeat;
+    background-position: center center;
+    -webkit-background-size: contain;
+    background-size: contain;
+    overflow: hidden;
+    height: 360px;
+}
+
 .package-details-page .details-scroll > .details-description {
     display: none;
 }
@@ -1441,6 +1620,7 @@ body.source-details-page-body {
     margin: 0;
     color: var(--ink);
     line-height: 1.4;
+    font-size: 0.92rem;
 }
 
 .package-details-card .details-images {
@@ -1456,58 +1636,59 @@ body.source-details-page-body {
     margin-top: 16px;
 }
 
-.source-summary {
-    border: 2px solid #504c46;
-    border-radius: 8px;
-    background: #ffffff;
-    padding: 14px;
-    margin-bottom: 14px;
+.source-details-page .details-header {
+    position: relative;
 }
 
-.source-summary-main {
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-orient: horizontal;
-    flex-direction: row;
-    -webkit-box-align: center;
-    align-items: center;
-}
-
-.source-summary-icon-wrap {
+.source-header-icon {
     display: block;
     width: 96px;
     height: 96px;
-    margin-right: 12px;
+    margin-right: 36px;
     flex-shrink: 0;
 }
 
-.source-summary-icon {
-    display: block;
-    width: 96px;
-    height: 96px;
-}
-
-.source-summary-text {
+.source-header-text {
     -webkit-box-flex: 1;
     flex: 1;
     min-width: 0;
 }
 
-.source-summary h3 {
-    margin: 0 0 8px;
-    font-size: 1.1rem;
+.source-header-title-row {
+    display: block;
+    width: 100%;
 }
 
-.source-summary-url,
-.source-summary-meta {
+.source-header-title-row h2 {
+    display: inline-block;
+    vertical-align: middle;
+    padding-right: 8px;
+}
+
+.source-title-verification {
+    display: inline-block;
+    vertical-align: middle;
+    width: 38px;
+    height: 38px;
+}
+
+.source-header-url {
     margin: 0;
     color: var(--muted);
+    font-size: 0.78rem;
     line-height: 1.35;
     word-break: break-all;
 }
 
-.source-summary-meta {
-    margin-top: 6px;
+.source-header-url {
+    margin-top: 4px;
+}
+
+.source-packages-heading {
+    flex-shrink: 0;
+    padding: 14px 16px 6px;
+    margin: 0;
+    font-size: 1.05rem;
 }
 
 @media (max-width: 640px) {

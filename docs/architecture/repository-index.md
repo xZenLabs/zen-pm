@@ -31,6 +31,8 @@ Example:
       "name": "KOReader (Kindle)",
       "version": "2026.03.0",
       "platforms": ["kindle"],
+      "featured": true,
+      "featured_image": "packages/koreader-kindle/featured.png",
       "dependencies": ["kual"],
       "install_url": "packages/koreader-kindle/scripts/install.sh",
       "uninstall_url": "packages/koreader-kindle/scripts/uninstall.sh",
