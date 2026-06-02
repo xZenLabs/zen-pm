@@ -739,17 +739,51 @@ var ZenUtils = (function () {
         function goCard(index) {
             if (cards.length === 0) return;
             cIndex = Math.max(0, Math.min(cards.length - 1, index));
-            if (scrollEl) scrollEl.scrollTop = cards[cIndex].offsetTop - 10;
+            if (!scrollEl) return;
+            // Ensure scrollTop=0 for first card so the top of the list
+            // isn't clipped (offsetTop includes container padding).
+            scrollEl.scrollTop = cIndex === 0 ? 0 : cards[cIndex].offsetTop - 10;
+        }
+
+        // Derive current card from actual scrollTop — keeps scrollbar
+        // drags in sync so the next mousewheel doesn't jump position.
+        function currentCardIndex() {
+            if (cards.length === 0 || !scrollEl) return 0;
+            var st = scrollEl.scrollTop;
+            for (var i = cards.length - 1; i >= 0; i--) {
+                if (cards[i].offsetTop <= st + 10) return i;
+            }
+            return 0;
         }
 
         window.addEventListener("mousewheel", function (e) {
             if (cards.length === 0) return;
             e.preventDefault();
-            if (e.wheelDeltaY > 0) goCard(cIndex - 1);
-            else if (e.wheelDeltaY < 0) goCard(cIndex + 1);
+            var cur = currentCardIndex();
+            if (e.wheelDeltaY > 0) goCard(cur - 1);
+            else if (e.wheelDeltaY < 0) goCard(cur + 1);
         }, false);
 
-        return { rebuild: rebuild, goCard: goCard };
+        // Persist scroll position across page navigations so returning
+        // from package details restores the user's place.
+        function savePosition() {
+            if (cards.length === 0) return;
+            var idx = currentCardIndex();
+            try { sessionStorage.setItem("zenpm_scroll:" + window.location.pathname, String(idx)); } catch (_e) {}
+        }
+
+        function restorePosition() {
+            try {
+                var key = "zenpm_scroll:" + window.location.pathname;
+                var saved = sessionStorage.getItem(key);
+                if (saved !== null && saved !== undefined) {
+                    goCard(parseInt(saved, 10));
+                    sessionStorage.removeItem(key);
+                }
+            } catch (_e) {}
+        }
+
+        return { rebuild: rebuild, goCard: goCard, savePosition: savePosition, restorePosition: restorePosition };
     }
 
     return {

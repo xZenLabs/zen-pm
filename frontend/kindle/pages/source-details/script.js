@@ -152,6 +152,7 @@
 
     function showPackageDetails(pkg) {
         if (!pkg || (!pkg.id && !pkg.name)) return;
+        if (cardScroll) cardScroll.savePosition();
         window.location.href = ZenUtils.packageDetailsURL(pkg);
     }
 
@@ -213,7 +214,7 @@
         el.hint.textContent = state.visible.length ? "" : "No packages found for this source.";
         renderSourceHeader();
         ZenUtils.reconcilePackageCards(el.packages, state.visible, performPackageAction, showPackageDetails);
-        if (cardScroll) cardScroll.rebuild();
+        if (cardScroll) { cardScroll.rebuild(); cardScroll.restorePosition(); }
     }
 
     function setupChrome() {

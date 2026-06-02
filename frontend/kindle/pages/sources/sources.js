@@ -164,7 +164,10 @@
                     title: r.name,
                     line2: r.url,
                     action: actionBtn,
-                    clickHandler: function () { window.location.href = sourceDetailsURL(r); }
+                    clickHandler: function () {
+                        if (cardScroll) cardScroll.savePosition();
+                        window.location.href = sourceDetailsURL(r);
+                    }
                 });
 
                 // Inline verification icon after the title, matching source-details pattern
@@ -195,7 +198,7 @@
                 el.repoList.appendChild(row);
             })(repos[_i]);
         }
-        if (cardScroll) cardScroll.rebuild();
+        if (cardScroll) { cardScroll.rebuild(); cardScroll.restorePosition(); }
     }
 
     function removeRepo(name) {
