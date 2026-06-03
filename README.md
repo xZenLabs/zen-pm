@@ -18,6 +18,7 @@ frontend/kindle/    Kindle WAF frontend (HTML/CSS/JS)
 installers/kindle/  ZenPM.sh — on-device installer
 installers/kobo/    ZenPM.sh / uninstall-zenpm.sh
 docs/architecture/  Schema and behavior contracts
+docs/api/           OpenAPI reference for the local daemon
 ```
 
 ## Design goals
@@ -58,6 +59,11 @@ ZENPM_HOME=/tmp/.zenpm ZENPM_PLATFORM=host ./zenpm serve --port 8080
 ./zenpm package list kindle
 ZENPM_DRY_RUN=1 ./zenpm package install koreader-kindle
 ```
+
+## API reference
+
+The local daemon API is documented as OpenAPI 3.0 in
+[`docs/api/openapi.yaml`](docs/api/openapi.yaml).
 
 ## Install on Kindle
 
