@@ -60,14 +60,24 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
-    local title_y = y + pad
-    local title_size = P.text(bb, ellipsize(pkg.name or pkg.id or "Unknown package", 60), text_x, title_y, text_w, "small", { bold = true })
+    local title = ellipsize(pkg.name or pkg.id or "Unknown package", 60)
     local second_line = ellipsize(opts.second_line or pkg.description or "No description", 54)
-    local text_gap = opts.text_gap or Theme.scale(6)
+    local meta_text = ellipsize(package_meta_text(pkg), 48)
+    local text_gap = opts.text_gap or Theme.scale(4)
+    local title_size = P.text_size(title, text_w, "small", { bold = true })
+    local line2_size = P.text_size(second_line, text_w, "small")
+    local meta_size = P.text_size(meta_text, text_w - Theme.scale(24), "small")
+    local stack_h = title_size.h + line2_size.h + meta_size.h + text_gap * 2
+    local title_y = y + pad
+    local max_bottom = y + h - pad
+    if title_y + stack_h > max_bottom then
+        title_y = math.max(y + Theme.scale(4), max_bottom - stack_h)
+    end
     local line2_y = title_y + title_size.h + text_gap
-    local line2_size = P.text(bb, second_line, text_x, line2_y, text_w, "small")
     local meta_y = line2_y + line2_size.h + text_gap
-    local meta_size = P.text(bb, ellipsize(package_meta_text(pkg), 48), text_x, meta_y, text_w - Theme.scale(24), "small")
+    P.text(bb, title, text_x, title_y, text_w, "small", { bold = true })
+    P.text(bb, second_line, text_x, line2_y, text_w, "small")
+    P.text(bb, meta_text, text_x, meta_y, text_w - Theme.scale(24), "small")
     local verify_size = Theme.scale(16)
     draw_verification_icon(bb, Models.package_verified(pkg), text_x + math.min(meta_size.w + Theme.scale(5), text_w - verify_size), meta_y + math.floor((meta_size.h - verify_size) / 2), verify_size)
 

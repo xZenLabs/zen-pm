@@ -87,6 +87,20 @@ function P.text(bb, text, x, y, width, role, opts)
     return size
 end
 
+function P.text_size(text, width, role, opts)
+    opts = opts or {}
+    local widget = TextWidget:new{
+        text = tostring(text or ""),
+        face = opts.face or Theme.face(role),
+        bold = opts.bold,
+        fgcolor = opts.color or Theme.ink,
+        max_width = width,
+    }
+    local size = widget:getSize()
+    widget:free()
+    return size
+end
+
 function P.center_text(bb, text, x, y, w, role, opts)
     opts = opts or {}
     local widget = TextWidget:new{

@@ -61,12 +61,61 @@ function Chrome:onTapZenPM(_, ges)
             return true
         end
     end
+    if self:show_koreader_menu_from_gesture(ges, "tap") then
+        return true
+    end
     return true
+end
+
+function Chrome:gesture_in_menu_zone(ges)
+    local pos = ges and ges.pos
+    if not pos then
+        return false
+    end
+    return pos.y <= (self.dimen.y or 0) + math.floor(Screen:getHeight() * 0.05)
+end
+
+function Chrome:show_koreader_menu_from_gesture(ges, kind)
+    if not self:gesture_in_menu_zone(ges) then
+        return false
+    end
+    local activation = G_reader_settings and G_reader_settings.readSetting and G_reader_settings:readSetting("activate_menu") or "swipe_tap"
+    if activation == "swipe_tap" or activation == "tap_swipe" or activation == "both" then
+        -- enabled for both activation gestures
+    elseif activation ~= kind then
+        return false
+    end
+    local plugin = self.app and self.app.plugin
+    local ui = plugin and plugin.ui
+    local menu = ui and ui.menu
+    if not menu then
+        return false
+    end
+    if kind == "swipe" and menu.onSwipeShowMenu then
+        local ok = pcall(function()
+            menu:onSwipeShowMenu(ges)
+        end)
+        return ok
+    elseif kind == "tap" and menu.onTapShowMenu then
+        local ok = pcall(function()
+            menu:onTapShowMenu(ges)
+        end)
+        return ok
+    elseif menu.onShowMenu then
+        local ok = pcall(function()
+            menu:onShowMenu()
+        end)
+        return ok
+    end
+    return false
 end
 
 function Chrome:onSwipeZenPM(_, ges)
     local direction = ges.direction
     if direction ~= "north" and direction ~= "south" then
+        return true
+    end
+    if direction == "south" and self:show_koreader_menu_from_gesture(ges, "swipe") then
         return true
     end
     if self.list_bounds and not P.contains(self.list_bounds, ges.pos.x, ges.pos.y) then
@@ -417,14 +466,21 @@ function Chrome:draw_package_details(bb, x, y, w, h)
         }) then
             P.center_text(bb, "Featured", inner_x, iy + Theme.scale(60), inner_w, "heading", { bold = true, color = Theme.muted })
         end
-        iy = iy + art_h + Theme.scale(10)
+        iy = iy + art_h
+        P.rect(bb, panel_x + Theme.scale(2), iy, panel_w - Theme.scale(4), Theme.scale(1), Theme.border)
+        iy = iy + Theme.scale(10)
     end
     Cards.package(self, bb, pkg, inner_x, iy, inner_w, {
         height = Theme.scale(148),
         second_line = "By " .. tostring(pkg.author or "?"),
-        text_gap = Theme.scale(9),
+        text_gap = Theme.scale(6),
+        border = false,
     })
-    iy = iy + Theme.scale(166)
+    local card_bottom = iy + Theme.scale(148)
+    local description_y = iy + Theme.scale(166)
+    local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
+    P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
+    iy = description_y
     P.text(bb, "Description", inner_x, iy, inner_w, "small", { bold = true })
     iy = iy + Theme.scale(34)
     P.text(bb, pkg.description or "No description available.", inner_x, iy, inner_w, "small")
