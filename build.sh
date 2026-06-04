@@ -54,6 +54,7 @@ fi
 
 KINDLE_STAGE="$BUILD_DIR/kindle"
 KOBO_STAGE="$BUILD_DIR/kobo"
+KOREADER_PLUGIN_STAGE="$BUILD_DIR/koreader-plugin"
 
 copy_tree() {
     src="$1"
@@ -84,7 +85,7 @@ build_go() {
 trap cleanup_stage EXIT INT TERM
 
 rm -rf "$DIST_DIR"
-mkdir -p "$KINDLE_STAGE" "$KOBO_STAGE" "$DIST_DIR"
+mkdir -p "$KINDLE_STAGE" "$KOBO_STAGE" "$KOREADER_PLUGIN_STAGE" "$DIST_DIR"
 
 build_go
 
@@ -124,8 +125,12 @@ copy_tree "$ROOT_DIR/installers" "$KOBO_STAGE/.adds/ZenPM"
 
 ensure_exec "$KOBO_STAGE/.adds/ZenPM"
 
+copy_tree "$ROOT_DIR/frontend/koreader/zenpm.koplugin" "$KOREADER_PLUGIN_STAGE"
+cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/VERSION"
+
 KINDLE_ZIP="$DIST_DIR/ZenPM-kindle-$VERSION.zip"
 KOBO_ZIP="$DIST_DIR/ZenPM-kobo-$VERSION.zip"
+KOREADER_PLUGIN_ZIP="$DIST_DIR/ZenPM-koreader-plugin-$VERSION.zip"
 
 (
     cd "$KINDLE_STAGE"
@@ -137,10 +142,16 @@ KOBO_ZIP="$DIST_DIR/ZenPM-kobo-$VERSION.zip"
     zip -qr "$KOBO_ZIP" .adds
 )
 
+(
+    cd "$KOREADER_PLUGIN_STAGE"
+    zip -qr "$KOREADER_PLUGIN_ZIP" zenpm.koplugin
+)
+
 echo "Build complete"
 echo "Version:          $VERSION"
 echo "Kindle package: $KINDLE_ZIP"
 echo "Kobo package:   $KOBO_ZIP"
+echo "KOReader plugin: $KOREADER_PLUGIN_ZIP"
 
 # Bump patch for the next build.
 _major=$(printf '%s' "$VERSION" | cut -d. -f1)

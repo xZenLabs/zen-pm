@@ -15,6 +15,7 @@ Package manager for jailbroken Kindle devices, with Kobo support. Browse and ins
 cmd/zenpm/          CLI entry point (serve, repo, package, doctor, logs)
 internal/           Go packages (server, state, repo, pkg, platform, launcher, log, tx)
 frontend/kindle/    Kindle WAF frontend (HTML/CSS/JS)
+frontend/koreader/  KOReader native plugin frontend
 installers/kindle/  ZenPM.sh — on-device installer
 installers/kobo/    ZenPM.sh / uninstall-zenpm.sh
 docs/architecture/  Schema and behavior contracts
@@ -38,10 +39,12 @@ Requires Go 1.22+. Set the version in `VERSION` (SemVer):
 
 Outputs:
 
-- `dist/zenpm-kindle-<version>.zip`
-- `dist/zenpm-kobo-<version>.zip`
+- `dist/ZenPM-kindle-<version>.zip`
+- `dist/ZenPM-kobo-<version>.zip`
+- `dist/ZenPM-koreader-plugin-<version>.zip`
 
 Each zip contains ARMhf (`zenpm-hf`) and ARMsf (`zenpm-sf`) binaries. The installer selects the correct one at install time.
+The KOReader plugin zip contains only `zenpm.koplugin/`; the backend is still deployed by the Kindle/Kobo packages.
 
 ## Local development
 
@@ -99,6 +102,17 @@ sh /mnt/onboard/.adds/zenpm/installers/kobo/ZenPM.sh
 
 4. If NickelMenu is absent, the installer stages it and prompts for reboot. Re-run after reboot.
 5. ZenPM entries appear in the NickelMenu main menu.
+
+## Install KOReader plugin
+
+1. Install the ZenPM backend with the Kindle or Kobo package first.
+2. Extract `dist/ZenPM-koreader-plugin-<version>.zip`.
+3. Copy `zenpm.koplugin/` into KOReader's `plugins/` directory.
+4. Restart KOReader and open **ZenPM** from the KOReader menu.
+
+The plugin calls the same loopback HTTP daemon as the Kindle WAF frontend. If
+`/health` is unreachable when opened, it tries to start the deployed backend
+from the standard Kindle or Kobo ZenPM path.
 
 ## Updating ZenPM (Kindle)
 
