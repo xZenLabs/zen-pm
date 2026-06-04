@@ -568,7 +568,7 @@ function App:show_actions()
         },
         {
             text = _("Quit"),
-            callback = function() self:close() end,
+            callback = function() self:quit() end,
         },
     })
 end

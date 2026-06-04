@@ -6,6 +6,10 @@ function Launcher.get_app(plugin)
     if not Launcher.app then
         local App = require("app")
         Launcher.app = App:new(plugin)
+        Launcher.app.quit = function(app)
+            app:close()
+            Launcher.app = nil
+        end
     elseif plugin then
         Launcher.app.plugin = plugin
     end
@@ -14,6 +18,14 @@ end
 
 function Launcher.open(plugin)
     Launcher.get_app(plugin):show()
+    return true
+end
+
+function Launcher.quit()
+    if Launcher.app then
+        Launcher.app:close()
+        Launcher.app = nil
+    end
     return true
 end
 
