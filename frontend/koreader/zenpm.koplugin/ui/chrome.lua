@@ -6,11 +6,13 @@ local UIManager = require("ui/uimanager")
 
 local Cards = require("ui/cards")
 local Constants = require("constants")
+local I18n = require("i18n")
 local Images = require("ui/images")
 local P = require("ui/primitives")
 local Search = require("ui/search")
 local Theme = require("ui/theme")
 local Util = require("zenpm_util")
+local _ = require("gettext")
 
 local Screen = Device.screen
 
@@ -18,6 +20,21 @@ local Chrome = InputContainer:extend{
     modal = false,
     stop_events_propagation = true,
 }
+
+local function tab_label(tab_id)
+    if tab_id == "home" then
+        return _("Featured")
+    elseif tab_id == "sources" then
+        return _("Sources")
+    elseif tab_id == "installed" then
+        return _("Installed")
+    elseif tab_id == "debug" then
+        return _("Debug")
+    elseif tab_id == "search" then
+        return _("Search")
+    end
+    return tostring(tab_id or "")
+end
 
 local function ellipsize(value, limit)
     local title = tostring(value or "")
@@ -184,12 +201,12 @@ function Chrome:draw_header(bb, x, y, w)
         if not P.image(bb, Images.asset("zenpm.svg"), x + pad, y + Theme.scale(13), logo, logo, { is_icon = true }) then
             P.center_text(bb, "Z", x + pad, y + Theme.scale(30), logo, "title", { bold = true })
         end
-        P.vcenter_text(bb, "Welcome to ZenPM", x + pad + Theme.scale(66), logo_y, w - pad * 2 - Theme.scale(112), logo, "title", { bold = true })
+        P.vcenter_text(bb, _("Welcome") .. " ZenPM", x + pad + Theme.scale(66), logo_y, w - pad * 2 - Theme.scale(112), logo, "title", { bold = true })
         return y + h
     elseif page == "search" then
         local h = Theme.scale(68)
         self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
-        Search.draw(self, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), self.app.state.filters.search, "Search...", function()
+        Search.draw(self, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), self.app.state.filters.search, _("Search..."), function()
             self.app:prompt_filter("search")
         end, function()
             self.app:set_filter("search", "")
@@ -198,7 +215,7 @@ function Chrome:draw_header(bb, x, y, w)
     elseif page == "installed" then
         local h = Theme.scale(68)
         self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
-        Search.draw(self, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), self.app.state.filters.installed, "Filter installed...", function()
+        Search.draw(self, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), self.app.state.filters.installed, _("Filter installed..."), function()
             self.app:prompt_filter("installed")
         end, function()
             self.app:set_filter("installed", "")
@@ -211,9 +228,9 @@ function Chrome:draw_header(bb, x, y, w)
         local gap = Theme.scale(8)
         local action_x = x + w - pad - action_s
         local button_x = action_x - gap - bw
-        P.vcenter_text(bb, "Sources", x + pad, y + Theme.scale(12), button_x - x - pad - Theme.scale(8), bh, "title", { bold = true })
+        P.vcenter_text(bb, _("Sources"), x + pad, y + Theme.scale(12), button_x - x - pad - Theme.scale(8), bh, "title", { bold = true })
         P.box(bb, button_x, y + Theme.scale(12), bw, bh, { radius = math.floor(bh / 2) })
-        P.center_text_box(bb, "+ Add source", button_x, y + Theme.scale(12), bw, bh, "small", { bold = true })
+        P.center_text_box(bb, "+ " .. _("Add Source"), button_x, y + Theme.scale(12), bw, bh, "small", { bold = true })
         P.hit(self, button_x, y + Theme.scale(12), bw, bh, function() self.app:prompt_add_source() end, "add-source")
         self:draw_actions(bb, action_x, y + Theme.scale(13))
         return y + h
@@ -229,7 +246,7 @@ function Chrome:draw_header(bb, x, y, w)
             P.center_text(bb, "SRC", icon_x, icon_y + Theme.scale(27), icon, "small", { bold = true })
         end
         local text_x = icon_x + icon + Theme.scale(18)
-        P.text(bb, ellipsize(repo.name or "Source Details", 60), text_x, y + Theme.scale(13), w - text_x - pad - Theme.scale(48), "heading", { bold = true })
+        P.text(bb, ellipsize(I18n.dynamic_or(repo.name, _("Source Details")), 60), text_x, y + Theme.scale(13), w - text_x - pad - Theme.scale(48), "heading", { bold = true })
         P.text(bb, ellipsize(repo.url or "", 70), text_x, y + Theme.scale(44), w - text_x - pad - Theme.scale(48), "small")
         return y + h
     elseif page == "package_details" then
@@ -237,12 +254,12 @@ function Chrome:draw_header(bb, x, y, w)
         self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(8))
         self:draw_back(bb, x + pad, y + Theme.scale(8), function() self.app:go_back_from_details() end)
         local pkg = self.app.state.current_package or {}
-        P.vcenter_text(bb, ellipsize(pkg.name or "Package Details", 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
+        P.vcenter_text(bb, ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
         return y + h
     elseif page == "debug" then
         local h = Theme.scale(54)
         self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(6))
-        P.text(bb, "ZenPM - Debug", x + pad, y + Theme.scale(18), w - pad * 2, "heading", { bold = true })
+        P.text(bb, _("ZenPM - Debug"), x + pad, y + Theme.scale(18), w - pad * 2, "heading", { bold = true })
         return y + h
     end
     return y
@@ -336,9 +353,9 @@ function Chrome:draw_content(bb, x, y, w, h)
     if page == "home" then
         max_scroll = self:draw_featured(bb, x, y, w, h, scroll)
     elseif page == "search" then
-        max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, "Search", state.visible_packages, state.packages, state.filters.search)
+        max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, _("Search"), "search", state.visible_packages, state.packages, state.filters.search)
     elseif page == "installed" then
-        max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, "Installed", state.visible_packages, state.installed_packages, state.filters.installed)
+        max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
     elseif page == "sources" then
         max_scroll = self:draw_sources(bb, x, y, w, h, scroll)
     elseif page == "source_details" then
@@ -370,7 +387,7 @@ function Chrome:draw_featured(bb, x, y, w, h, scroll)
     local list_y = y + Theme.scale(8)
     local list_h = h - Theme.scale(8)
     if #list == 0 then
-        P.text(bb, "Featured packages coming soon.", x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
+        P.text(bb, _("Featured packages coming soon."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
         self:set_list_bounds(x, list_y, w, list_h, m.featured_h + m.card_gap)
         return 0
     end
@@ -380,7 +397,7 @@ function Chrome:draw_featured(bb, x, y, w, h, scroll)
     end)
 end
 
-function Chrome:draw_packages_page(bb, x, y, w, h, scroll, title, visible, total, query)
+function Chrome:draw_packages_page(bb, x, y, w, h, scroll, title, kind, visible, total, query)
     local m = Theme.metrics()
     local pad = m.pad
     local count = tostring(#(visible or {}))
@@ -393,11 +410,11 @@ function Chrome:draw_packages_page(bb, x, y, w, h, scroll, title, visible, total
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     if #(visible or {}) == 0 then
-        local msg = "No packages found. Try Refresh."
-        if title == "Installed" then
-            msg = query and query ~= "" and "No installed packages match the filter." or "No packages installed. Browse Search to find packages."
+        local msg = _("No packages found. Try Refresh.")
+        if kind == "installed" then
+            msg = query and query ~= "" and _("No installed packages match the filter.") or _("No packages installed. Browse Search to find packages.")
         elseif query and query ~= "" then
-            msg = "No packages match the filter."
+            msg = _("No packages match the filter.")
         end
         P.text(bb, msg, x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
         self:set_list_bounds(x, list_y, w, list_h, m.card_h + m.card_gap)
@@ -416,7 +433,7 @@ function Chrome:draw_sources(bb, x, y, w, h, scroll)
     local list_h = h - Theme.scale(12)
     local repos = self.app.state.repos or {}
     if #repos == 0 then
-        P.text(bb, "No repositories configured.", x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
+        P.text(bb, _("No repositories configured."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
         self:set_list_bounds(x, list_y, w, list_h, m.repo_h + m.card_gap)
         return 0
     end
@@ -430,12 +447,12 @@ function Chrome:draw_source_details(bb, x, y, w, h, scroll)
     local pad = m.pad
     local cy = y + Theme.scale(8)
     local visible = self.app.state.visible_packages or {}
-    P.text(bb, "Packages (" .. tostring(#visible) .. ")", x + pad, cy, w - pad * 2, "heading", { bold = true })
+    P.text(bb, _("Packages") .. " (" .. tostring(#visible) .. ")", x + pad, cy, w - pad * 2, "heading", { bold = true })
     cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     if #visible == 0 then
-        P.text(bb, "No packages found for this source.", x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
+        P.text(bb, _("No packages found for this source."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
         self:set_list_bounds(x, list_y, w, list_h, m.card_h + m.card_gap)
         return 0
     end
@@ -464,7 +481,7 @@ function Chrome:draw_package_details(bb, x, y, w, h)
             outer_bounds = { x = panel_x, y = cy, w = panel_w, h = panel_h },
             mask_bounds = { x = panel_x + Theme.scale(2), y = cy + Theme.scale(2), w = panel_w - Theme.scale(4), h = panel_h - Theme.scale(4) },
         }) then
-            P.center_text(bb, "Featured", inner_x, iy + Theme.scale(60), inner_w, "heading", { bold = true, color = Theme.muted })
+            P.center_text(bb, _("Featured"), inner_x, iy + Theme.scale(60), inner_w, "heading", { bold = true, color = Theme.muted })
         end
         iy = iy + art_h
         P.rect(bb, panel_x + Theme.scale(2), iy, panel_w - Theme.scale(4), Theme.scale(1), Theme.border)
@@ -472,7 +489,7 @@ function Chrome:draw_package_details(bb, x, y, w, h)
     end
     Cards.package(self, bb, pkg, inner_x, iy, inner_w, {
         height = Theme.scale(148),
-        second_line = "By " .. tostring(pkg.author or "?"),
+        second_line = _("By ") .. I18n.dynamic_or(pkg.author, "?"),
         text_gap = Theme.scale(6),
         border = false,
     })
@@ -481,9 +498,9 @@ function Chrome:draw_package_details(bb, x, y, w, h)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
-    P.text(bb, "Description", inner_x, iy, inner_w, "small", { bold = true })
+    P.text(bb, _("Description"), inner_x, iy, inner_w, "small", { bold = true })
     iy = iy + Theme.scale(34)
-    P.text(bb, pkg.description or "No description available.", inner_x, iy, inner_w, "small")
+    P.text(bb, I18n.dynamic_or(pkg.description, _("No description available.")), inner_x, iy, inner_w, "small")
     return cy + panel_h - Theme.scale(12)
 end
 
@@ -524,13 +541,14 @@ function Chrome:draw_nav(bb, x, y, w, h)
         search = "search.svg",
     }
     for i, tab in ipairs(Constants.TABS) do
+        local label = tab_label(tab.id)
         local tx = x + (i - 1) * tab_w
         local tw = i == #Constants.TABS and (w - (i - 1) * tab_w) or tab_w
         local icon_size = Theme.scale(44)
         if not P.image(bb, Images.asset(icons[tab.id] or "packages.svg"), tx + math.floor((tw - icon_size) / 2), y + Theme.scale(5), icon_size, icon_size, { is_icon = true }) then
-            P.center_text(bb, tab.label:sub(1, 1), tx, y + Theme.scale(14), tw, "heading", { bold = true })
+            P.center_text(bb, label:sub(1, 1), tx, y + Theme.scale(14), tw, "heading", { bold = true })
         end
-        local label_size = P.center_text(bb, tab.label, tx, y + Theme.scale(50), tw, "small", { bold = self.app.state.active_tab == tab.id })
+        local label_size = P.center_text(bb, label, tx, y + Theme.scale(50), tw, "small", { bold = self.app.state.active_tab == tab.id })
         if self.app.state.active_tab == tab.id then
             local ux = tx + math.max(0, math.floor((tw - label_size.w) / 2))
             P.rect(bb, ux, y + h - Theme.scale(5), label_size.w, Theme.scale(3), Theme.border)

@@ -1,3 +1,6 @@
+local I18n = require("i18n")
+I18n.install()
+
 local Dispatcher = require("dispatcher")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
@@ -22,6 +25,7 @@ function ZenPM:onDispatcherRegisterActions()
 end
 
 function ZenPM:init()
+    I18n.install()
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
 end
@@ -49,6 +53,10 @@ end
 
 function ZenPM.open(plugin)
     return Launcher.open(plugin)
+end
+
+function ZenPM:onCloseWidget()
+    I18n.uninstall()
 end
 
 return ZenPM

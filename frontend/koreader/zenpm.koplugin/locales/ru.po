@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: ru
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "Открыть ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Интерфейс Zen Package Manager для KOReader."
+
+msgid "Featured"
+msgstr "Рекомендуемые"
+
+msgid "Sources"
+msgstr "Источники"
+
+msgid "Installed"
+msgstr "Установлено"
+
+msgid "Debug"
+msgstr "Отладка"
+
+msgid "Search"
+msgstr "Поиск"
+
+msgid "Welcome"
+msgstr "Добро пожаловать"
+
+msgid "Add Source"
+msgstr "Добавить источник"
+
+msgid "Add"
+msgstr "Добавить"
+
+msgid "Search..."
+msgstr "Поиск..."
+
+msgid "Filter installed..."
+msgstr "Фильтр установленных..."
+
+msgid "Packages"
+msgstr "Пакеты"
+
+msgid "Source Details"
+msgstr "Сведения об источнике"
+
+msgid "Package Details"
+msgstr "Сведения о пакете"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Отладка"
+
+msgid "Featured packages coming soon."
+msgstr "Рекомендуемые пакеты скоро появятся."
+
+msgid "No packages found. Try Refresh."
+msgstr "Пакеты не найдены. Попробуйте обновить."
+
+msgid "No installed packages match the filter."
+msgstr "Нет установленных пакетов, подходящих под фильтр."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Пакеты не установлены. Используйте Поиск, чтобы найти пакеты."
+
+msgid "No packages match the filter."
+msgstr "Нет пакетов, подходящих под фильтр."
+
+msgid "No repositories configured."
+msgstr "Репозитории не настроены."
+
+msgid "No packages found for this source."
+msgstr "Для этого источника пакеты не найдены."
+
+msgid "By "
+msgstr "Автор: "
+
+msgid "Description"
+msgstr "Описание"
+
+msgid "No description available."
+msgstr "Описание недоступно."
+
+msgid "Unknown package"
+msgstr "Неизвестный пакет"
+
+msgid "No description"
+msgstr "Нет описания"
+
+msgid "Source"
+msgstr "Источник"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Modify"
+msgstr "Изменить"
+
+msgid "Get"
+msgstr "Получить"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Clear"
+msgstr "Очистить"
+
+msgid "Info"
+msgstr "Инфо"
+
+msgid "Reinstall"
+msgstr "Переустановить"
+
+msgid "Uninstall"
+msgstr "Удалить"
+
+msgid "Refresh"
+msgstr "Обновить"
+
+msgid "About"
+msgstr "О программе"
+
+msgid "Update"
+msgstr "Обновить"
+
+msgid "Quit"
+msgstr "Выйти"
+
+msgid "Filter installed packages"
+msgstr "Фильтровать установленные пакеты"
+
+msgid "Search packages"
+msgstr "Искать пакеты"
+
+msgid "Please enter a URL."
+msgstr "Введите URL."
+
+msgid "Detecting repo..."
+msgstr "Определение репозитория..."
+
+msgid "Could not detect repo format."
+msgstr "Не удалось определить формат репозитория."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Другая операция уже выполняется. Подождите."
+
+msgid "Package has no id."
+msgstr "У пакета нет id."
+
+msgid "Downloading... Please wait."
+msgstr "Загрузка... Подождите."
+
+msgid "Refreshing repositories..."
+msgstr "Обновление репозиториев..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Проверить и запустить обновление ZenPM?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Обновление принято. Демон может перезапуститься."
+
+msgid "None"
+msgstr "Нет"
+
+msgid "Version: "
+msgstr "Версия: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Автор: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " did not complete.\n\nCheck the debug log for details."
+
+msgid " successfully."
+msgstr " успешно."
+
+msgid "Are you sure you want to download "
+msgstr "Вы уверены, что хотите скачать "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Вы уверены, что хотите переустановить "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Вы уверены, что хотите удалить "
+
+msgid "Connecting to ZenPM..."
+msgstr "Подключение к ZenPM..."
+
+msgid "Could not add source: "
+msgstr "Could not add source: "
+
+msgid "Could not read log: "
+msgstr "Could not read log: "
+
+msgid "Could not remove source: "
+msgstr "Could not remove source: "
+
+msgid "Failed to load package: "
+msgstr "Failed to load package: "
+
+msgid "Failed to load packages: "
+msgstr "Failed to load packages: "
+
+msgid "Failed to load source: "
+msgstr "Failed to load source: "
+
+msgid "Failed to load sources: "
+msgstr "Failed to load sources: "
+
+msgid "Failed to start package action: "
+msgstr "Failed to start package action: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "Installing"
+msgstr "Установка"
+
+msgid "Loading featured packages..."
+msgstr "Загрузка рекомендуемых пакетов..."
+
+msgid "Loading installed packages..."
+msgstr "Загрузка установленных пакетов..."
+
+msgid "Loading log..."
+msgstr "Загрузка журнала..."
+
+msgid "Loading package..."
+msgstr "Загрузка пакета..."
+
+msgid "Loading packages..."
+msgstr "Загрузка пакетов..."
+
+msgid "Loading source..."
+msgstr "Загрузка источника..."
+
+msgid "Loading sources..."
+msgstr "Загрузка источников..."
+
+msgid "Log is empty."
+msgstr "Журнал пуст."
+
+msgid "Package"
+msgstr "Пакет"
+
+msgid "Package not found."
+msgstr "Пакет не найден."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Package operation status could not be checked. See Debug log."
+
+msgid "Refresh failed: "
+msgstr "Refresh failed: "
+
+msgid "Reinstalling"
+msgstr "Переустановка"
+
+msgid "Remove source "
+msgstr "Удалить источник "
+
+msgid "Source not found."
+msgstr "Источник не найден."
+
+msgid "Uninstalling"
+msgstr "Удаление"
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPM backend not found. Expected "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "install"
+msgstr "установка"
+
+msgid "installed"
+msgstr "установлен"
+
+msgid "network error"
+msgstr "сетевая ошибка"
+
+msgid "of"
+msgstr "для"
+
+msgid "or"
+msgstr "или"
+
+msgid "reinstall"
+msgstr "переустановка"
+
+msgid "reinstalled"
+msgstr "переустановлен"
+
+msgid "request failed"
+msgstr "request failed"
+
+msgid "uninstall"
+msgstr "удаление"
+
+msgid "uninstalled"
+msgstr "удален"

@@ -2,6 +2,7 @@ local JSON = require("json")
 local http = require("socket.http")
 local ltn12 = require("ltn12")
 local socket = require("socket")
+local _ = require("gettext")
 
 local Constants = require("constants")
 
@@ -61,7 +62,7 @@ function Client:request(method, path, body)
     local requester = http
     if url:match("^https://") then
         if not ok_https then
-            return false, "HTTPS support is unavailable in this KOReader build."
+            return false, _("HTTPS support is unavailable in this KOReader build.")
         end
         requester = https
     end
@@ -78,13 +79,13 @@ function Client:request(method, path, body)
 
     local text = table.concat(sink)
     if not code then
-        return false, status or "network error"
+        return false, status or _("network error")
     end
     if type(code) ~= "number" then
         code = tonumber(code)
     end
     if not code or code < 200 or code >= 300 then
-        local detail = text ~= "" and text or tostring(status or "request failed")
+        local detail = text ~= "" and text or tostring(status or _("request failed"))
         return false, "HTTP " .. tostring(code or "?") .. ": " .. detail, code, resp_headers
     end
     if text == "" then
@@ -113,7 +114,7 @@ function Client:download(path)
     local requester = http
     if url:match("^https://") then
         if not ok_https then
-            return false, "HTTPS support is unavailable in this KOReader build."
+            return false, _("HTTPS support is unavailable in this KOReader build.")
         end
         requester = https
     end
@@ -132,7 +133,7 @@ function Client:download(path)
         code = tonumber(code)
     end
     if not code or code < 200 or code >= 300 then
-        return false, "HTTP " .. tostring(code or "?") .. ": " .. tostring(status or "download failed"), code, resp_headers
+        return false, "HTTP " .. tostring(code or "?") .. ": " .. tostring(status or _("download failed")), code, resp_headers
     end
     return true, table.concat(sink), code, resp_headers
 end

@@ -1,8 +1,10 @@
 local Models = require("models")
+local I18n = require("i18n")
 local Images = require("ui/images")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
 local Util = require("zenpm_util")
+local _ = require("gettext")
 
 local Cards = {}
 
@@ -28,8 +30,8 @@ local function package_meta_text(pkg)
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
         table.insert(parts, "v" .. pkg.version)
     end
-    table.insert(parts, pkg and pkg.repo or "?")
-    return table.concat(parts, " · ")
+    table.insert(parts, I18n.dynamic_or(pkg and pkg.repo, "?"))
+    return table.concat(parts, " - ")
 end
 
 local function action_pill(view, bb, text, x, y, w, h, callback)
@@ -60,8 +62,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
-    local title = ellipsize(pkg.name or pkg.id or "Unknown package", 60)
-    local second_line = ellipsize(opts.second_line or pkg.description or "No description", 54)
+    local title = ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Unknown package")), 60)
+    local second_line = ellipsize(opts.second_line or I18n.dynamic_or(pkg.description, _("No description")), 54)
     local meta_text = ellipsize(package_meta_text(pkg), 48)
     local text_gap = opts.text_gap or Theme.scale(4)
     local title_size = P.text_size(title, text_w, "small", { bold = true })
@@ -112,7 +114,7 @@ function Cards.featured(view, bb, pkg, x, y, w)
         outer_bounds = { x = x, y = y, w = w, h = h },
         mask_bounds = { x = x + Theme.scale(2), y = y + Theme.scale(2), w = w - Theme.scale(4), h = h - Theme.scale(4) },
     }) then
-        P.center_text(bb, "Featured", x, y + math.floor(art_h / 2) - Theme.scale(14), w, "heading", { bold = true, color = Theme.muted })
+        P.center_text(bb, _("Featured"), x, y + math.floor(art_h / 2) - Theme.scale(14), w, "heading", { bold = true, color = Theme.muted })
     end
     P.rect(bb, x, y + art_h - Theme.scale(1), w, Theme.scale(1), Theme.border)
     P.hit(view, x, y, w, h, function()
@@ -147,13 +149,13 @@ function Cards.source(view, bb, repo, x, y, w)
     local text_w = w - (text_x - x) - pad - action_w - (action_w > 0 and Theme.scale(12) or 0)
     local title_y = y + Theme.scale(24)
     local url_y = y + Theme.scale(66)
-    local title_size = P.text(bb, ellipsize(repo.name or "Source", 60), text_x, title_y, text_w - Theme.scale(22), "heading", { bold = true })
+    local title_size = P.text(bb, ellipsize(I18n.dynamic_or(repo.name, _("Source")), 60), text_x, title_y, text_w - Theme.scale(22), "heading", { bold = true })
     local verify_size = Theme.scale(18)
     draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + Theme.scale(5), text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
     P.text(bb, ellipsize(repo.url or "", 54), text_x, url_y, text_w, "small")
 
     if action_w > 0 then
-        action_pill(view, bb, "Remove", x + w - action_w - pad, y + math.floor((h - m.action_h) / 2), action_w, m.action_h, function()
+        action_pill(view, bb, _("Remove"), x + w - action_w - pad, y + math.floor((h - m.action_h) / 2), action_w, m.action_h, function()
             view.app:confirm_remove_source(repo.name)
         end)
     end

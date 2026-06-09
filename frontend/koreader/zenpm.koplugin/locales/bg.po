@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: bg
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "Отвори ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Интерфейс на Zen Package Manager за KOReader."
+
+msgid "Featured"
+msgstr "Препоръчани"
+
+msgid "Sources"
+msgstr "Източници"
+
+msgid "Installed"
+msgstr "Инсталирани"
+
+msgid "Debug"
+msgstr "Отстраняване"
+
+msgid "Search"
+msgstr "Търсене"
+
+msgid "Welcome"
+msgstr "Добре дошли"
+
+msgid "Add Source"
+msgstr "Добави източник"
+
+msgid "Add"
+msgstr "Добави"
+
+msgid "Search..."
+msgstr "Търсене..."
+
+msgid "Filter installed..."
+msgstr "Филтрирай инсталираните..."
+
+msgid "Packages"
+msgstr "Пакети"
+
+msgid "Source Details"
+msgstr "Детайли за източника"
+
+msgid "Package Details"
+msgstr "Детайли за пакета"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Отстраняване"
+
+msgid "Featured packages coming soon."
+msgstr "Препоръчаните пакети идват скоро."
+
+msgid "No packages found. Try Refresh."
+msgstr "Няма намерени пакети. Опитайте Обновяване."
+
+msgid "No installed packages match the filter."
+msgstr "Няма инсталирани пакети, съвпадащи с филтъра."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Няма инсталирани пакети. Използвайте Търсене, за да намерите пакети."
+
+msgid "No packages match the filter."
+msgstr "Няма пакети, съвпадащи с филтъра."
+
+msgid "No repositories configured."
+msgstr "Няма конфигурирани хранилища."
+
+msgid "No packages found for this source."
+msgstr "Няма пакети за този източник."
+
+msgid "By "
+msgstr "От "
+
+msgid "Description"
+msgstr "Описание"
+
+msgid "No description available."
+msgstr "Няма налично описание."
+
+msgid "Unknown package"
+msgstr "Неизвестен пакет"
+
+msgid "No description"
+msgstr "Няма описание"
+
+msgid "Source"
+msgstr "Източник"
+
+msgid "Remove"
+msgstr "Премахни"
+
+msgid "Modify"
+msgstr "Промени"
+
+msgid "Get"
+msgstr "Вземи"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Отказ"
+
+msgid "Clear"
+msgstr "Изчисти"
+
+msgid "Info"
+msgstr "Инфо"
+
+msgid "Reinstall"
+msgstr "Преинсталирай"
+
+msgid "Uninstall"
+msgstr "Деинсталирай"
+
+msgid "Refresh"
+msgstr "Обнови"
+
+msgid "About"
+msgstr "Относно"
+
+msgid "Update"
+msgstr "Актуализирай"
+
+msgid "Quit"
+msgstr "Изход"
+
+msgid "Filter installed packages"
+msgstr "Филтрирай инсталираните пакети"
+
+msgid "Search packages"
+msgstr "Търсене на пакети"
+
+msgid "Please enter a URL."
+msgstr "Въведете URL."
+
+msgid "Detecting repo..."
+msgstr "Откриване на хранилище..."
+
+msgid "Could not detect repo format."
+msgstr "Форматът на хранилището не бе разпознат."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Друга операция е в ход. Моля, изчакайте."
+
+msgid "Package has no id."
+msgstr "Пакетът няма id."
+
+msgid "Downloading... Please wait."
+msgstr "Изтегляне... Моля, изчакайте."
+
+msgid "Refreshing repositories..."
+msgstr "Обновяване на хранилищата..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Да се провери и стартира актуализация на ZenPM?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Актуализацията е приета. Демонът може да се рестартира."
+
+msgid "None"
+msgstr "Няма"
+
+msgid "Version: "
+msgstr "Версия: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Автор: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " did not complete.\n\nCheck the debug log for details."
+
+msgid " successfully."
+msgstr " успешно."
+
+msgid "Are you sure you want to download "
+msgstr "Сигурни ли сте, че искате да изтеглите "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Сигурни ли сте, че искате да преинсталирате "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Сигурни ли сте, че искате да деинсталирате "
+
+msgid "Connecting to ZenPM..."
+msgstr "Свързване със ZenPM..."
+
+msgid "Could not add source: "
+msgstr "Could not add source: "
+
+msgid "Could not read log: "
+msgstr "Could not read log: "
+
+msgid "Could not remove source: "
+msgstr "Could not remove source: "
+
+msgid "Failed to load package: "
+msgstr "Failed to load package: "
+
+msgid "Failed to load packages: "
+msgstr "Failed to load packages: "
+
+msgid "Failed to load source: "
+msgstr "Failed to load source: "
+
+msgid "Failed to load sources: "
+msgstr "Failed to load sources: "
+
+msgid "Failed to start package action: "
+msgstr "Failed to start package action: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "Installing"
+msgstr "Инсталиране"
+
+msgid "Loading featured packages..."
+msgstr "Зареждане на препоръчани пакети..."
+
+msgid "Loading installed packages..."
+msgstr "Зареждане на инсталирани пакети..."
+
+msgid "Loading log..."
+msgstr "Зареждане на лог..."
+
+msgid "Loading package..."
+msgstr "Зареждане на пакет..."
+
+msgid "Loading packages..."
+msgstr "Зареждане на пакети..."
+
+msgid "Loading source..."
+msgstr "Зареждане на източник..."
+
+msgid "Loading sources..."
+msgstr "Зареждане на източници..."
+
+msgid "Log is empty."
+msgstr "Логът е празен."
+
+msgid "Package"
+msgstr "Пакет"
+
+msgid "Package not found."
+msgstr "Пакетът не е намерен."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Package operation status could not be checked. See Debug log."
+
+msgid "Refresh failed: "
+msgstr "Refresh failed: "
+
+msgid "Reinstalling"
+msgstr "Преинсталиране"
+
+msgid "Remove source "
+msgstr "Премахване на източник "
+
+msgid "Source not found."
+msgstr "Източникът не е намерен."
+
+msgid "Uninstalling"
+msgstr "Деинсталиране"
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPM backend not found. Expected "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "install"
+msgstr "инсталиране"
+
+msgid "installed"
+msgstr "инсталиран"
+
+msgid "network error"
+msgstr "мрежова грешка"
+
+msgid "of"
+msgstr "на"
+
+msgid "or"
+msgstr "или"
+
+msgid "reinstall"
+msgstr "преинсталиране"
+
+msgid "reinstalled"
+msgstr "преинсталиран"
+
+msgid "request failed"
+msgstr "request failed"
+
+msgid "uninstall"
+msgstr "деинсталиране"
+
+msgid "uninstalled"
+msgstr "деинсталиран"

@@ -1,6 +1,5 @@
 local source = debug.getinfo(1, "S").source or ""
 local plugin_dir = source:match("^@(.+)/constants%.lua$") or "plugins/zenpm.koplugin"
-
 return {
     PLUGIN_DIR = plugin_dir,
     ASSET_DIR = plugin_dir .. "/assets",

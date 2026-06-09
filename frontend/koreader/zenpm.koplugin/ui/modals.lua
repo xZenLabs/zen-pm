@@ -3,6 +3,7 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local UIManager = require("ui/uimanager")
+local I18n = require("i18n")
 local _ = require("gettext")
 
 local Modals = {}
@@ -62,7 +63,7 @@ end
 function Modals.package_modify(pkg, callbacks)
     local dialog
     dialog = ButtonDialog:new{
-        title = pkg.name or pkg.id or _("Package"),
+        title = I18n.dynamic_or(pkg.name or pkg.id, _("Package")),
         buttons = {
             {
                 {

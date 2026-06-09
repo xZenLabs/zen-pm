@@ -1,4 +1,5 @@
 local socket = require("socket")
+local _ = require("gettext")
 
 local Constants = require("constants")
 local Util = require("zenpm_util")
@@ -74,7 +75,7 @@ end
 function Daemon:start()
     local backend = self:find_backend()
     if not backend then
-        return false, "ZenPM backend not found. Expected " .. table.concat(self:candidate_backends(), " or ") .. "."
+        return false, _("ZenPM backend not found. Expected ") .. table.concat(self:candidate_backends(), " " .. _("or") .. " ") .. "."
     end
 
     local platform = self:detect_platform()

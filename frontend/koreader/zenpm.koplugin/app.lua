@@ -6,6 +6,7 @@ local Chrome = require("ui/chrome")
 local Client = require("client")
 local Constants = require("constants")
 local Daemon = require("daemon")
+local I18n = require("i18n")
 local Images = require("ui/images")
 local Modals = require("ui/modals")
 local Models = require("models")
@@ -42,6 +43,40 @@ function App:new(plugin)
     setmetatable(o, self)
     self.__index = self
     return o
+end
+
+local function package_title(pkg, fallback)
+    return I18n.dynamic_or(pkg and (pkg.name or pkg.id), fallback or _("Package"))
+end
+
+local function action_present(action)
+    if action == "uninstall" then
+        return _("uninstall")
+    end
+    if action == "reinstall" then
+        return _("reinstall")
+    end
+    return _("install")
+end
+
+local function action_progress(action)
+    if action == "uninstall" then
+        return _("Uninstalling")
+    end
+    if action == "reinstall" then
+        return _("Reinstalling")
+    end
+    return _("Installing")
+end
+
+local function action_done(action)
+    if action == "install" then
+        return _("installed")
+    end
+    if action == "reinstall" then
+        return _("reinstalled")
+    end
+    return _("uninstalled")
 end
 
 function App:show()
@@ -97,8 +132,9 @@ function App:ensure_backend()
     self:set_loading(_("Connecting to ZenPM..."))
     local ok, data = self.daemon:ensure(self.client)
     if not ok then
-        self:set_error(data or Constants.DAEMON_UNAVAILABLE_MESSAGE)
-        Modals.info(data or Constants.DAEMON_UNAVAILABLE_MESSAGE)
+        local message = data or _("ZenPM daemon not reachable. Re-run ZenPM installer if it is not running.")
+        self:set_error(message)
+        Modals.info(message)
         return false
     end
     self.version = data and data.version or "?"
@@ -429,7 +465,7 @@ function App:detect_repo_name(url)
 end
 
 function App:confirm_remove_source(name)
-    Modals.confirm(_("Remove source ") .. tostring(name) .. "?", _("Remove"), function()
+    Modals.confirm(_("Remove source ") .. I18n.dynamic_or(name, _("Source")) .. "?", _("Remove"), function()
         local ok, data = self.client:remove_repo(name)
         if ok then
             self:show_sources()
@@ -462,13 +498,14 @@ function App:perform_package_action(pkg, on_done)
 end
 
 function App:confirm_package_action(pkg, action, on_done)
-    local question = _("Are you sure you want to download ") .. (pkg.name or pkg.id or "?") .. "?"
+    local name = package_title(pkg, "?")
+    local question = _("Are you sure you want to download ") .. name .. "?"
     local label = _("Get")
     if action == "reinstall" then
-        question = _("Are you sure you want to reinstall ") .. (pkg.name or pkg.id or "?") .. "?"
+        question = _("Are you sure you want to reinstall ") .. name .. "?"
         label = _("Reinstall")
     elseif action == "uninstall" then
-        question = _("Are you sure you want to uninstall ") .. (pkg.name or pkg.id or "?") .. "?"
+        question = _("Are you sure you want to uninstall ") .. name .. "?"
         label = _("Uninstall")
     end
     Modals.confirm(question, label, function()
@@ -484,8 +521,8 @@ function App:start_package_action(pkg, action, on_done)
         return
     end
     self.busy = true
-    Modals.info((action == "uninstall" and _("Uninstalling ") or action == "reinstall" and _("Reinstalling ") or _("Installing "))
-        .. (pkg.name or id) .. "\n\n" .. _("Downloading... Please wait."))
+    Modals.info(action_progress(action) .. " "
+        .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
     local ok, err = self.client:package_action(id, backend_action)
     if not ok then
         self.busy = false
@@ -494,7 +531,7 @@ function App:start_package_action(pkg, action, on_done)
     end
     self:poll_package_action({
         id = id,
-        name = pkg.name or id,
+        name = package_title(pkg, id),
         action = action,
         was_installed = pkg.installed and true or false,
         on_done = on_done,
@@ -524,12 +561,12 @@ function App:poll_package_action(op, attempt)
 
         if succeeded then
             self.busy = false
-            local done = op.action == "install" and _("installed") or op.action == "reinstall" and _("reinstalled") or _("uninstalled")
+            local done = action_done(op.action)
             Modals.info(op.name .. " " .. done .. _(" successfully."))
             if op.on_done then op.on_done() end
         elseif attempt >= Constants.MAX_POLL_RETRIES then
             self.busy = false
-            Modals.info(op.action .. " of " .. op.id .. _(" did not complete.\n\nCheck the debug log for details."))
+            Modals.info(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details."))
         else
             self:poll_package_action(op, attempt + 1)
         end
@@ -547,7 +584,7 @@ function App:refresh_repos()
 end
 
 function App:show_actions()
-    Modals.actions("ZenPM", {
+    Modals.actions(_("ZenPM"), {
         {
             text = _("Refresh"),
             callback = function()
@@ -577,7 +614,7 @@ function App:show_about()
     local ok, data = self.client:health()
     local version = ok and data and data.version or self.version or "?"
     version = tostring(version):gsub("^v", "")
-    Modals.info("ZenPM\n\nVersion: " .. version .. "\nAuthor: Anthony Gress (ZenLabs)\n2026")
+    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
 end
 
 function App:start_update()
@@ -592,14 +629,14 @@ function App:start_update()
 end
 
 function App:image_summary(pkg)
-    if not pkg then return "None" end
+    if not pkg then return _("None") end
     if type(pkg.images) == "table" and #pkg.images > 0 then
         return table.concat(pkg.images, ", ")
     end
     if pkg.image_url and pkg.image_url ~= "" then
         return pkg.image_url
     end
-    return "None"
+    return _("None")
 end
 
 return App

@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: nl
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "ZenPM openen"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Frontend van Zen Package Manager voor KOReader."
+
+msgid "Featured"
+msgstr "Uitgelicht"
+
+msgid "Sources"
+msgstr "Bronnen"
+
+msgid "Installed"
+msgstr "Geinstalleerd"
+
+msgid "Debug"
+msgstr "Debug"
+
+msgid "Search"
+msgstr "Zoeken"
+
+msgid "Welcome"
+msgstr "Welkom"
+
+msgid "Add Source"
+msgstr "Bron toevoegen"
+
+msgid "Add"
+msgstr "Toevoegen"
+
+msgid "Search..."
+msgstr "Zoeken..."
+
+msgid "Filter installed..."
+msgstr "Geinstalleerde filteren..."
+
+msgid "Packages"
+msgstr "Pakketten"
+
+msgid "Source Details"
+msgstr "Brondetails"
+
+msgid "Package Details"
+msgstr "Pakketdetails"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Debug"
+
+msgid "Featured packages coming soon."
+msgstr "Uitgelichte pakketten komen binnenkort."
+
+msgid "No packages found. Try Refresh."
+msgstr "Geen pakketten gevonden. Probeer Vernieuwen."
+
+msgid "No installed packages match the filter."
+msgstr "Geen geinstalleerde pakketten passen bij het filter."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Geen pakketten geinstalleerd. Gebruik Zoeken om pakketten te vinden."
+
+msgid "No packages match the filter."
+msgstr "Geen pakketten passen bij het filter."
+
+msgid "No repositories configured."
+msgstr "Geen repositories geconfigureerd."
+
+msgid "No packages found for this source."
+msgstr "Geen pakketten gevonden voor deze bron."
+
+msgid "By "
+msgstr "Door "
+
+msgid "Description"
+msgstr "Beschrijving"
+
+msgid "No description available."
+msgstr "Geen beschrijving beschikbaar."
+
+msgid "Unknown package"
+msgstr "Onbekend pakket"
+
+msgid "No description"
+msgstr "Geen beschrijving"
+
+msgid "Source"
+msgstr "Bron"
+
+msgid "Remove"
+msgstr "Verwijderen"
+
+msgid "Modify"
+msgstr "Wijzigen"
+
+msgid "Get"
+msgstr "Ophalen"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Annuleren"
+
+msgid "Clear"
+msgstr "Wissen"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Reinstall"
+msgstr "Opnieuw installeren"
+
+msgid "Uninstall"
+msgstr "Verwijderen"
+
+msgid "Refresh"
+msgstr "Vernieuwen"
+
+msgid "About"
+msgstr "Over"
+
+msgid "Update"
+msgstr "Bijwerken"
+
+msgid "Quit"
+msgstr "Afsluiten"
+
+msgid "Filter installed packages"
+msgstr "Geinstalleerde pakketten filteren"
+
+msgid "Search packages"
+msgstr "Pakketten zoeken"
+
+msgid "Please enter a URL."
+msgstr "Voer een URL in."
+
+msgid "Detecting repo..."
+msgstr "Repository detecteren..."
+
+msgid "Could not detect repo format."
+msgstr "Kon repositoryformaat niet detecteren."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Er is een andere bewerking bezig. Wacht even."
+
+msgid "Package has no id."
+msgstr "Pakket heeft geen id."
+
+msgid "Downloading... Please wait."
+msgstr "Downloaden... Wacht even."
+
+msgid "Refreshing repositories..."
+msgstr "Repositories vernieuwen..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Controleren op en starten van een ZenPM-update?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Update geaccepteerd. De daemon kan opnieuw starten."
+
+msgid "None"
+msgstr "Geen"
+
+msgid "Version: "
+msgstr "Versie: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Auteur: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " did not complete.\n\nCheck the debug log for details."
+
+msgid " successfully."
+msgstr " gelukt."
+
+msgid "Are you sure you want to download "
+msgstr "Weet je zeker dat je wilt downloaden: "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Weet je zeker dat je opnieuw wilt installeren: "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Weet je zeker dat je wilt verwijderen: "
+
+msgid "Connecting to ZenPM..."
+msgstr "Verbinden met ZenPM..."
+
+msgid "Could not add source: "
+msgstr "Could not add source: "
+
+msgid "Could not read log: "
+msgstr "Could not read log: "
+
+msgid "Could not remove source: "
+msgstr "Could not remove source: "
+
+msgid "Failed to load package: "
+msgstr "Failed to load package: "
+
+msgid "Failed to load packages: "
+msgstr "Failed to load packages: "
+
+msgid "Failed to load source: "
+msgstr "Failed to load source: "
+
+msgid "Failed to load sources: "
+msgstr "Failed to load sources: "
+
+msgid "Failed to start package action: "
+msgstr "Failed to start package action: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "Installing"
+msgstr "Installeren"
+
+msgid "Loading featured packages..."
+msgstr "Uitgelichte pakketten laden..."
+
+msgid "Loading installed packages..."
+msgstr "Geinstalleerde pakketten laden..."
+
+msgid "Loading log..."
+msgstr "Log laden..."
+
+msgid "Loading package..."
+msgstr "Pakket laden..."
+
+msgid "Loading packages..."
+msgstr "Pakketten laden..."
+
+msgid "Loading source..."
+msgstr "Bron laden..."
+
+msgid "Loading sources..."
+msgstr "Bronnen laden..."
+
+msgid "Log is empty."
+msgstr "Log is leeg."
+
+msgid "Package"
+msgstr "Pakket"
+
+msgid "Package not found."
+msgstr "Pakket niet gevonden."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Package operation status could not be checked. See Debug log."
+
+msgid "Refresh failed: "
+msgstr "Refresh failed: "
+
+msgid "Reinstalling"
+msgstr "Opnieuw installeren"
+
+msgid "Remove source "
+msgstr "Bron verwijderen "
+
+msgid "Source not found."
+msgstr "Bron niet gevonden."
+
+msgid "Uninstalling"
+msgstr "Verwijderen"
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPM backend not found. Expected "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "install"
+msgstr "installeren"
+
+msgid "installed"
+msgstr "geinstalleerd"
+
+msgid "network error"
+msgstr "netwerkfout"
+
+msgid "of"
+msgstr "van"
+
+msgid "or"
+msgstr "of"
+
+msgid "reinstall"
+msgstr "opnieuw installeren"
+
+msgid "reinstalled"
+msgstr "opnieuw geinstalleerd"
+
+msgid "request failed"
+msgstr "request failed"
+
+msgid "uninstall"
+msgstr "verwijderen"
+
+msgid "uninstalled"
+msgstr "verwijderd"

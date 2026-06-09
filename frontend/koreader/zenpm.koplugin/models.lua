@@ -1,5 +1,7 @@
 local Constants = require("constants")
+local I18n = require("i18n")
 local Util = require("zenpm_util")
+local _ = require("gettext")
 
 local Models = {}
 
@@ -32,9 +34,12 @@ function Models.filter_packages(packages, query)
     for _, pkg in ipairs(packages or {}) do
         local hay = table.concat({
             tostring(pkg.name or ""),
+            tostring(I18n.dynamic(pkg.name) or ""),
             tostring(pkg.id or ""),
             tostring(pkg.description or ""),
+            tostring(I18n.dynamic(pkg.description) or ""),
             tostring(pkg.repo or ""),
+            tostring(I18n.dynamic(pkg.repo) or ""),
         }, " "):lower()
         if hay:find(query, 1, true) then
             table.insert(out, pkg)
@@ -117,7 +122,7 @@ function Models.select_featured(packages, zenlabs_index)
 end
 
 function Models.package_action_label(pkg)
-    return pkg and pkg.installed and "Modify" or "Get"
+    return pkg and pkg.installed and _("Modify") or _("Get")
 end
 
 function Models.package_meta(pkg)
@@ -125,8 +130,8 @@ function Models.package_meta(pkg)
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
         table.insert(parts, "v" .. pkg.version)
     end
-    table.insert(parts, pkg and pkg.repo or "?")
-    return table.concat(parts, " · ")
+    table.insert(parts, I18n.dynamic_or(pkg and pkg.repo, "?"))
+    return table.concat(parts, " - ")
 end
 
 return Models
