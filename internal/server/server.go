@@ -129,10 +129,19 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 			Priority int    `json:"priority"`
 			Trust    string `json:"trust"`
 			Default  bool   `json:"default"`
+			IconURL  string `json:"icon_url,omitempty"`
+		}
+		repoIcons := make(map[string]string)
+		if catalog, err := s.repos.ReadCatalog(); err == nil {
+			for _, entry := range catalog {
+				if entry.RepoIconURL != "" && repoIcons[entry.Repo] == "" {
+					repoIcons[entry.Repo] = entry.RepoIconURL
+				}
+			}
 		}
 		result := make([]repoJSON, len(repos))
 		for i, e := range repos {
-			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust, Default: e.Default}
+			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust, Default: e.Default, IconURL: repoIcons[e.Name]}
 		}
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodPost:
@@ -411,7 +420,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, content)
 }
 
-// handleClientLog receives a WAF JS log message and writes it to the server log file.
+// handleClientLog receives frontend log messages and writes them to the server log file.
 func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -425,10 +434,10 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Route noisy per-package-card and image-fallback logs to debug level.
-	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") {
-		log.Debugf("[WAF] %s", body.Message)
+	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") || strings.HasPrefix(body.Message, "[icon]") {
+		log.Debugf("[client] %s", body.Message)
 	} else {
-		log.Infof("[WAF] %s", body.Message)
+		log.Infof("[client] %s", body.Message)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

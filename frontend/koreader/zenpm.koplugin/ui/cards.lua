@@ -40,13 +40,24 @@ local function action_pill(view, bb, text, x, y, w, h, callback)
     P.hit(view, x, y, w, h, callback, text)
 end
 
+local function package_icon_zoom(value, source)
+    if source ~= "package" then
+        return 1
+    end
+    value = tostring(value or ""):lower()
+    if value:find("favicon", 1, true) or value:match("%.ico[%?%#]?$") then
+        return 1.75
+    end
+    return 1
+end
+
 function Cards.package(view, bb, pkg, x, y, w, opts)
     opts = opts or {}
     local m = Theme.metrics()
     local h = opts.height or m.card_h
     P.box(bb, x, y, w, h, { border = opts.border })
     local pad = opts.pad or Theme.scale(10)
-    local icon_w = opts.compact and 0 or Theme.scale(58)
+    local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(72), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(10) or 0)
     local action_w = opts.action_w or m.action_w
     local action_h = opts.action_h or m.action_h
@@ -57,8 +68,12 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     if icon_w > 0 then
         local ix = x + pad
         local iy = y + math.floor((h - icon_w) / 2)
-        if not P.image(bb, view.app:package_icon_file(pkg), ix, iy, icon_w, icon_w, { is_icon = true }) then
-            P.center_text(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy + Theme.scale(20), icon_w, "small", { bold = true })
+        local icon_file, icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
+        local zoom = package_icon_zoom(icon_value, icon_source)
+        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = icon_is_icon })
+            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = icon_is_icon })
+        if not painted then
+            P.center_text_box(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy, icon_w, icon_w, "small", { bold = true })
         end
     end
 

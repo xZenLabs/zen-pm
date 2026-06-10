@@ -170,13 +170,19 @@ func boolField(value bool) string {
 	return ""
 }
 
+func isFaviconURL(value string) bool {
+	value = strings.ToLower(value)
+	return strings.Contains(value, "favicon") || strings.HasSuffix(value, ".ico")
+}
+
 // manifestJSON mirrors the repository manifest.json schema.
 type manifestJSON struct {
 	SchemaVersion string `json:"schema_version"`
 	Repo          struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-		URL  string `json:"url"`
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		URL     string `json:"url"`
+		IconURL string `json:"icon_url,omitempty"`
 	} `json:"repo"`
 	Packages []struct {
 		ID            string   `json:"id"`
@@ -245,14 +251,24 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 // parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.
 func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifestJSON) []*CatalogEntry {
 	repoIcon := joinURL(repoURL, "favicon.svg")
+	repoIconSource := "favicon"
+	if manifest.Repo.IconURL != "" {
+		resolvedRepoIcon := resolveURL(repoURL, manifest.Repo.IconURL)
+		if !isFaviconURL(resolvedRepoIcon) {
+			repoIcon = resolvedRepoIcon
+			repoIconSource = "manifest"
+		}
+	}
+	log.Debugf("Repo %s icon source=%s value=%s", repoName, repoIconSource, repoIcon)
 	var entries []*CatalogEntry
 	for _, p := range manifest.Packages {
 		iconURL := p.IconURL
-		if iconURL == "" {
-			iconURL = repoIcon
-		} else {
+		iconSource := "repo-fallback"
+		if iconURL != "" {
 			iconURL = resolveURL(repoURL, iconURL)
+			iconSource = "package"
 		}
+		log.Debugf("Package %s icon source=%s value=%s repo_icon=%s", p.ID, iconSource, iconURL, repoIcon)
 		images := resolveURLList(repoURL, appendURLLists([]string{p.ImageURL}, p.Images, p.Screenshots))
 		featuredImage := ""
 		if p.FeaturedImage != "" {

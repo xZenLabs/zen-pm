@@ -50,15 +50,20 @@ function Images.asset(name)
     return Constants.ASSET_DIR .. "/" .. name
 end
 
+local function is_favicon(value)
+    value = tostring(value or ""):lower()
+    return value:find("favicon", 1, true) ~= nil or value:match("%.ico[%?%#]?$") ~= nil
+end
+
 function Images.repo_icon(repo)
+    if repo and repo.icon_url and repo.icon_url ~= "" and not is_favicon(repo.icon_url) then
+        return repo.icon_url
+    end
     if repo and repo.name == Constants.REPO_KINDLEFORGE_NAME then
         return Images.asset("kindleforge.svg")
     end
     if repo and repo.name == Constants.REPO_ZENLABS_NAME then
         return Images.asset("zen.svg")
-    end
-    if repo and repo.icon_url and repo.icon_url ~= "" then
-        return repo.icon_url
     end
     if repo and repo.url and repo.url ~= "" then
         return repo.url:gsub("/+$", "") .. "/favicon.svg"
@@ -67,13 +72,19 @@ function Images.repo_icon(repo)
 end
 
 function Images.package_fallback(pkg)
+    if pkg and pkg.repo_icon_url and pkg.repo_icon_url ~= "" and not is_favicon(pkg.repo_icon_url) then
+        return pkg.repo_icon_url
+    end
     if pkg and pkg.repo == Constants.REPO_KINDLEFORGE_NAME then
         return Images.asset("kindleforge.svg")
     end
     if pkg and pkg.repo == Constants.REPO_ZENLABS_NAME then
         return Images.asset("zen.svg")
     end
-    return pkg and pkg.repo_icon_url and pkg.repo_icon_url ~= "" and pkg.repo_icon_url or Images.asset("packages.svg")
+    if pkg and pkg.repo_icon_url and pkg.repo_icon_url ~= "" then
+        return pkg.repo_icon_url
+    end
+    return Images.asset("packages.svg")
 end
 
 function Images.package_icon(pkg)

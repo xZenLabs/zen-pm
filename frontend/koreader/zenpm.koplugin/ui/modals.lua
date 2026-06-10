@@ -7,9 +7,28 @@ local I18n = require("i18n")
 local _ = require("gettext")
 
 local Modals = {}
+local status_modal = nil
 
 function Modals.info(text)
     UIManager:show(InfoMessage:new{ text = text })
+end
+
+function Modals.status(text)
+    Modals.close_status()
+    status_modal = InfoMessage:new{
+        text = text,
+        dismissable = false,
+        flush_events_on_show = true,
+    }
+    UIManager:show(status_modal)
+    return status_modal
+end
+
+function Modals.close_status()
+    if status_modal then
+        UIManager:close(status_modal)
+        status_modal = nil
+    end
 end
 
 function Modals.confirm(text, ok_text, ok_callback)

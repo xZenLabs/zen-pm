@@ -1,10 +1,17 @@
 local Geom = require("ui/geometry")
 local ImageWidget = require("ui/widget/imagewidget")
 local TextWidget = require("ui/widget/textwidget")
+local ok_logger, logger = pcall(require, "logger")
 
 local Theme = require("ui/theme")
 
 local P = {}
+
+local function exact_size_svg_icon(file, opts)
+    return opts
+        and opts.is_icon
+        and tostring(file):match("/zen[^/]*%.svg$") ~= nil
+end
 
 function P.rect(bb, x, y, w, h, color)
     if w <= 0 or h <= 0 then
@@ -156,20 +163,32 @@ function P.image(bb, file, x, y, w, h, opts)
     end
     opts = opts or {}
     local ok, widget = pcall(function()
-        return ImageWidget:new{
+        local image_opts = {
             file = file,
             width = w,
             height = h,
-            scale_factor = opts.scale_factor or 0,
             alpha = opts.alpha ~= false,
             is_icon = opts.is_icon,
             file_do_cache = true,
         }
+        if not exact_size_svg_icon(file, opts) then
+            image_opts.scale_factor = opts.scale_factor or 0
+        end
+        return ImageWidget:new(image_opts)
     end)
     if not ok or not widget then
         return false
     end
     local painted = pcall(function()
+        if tostring(file):match("/zen[^/]*%.svg$") then
+            local size = widget:getSize()
+            local image = widget._bb
+            local image_w = image and image:getWidth() or "?"
+            local image_h = image and image:getHeight() or "?"
+            if ok_logger and logger and logger.dbg then
+                logger.dbg("[zenpm] image", file, "slot", w, h, "size", size.w, size.h, "bb", image_w, image_h, "is_icon", tostring(opts.is_icon), "exact", tostring(exact_size_svg_icon(file, opts)))
+            end
+        end
         widget:paintTo(bb, x, y)
     end)
     if widget.free then

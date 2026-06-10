@@ -482,6 +482,10 @@ components:
         default:
           type: boolean
           description: Built-in repositories are protected from modification and removal.
+        icon_url:
+          type: string
+          format: uri
+          description: Resolved repository icon URL from `manifest.json` repo metadata, when available.
     TrustLevel:
       type: string
       enum:

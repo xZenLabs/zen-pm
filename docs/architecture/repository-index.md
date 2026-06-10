@@ -22,7 +22,8 @@ Example:
   "repo": {
     "id": "zenpm-default",
     "name": "ZenPM Repository",
-    "url": "https://example.invalid/zenpm/default"
+    "url": "https://example.invalid/zenpm/default",
+    "icon_url": "assets/repo-icon.svg"
   },
   "packages": [
     {
@@ -42,6 +43,10 @@ Example:
 ```
 
 ## Merge and precedence behavior
+
+Package `icon_url` is package-specific. When it is omitted, clients should fall
+back to `repo.icon_url`; if that is omitted too, clients may fall back to the
+repository favicon.
 
 When multiple repositories define the same package id:
 

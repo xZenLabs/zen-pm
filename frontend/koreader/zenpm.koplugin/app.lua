@@ -22,6 +22,7 @@ function App:new(plugin)
         view = nil,
         busy = false,
         image_files = {},
+        icon_logs = {},
         state = {
             page = "home",
             active_tab = "home",
@@ -67,6 +68,10 @@ local function action_progress(action)
         return _("Reinstalling")
     end
     return _("Installing")
+end
+
+local function backend_action_for(action)
+    return action == "reinstall" and "install" or action
 end
 
 local function action_done(action)
@@ -152,23 +157,134 @@ function App:platform()
     return self.daemon:platform_filter()
 end
 
+local function file_content_hash(data)
+    local hash = 5381
+    data = tostring(data or "")
+    for i = 1, #data do
+        hash = (hash * 33 + data:byte(i)) % 4294967296
+    end
+    return string.format("%08x", hash)
+end
+
+local function cache_busted_zen_asset(file)
+    file = tostring(file or "")
+    if not Util.endswith(file, "/zen.svg") then
+        return file
+    end
+    local input = io.open(file, "rb")
+    if not input then
+        return file
+    end
+    local data = input:read("*a") or ""
+    input:close()
+    if data == "" then
+        return file
+    end
+    local cache_dir = "/tmp/zenpm-koreader-images/assets"
+    if not Util.ensure_dir(cache_dir) then
+        return file
+    end
+    local target = cache_dir .. "/zen-" .. tostring(#data) .. "-" .. file_content_hash(data) .. ".svg"
+    if Util.path_exists(target) then
+        return target
+    end
+    local output = io.open(target, "wb")
+    if not output then
+        return file
+    end
+    output:write(data)
+    output:close()
+    return target
+end
+
 function App:image_file_for(value)
     value = tostring(value or "")
     if value == "" then
         return nil
     end
-    if self.image_files[value] and Util.path_exists(self.image_files[value]) then
+    local cacheable = not Util.endswith(value, "/zen.svg")
+    if cacheable and self.image_files[value] and Util.path_exists(self.image_files[value]) then
         return self.image_files[value]
     end
     local file = Images.file_for(self.client, self:platform(), value)
     if file then
-        self.image_files[value] = file
+        file = cache_busted_zen_asset(file)
+        if cacheable then
+            self.image_files[value] = file
+        end
     end
     return file
 end
 
+function App:log_icon_once(key, message)
+    key = tostring(key or "")
+    if key == "" or self.icon_logs[key] then
+        return
+    end
+    self.icon_logs[key] = true
+    pcall(function()
+        self.client:post_log(message)
+    end)
+end
+
+local function file_fingerprint(file)
+    file = tostring(file or "")
+    if file == "" then
+        return ""
+    end
+    local f = io.open(file, "rb")
+    if not f then
+        return " file_read=failed"
+    end
+    local head = f:read(160) or ""
+    local size = f:seek("end") or 0
+    f:close()
+    local hint = head:gsub("%s+", " "):sub(1, 80)
+    return " file_size=" .. tostring(size)
+        .. " file_head_hash=" .. file_content_hash(head)
+        .. " file_head=" .. hint
+end
+
+local function repo_icon_source(repo, value)
+    if repo and repo.icon_url and repo.icon_url ~= "" and value == repo.icon_url then
+        return "manifest"
+    end
+    if value:find("favicon", 1, true) then
+        return "favicon"
+    end
+    if value:find("/assets/", 1, true) then
+        return "bundled"
+    end
+    return "fallback"
+end
+
 function App:package_icon_file(pkg)
-    return self:image_file_for(Images.package_icon(pkg)) or self:image_file_for(Images.package_fallback(pkg))
+    local icon_value = Images.package_icon(pkg)
+    local fallback_value = Images.package_fallback(pkg)
+    local id = tostring(pkg and (pkg.id or pkg.name) or "?")
+    local source = icon_value == fallback_value and "repo-fallback" or "package"
+    local file = self:image_file_for(icon_value)
+    if file then
+        self:log_icon_once("package:" .. id .. ":" .. icon_value,
+            "[icon] package id=" .. id
+            .. " repo=" .. tostring(pkg and pkg.repo or "")
+            .. " source=" .. source
+            .. " value=" .. tostring(icon_value)
+            .. " file=" .. tostring(file)
+            .. file_fingerprint(file)
+            .. " fallback=" .. tostring(fallback_value))
+        return file, icon_value == fallback_value, icon_value, source
+    end
+    local fallback_file = self:image_file_for(fallback_value)
+    self:log_icon_once("package:" .. id .. ":fallback:" .. fallback_value,
+        "[icon] package id=" .. id
+        .. " repo=" .. tostring(pkg and pkg.repo or "")
+        .. " source=fallback"
+        .. " value=" .. tostring(fallback_value)
+        .. " file=" .. tostring(fallback_file)
+        .. file_fingerprint(fallback_file)
+        .. " primary_failed=" .. tostring(icon_value))
+    return fallback_file, true, fallback_value, "fallback"
 end
 
 function App:package_featured_file(pkg)
@@ -176,7 +292,28 @@ function App:package_featured_file(pkg)
 end
 
 function App:repo_icon_file(repo)
-    return self:image_file_for(Images.repo_icon(repo)) or self:image_file_for(Images.asset("sources.svg"))
+    local value = Images.repo_icon(repo)
+    local file = self:image_file_for(value)
+    local name = tostring(repo and repo.name or "?")
+    if file then
+        self:log_icon_once("repo:" .. name .. ":" .. value,
+            "[icon] repo name=" .. name
+            .. " source=" .. repo_icon_source(repo, value)
+            .. " value=" .. tostring(value)
+            .. " file=" .. tostring(file)
+            .. file_fingerprint(file))
+        return file
+    end
+    local fallback = Images.asset("sources.svg")
+    local fallback_file = self:image_file_for(fallback)
+    self:log_icon_once("repo:" .. name .. ":fallback:" .. fallback,
+        "[icon] repo name=" .. name
+        .. " source=fallback"
+        .. " value=" .. tostring(fallback)
+        .. " file=" .. tostring(fallback_file)
+        .. file_fingerprint(fallback_file)
+        .. " primary_failed=" .. tostring(value))
+    return fallback_file
 end
 
 function App:scroll_key()
@@ -521,18 +658,19 @@ function App:confirm_package_action(pkg, action, on_done)
 end
 
 function App:start_package_action(pkg, action, on_done)
-    local backend_action = action == "reinstall" and "install" or action
+    local backend_action = backend_action_for(action)
     local id = pkg.id or pkg.name
     if not id then
         Modals.info(_("Package has no id."))
         return
     end
     self.busy = true
-    Modals.info(action_progress(action) .. " "
+    Modals.status(action_progress(action) .. " "
         .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
     local ok, err = self.client:package_action(id, backend_action)
     if not ok then
         self.busy = false
+        Modals.close_status()
         Modals.info(_("Failed to start package action: ") .. tostring(err))
         return
     end
@@ -545,12 +683,29 @@ function App:start_package_action(pkg, action, on_done)
     }, 1)
 end
 
+function App:package_action_failure_detail(op)
+    local ok, log_text = self.client:get_log(200)
+    if not ok or type(log_text) ~= "string" then
+        return nil
+    end
+    local needle = "Package " .. tostring(op.id) .. " " .. backend_action_for(op.action) .. " failed: "
+    local detail = nil
+    for _, line in ipairs(Util.split_lines(log_text)) do
+        local pos = line:find(needle, 1, true)
+        if pos then
+            detail = line:sub(pos + #needle)
+        end
+    end
+    return detail and Util.trim(detail) ~= "" and Util.trim(detail) or nil
+end
+
 function App:poll_package_action(op, attempt)
     UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
         local ok, packages = self:load_packages()
         if not ok then
             if attempt >= Constants.MAX_POLL_RETRIES then
                 self.busy = false
+                Modals.close_status()
                 Modals.info(_("Package operation status could not be checked. See Debug log."))
                 return
             end
@@ -569,11 +724,20 @@ function App:poll_package_action(op, attempt)
         if succeeded then
             self.busy = false
             local done = action_done(op.action)
+            Modals.close_status()
             Modals.info(op.name .. " " .. done .. _(" successfully."))
             if op.on_done then op.on_done() end
         elseif attempt >= Constants.MAX_POLL_RETRIES then
             self.busy = false
-            Modals.info(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details."))
+            local detail = self:package_action_failure_detail(op)
+            local message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " did not complete."
+            if detail then
+                message = message .. "\n\n" .. detail
+            else
+                message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
+            end
+            Modals.close_status()
+            Modals.info(message)
         else
             self:poll_package_action(op, attempt + 1)
         end
