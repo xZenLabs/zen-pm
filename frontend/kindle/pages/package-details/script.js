@@ -86,17 +86,17 @@
         return "";
     }
 
-    function enrichPackageFromRepoIndex(pkg) {
+    function enrichPackageFromRepoManifest(pkg) {
         if (!pkg || !pkg.repo) return Promise.resolve(pkg);
         return fetchJSON("GET", "/repos", null).then(function (repos) {
             var repoURL = findRepoURL(Array.isArray(repos) ? repos : [], pkg.repo);
             if (!repoURL) throw new Error("repo URL not found for " + pkg.repo);
-            return fetch(repoURL.replace(/\/+$/, "") + "/index.json").then(function (resp) {
-                postLog("[details] repo index " + repoURL + "/index.json status=" + resp.status);
-                if (!resp.ok) throw new Error("repo index unavailable");
+            return fetch(repoURL.replace(/\/+$/, "") + "/manifest.json").then(function (resp) {
+                postLog("[details] repo manifest " + repoURL + "/manifest.json status=" + resp.status);
+                if (!resp.ok) throw new Error("repo manifest unavailable");
                 return resp.json();
-            }).then(function (idx) {
-                var repoPackages = idx && Array.isArray(idx.packages) ? idx.packages : [];
+            }).then(function (manifest) {
+                var repoPackages = manifest && Array.isArray(manifest.packages) ? manifest.packages : [];
                 for (var i = 0; i < repoPackages.length; i++) {
                     if (repoPackages[i].id === pkg.id) {
                         return mergeRepoMetadata(pkg, repoPackages[i], repoURL);
@@ -114,7 +114,7 @@
         return fetchJSON("GET", "/packages?platform=kindle", null).then(function (data) {
             state.packages = Array.isArray(data) ? data : [];
             state.pkg = findPackage(state.packages);
-            return enrichPackageFromRepoIndex(state.pkg);
+            return enrichPackageFromRepoManifest(state.pkg);
         }).then(function (pkg) {
             state.pkg = pkg;
             renderDetails();

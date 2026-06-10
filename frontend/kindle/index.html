@@ -95,14 +95,14 @@
 
             function loadZenLabsFeatured(all) {
                 var repoURL = ZenUtils.REPO_ZENLABS_URL;
-                var indexURL = repoURL.replace(/\/+$/, "") + "/index.json";
-                ZenUtils.postLog("[home] fetching ZenLabs index " + indexURL);
-                return fetch(indexURL).then(function (resp) {
-                    ZenUtils.postLog("[home] ZenLabs index status=" + resp.status);
-                    if (!resp.ok) throw new Error("no ZenLabs index");
+                var manifestURL = repoURL.replace(/\/+$/, "") + "/manifest.json";
+                ZenUtils.postLog("[home] fetching ZenLabs manifest " + manifestURL);
+                return fetch(manifestURL).then(function (resp) {
+                    ZenUtils.postLog("[home] ZenLabs manifest status=" + resp.status);
+                    if (!resp.ok) throw new Error("no ZenLabs manifest");
                     return resp.json();
-                }).then(function (idx) {
-                    var repoPackages = idx && Array.isArray(idx.packages) ? idx.packages : [];
+                }).then(function (manifest) {
+                    var repoPackages = manifest && Array.isArray(manifest.packages) ? manifest.packages : [];
                     ZenUtils.postLog("[home] ZenLabs repo packages count=" + repoPackages.length);
                     var featured = [];
                     for (var i = 0; i < repoPackages.length; i++) {

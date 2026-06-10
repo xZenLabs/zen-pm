@@ -123,14 +123,21 @@ function App:clear_status()
 end
 
 function App:ensure_backend()
+    local changed, prepare_err = self.daemon:ensure_backend_files()
+    if prepare_err then
+        self:set_error(prepare_err)
+        Modals.info(prepare_err)
+        return false
+    end
+
     local healthy, health_data = self.client:health()
-    if healthy then
+    if healthy and not changed then
         self.version = health_data and health_data.version or self.version or "?"
         return true
     end
 
     self:set_loading(_("Connecting to ZenPM..."))
-    local ok, data = self.daemon:ensure(self.client)
+    local ok, data = self.daemon:ensure(self.client, changed)
     if not ok then
         local message = data or _("ZenPM daemon not reachable. Re-run ZenPM installer if it is not running.")
         self:set_error(message)
@@ -236,9 +243,9 @@ function App:show_featured()
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local ok_idx, index = self.client:request("GET", Constants.REPO_ZENLABS_URL:gsub("/+$", "") .. "/index.json", nil)
+    local ok_manifest, manifest = self.client:request("GET", Constants.REPO_ZENLABS_URL:gsub("/+$", "") .. "/manifest.json", nil)
     self.state.packages = packages
-    self.state.featured_packages = Models.select_featured(packages, ok_idx and index or nil)
+    self.state.featured_packages = Models.select_featured(packages, ok_manifest and manifest or nil)
     self:clear_status()
     self:refresh()
 end
@@ -365,11 +372,11 @@ function App:enrich_package_from_repo(pkg)
     if not repo or not repo.url then
         return pkg
     end
-    local ok_idx, idx = self.client:request("GET", repo.url:gsub("/+$", "") .. "/index.json", nil)
-    if not ok_idx or type(idx) ~= "table" or type(idx.packages) ~= "table" then
+    local ok_manifest, manifest = self.client:request("GET", repo.url:gsub("/+$", "") .. "/manifest.json", nil)
+    if not ok_manifest or type(manifest) ~= "table" or type(manifest.packages) ~= "table" then
         return pkg
     end
-    for _, repo_pkg in ipairs(idx.packages) do
+    for _, repo_pkg in ipairs(manifest.packages) do
         if repo_pkg.id == pkg.id then
             return Models.merge_repo_metadata(pkg, repo_pkg, repo.url)
         end
@@ -445,7 +452,7 @@ end
 
 function App:detect_repo_name(url)
     local base = url:gsub("/+$", "") .. "/"
-    local ok, data = self.client:request("GET", base .. "index.json", nil)
+    local ok, data = self.client:request("GET", base .. "manifest.json", nil)
     if ok and type(data) == "table" and type(data.repo) == "table" and data.repo.name then
         return data.repo.name
     end

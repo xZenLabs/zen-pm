@@ -43,8 +43,7 @@ Outputs:
 - `dist/ZenPM-kobo-<version>.zip`
 - `dist/ZenPM-koreader-plugin-<version>.zip`
 
-Each zip contains ARMhf (`zenpm-hf`) and ARMsf (`zenpm-sf`) binaries. The installer selects the correct one at install time.
-The KOReader plugin zip contains only `zenpm.koplugin/`; the backend is still deployed by the Kindle/Kobo packages.
+Kindle and Kobo packages contain ARMhf (`zenpm-hf`) and ARMsf (`zenpm-sf`) binaries. The KOReader plugin zip bundles ARMhf, ARMsf, Linux ARM64 (`zenpm-linux-arm64`), Linux AMD64 (`zenpm-linux-amd64`), macOS ARM64 (`zenpm-darwin-arm64`), and macOS AMD64 (`zenpm-darwin-amd64`) backend binaries under `zenpm.koplugin/backend/`.
 
 ## Local development
 
@@ -105,14 +104,15 @@ sh /mnt/onboard/.adds/zenpm/installers/kobo/ZenPM.sh
 
 ## Install KOReader plugin
 
-1. Install the ZenPM backend with the Kindle or Kobo package first.
-2. Extract `dist/ZenPM-koreader-plugin-<version>.zip`.
-3. Copy `zenpm.koplugin/` into KOReader's `plugins/` directory.
-4. Restart KOReader and open **ZenPM** from the KOReader menu.
+1. Extract `dist/ZenPM-koreader-plugin-<version>.zip`.
+2. Copy `zenpm.koplugin/` into KOReader's `plugins/` directory.
+3. Restart KOReader and open **ZenPM** from the KOReader menu.
 
-The plugin calls the same loopback HTTP daemon as the Kindle WAF frontend. If
-`/health` is unreachable when opened, it tries to start the deployed backend
-from the standard Kindle or Kobo ZenPM path.
+On KOReader startup, the plugin copies the matching bundled backend into
+KOReader's settings `ZenPM/backend/` directory and runs it from there. The
+settings copy is refreshed whenever the plugin `_meta.lua` version or bundled
+backend `VERSION` changes, so backend binaries survive plugin updates but still
+track the installed plugin.
 
 ## Updating ZenPM (Kindle)
 
@@ -210,18 +210,18 @@ The log includes: startup info (platform, home dir, log path), every HTTP reques
 
 ZenPM supports two registry formats with auto-detection:
 
-- **ZenPM native** — `index.json` at the repo root (preferred for custom repos)
+- **ZenPM native** — `manifest.json` at the repo root (preferred for custom repos)
 - **KindleForge** — `registry.json` flat array (for compatibility with existing KindleForge registries)
 
 ### Hosting a ZenPM repository
 
-Each package lives in a `packages/<id>/scripts/` directory. The repo root exposes an `index.json` catalog that contains ALL package metadata — there is no separate manifest file.
+Each package lives in a `packages/<id>/scripts/` directory. The repo root exposes a `manifest.json` catalog that contains package metadata.
 
 #### Directory structure
 
 ```
 my-repo/
-  index.json
+  manifest.json
   packages/
     my-package/
       scripts/
@@ -229,9 +229,9 @@ my-repo/
         uninstall.sh
 ```
 
-#### `index.json` — package catalog (single source of truth)
+#### `manifest.json` — package catalog
 
-Top-level JSON object listing every package in the repo. Fetched on every `repo refresh`. All per-package metadata (description, author, launcher config, ABI constraints) lives here — not in a separate manifest.
+Top-level JSON object listing every package in the repo. Fetched on every `repo refresh`.
 
 ```json
 {
@@ -263,7 +263,6 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
           "entry_name": "My Package"
         }
       },
-      "sha256": "",
       "size": "0"
     }
   ]
@@ -289,7 +288,6 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].uninstall_url` | no | Path to uninstall script |
 | `packages[].constraints.abi` | no | Restrict to ARMhf (`hf`) or ARMsf (`sf`) — planned, not yet enforced |
 | `packages[].launcher` | no | Auto-create a launcher entry after install — planned, not yet implemented |
-| `packages[].sha256` | no | SHA-256 of package archive (future use) |
 | `packages[].size` | no | Size in bytes (future use) |
 
 **Launcher config (planned):**
@@ -390,7 +388,7 @@ Users can also add repos interactively from the ZenPM Sources tab in the Kindle 
 
 Priority is always `100` for user-added repos (default repos use `10` for higher precedence). Trust level is auto-detected:
 
-- `signed` — repo has a valid `index.json.sig` Ed25519 signature
+- `signed` — repo has a valid `manifest.json.sig` Ed25519 signature
 - `warn-unsigned` — no valid signature found, or repo uses plain HTTP
 - `trusted` — built-in default repos (KindleForge, ZenLabs)
 
@@ -461,23 +459,23 @@ This works because the Kindle browser can make HTTP requests to localhost — no
 
 #### Auto-detection notes
 
-ZenPM fetches `index.json` first. If that returns 404 or isn't a valid ZenPM catalog object, it falls back to trying `registry.json` as a KindleForge-format flat array. This means a single repo URL can serve both formats — or you can host exclusively one format and ZenPM will detect it automatically.
+ZenPM fetches `manifest.json` first. If that returns 404 or isn't a valid ZenPM catalog object, it falls back to trying `registry.json` as a KindleForge-format flat array. This means a single repo URL can serve both formats — or you can host exclusively one format and ZenPM will detect it automatically.
 
-#### Repo signing with `index.json.sig`
+#### Repo signing with `manifest.json.sig`
 
-Repos can include an Ed25519 detached signature to earn the `signed` trust level. Place an `index.json.sig` file alongside `index.json` at the repo root:
+Repos can include an Ed25519 detached signature to earn the `signed` trust level. Place a `manifest.json.sig` file alongside `manifest.json` at the repo root:
 
 ```
 my-repo/
-  index.json
-  index.json.sig    ← hex-encoded Ed25519 signature of SHA-256(index.json)
+  manifest.json
+  manifest.json.sig    ← hex-encoded Ed25519 signature of SHA-256(manifest.json)
 ```
 
-The `.sig` file contains the raw 64-byte Ed25519 signature of `index.json`'s raw bytes (or hex-encoded — both are accepted). ZenPM uses the ZenLabs public key by default; override via `ZENPM_REPO_PUBKEY` (hex-encoded 32-byte key).
+The `.sig` file contains the raw 64-byte Ed25519 signature of `manifest.json`'s raw bytes (or hex-encoded — both are accepted). ZenPM uses the ZenLabs public key by default; override via `ZENPM_REPO_PUBKEY` (hex-encoded 32-byte key).
 
 ```sh
-# Sign index.json with your Ed25519 private key (raw binary output):
-openssl pkeyutl -sign -inkey private.pem -rawin -in index.json -out index.json.sig
+# Sign manifest.json with your Ed25519 private key (raw binary output):
+openssl pkeyutl -sign -inkey private.pem -rawin -in manifest.json -out manifest.json.sig
 ```
 
 **Trust levels:**
@@ -485,7 +483,7 @@ openssl pkeyutl -sign -inkey private.pem -rawin -in index.json -out index.json.s
 | Trust | Meaning |
 |---|---|
 | `trusted` | Built-in default repo (KindleForge, ZenLabs) |
-| `signed` | Valid `index.json.sig` found and verified |
+| `signed` | Valid `manifest.json.sig` found and verified |
 | `warn-unsigned` | No valid signature, or plain HTTP repo |
 
 #### HTTPS requirement

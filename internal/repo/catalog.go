@@ -22,7 +22,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|manifest_url|sha256|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -33,8 +33,6 @@ type CatalogEntry struct {
 	Deps          []string
 	InstallURL    string
 	UninstallURL  string
-	ManifestURL   string
-	SHA256        string
 	Size          string
 	Description   string
 	Author        string
@@ -62,8 +60,8 @@ func (e *CatalogEntry) serialize() string {
 		e.ID, e.Name, e.Version,
 		strings.Join(e.Platforms, ","),
 		strings.Join(e.Deps, ","),
-		e.InstallURL, e.UninstallURL, e.ManifestURL,
-		e.SHA256, e.Size,
+		e.InstallURL, e.UninstallURL,
+		e.Size,
 		e.Description, e.Author,
 		strings.Join(e.Tags, ","),
 		e.IconURL,
@@ -75,8 +73,11 @@ func (e *CatalogEntry) serialize() string {
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
-	parts := strings.SplitN(line, "|", 20)
-	if len(parts) < 12 {
+	parts := strings.Split(line, "|")
+	if len(parts) >= 20 {
+		return parseLegacyCatalogLine(parts)
+	}
+	if len(parts) < 10 {
 		return nil, fmt.Errorf("invalid catalog line (got %d fields): %q", len(parts), line)
 	}
 	var priority int
@@ -84,8 +85,50 @@ func parseCatalogLine(line string) (*CatalogEntry, error) {
 	e := &CatalogEntry{
 		Repo: parts[0], Priority: priority,
 		ID: parts[2], Name: parts[3], Version: parts[4],
-		InstallURL: parts[7], UninstallURL: parts[8], ManifestURL: parts[9],
-		SHA256: parts[10], Size: parts[11],
+		InstallURL: parts[7], UninstallURL: parts[8],
+		Size: parts[9],
+	}
+	if parts[5] != "" {
+		e.Platforms = strings.Split(parts[5], ",")
+	}
+	if parts[6] != "" {
+		e.Deps = strings.Split(parts[6], ",")
+	}
+	if len(parts) >= 11 {
+		e.Description = parts[10]
+	}
+	if len(parts) >= 12 {
+		e.Author = parts[11]
+	}
+	if len(parts) >= 13 && parts[12] != "" {
+		e.Tags = strings.Split(parts[12], ",")
+	}
+	if len(parts) >= 14 {
+		e.IconURL = parts[13]
+	}
+	if len(parts) >= 15 {
+		e.RepoIconURL = parts[14]
+	}
+	if len(parts) >= 16 && parts[15] != "" {
+		e.Images = strings.Split(parts[15], ",")
+	}
+	if len(parts) >= 17 {
+		e.Featured = parts[16] == "featured" || parts[16] == "true" || parts[16] == "1"
+	}
+	if len(parts) >= 18 {
+		e.FeaturedImage = parts[17]
+	}
+	return e, nil
+}
+
+func parseLegacyCatalogLine(parts []string) (*CatalogEntry, error) {
+	var priority int
+	fmt.Sscanf(parts[1], "%d", &priority)
+	e := &CatalogEntry{
+		Repo: parts[0], Priority: priority,
+		ID: parts[2], Name: parts[3], Version: parts[4],
+		InstallURL: parts[7], UninstallURL: parts[8],
+		Size: parts[11],
 	}
 	if parts[5] != "" {
 		e.Platforms = strings.Split(parts[5], ",")
@@ -127,8 +170,8 @@ func boolField(value bool) string {
 	return ""
 }
 
-// indexJSON mirrors the repos/default/index.json schema.
-type indexJSON struct {
+// manifestJSON mirrors the repository manifest.json schema.
+type manifestJSON struct {
 	SchemaVersion string `json:"schema_version"`
 	Repo          struct {
 		ID   string `json:"id"`
@@ -145,10 +188,11 @@ type indexJSON struct {
 		Dependencies  []string `json:"dependencies"`
 		InstallURL    string   `json:"install_url"`
 		UninstallURL  string   `json:"uninstall_url"`
-		SHA256        string   `json:"sha256"`
 		Size          string   `json:"size"`
 		IconURL       string   `json:"icon_url,omitempty"`
 		ImageURL      string   `json:"image_url,omitempty"`
+		Source        string   `json:"source,omitempty"`
+		SourceAsset   string   `json:"source_asset,omitempty"`
 		Featured      bool     `json:"featured,omitempty"`
 		FeaturedImage string   `json:"featured_image,omitempty"`
 		Images        []string `json:"images,omitempty"`
@@ -167,26 +211,26 @@ type kfRegistryEntry struct {
 	Tags         []string `json:"tags"`
 }
 
-// FetchCatalog downloads the repo catalog, auto-detecting between ZenPM index.json
+// FetchCatalog downloads the repo catalog, auto-detecting between ZenPM manifest.json
 // and KindleForge registry.json formats.
 func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
-	// Try ZenPM index.json first.
-	indexURL := joinURL(repoURL, "index.json")
-	log.Infof("Fetching %s", indexURL)
-	data, err := fetchBytes(indexURL)
+	// Try ZenPM manifest.json first.
+	manifestURL := joinURL(repoURL, "manifest.json")
+	log.Infof("Fetching %s", manifestURL)
+	data, err := fetchBytes(manifestURL)
 	if err != nil {
 		// Fall back to KindleForge registry.json.
-		log.Infof("index.json failed (%v), trying registry.json", err)
+		log.Infof("manifest.json failed (%v), trying registry.json", err)
 		return fetchKindleForgeCatalog(repoName, repoURL, priority, cacheDir)
 	}
 
-	// Cache raw index for debugging.
-	os.WriteFile(filepath.Join(cacheDir, "index-"+repoName+".json"), data, 0644)
+	// Cache raw manifest for debugging.
+	os.WriteFile(filepath.Join(cacheDir, "manifest-"+repoName+".json"), data, 0644)
 
 	// Try ZenPM format first (object with "packages" key).
-	var idx indexJSON
-	if err := json.Unmarshal(data, &idx); err == nil && len(idx.Packages) > 0 {
-		return parseZenPMCatalog(repoName, repoURL, priority, idx), nil
+	var manifest manifestJSON
+	if err := json.Unmarshal(data, &manifest); err == nil && len(manifest.Packages) > 0 {
+		return parseZenPMCatalog(repoName, repoURL, priority, manifest), nil
 	}
 
 	// Try KindleForge format (top-level array).
@@ -198,11 +242,11 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 	return nil, fmt.Errorf("unrecognized catalog format from %s", repoName)
 }
 
-// parseZenPMCatalog converts the ZenPM index.json format to CatalogEntry list.
-func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []*CatalogEntry {
+// parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.
+func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifestJSON) []*CatalogEntry {
 	repoIcon := joinURL(repoURL, "favicon.svg")
 	var entries []*CatalogEntry
-	for _, p := range idx.Packages {
+	for _, p := range manifest.Packages {
 		iconURL := p.IconURL
 		if iconURL == "" {
 			iconURL = repoIcon
@@ -226,7 +270,6 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, idx indexJSON) []
 			Deps:          p.Dependencies,
 			InstallURL:    resolveURL(repoURL, p.InstallURL),
 			UninstallURL:  resolveURL(repoURL, p.UninstallURL),
-			SHA256:        p.SHA256,
 			Size:          p.Size,
 			IconURL:       iconURL,
 			RepoIconURL:   repoIcon,
@@ -259,8 +302,6 @@ func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []k
 			Deps:         e.Dependencies,
 			InstallURL:   resolveURL(repoURL, e.URI+"/install.sh"),
 			UninstallURL: resolveURL(repoURL, e.URI+"/uninstall.sh"),
-			ManifestURL:  "",
-			SHA256:       "",
 			Size:         "",
 			IconURL:      repoIcon,
 			RepoIconURL:  repoIcon,
@@ -308,7 +349,7 @@ func fetchKindleForgeCatalog(repoName, repoURL string, priority int, cacheDir st
 		return nil, fmt.Errorf("fetch %s: %w", regURL, err)
 	}
 
-	os.WriteFile(filepath.Join(cacheDir, "index-"+repoName+".json"), data, 0644)
+	os.WriteFile(filepath.Join(cacheDir, "manifest-"+repoName+".json"), data, 0644)
 
 	var entries []kfRegistryEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
@@ -466,7 +507,7 @@ func parsePEMPubKey(pemData string) ed25519.PublicKey {
 	return edKey
 }
 
-// VerifyRepoSignature fetches index.json and index.json.sig from repoURL and verifies
+// VerifyRepoSignature fetches manifest.json and manifest.json.sig from repoURL and verifies
 // the Ed25519 signature. Returns "signed" if valid, "warn-unsigned" otherwise.
 func VerifyRepoSignature(repoURL string) (string, error) {
 	pk := KnownRepoPubKey()
@@ -475,22 +516,22 @@ func VerifyRepoSignature(repoURL string) (string, error) {
 		return "warn-unsigned", fmt.Errorf("no public key configured")
 	}
 
-	indexURL := joinURL(repoURL, "index.json")
-	sigURL := joinURL(repoURL, "index.json.sig")
+	manifestURL := joinURL(repoURL, "manifest.json")
+	sigURL := joinURL(repoURL, "manifest.json.sig")
 
-	indexData, err := fetchBytes(indexURL)
+	manifestData, err := fetchBytes(manifestURL)
 	if err != nil {
-		log.Infof("VerifyRepoSignature: fetch index.json failed: %v", err)
-		return "warn-unsigned", fmt.Errorf("fetch index.json: %w", err)
+		log.Infof("VerifyRepoSignature: fetch manifest.json failed: %v", err)
+		return "warn-unsigned", fmt.Errorf("fetch manifest.json: %w", err)
 	}
-	log.Infof("VerifyRepoSignature: fetched index.json (%d bytes)", len(indexData))
+	log.Infof("VerifyRepoSignature: fetched manifest.json (%d bytes)", len(manifestData))
 
 	sigHex, err := fetchBytes(sigURL)
 	if err != nil {
-		log.Infof("VerifyRepoSignature: no index.json.sig: %v", err)
-		return "warn-unsigned", fmt.Errorf("no index.json.sig: %w", err)
+		log.Infof("VerifyRepoSignature: no manifest.json.sig: %v", err)
+		return "warn-unsigned", fmt.Errorf("no manifest.json.sig: %w", err)
 	}
-	log.Infof("VerifyRepoSignature: fetched index.json.sig (%d bytes)", len(sigHex))
+	log.Infof("VerifyRepoSignature: fetched manifest.json.sig (%d bytes)", len(sigHex))
 
 	// The .sig file may be raw binary (64-byte Ed25519 signature) or hex-encoded.
 	// Try raw binary first — it's the standard openssl pkeyutl output.
@@ -524,8 +565,8 @@ func VerifyRepoSignature(repoURL string) (string, error) {
 		return "warn-unsigned", fmt.Errorf("sig wrong size: %d", len(sig))
 	}
 
-	if !ed25519.Verify(pk, indexData, sig) {
-		log.Warnf("VerifyRepoSignature: signature verification failed (index=%d bytes, sig=%d bytes, pubkey=%d bytes)", len(indexData), len(sig), len(pk))
+	if !ed25519.Verify(pk, manifestData, sig) {
+		log.Warnf("VerifyRepoSignature: signature verification failed (manifest=%d bytes, sig=%d bytes, pubkey=%d bytes)", len(manifestData), len(sig), len(pk))
 		return "warn-unsigned", fmt.Errorf("signature verification failed")
 	}
 

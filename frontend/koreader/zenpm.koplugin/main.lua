@@ -28,6 +28,9 @@ function ZenPM:init()
     I18n.install()
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
+    pcall(function()
+        require("daemon"):new():ensure_backend_files()
+    end)
 end
 
 function ZenPM:onOpenZenPM()

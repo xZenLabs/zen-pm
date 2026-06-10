@@ -490,7 +490,7 @@ components:
         - warn-unsigned
       description: |
         `trusted` is used for built-in repositories, `signed` for repositories
-        with a valid `index.json.sig`, and `warn-unsigned` for unsigned or
+        with a valid `manifest.json.sig`, and `warn-unsigned` for unsigned or
         plain-HTTP repositories.
     AddRepositoryRequest:
       type: object

@@ -148,7 +148,7 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 		// Priority and trust are backend-determined — callers cannot set them.
 		priority := repo.UserAddedPriority
 
-		// Auto-detect trust via index.json.sig signature.
+		// Auto-detect trust via manifest.json.sig signature.
 		trust, sigErr := repo.VerifyRepoSignature(body.URL)
 		if sigErr != nil {
 			trust = "warn-unsigned"

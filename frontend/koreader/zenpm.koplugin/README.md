@@ -8,12 +8,18 @@ It mirrors the Kindle WAF frontend flows while running inside KOReader.
 Copy `zenpm.koplugin` into KOReader's `plugins/` directory and restart KOReader.
 Open **ZenPM** from the KOReader menu.
 
-The backend is still deployed separately. On launch, the plugin checks
-`http://127.0.0.1:8080/health`; if the daemon is not reachable, it tries to
-start the deployed backend from:
+The plugin zip includes ARMhf, ARMsf, Linux ARM64, Linux AMD64, macOS ARM64,
+and macOS AMD64 ZenPM backend binaries under `zenpm.koplugin/backend/`. On KOReader startup, the
+plugin copies the matching backend into KOReader's settings
+`ZenPM/backend/zenpm` path and runs it from there.
 
-- Kindle: `/mnt/us/ZenPM/backend/zenpm`
-- Kobo: `/mnt/onboard/.adds/ZenPM/backend/zenpm`
+The settings copy is refreshed whenever either of these changes:
+
+- `_meta.lua` plugin `version`
+- bundled `backend/VERSION`
+
+State, cache, logs, and the managed backend live in the settings `ZenPM/`
+directory so they survive plugin updates.
 
 ## Parity Targets
 

@@ -47,16 +47,16 @@
 
         var base = url.replace(/\/+$/, "") + "/";
 
-        // Try index.json first for ZenPM-format repos.
-        fetch(base + "index.json")
+        // Try manifest.json first for ZenPM-format repos.
+        fetch(base + "manifest.json")
             .then(function (resp) {
-                if (!resp.ok) throw new Error("no index");
+                if (!resp.ok) throw new Error("no manifest");
                 return resp.text();
             })
             .then(function (text) {
                 var data = JSON.parse(text);
                 if (data && data.repo && data.repo.name) return data.repo.name;
-                throw new Error("no name in index");
+                throw new Error("no name in manifest");
             })
             .catch(function () {
                 // Fall back to registry.json — KindleForge format.
@@ -90,7 +90,7 @@
             })
             .catch(function (err) {
                 var msg = (err && err.message) ? err.message : String(err);
-                if (msg === "no index" || msg === "no registry" || msg === "unknown registry") {
+                if (msg === "no manifest" || msg === "no registry" || msg === "unknown registry") {
                     msg = "Could not detect repo format.";
                 }
                 el.addSourceMsg.textContent = msg;
