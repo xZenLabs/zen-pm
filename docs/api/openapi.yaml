@@ -189,21 +189,19 @@ paths:
       summary: List packages
       description: |
         Returns packages from the merged catalog, optionally filtered by
-        platform. Packages already installed on the device but missing from the
-        catalog are included as installed device packages.
+        platform capabilities. A package is returned only when every declared
+        platform is present in the filter. Packages already installed on the
+        device but missing from the catalog are included as installed device
+        packages.
       operationId: listPackages
       parameters:
         - name: platform
           in: query
           required: false
-          description: Platform filter. Omit to return all packages.
+          description: Comma-separated platform capability filter. Omit to return all packages.
           schema:
             type: string
-            enum:
-              - kindle
-              - kobo
-              - host
-          example: kindle
+          example: kindle,koreader
       responses:
         "200":
           description: Package list. If the catalog has not been built yet, this may be an empty array.
@@ -221,12 +219,17 @@ paths:
                   author: KOReader contributors
                   tags:
                     - reader
+                  category: Media
                   platforms:
                     - kindle
+                    - koreader
                   repo: ZenLabs
                   repo_trust: trusted
                   repo_default: true
                   installed: false
+                  installed_version: ""
+                  latest_version: v2026.05
+                  update_available: false
                   icon_url: https://example.com/favicon.svg
                   repo_icon_url: https://example.com/favicon.svg
                   image_url: https://example.com/packages/koreader/screenshot.png
@@ -234,6 +237,7 @@ paths:
                     - https://example.com/packages/koreader/screenshot.png
                   featured: true
                   featured_image: https://example.com/packages/koreader/featured.png
+                  source: https://github.com/koreader/koreader
         "405":
           $ref: "#/components/responses/TextError"
   /packages/{id}/install:
@@ -581,6 +585,9 @@ components:
           nullable: true
           items:
             type: string
+        category:
+          type: string
+          description: Repository-provided category, such as Media, Utility, Productivity, or Games.
         platforms:
           type: array
           nullable: true
@@ -590,6 +597,7 @@ components:
               - kindle
               - kobo
               - host
+              - koreader
         repo:
           type: string
         repo_trust:
@@ -598,6 +606,15 @@ components:
           type: boolean
         installed:
           type: boolean
+        installed_version:
+          type: string
+          description: Version recorded at install time, when the package is installed.
+        latest_version:
+          type: string
+          description: Latest GitHub release tag when update checks are requested.
+        update_available:
+          type: boolean
+          description: True when `latest_version` is newer than `installed_version`.
         icon_url:
           type: string
           format: uri
@@ -618,6 +635,10 @@ components:
         featured_image:
           type: string
           format: uri
+        source:
+          type: string
+          format: uri
+          description: Upstream source URL, used for GitHub release update checks when available.
     OkResponse:
       type: object
       required:

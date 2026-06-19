@@ -55,6 +55,29 @@ local function is_favicon(value)
     return value:find("favicon", 1, true) ~= nil or value:match("%.ico[%?%#]?$") ~= nil
 end
 
+local function normalize_category(value)
+    value = tostring(value or ""):lower()
+    value = value:gsub("^%s+", ""):gsub("%s+$", "")
+    value = value:gsub("[%s_%-]+", "")
+    if value == "game" then
+        return "games"
+    end
+    if value == "tools" or value == "tool" or value == "utilities" then
+        return "utility"
+    end
+    return value
+end
+
+function Images.category_icon(category)
+    local id = normalize_category(category and (category.id or category.category or category.label) or category)
+    for _, item in ipairs(Constants.CATEGORIES or {}) do
+        if normalize_category(item.id) == id or normalize_category(item.label) == id then
+            return Images.asset(item.icon or "packages.svg")
+        end
+    end
+    return nil
+end
+
 function Images.repo_icon(repo)
     if repo and repo.icon_url and repo.icon_url ~= "" and not is_favicon(repo.icon_url) then
         return repo.icon_url
@@ -96,6 +119,8 @@ function Images.package_icon(pkg)
     if pkg.image_url and pkg.image_url ~= "" then return pkg.image_url end
     if type(pkg.images) == "table" and pkg.images[1] then return pkg.images[1] end
     if pkg.image and pkg.image ~= "" then return pkg.image end
+    local category_icon = Images.category_icon(pkg.category)
+    if category_icon then return category_icon end
     return Images.package_fallback(pkg)
 end
 

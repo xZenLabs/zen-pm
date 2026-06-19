@@ -24,6 +24,8 @@ local Chrome = InputContainer:extend{
 local function tab_label(tab_id)
     if tab_id == "home" then
         return _("Featured")
+    elseif tab_id == "categories" then
+        return _("Categories")
     elseif tab_id == "sources" then
         return _("Sources")
     elseif tab_id == "installed" then
@@ -212,6 +214,30 @@ function Chrome:draw_header(bb, x, y, w)
             self.app:set_filter("search", "")
         end)
         return y + h
+    elseif page == "categories" then
+        local h = Theme.scale(68)
+        self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
+        Search.draw(self, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), self.app.state.filters.categories, _("Search categories..."), function()
+            self.app:prompt_filter("categories")
+        end, function()
+            self.app:set_filter("categories", "")
+        end)
+        return y + h
+    elseif page == "category_details" then
+        local h = Theme.scale(68)
+        local action_s = Theme.scale(42)
+        local back_s = Theme.scale(46)
+        local gap = Theme.scale(6)
+        local action_x = x + w - pad - action_s
+        local search_x = x + pad + back_s + gap
+        self:draw_back(bb, x + pad, y + Theme.scale(11), function() self.app:show_categories() end)
+        self:draw_actions(bb, action_x, y + Theme.scale(12))
+        Search.draw(self, bb, search_x, y + Theme.scale(11), action_x - search_x - gap, self.app.state.filters.category, _("Search category..."), function()
+            self.app:prompt_filter("category")
+        end, function()
+            self.app:set_filter("category", "")
+        end)
+        return y + h
     elseif page == "installed" then
         local h = Theme.scale(68)
         self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
@@ -354,6 +380,11 @@ function Chrome:draw_content(bb, x, y, w, h)
         max_scroll = self:draw_featured(bb, x, y, w, h, scroll)
     elseif page == "search" then
         max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, _("Search"), "search", state.visible_packages, state.packages, state.filters.search)
+    elseif page == "categories" then
+        max_scroll = self:draw_categories(bb, x, y, w, h, scroll)
+    elseif page == "category_details" then
+        local category = state.current_category or {}
+        max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)
     elseif page == "installed" then
         max_scroll = self:draw_packages_page(bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
     elseif page == "sources" then
@@ -413,6 +444,8 @@ function Chrome:draw_packages_page(bb, x, y, w, h, scroll, title, kind, visible,
         local msg = _("No packages found. Try Refresh.")
         if kind == "installed" then
             msg = query and query ~= "" and _("No installed packages match the filter.") or _("No packages installed. Browse Search to find packages.")
+        elseif kind == "category" then
+            msg = query and query ~= "" and _("No packages match the filter.") or _("No packages found for this category.")
         elseif query and query ~= "" then
             msg = _("No packages match the filter.")
         end
@@ -439,6 +472,32 @@ function Chrome:draw_sources(bb, x, y, w, h, scroll)
     end
     return self:draw_scrolled_list(bb, repos, x, list_y, w, list_h, scroll, m.repo_h, m.card_gap, function(repo, row_y)
         Cards.source(self, bb, repo, x + pad, row_y, w - pad * 2)
+    end)
+end
+
+function Chrome:draw_categories(bb, x, y, w, h, scroll)
+    local m = Theme.metrics()
+    local pad = m.pad
+    local categories = self.app.state.visible_categories or {}
+    local total = self.app.state.categories or {}
+    local query = self.app.state.filters.categories
+    local count = tostring(#categories)
+    if query and query ~= "" then
+        count = count .. "/" .. tostring(#total)
+    end
+    local cy = y
+    P.text(bb, _("Categories") .. " (" .. count .. ")", x + pad, cy + Theme.scale(6), w - pad * 2, "heading", { bold = true })
+    cy = cy + Theme.scale(54)
+    local list_y = cy
+    local list_h = h - (list_y - y) - Theme.scale(8)
+    if #categories == 0 then
+        local msg = query and query ~= "" and _("No categories match the filter.") or _("No categories found.")
+        P.text(bb, msg, x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
+        self:set_list_bounds(x, list_y, w, list_h, m.repo_h + m.card_gap)
+        return 0
+    end
+    return self:draw_scrolled_list(bb, categories, x, list_y, w, list_h, scroll, m.repo_h, m.card_gap, function(category, row_y)
+        Cards.category(self, bb, category, x + pad, row_y, w - pad * 2)
     end)
 end
 
@@ -535,6 +594,7 @@ function Chrome:draw_nav(bb, x, y, w, h)
     P.rect(bb, x, y, w, Theme.scale(2), Theme.muted)
     local icons = {
         home = "home.svg",
+        categories = "categories.svg",
         sources = "sources.svg",
         installed = "packages.svg",
         debug = "debug.svg",
@@ -548,7 +608,7 @@ function Chrome:draw_nav(bb, x, y, w, h)
         if not P.image(bb, Images.asset(icons[tab.id] or "packages.svg"), tx + math.floor((tw - icon_size) / 2), y + Theme.scale(5), icon_size, icon_size, { is_icon = true }) then
             P.center_text(bb, label:sub(1, 1), tx, y + Theme.scale(14), tw, "heading", { bold = true })
         end
-        local label_size = P.center_text(bb, label, tx, y + Theme.scale(50), tw, "small", { bold = self.app.state.active_tab == tab.id })
+        local label_size = P.center_text(bb, label, tx, y + Theme.scale(50), tw, "nav", { bold = self.app.state.active_tab == tab.id })
         if self.app.state.active_tab == tab.id then
             local ux = tx + math.max(0, math.floor((tw - label_size.w) / 2))
             P.rect(bb, ux, y + h - Theme.scale(5), label_size.w, Theme.scale(3), Theme.border)

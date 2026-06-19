@@ -1,7 +1,6 @@
 local Geom = require("ui/geometry")
 local ImageWidget = require("ui/widget/imagewidget")
 local TextWidget = require("ui/widget/textwidget")
-local ok_logger, logger = pcall(require, "logger")
 
 local Theme = require("ui/theme")
 
@@ -180,15 +179,6 @@ function P.image(bb, file, x, y, w, h, opts)
         return false
     end
     local painted = pcall(function()
-        if tostring(file):match("/zen[^/]*%.svg$") then
-            local size = widget:getSize()
-            local image = widget._bb
-            local image_w = image and image:getWidth() or "?"
-            local image_h = image and image:getHeight() or "?"
-            if ok_logger and logger and logger.dbg then
-                logger.dbg("[zenpm] image", file, "slot", w, h, "size", size.w, size.h, "bb", image_w, image_h, "is_icon", tostring(opts.is_icon), "exact", tostring(exact_size_svg_icon(file, opts)))
-            end
-        end
         widget:paintTo(bb, x, y)
     end)
     if widget.free then

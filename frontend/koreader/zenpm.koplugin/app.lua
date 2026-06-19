@@ -22,19 +22,22 @@ function App:new(plugin)
         view = nil,
         busy = false,
         image_files = {},
-        icon_logs = {},
         state = {
             page = "home",
             active_tab = "home",
-            filters = { search = "", installed = "" },
+            filters = { search = "", installed = "", categories = "", category = "" },
             scroll = {},
             packages = {},
             visible_packages = {},
             featured_packages = {},
             installed_packages = {},
+            categories = {},
+            visible_categories = {},
+            category_packages = {},
             repos = {},
             current_package = nil,
             current_repo = nil,
+            current_category = nil,
             details_from = "search",
             loading = nil,
             error = nil,
@@ -51,6 +54,9 @@ local function package_title(pkg, fallback)
 end
 
 local function action_present(action)
+    if action == "update" then
+        return _("update")
+    end
     if action == "uninstall" then
         return _("uninstall")
     end
@@ -61,6 +67,9 @@ local function action_present(action)
 end
 
 local function action_progress(action)
+    if action == "update" then
+        return _("Updating")
+    end
     if action == "uninstall" then
         return _("Uninstalling")
     end
@@ -71,10 +80,13 @@ local function action_progress(action)
 end
 
 local function backend_action_for(action)
-    return action == "reinstall" and "install" or action
+    return (action == "reinstall" or action == "update") and "install" or action
 end
 
 local function action_done(action)
+    if action == "update" then
+        return _("updated")
+    end
     if action == "install" then
         return _("installed")
     end
@@ -136,9 +148,12 @@ function App:ensure_backend()
     end
 
     local healthy, health_data = self.client:health()
-    if healthy and not changed then
+    if healthy and not changed and self.daemon:health_matches(health_data) then
         self.version = health_data and health_data.version or self.version or "?"
         return true
+    elseif healthy then
+        self.daemon:stop_known_backends()
+        changed = true
     end
 
     self:set_loading(_("Connecting to ZenPM..."))
@@ -157,44 +172,8 @@ function App:platform()
     return self.daemon:platform_filter()
 end
 
-local function file_content_hash(data)
-    local hash = 5381
-    data = tostring(data or "")
-    for i = 1, #data do
-        hash = (hash * 33 + data:byte(i)) % 4294967296
-    end
-    return string.format("%08x", hash)
-end
-
-local function cache_busted_zen_asset(file)
-    file = tostring(file or "")
-    if not Util.endswith(file, "/zen.svg") then
-        return file
-    end
-    local input = io.open(file, "rb")
-    if not input then
-        return file
-    end
-    local data = input:read("*a") or ""
-    input:close()
-    if data == "" then
-        return file
-    end
-    local cache_dir = "/tmp/zenpm-koreader-images/assets"
-    if not Util.ensure_dir(cache_dir) then
-        return file
-    end
-    local target = cache_dir .. "/zen-" .. tostring(#data) .. "-" .. file_content_hash(data) .. ".svg"
-    if Util.path_exists(target) then
-        return target
-    end
-    local output = io.open(target, "wb")
-    if not output then
-        return file
-    end
-    output:write(data)
-    output:close()
-    return target
+function App:package_platforms()
+    return self.daemon:package_platform_filter()
 end
 
 function App:image_file_for(value)
@@ -202,89 +181,25 @@ function App:image_file_for(value)
     if value == "" then
         return nil
     end
-    local cacheable = not Util.endswith(value, "/zen.svg")
-    if cacheable and self.image_files[value] and Util.path_exists(self.image_files[value]) then
+    if self.image_files[value] and Util.path_exists(self.image_files[value]) then
         return self.image_files[value]
     end
     local file = Images.file_for(self.client, self:platform(), value)
     if file then
-        file = cache_busted_zen_asset(file)
-        if cacheable then
-            self.image_files[value] = file
-        end
+        self.image_files[value] = file
     end
     return file
-end
-
-function App:log_icon_once(key, message)
-    key = tostring(key or "")
-    if key == "" or self.icon_logs[key] then
-        return
-    end
-    self.icon_logs[key] = true
-    pcall(function()
-        self.client:post_log(message)
-    end)
-end
-
-local function file_fingerprint(file)
-    file = tostring(file or "")
-    if file == "" then
-        return ""
-    end
-    local f = io.open(file, "rb")
-    if not f then
-        return " file_read=failed"
-    end
-    local head = f:read(160) or ""
-    local size = f:seek("end") or 0
-    f:close()
-    local hint = head:gsub("%s+", " "):sub(1, 80)
-    return " file_size=" .. tostring(size)
-        .. " file_head_hash=" .. file_content_hash(head)
-        .. " file_head=" .. hint
-end
-
-local function repo_icon_source(repo, value)
-    if repo and repo.icon_url and repo.icon_url ~= "" and value == repo.icon_url then
-        return "manifest"
-    end
-    if value:find("favicon", 1, true) then
-        return "favicon"
-    end
-    if value:find("/assets/", 1, true) then
-        return "bundled"
-    end
-    return "fallback"
 end
 
 function App:package_icon_file(pkg)
     local icon_value = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
-    local id = tostring(pkg and (pkg.id or pkg.name) or "?")
     local source = icon_value == fallback_value and "repo-fallback" or "package"
     local file = self:image_file_for(icon_value)
     if file then
-        self:log_icon_once("package:" .. id .. ":" .. icon_value,
-            "[icon] package id=" .. id
-            .. " repo=" .. tostring(pkg and pkg.repo or "")
-            .. " source=" .. source
-            .. " value=" .. tostring(icon_value)
-            .. " file=" .. tostring(file)
-            .. file_fingerprint(file)
-            .. " fallback=" .. tostring(fallback_value))
         return file, icon_value == fallback_value, icon_value, source
     end
-    local fallback_file = self:image_file_for(fallback_value)
-    self:log_icon_once("package:" .. id .. ":fallback:" .. fallback_value,
-        "[icon] package id=" .. id
-        .. " repo=" .. tostring(pkg and pkg.repo or "")
-        .. " source=fallback"
-        .. " value=" .. tostring(fallback_value)
-        .. " file=" .. tostring(fallback_file)
-        .. file_fingerprint(fallback_file)
-        .. " primary_failed=" .. tostring(icon_value))
-    return fallback_file, true, fallback_value, "fallback"
+    return self:image_file_for(fallback_value), true, fallback_value, "fallback"
 end
 
 function App:package_featured_file(pkg)
@@ -292,33 +207,15 @@ function App:package_featured_file(pkg)
 end
 
 function App:repo_icon_file(repo)
-    local value = Images.repo_icon(repo)
-    local file = self:image_file_for(value)
-    local name = tostring(repo and repo.name or "?")
-    if file then
-        self:log_icon_once("repo:" .. name .. ":" .. value,
-            "[icon] repo name=" .. name
-            .. " source=" .. repo_icon_source(repo, value)
-            .. " value=" .. tostring(value)
-            .. " file=" .. tostring(file)
-            .. file_fingerprint(file))
-        return file
-    end
-    local fallback = Images.asset("sources.svg")
-    local fallback_file = self:image_file_for(fallback)
-    self:log_icon_once("repo:" .. name .. ":fallback:" .. fallback,
-        "[icon] repo name=" .. name
-        .. " source=fallback"
-        .. " value=" .. tostring(fallback)
-        .. " file=" .. tostring(fallback_file)
-        .. file_fingerprint(fallback_file)
-        .. " primary_failed=" .. tostring(value))
-    return fallback_file
+    return self:image_file_for(Images.repo_icon(repo)) or self:image_file_for(Images.asset("sources.svg"))
 end
 
 function App:scroll_key()
     if self.state.page == "source_details" and self.state.current_repo then
         return "source:" .. tostring(self.state.current_repo.name)
+    end
+    if self.state.page == "category_details" and self.state.current_category then
+        return "category:" .. tostring(self.state.current_category.id)
     end
     if self.state.page == "package_details" and self.state.current_package then
         return "package:" .. tostring(self.state.current_package.id or self.state.current_package.name)
@@ -333,6 +230,8 @@ end
 function App:navigate(tab_id)
     if tab_id == "home" then
         self:show_featured()
+    elseif tab_id == "categories" then
+        self:show_categories()
     elseif tab_id == "sources" then
         self:show_sources()
     elseif tab_id == "installed" then
@@ -347,6 +246,8 @@ end
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
         self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from)
+    elseif self.state.page == "category_details" and self.state.current_category then
+        self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
         self:show_source_details(self.state.current_repo.name)
     else
@@ -354,12 +255,95 @@ function App:reload_current_page()
     end
 end
 
-function App:load_packages()
-    local ok, data = self.client:list_packages(self:platform())
+local function normalized_version(value)
+    value = tostring(value or "")
+    value = value:gsub("^%s+", ""):gsub("%s+$", "")
+    value = value:gsub("^refs/tags/", "")
+    value = value:gsub("^[vV]", "")
+    return value
+end
+
+local function version_gt(a, b)
+    a = normalized_version(a)
+    b = normalized_version(b)
+    local function parts(value)
+        local out = {}
+        for n in value:gmatch("%d+") do
+            table.insert(out, tonumber(n) or 0)
+        end
+        return out
+    end
+    local ap, bp = parts(a), parts(b)
+    local max = math.max(#ap, #bp)
+    for i = 1, max do
+        local av, bv = ap[i] or 0, bp[i] or 0
+        if av > bv then return true end
+        if av < bv then return false end
+    end
+    if max > 0 then return false end
+    return a > b
+end
+
+local function platform_capabilities(value)
+    local list, set = {}, {}
+    for part in tostring(value or ""):gmatch("[^,]+") do
+        local normalized = Util.trim(part):lower()
+        if normalized ~= "" and not set[normalized] then
+            set[normalized] = true
+            table.insert(list, normalized)
+        end
+    end
+    return list, set
+end
+
+local function package_matches_platforms(pkg, platforms)
+    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    local required = 0
+    for _, platform in ipairs(pkg.platforms) do
+        local normalized = Util.trim(tostring(platform or "")):lower()
+        if normalized ~= "" then
+            required = required + 1
+            if not platforms[normalized] then
+                return false
+            end
+        end
+    end
+    return required > 0
+end
+
+local function merge_compatible_packages(out, seen, packages, platforms)
+    for _, pkg in ipairs(packages or {}) do
+        local id = tostring(pkg.id or pkg.name or "")
+        if id ~= "" and not seen[id] and package_matches_platforms(pkg, platforms) then
+            seen[id] = true
+            table.insert(out, pkg)
+        end
+    end
+end
+
+function App:load_packages(check_updates)
+    local filter = self:package_platforms()
+    local capabilities, capability_set = platform_capabilities(filter)
+    local ok, data = self.client:list_packages(filter, check_updates)
     if not ok then
         return false, {}, data
     end
-    return true, type(data) == "table" and data or {}
+    local packages = {}
+    local seen = {}
+    merge_compatible_packages(packages, seen, type(data) == "table" and data or {}, capability_set)
+    if #packages > 0 or #capabilities <= 1 then
+        return true, packages
+    end
+    for _, platform in ipairs(capabilities) do
+        ok, data = self.client:list_packages(platform, check_updates)
+        if not ok then
+            return false, {}, data
+        end
+        merge_compatible_packages(packages, seen, type(data) == "table" and data or {}, capability_set)
+    end
+    return true, packages
 end
 
 function App:load_repos()
@@ -403,12 +387,55 @@ function App:show_search()
     self:refresh()
 end
 
+function App:show_categories()
+    self.state.page = "categories"
+    self.state.active_tab = "categories"
+    if not self:ensure_backend() then return end
+    self:set_loading(_("Loading categories..."))
+    local ok, packages, err = self:load_packages()
+    if not ok then
+        self:set_error(_("Failed to load packages: ") .. tostring(err))
+        return
+    end
+    local categories = Models.category_cards(packages)
+    self.state.packages = packages
+    self.state.categories = categories
+    self.state.visible_categories = Models.filter_categories(categories, self.state.filters.categories)
+    self.state.current_category = nil
+    self:clear_status()
+    self:refresh()
+end
+
+function App:show_category_details(category_id)
+    self.state.page = "category_details"
+    self.state.active_tab = "categories"
+    if not self:ensure_backend() then return end
+    self:set_loading(_("Loading category..."))
+    local category = Models.category_for_id(category_id)
+    if not category then
+        self:set_error(_("Category not found."))
+        return
+    end
+    local ok, packages, err = self:load_packages()
+    if not ok then
+        self:set_error(_("Failed to load packages: ") .. tostring(err))
+        return
+    end
+    local category_packages = Models.packages_in_category(packages, category)
+    self.state.packages = packages
+    self.state.current_category = category
+    self.state.category_packages = category_packages
+    self.state.visible_packages = Models.filter_packages(category_packages, self.state.filters.category)
+    self:clear_status()
+    self:refresh()
+end
+
 function App:show_installed()
     self.state.page = "installed"
     self.state.active_tab = "installed"
     if not self:ensure_backend() then return end
     self:set_loading(_("Loading installed packages..."))
-    local ok, packages, err = self:load_packages()
+    local ok, packages, err = self:load_packages(true)
     if not ok then
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
@@ -544,17 +571,39 @@ end
 
 function App:set_filter(kind, value)
     self.state.filters[kind] = value or ""
-    self:reset_scroll(kind == "installed" and "installed" or "search")
+    if kind == "installed" then
+        self:reset_scroll("installed")
+    elseif kind == "categories" then
+        self:reset_scroll("categories")
+    elseif kind == "category" and self.state.current_category then
+        self:reset_scroll("category:" .. tostring(self.state.current_category.id))
+    else
+        self:reset_scroll("search")
+    end
     if kind == "installed" then
         self:show_installed()
+    elseif kind == "categories" then
+        self:show_categories()
+    elseif kind == "category" and self.state.current_category then
+        self:show_category_details(self.state.current_category.id)
     else
         self:show_search()
     end
 end
 
 function App:prompt_filter(kind)
-    local title = kind == "installed" and _("Filter installed packages") or _("Search packages")
-    local hint = kind == "installed" and _("Filter installed...") or _("Search...")
+    local title = _("Search packages")
+    local hint = _("Search...")
+    if kind == "installed" then
+        title = _("Filter installed packages")
+        hint = _("Filter installed...")
+    elseif kind == "categories" then
+        title = _("Search categories")
+        hint = _("Search categories...")
+    elseif kind == "category" then
+        title = _("Search category")
+        hint = _("Search category...")
+    end
     Modals.input(title, self.state.filters[kind] or "", hint, _("Search"), function(text)
         self:set_filter(kind, Util.trim(text))
     end, function()
@@ -625,6 +674,10 @@ function App:perform_package_action(pkg, on_done)
         return
     end
     if pkg.installed then
+        if pkg.update_available then
+            self:confirm_package_action(pkg, "update", on_done)
+            return
+        end
         Modals.package_modify(pkg, {
             info = function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
@@ -648,6 +701,10 @@ function App:confirm_package_action(pkg, action, on_done)
     if action == "reinstall" then
         question = _("Are you sure you want to reinstall ") .. name .. "?"
         label = _("Reinstall")
+    elseif action == "update" then
+        local latest = pkg.latest_version and pkg.latest_version ~= "" and (" " .. _("to") .. " " .. pkg.latest_version) or ""
+        question = _("Are you sure you want to update ") .. name .. latest .. "?"
+        label = _("Update")
     elseif action == "uninstall" then
         question = _("Are you sure you want to uninstall ") .. name .. "?"
         label = _("Uninstall")
@@ -664,6 +721,10 @@ function App:start_package_action(pkg, action, on_done)
         Modals.info(_("Package has no id."))
         return
     end
+    local failure_baseline = self:package_action_failure_stats({
+        id = id,
+        action = action,
+    })
     self.busy = true
     Modals.status(action_progress(action) .. " "
         .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
@@ -679,28 +740,68 @@ function App:start_package_action(pkg, action, on_done)
         name = package_title(pkg, id),
         action = action,
         was_installed = pkg.installed and true or false,
+        target_version = pkg.latest_version,
+        failure_baseline = failure_baseline,
         on_done = on_done,
     }, 1)
 end
 
-function App:package_action_failure_detail(op)
+function App:package_action_failure_stats(op)
     local ok, log_text = self.client:get_log(200)
     if not ok or type(log_text) ~= "string" then
-        return nil
+        return 0, nil
     end
     local needle = "Package " .. tostring(op.id) .. " " .. backend_action_for(op.action) .. " failed: "
+    local count = 0
     local detail = nil
     for _, line in ipairs(Util.split_lines(log_text)) do
         local pos = line:find(needle, 1, true)
         if pos then
+            count = count + 1
             detail = line:sub(pos + #needle)
         end
     end
-    return detail and Util.trim(detail) ~= "" and Util.trim(detail) or nil
+    detail = detail and Util.trim(detail) ~= "" and Util.trim(detail) or nil
+    return count, detail
+end
+
+function App:package_action_failure_detail(op)
+    local count, detail = self:package_action_failure_stats(op)
+    if count > (op.failure_baseline or 0) then
+        return detail or _("Check the debug log for details.")
+    end
+    return nil
+end
+
+function App:package_action_succeeded(op, pkg)
+    if op.action == "uninstall" then
+        return op.was_installed and (not pkg or not pkg.installed)
+    end
+    if op.action == "update" then
+        if not pkg or not pkg.installed then
+            return false
+        end
+        if op.target_version and op.target_version ~= "" then
+            return not version_gt(op.target_version, pkg.installed_version or pkg.version)
+        end
+        return true
+    end
+    if op.action == "reinstall" then
+        return pkg and pkg.installed
+    end
+    return pkg and pkg.installed
 end
 
 function App:poll_package_action(op, attempt)
     UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
+        local detail = self:package_action_failure_detail(op)
+        if detail then
+            self.busy = false
+            Modals.close_status()
+            Modals.info(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail)
+            return
+        end
+
         local ok, packages = self:load_packages()
         if not ok then
             if attempt >= Constants.MAX_POLL_RETRIES then
@@ -714,12 +815,7 @@ function App:poll_package_action(op, attempt)
         end
 
         local pkg = Models.find_package(packages, op.id)
-        local succeeded = false
-        if op.action == "reinstall" then
-            succeeded = pkg and pkg.installed
-        else
-            succeeded = pkg and ((pkg.installed and true or false) ~= op.was_installed)
-        end
+        local succeeded = self:package_action_succeeded(op, pkg)
 
         if succeeded then
             self.busy = false
@@ -729,7 +825,7 @@ function App:poll_package_action(op, attempt)
             if op.on_done then op.on_done() end
         elseif attempt >= Constants.MAX_POLL_RETRIES then
             self.busy = false
-            local detail = self:package_action_failure_detail(op)
+            detail = self:package_action_failure_detail(op)
             local message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " did not complete."
             if detail then
                 message = message .. "\n\n" .. detail

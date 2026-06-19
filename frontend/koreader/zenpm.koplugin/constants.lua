@@ -21,9 +21,17 @@ return {
 
     TABS = {
         { id = "home", label = "Featured" },
+        { id = "categories", label = "Categories" },
         { id = "sources", label = "Sources" },
         { id = "installed", label = "Installed" },
         { id = "debug", label = "Debug" },
         { id = "search", label = "Search" },
+    },
+
+    CATEGORIES = {
+        { id = "media", label = "Media", icon = "media.svg" },
+        { id = "utility", label = "Utility", icon = "utility.svg" },
+        { id = "productivity", label = "Productivity", icon = "productivity.svg" },
+        { id = "games", label = "Games", icon = "games.svg.svg" },
     },
 }

@@ -158,8 +158,12 @@ function Client:refresh_repos()
     return self:request("POST", "/repo/refresh", nil)
 end
 
-function Client:list_packages(platform)
-    return self:request("GET", "/packages?platform=" .. url_encode(platform), nil)
+function Client:list_packages(platform, check_updates)
+    local path = "/packages?platform=" .. url_encode(platform)
+    if check_updates then
+        path = path .. "&check_updates=1"
+    end
+    return self:request("GET", path, nil)
 end
 
 function Client:package_action(id, action)

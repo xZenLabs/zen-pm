@@ -12,6 +12,7 @@ import (
 
 	"ZPM/internal/log"
 	"ZPM/internal/pkg"
+	"ZPM/internal/releases"
 	"ZPM/internal/repo"
 	"ZPM/internal/state"
 )
@@ -25,6 +26,31 @@ type Server struct {
 	repos *repo.Manager
 	pkgs  *pkg.Manager
 	port  int
+}
+
+type pkgJSON struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Version       string   `json:"version"`
+	Description   string   `json:"description"`
+	Author        string   `json:"author"`
+	Tags          []string `json:"tags"`
+	Category      string   `json:"category,omitempty"`
+	Platforms     []string `json:"platforms"`
+	Repo          string   `json:"repo"`
+	RepoTrust     string   `json:"repo_trust,omitempty"`
+	RepoDefault   bool     `json:"repo_default,omitempty"`
+	Installed     bool     `json:"installed"`
+	InstalledVer  string   `json:"installed_version,omitempty"`
+	LatestVersion string   `json:"latest_version,omitempty"`
+	UpdateAvail   bool     `json:"update_available,omitempty"`
+	IconURL       string   `json:"icon_url,omitempty"`
+	RepoIconURL   string   `json:"repo_icon_url,omitempty"`
+	ImageURL      string   `json:"image_url,omitempty"`
+	Images        []string `json:"images,omitempty"`
+	Featured      bool     `json:"featured,omitempty"`
+	FeaturedImage string   `json:"featured_image,omitempty"`
+	Source        string   `json:"source,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -112,7 +138,12 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "version": Version})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":        true,
+		"version":   Version,
+		"home":      s.st.Home,
+		"cache_dir": s.st.CacheDir,
+	})
 }
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
@@ -276,6 +307,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plat := r.URL.Query().Get("platform")
+	checkUpdates := r.URL.Query().Get("check_updates") == "1" || r.URL.Query().Get("check_updates") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		// Catalog doesn't exist yet — return empty list so WAF can show "no packages" instead of error.
@@ -289,33 +321,14 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 
 	installed, _ := s.st.ReadInstalled()
 	installedSet := make(map[string]bool, len(installed))
-	installedName := make(map[string]string, len(installed))
+	installedVersion := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
-		installedName[e.ID] = e.Name
-	}
-
-	type pkgJSON struct {
-		ID            string   `json:"id"`
-		Name          string   `json:"name"`
-		Version       string   `json:"version"`
-		Description   string   `json:"description"`
-		Author        string   `json:"author"`
-		Tags          []string `json:"tags"`
-		Platforms     []string `json:"platforms"`
-		Repo          string   `json:"repo"`
-		RepoTrust     string   `json:"repo_trust,omitempty"`
-		RepoDefault   bool     `json:"repo_default,omitempty"`
-		Installed     bool     `json:"installed"`
-		IconURL       string   `json:"icon_url,omitempty"`
-		RepoIconURL   string   `json:"repo_icon_url,omitempty"`
-		ImageURL      string   `json:"image_url,omitempty"`
-		Images        []string `json:"images,omitempty"`
-		Featured      bool     `json:"featured,omitempty"`
-		FeaturedImage string   `json:"featured_image,omitempty"`
+		installedVersion[e.ID] = e.Version
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
+	platformList := platformValues(plat)
 	repoEntries, _ := s.repos.List()
 	repoTrust := make(map[string]string, len(repoEntries))
 	repoDefault := make(map[string]bool, len(repoEntries))
@@ -324,13 +337,15 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		repoDefault[r.Name] = r.Default
 	}
 	seen := make(map[string]bool, len(filtered))
+	releaseCache := make(map[string]string)
 	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
 		seen[e.ID] = true
-		result = append(result, pkgJSON{
+		item := pkgJSON{
 			ID: e.ID, Name: e.Name, Version: e.Version,
 			Description: e.Description, Author: e.Author,
 			Tags:      e.Tags,
+			Category:  e.Category,
 			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID],
 			IconURL:       e.IconURL,
 			RepoIconURL:   e.RepoIconURL,
@@ -338,7 +353,15 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Images:        e.Images,
 			Featured:      e.Featured,
 			FeaturedImage: e.FeaturedImage,
-		})
+			Source:        e.Source,
+		}
+		if item.Installed {
+			item.InstalledVer = installedVersion[e.ID]
+			if checkUpdates {
+				applyUpdateInfo(&item, e.Source, releaseCache)
+			}
+		}
+		result = append(result, item)
 	}
 
 	// Include device-installed packages not in any catalog (e.g. detected via scanKnownApps).
@@ -348,15 +371,54 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			if name == "" {
 				name = e.ID
 			}
-			result = append(result, pkgJSON{
+			item := pkgJSON{
 				ID: e.ID, Name: name, Version: e.Version,
 				Repo: e.Repo, Installed: true,
-				Platforms: []string{plat},
-			})
+				InstalledVer: e.Version,
+				Platforms:    platformList,
+			}
+			result = append(result, item)
 		}
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func platformValues(platform string) []string {
+	var out []string
+	for _, value := range strings.Split(platform, ",") {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func applyUpdateInfo(item *pkgJSON, source string, cache map[string]string) {
+	if item == nil || source == "" {
+		return
+	}
+	latest, ok := cache[source]
+	if !ok {
+		var err error
+		latest, err = releases.LatestGitHubReleaseTag(source)
+		if err != nil {
+			log.Debugf("GitHub update check failed for %s: %v", source, err)
+			cache[source] = ""
+			return
+		}
+		cache[source] = latest
+	}
+	if latest == "" {
+		return
+	}
+	item.LatestVersion = latest
+	base := item.InstalledVer
+	if base == "" {
+		base = item.Version
+	}
+	item.UpdateAvail = releases.VersionGreater(latest, base)
 }
 
 func firstString(values []string) string {
@@ -434,7 +496,7 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Route noisy per-package-card and image-fallback logs to debug level.
-	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") || strings.HasPrefix(body.Message, "[icon]") {
+	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") {
 		log.Debugf("[client] %s", body.Message)
 	} else {
 		log.Infof("[client] %s", body.Message)

@@ -180,4 +180,29 @@ function Cards.source(view, bb, repo, x, y, w)
     return h
 end
 
+function Cards.category(view, bb, category, x, y, w)
+    local m = Theme.metrics()
+    local h = m.repo_h
+    P.box(bb, x, y, w, h)
+    local pad = Theme.scale(10)
+    local icon = Theme.scale(62)
+    local ix = x + pad
+    local iy = y + math.floor((h - icon) / 2)
+    if not P.image(bb, Images.asset(category.icon or "packages.svg"), ix, iy, icon, icon, { is_icon = true }) then
+        P.center_text(bb, tostring(category.label or "?"):sub(1, 1), ix, iy + Theme.scale(18), icon, "small", { bold = true })
+    end
+
+    local text_x = x + pad + icon + Theme.scale(10)
+    local text_w = w - (text_x - x) - pad
+    local title_y = y + Theme.scale(24)
+    local subtitle_y = y + Theme.scale(66)
+    P.text(bb, I18n.dynamic_or(category.label, _("Category")), text_x, title_y, text_w, "heading", { bold = true })
+    P.text(bb, tostring(category.count or 0) .. " " .. _("packages"), text_x, subtitle_y, text_w, "small")
+
+    P.hit(view, x, y, w, h, function()
+        view.app:show_category_details(category.id)
+    end, "category:" .. tostring(category.id))
+    return h
+end
+
 return Cards

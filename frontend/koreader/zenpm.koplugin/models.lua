@@ -38,11 +38,105 @@ function Models.filter_packages(packages, query)
             tostring(pkg.id or ""),
             tostring(pkg.description or ""),
             tostring(I18n.dynamic(pkg.description) or ""),
+            tostring(pkg.category or ""),
+            tostring(I18n.dynamic(pkg.category) or ""),
             tostring(pkg.repo or ""),
             tostring(I18n.dynamic(pkg.repo) or ""),
         }, " "):lower()
         if hay:find(query, 1, true) then
             table.insert(out, pkg)
+        end
+    end
+    return out
+end
+
+local function normalize_category(value)
+    value = Util.trim(tostring(value or "")):lower()
+    value = value:gsub("[%s_%-]+", "")
+    if value == "game" then
+        return "games"
+    end
+    if value == "utilities" then
+        return "utility"
+    end
+    return value
+end
+
+function Models.category_label(category)
+    return I18n.dynamic_or(category and category.label, tostring(category and category.id or ""))
+end
+
+function Models.category_for_id(id)
+    id = normalize_category(id)
+    for _, category in ipairs(Constants.CATEGORIES) do
+        if normalize_category(category.id) == id or normalize_category(category.label) == id then
+            return category
+        end
+    end
+    return nil
+end
+
+function Models.package_in_category(pkg, category)
+    if not pkg or not category then
+        return false
+    end
+    local wanted = normalize_category(category.id)
+    if normalize_category(pkg.category) == wanted then
+        return true
+    end
+    if type(pkg.tags) == "table" then
+        for _, tag in ipairs(pkg.tags) do
+            if normalize_category(tag) == wanted then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function Models.packages_in_category(packages, category)
+    local out = {}
+    for _, pkg in ipairs(packages or {}) do
+        if Models.package_in_category(pkg, category) then
+            table.insert(out, pkg)
+        end
+    end
+    return out
+end
+
+function Models.category_cards(packages)
+    local cards = {}
+    for _, category in ipairs(Constants.CATEGORIES) do
+        local count = 0
+        for _, pkg in ipairs(packages or {}) do
+            if Models.package_in_category(pkg, category) then
+                count = count + 1
+            end
+        end
+        table.insert(cards, {
+            id = category.id,
+            label = category.label,
+            icon = category.icon,
+            count = count,
+        })
+    end
+    return cards
+end
+
+function Models.filter_categories(categories, query)
+    query = Util.trim(query):lower()
+    if query == "" then
+        return categories or {}
+    end
+    local out = {}
+    for _, category in ipairs(categories or {}) do
+        local hay = table.concat({
+            tostring(category.id or ""),
+            tostring(category.label or ""),
+            tostring(I18n.dynamic(category.label) or ""),
+        }, " "):lower()
+        if hay:find(query, 1, true) then
+            table.insert(out, category)
         end
     end
     return out
@@ -122,6 +216,9 @@ function Models.select_featured(packages, zenlabs_index)
 end
 
 function Models.package_action_label(pkg)
+    if pkg and pkg.installed and pkg.update_available then
+        return _("Update")
+    end
     return pkg and pkg.installed and _("Modify") or _("Get")
 end
 

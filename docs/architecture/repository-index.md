@@ -30,9 +30,11 @@ Example:
       "id": "koreader-kindle",
       "name": "KOReader (Kindle)",
       "version": "2026.03.0",
-      "platforms": ["kindle"],
+      "category": "utility",
+      "platforms": ["kindle", "koreader"],
       "featured": true,
       "featured_image": "packages/koreader-kindle/featured.png",
+      "source": "https://github.com/koreader/koreader",
       "dependencies": ["kual"],
       "install_url": "packages/koreader-kindle/scripts/install.sh",
       "uninstall_url": "packages/koreader-kindle/scripts/uninstall.sh",
@@ -41,6 +43,10 @@ Example:
   ]
 }
 ```
+
+`platforms` are required compatibility capabilities, not alternatives. For
+example, `["kindle", "koreader"]` is shown only when both Kindle and KOReader
+compatibility are present.
 
 ## Merge and precedence behavior
 

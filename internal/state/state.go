@@ -37,6 +37,7 @@ type State struct {
 // and seeds empty databases if missing.
 func Init(platform string) (*State, error) {
 	home := os.Getenv("ZENPM_HOME")
+	explicitHome := home != ""
 	if home == "" {
 		switch platform {
 		case "kindle":
@@ -53,7 +54,7 @@ func Init(platform string) (*State, error) {
 	}
 
 	// Persistent state lives in a dot-directory so it survives app updates.
-	persistDir := resolvePersistDir(platform, home)
+	persistDir := resolvePersistDir(platform, home, explicitHome)
 
 	s := &State{
 		Home:        home,
@@ -116,7 +117,10 @@ func cleanupStaleDirs(platform, lockDir string) {
 	}
 }
 
-func resolvePersistDir(platform, home string) string {
+func resolvePersistDir(platform, home string, explicitHome bool) string {
+	if explicitHome {
+		return filepath.Join(home, "state")
+	}
 	switch platform {
 	case "kindle":
 		return kindlePersistDir

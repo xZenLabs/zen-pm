@@ -56,6 +56,28 @@ local function read_text(path)
     return Util.trim(read_all(path))
 end
 
+local function content_hash(data)
+    local hash = 5381
+    data = tostring(data or "")
+    for i = 1, #data do
+        hash = (hash * 33 + data:byte(i)) % 4294967296
+    end
+    return string.format("%08x", hash)
+end
+
+local function file_signature(path)
+    local parts = {}
+    if ok_lfs then
+        local attrs = lfs.attributes(path)
+        if attrs then
+            table.insert(parts, "size=" .. tostring(attrs.size or ""))
+            table.insert(parts, "mtime=" .. tostring(attrs.modification or ""))
+        end
+    end
+    table.insert(parts, "hash=" .. content_hash(read_all(path)))
+    return table.concat(parts, " ")
+end
+
 local function write_text(path, value)
     local f = io.open(path, "w")
     if not f then
@@ -113,6 +135,14 @@ function Daemon:platform_filter()
         return "koreader"
     end
     return platform
+end
+
+function Daemon:package_platform_filter()
+    local platform = self:detect_platform()
+    if platform == "host" then
+        return "host,koreader"
+    end
+    return platform .. ",koreader"
 end
 
 function Daemon:plugin_version()
@@ -214,7 +244,35 @@ function Daemon:desired_marker(source)
         "plugin_version=" .. self:plugin_version(),
         "backend_version=" .. self:bundled_backend_version(),
         "backend_source=" .. tostring(source or ""),
+        "backend_signature=" .. file_signature(source),
     }, "\n") .. "\n"
+end
+
+function Daemon:runtime_dirs()
+    local home = self:standalone_home()
+    return {
+        home,
+        home .. "/cache",
+        home .. "/tmp",
+        home .. "/locks",
+        home .. "/journal",
+        home .. "/state",
+        home .. "/state/scripts",
+        self:standalone_backend_dir(),
+    }
+end
+
+function Daemon:ensure_runtime_dirs()
+    local had_missing = false
+    for _, dir in ipairs(self:runtime_dirs()) do
+        if not path_exists(dir) then
+            had_missing = true
+        end
+        if not Util.ensure_dir(dir) then
+            return had_missing, _("Could not create ZenPM directory: ") .. dir
+        end
+    end
+    return had_missing, nil
 end
 
 function Daemon:stop_standalone_backend()
@@ -229,7 +287,26 @@ function Daemon:stop_standalone_backend()
     socket.sleep(0.8)
 end
 
+function Daemon:stop_known_backends()
+    self:stop_standalone_backend()
+    for _, candidate in ipairs(self:candidate_backends()) do
+        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --port 8080") .. " >/dev/null 2>&1")
+    end
+    socket.sleep(0.8)
+end
+
+function Daemon:health_matches(data)
+    if type(data) ~= "table" then
+        return false
+    end
+    return tostring(data.home or "") == self:standalone_home()
+end
+
 function Daemon:ensure_backend_files()
+    local dirs_missing, dirs_err = self:ensure_runtime_dirs()
+    if dirs_err then
+        return false, dirs_err
+    end
     local source = self:bundled_backend()
     if not source then
         return false, _("Bundled ZenPM backend not found. Expected ") .. table.concat(self:bundled_backend_candidates(), " " .. _("or") .. " ") .. "."
@@ -240,7 +317,7 @@ function Daemon:ensure_backend_files()
     end
     local backend = self:standalone_backend()
     local marker = self:desired_marker(source)
-    local changed = read_all(self:standalone_marker()) ~= marker or not path_exists(backend)
+    local changed = dirs_missing or read_all(self:standalone_marker()) ~= marker or not path_exists(backend)
     if not changed then
         os.execute("chmod +x " .. Util.sh_quote(backend))
         self.backend_path = backend
@@ -346,8 +423,11 @@ function Daemon:ensure(client, force_start)
     local ok, data = false, nil
     if not force_start then
         ok, data = client:health()
-        if ok then
+        if ok and self:health_matches(data) then
             return true, data
+        elseif ok then
+            self:stop_known_backends()
+            force_start = true
         end
     end
 
@@ -359,7 +439,7 @@ function Daemon:ensure(client, force_start)
     for _ = 1, Constants.CONNECT_RETRIES do
         socket.sleep(Constants.CONNECT_RETRY_DELAY_SECONDS)
         ok, data = client:health()
-        if ok then
+        if ok and self:health_matches(data) then
             return true, data
         end
     end

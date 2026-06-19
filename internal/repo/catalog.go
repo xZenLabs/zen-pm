@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"ZPM/internal/log"
+	"ZPM/internal/releases"
 )
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|v2
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -42,15 +43,23 @@ type CatalogEntry struct {
 	Images        []string
 	Featured      bool
 	FeaturedImage string
+	Category      string
+	Source        string
 }
 
-func (e *CatalogEntry) HasPlatform(p string) bool {
+func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
+	required := 0
 	for _, pl := range e.Platforms {
-		if pl == p {
-			return true
+		pl = normalizePlatform(pl)
+		if pl == "" {
+			continue
+		}
+		required++
+		if !platforms[pl] {
+			return false
 		}
 	}
-	return false
+	return required > 0
 }
 
 func (e *CatalogEntry) serialize() string {
@@ -69,16 +78,26 @@ func (e *CatalogEntry) serialize() string {
 		strings.Join(e.Images, ","),
 		boolField(e.Featured),
 		e.FeaturedImage,
+		e.Category,
+		e.Source,
+		"v2",
 	}, "|")
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
 	parts := strings.Split(line, "|")
+	if len(parts) >= 21 && parts[20] == "v2" {
+		return parseModernCatalogLine(parts)
+	}
 	if len(parts) >= 20 {
 		return parseLegacyCatalogLine(parts)
 	}
+	return parseModernCatalogLine(parts)
+}
+
+func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	if len(parts) < 10 {
-		return nil, fmt.Errorf("invalid catalog line (got %d fields): %q", len(parts), line)
+		return nil, fmt.Errorf("invalid catalog line (got %d fields)", len(parts))
 	}
 	var priority int
 	fmt.Sscanf(parts[1], "%d", &priority)
@@ -117,6 +136,12 @@ func parseCatalogLine(line string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 18 {
 		e.FeaturedImage = parts[17]
+	}
+	if len(parts) >= 19 {
+		e.Category = parts[18]
+	}
+	if len(parts) >= 20 {
+		e.Source = parts[19]
 	}
 	return e, nil
 }
@@ -201,6 +226,7 @@ type manifestJSON struct {
 		SourceAsset   string   `json:"source_asset,omitempty"`
 		Featured      bool     `json:"featured,omitempty"`
 		FeaturedImage string   `json:"featured_image,omitempty"`
+		Category      string   `json:"category,omitempty"`
 		Images        []string `json:"images,omitempty"`
 		Screenshots   []string `json:"screenshots,omitempty"`
 	} `json:"packages"`
@@ -251,35 +277,30 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 // parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.
 func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifestJSON) []*CatalogEntry {
 	repoIcon := joinURL(repoURL, "favicon.svg")
-	repoIconSource := "favicon"
 	if manifest.Repo.IconURL != "" {
 		resolvedRepoIcon := resolveURL(repoURL, manifest.Repo.IconURL)
 		if !isFaviconURL(resolvedRepoIcon) {
 			repoIcon = resolvedRepoIcon
-			repoIconSource = "manifest"
 		}
 	}
-	log.Debugf("Repo %s icon source=%s value=%s", repoName, repoIconSource, repoIcon)
 	var entries []*CatalogEntry
 	for _, p := range manifest.Packages {
 		iconURL := p.IconURL
-		iconSource := "repo-fallback"
 		if iconURL != "" {
 			iconURL = resolveURL(repoURL, iconURL)
-			iconSource = "package"
 		}
-		log.Debugf("Package %s icon source=%s value=%s repo_icon=%s", p.ID, iconSource, iconURL, repoIcon)
 		images := resolveURLList(repoURL, appendURLLists([]string{p.ImageURL}, p.Images, p.Screenshots))
 		featuredImage := ""
 		if p.FeaturedImage != "" {
 			featuredImage = resolveURL(repoURL, p.FeaturedImage)
 		}
+		source := resolveURL(repoURL, p.Source)
 		entries = append(entries, &CatalogEntry{
 			Repo:          repoName,
 			Priority:      priority,
 			ID:            p.ID,
 			Name:          p.Name,
-			Version:       p.Version,
+			Version:       releaseVersion(source, p.Version),
 			Description:   p.Description,
 			Author:        p.Author,
 			Platforms:     p.Platforms,
@@ -292,9 +313,18 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Images:        images,
 			Featured:      p.Featured,
 			FeaturedImage: featuredImage,
+			Category:      p.Category,
+			Source:        source,
 		})
 	}
 	return entries
+}
+
+func releaseVersion(source, fallback string) string {
+	if latest, err := releases.LatestGitHubReleaseTag(source); err == nil && latest != "" {
+		return latest
+	}
+	return fallback
 }
 
 // parseKindleForgeCatalog converts the KindleForge registry.json flat array to CatalogEntry list.
@@ -321,9 +351,38 @@ func parseKindleForgeCatalog(repoName, repoURL string, priority int, entries []k
 			Size:         "",
 			IconURL:      repoIcon,
 			RepoIconURL:  repoIcon,
+			Category:     kindleForgeCategory(e.Tags),
 		})
 	}
 	return result
+}
+
+func kindleForgeCategory(tags []string) string {
+	for _, tag := range tags {
+		if category := categoryFromTag(tag); category != "" {
+			return category
+		}
+	}
+	return ""
+}
+
+func categoryFromTag(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = strings.ReplaceAll(tag, "-", "")
+	tag = strings.ReplaceAll(tag, "_", "")
+	tag = strings.ReplaceAll(tag, " ", "")
+	switch tag {
+	case "game", "games":
+		return "games"
+	case "media", "audio", "music", "video", "image", "images", "photo", "photos", "comic", "comics":
+		return "media"
+	case "productivity", "reader", "read", "book", "books", "notes", "note", "office", "writing", "write":
+		return "productivity"
+	case "utility", "utilities", "tool", "tools", "system", "network", "internet", "browser", "font", "fonts":
+		return "utility"
+	default:
+		return ""
+	}
 }
 
 func appendURLLists(first []string, rest ...[]string) []string {
@@ -422,19 +481,39 @@ func ReadMergedCatalog(path string) ([]*CatalogEntry, error) {
 	return entries, nil
 }
 
-// FilterByPlatform returns only entries that match the given platform string.
+// FilterByPlatform returns entries whose required platforms are all present in
+// the given comma-separated platform capability filter.
 // An empty platform string returns all entries.
 func FilterByPlatform(entries []*CatalogEntry, platform string) []*CatalogEntry {
 	if platform == "" {
 		return entries
 	}
+	platforms := parsePlatformFilter(platform)
+	if len(platforms) == 0 {
+		return entries
+	}
 	var out []*CatalogEntry
 	for _, e := range entries {
-		if e.HasPlatform(platform) {
+		if e.CompatibleWith(platforms) {
 			out = append(out, e)
 		}
 	}
 	return out
+}
+
+func parsePlatformFilter(platform string) map[string]bool {
+	platforms := make(map[string]bool)
+	for _, value := range strings.Split(platform, ",") {
+		value = normalizePlatform(value)
+		if value != "" {
+			platforms[value] = true
+		}
+	}
+	return platforms
+}
+
+func normalizePlatform(platform string) string {
+	return strings.ToLower(strings.TrimSpace(platform))
 }
 
 // FetchBytes downloads or reads (file://) a URL and returns raw bytes.

@@ -17,8 +17,12 @@ function Search.draw(view, bb, x, y, w, value, placeholder, callback, clear_call
     P.vcenter_text(bb, text, x + Theme.scale(46), y, w - Theme.scale(94), m.search_h, "default", { color = color })
     P.hit(view, x, y, w - Theme.scale(46), m.search_h, callback, "search")
     if value and value ~= "" then
-        P.text(bb, "x", x + w - Theme.scale(34), y + Theme.scale(12), Theme.scale(24), "heading", { bold = true })
-        P.hit(view, x + w - Theme.scale(48), y, Theme.scale(48), m.search_h, clear_callback, "clear-search")
+        local clear_w = Theme.scale(48)
+        local clear_x = x + w - clear_w
+        if not P.image(bb, Images.asset("close.svg"), clear_x + math.floor((clear_w - icon_size) / 2), y + math.floor((m.search_h - icon_size) / 2), icon_size, icon_size, { is_icon = true }) then
+            P.center_text_box(bb, "x", clear_x, y, clear_w, m.search_h, "default")
+        end
+        P.hit(view, clear_x, y, clear_w, m.search_h, clear_callback, "clear-search")
     end
     return m.search_h
 end

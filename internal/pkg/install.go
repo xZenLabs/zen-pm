@@ -7,6 +7,7 @@ import (
 
 	"ZPM/internal/log"
 	"ZPM/internal/platform"
+	"ZPM/internal/releases"
 	"ZPM/internal/repo"
 	"ZPM/internal/state"
 	"ZPM/internal/tx"
@@ -28,7 +29,12 @@ func (m *Manager) Install(id string) error {
 	if err != nil {
 		return fmt.Errorf("read catalog: %w", err)
 	}
-	plan, err := ResolvePlan(id, catalog)
+	installed, _ := m.st.ReadInstalled()
+	installedSet := make(map[string]bool, len(installed))
+	for _, e := range installed {
+		installedSet[e.ID] = true
+	}
+	plan, err := ResolvePlanWithInstalled(id, catalog, installedSet)
 	if err != nil {
 		return err
 	}
@@ -41,12 +47,6 @@ func (m *Manager) Install(id string) error {
 	byID := make(map[string]*repo.CatalogEntry, len(catalog))
 	for _, e := range catalog {
 		byID[e.ID] = e
-	}
-
-	installed, _ := m.st.ReadInstalled()
-	installedSet := make(map[string]bool, len(installed))
-	for _, e := range installed {
-		installedSet[e.ID] = true
 	}
 
 	for _, pkgID := range plan {
@@ -74,14 +74,16 @@ func (m *Manager) Install(id string) error {
 			log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
 		}
 
+		installedVersion := releaseVersion(entry)
+
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
-			ID: pkgID, Name: entry.Name, Version: entry.Version, Repo: entry.Repo,
+			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
 		}); err != nil {
 			j.Abort("record failed: " + err.Error())
 			return err
 		}
-		log.Infof("Installed: %s v%s", pkgID, entry.Version)
+		log.Infof("Installed: %s v%s", pkgID, installedVersion)
 	}
 
 	j.Commit()
@@ -182,8 +184,9 @@ func (m *Manager) Update(id string) error {
 			log.Warnf("Package %s not in any repo, skipping", e.ID)
 			continue
 		}
-		if versionGT(latest.Version, e.Version) {
-			log.Infof("Updating %s: %s -> %s", e.ID, e.Version, latest.Version)
+		latestVersion := releaseVersion(latest)
+		if releases.VersionGreater(latestVersion, e.Version) {
+			log.Infof("Updating %s: %s -> %s", e.ID, e.Version, latestVersion)
 			if err := m.Install(e.ID); err != nil {
 				return err
 			}
@@ -194,21 +197,12 @@ func (m *Manager) Update(id string) error {
 	return nil
 }
 
-// versionGT returns true if a > b using simple numeric semver comparison.
-func versionGT(a, b string) bool {
-	parse := func(v string) [3]int {
-		var maj, min, pat int
-		fmt.Sscanf(v, "%d.%d.%d", &maj, &min, &pat)
-		return [3]int{maj, min, pat}
+func releaseVersion(entry *repo.CatalogEntry) string {
+	if entry == nil {
+		return ""
 	}
-	av, bv := parse(a), parse(b)
-	for i := range av {
-		if av[i] > bv[i] {
-			return true
-		}
-		if av[i] < bv[i] {
-			return false
-		}
+	if latest, err := releases.LatestGitHubReleaseTag(entry.Source); err == nil && latest != "" {
+		return latest
 	}
-	return false
+	return entry.Version
 }
