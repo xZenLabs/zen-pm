@@ -5,13 +5,18 @@ It mirrors the Kindle WAF frontend flows while running inside KOReader.
 
 ## Install
 
-Copy `zenpm.koplugin` into KOReader's `plugins/` directory and restart KOReader.
+Extract the KOReader plugin zip for your platform, copy `zenpm.koplugin` into
+KOReader's `plugins/` directory, and restart KOReader.
 Open **ZenPM** from the KOReader menu.
 
-The plugin zip includes ARMhf, ARMsf, Linux ARM64, Linux AMD64, macOS ARM64,
-and macOS AMD64 ZenPM backend binaries under `zenpm.koplugin/backend/`. On KOReader startup, the
-plugin copies the matching backend into KOReader's settings
-`ZenPM/backend/zenpm` path and runs it from there.
+Release zips are platform-specific:
+
+- `ZenPM-koreader-ereader-<version>.zip` for Kindle/Kobo e-readers
+- `ZenPM-koreader-macos-<version>.zip` for macOS
+- `ZenPM-koreader-linux-<version>.zip` for Linux desktop
+
+On KOReader startup, the plugin copies the bundled backend into KOReader's
+settings `ZenPM/backend/zenpm` path and runs it from there.
 
 The settings copy is refreshed whenever either of these changes:
 

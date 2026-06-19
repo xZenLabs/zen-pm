@@ -21,6 +21,8 @@ function App:new(plugin)
         daemon = Daemon:new(),
         view = nil,
         busy = false,
+        backend_ready = false,
+        backend_starting = false,
         image_files = {},
         state = {
             page = "home",
@@ -101,7 +103,12 @@ function App:show()
         self.view = Chrome:new{ app = self }
     end
     UIManager:show(self.view)
-    self:navigate(self.state.active_tab or "home")
+    if self.backend_ready then
+        self:navigate(self.state.active_tab or "home")
+    else
+        self:set_loading(_("Loading packages, please wait"))
+        self:start_backend_then_reload()
+    end
 end
 
 function App:close()
@@ -139,16 +146,92 @@ function App:clear_status()
     self.state.error = nil
 end
 
+function App:backend_started(data, on_ready)
+    self.backend_starting = false
+    self.backend_ready = true
+    self.version = data and data.version or self.version or "?"
+    self:clear_status()
+    if on_ready then
+        on_ready()
+    else
+        self:refresh()
+    end
+end
+
+function App:backend_failed(message)
+    self.backend_starting = false
+    self.backend_ready = false
+    self:set_error(message)
+    Modals.info(message)
+end
+
+function App:poll_backend_ready(attempt, on_ready)
+    UIManager:scheduleIn(Constants.CONNECT_RETRY_DELAY_SECONDS, function()
+        local ok, data = self.client:health()
+        if ok and self.daemon:health_matches(data) then
+            self:backend_started(data, on_ready)
+            return
+        end
+        if attempt >= Constants.CONNECT_RETRIES then
+            self:backend_failed(Constants.DAEMON_UNAVAILABLE_MESSAGE)
+            return
+        end
+        self:poll_backend_ready(attempt + 1, on_ready)
+    end)
+end
+
+function App:start_backend_then_reload()
+    if self.backend_starting then
+        return
+    end
+    self.backend_starting = true
+    UIManager:scheduleIn(0.1, function()
+        local changed, prepare_err = self.daemon:ensure_backend_files()
+        if prepare_err then
+            self:backend_failed(prepare_err)
+            return
+        end
+
+        local healthy, health_data = self.client:health()
+        if healthy and not changed and self.daemon:health_matches(health_data) then
+            self:backend_started(health_data, function()
+                self:reload_current_page()
+            end)
+            return
+        elseif healthy then
+            self.daemon:stop_known_backends()
+            changed = true
+        end
+
+        self:set_loading(_("Loading packages, please wait"))
+        local started, err = self.daemon:start()
+        if not started then
+            self:backend_failed(err)
+            return
+        end
+        self:poll_backend_ready(1, function()
+            self:reload_current_page()
+        end)
+    end)
+end
+
 function App:ensure_backend()
+    if self.backend_starting then
+        self:set_loading(_("Loading packages, please wait"))
+        return false
+    end
+
     local changed, prepare_err = self.daemon:ensure_backend_files()
     if prepare_err then
         self:set_error(prepare_err)
         Modals.info(prepare_err)
+        self.backend_ready = false
         return false
     end
 
     local healthy, health_data = self.client:health()
     if healthy and not changed and self.daemon:health_matches(health_data) then
+        self.backend_ready = true
         self.version = health_data and health_data.version or self.version or "?"
         return true
     elseif healthy then
@@ -156,14 +239,16 @@ function App:ensure_backend()
         changed = true
     end
 
-    self:set_loading(_("Connecting to ZenPM..."))
+    self:set_loading(_("Loading packages, please wait"))
     local ok, data = self.daemon:ensure(self.client, changed)
     if not ok then
         local message = data or _("ZenPM daemon not reachable. Re-run ZenPM installer if it is not running.")
         self:set_error(message)
         Modals.info(message)
+        self.backend_ready = false
         return false
     end
+    self.backend_ready = true
     self.version = data and data.version or "?"
     return true
 end

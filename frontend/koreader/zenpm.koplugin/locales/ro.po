@@ -190,8 +190,8 @@ msgstr "Sigur doriți să reinstalați "
 msgid "Are you sure you want to uninstall "
 msgstr "Sigur doriți să dezinstalați "
 
-msgid "Connecting to ZenPM..."
-msgstr "Conectare la ZenPM..."
+msgid "Loading packages, please wait"
+msgstr "Se încarcă pachetele, vă rugăm așteptați"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "

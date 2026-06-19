@@ -190,8 +190,8 @@ msgstr "確定要重新安裝 "
 msgid "Are you sure you want to uninstall "
 msgstr "確定要解除安裝 "
 
-msgid "Connecting to ZenPM..."
-msgstr "正在連線 ZenPM..."
+msgid "Loading packages, please wait"
+msgstr "正在載入套件，請稍候"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "

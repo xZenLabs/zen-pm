@@ -115,6 +115,18 @@ local function copy_file(source, target)
     return false
 end
 
+local function dirname(path)
+    local dir = tostring(path or ""):match("^(.*)/[^/]*$")
+    if dir and dir ~= "" then
+        return dir
+    end
+    return "."
+end
+
+local function basename(path)
+    return tostring(path or ""):match("([^/]+)$") or tostring(path or "")
+end
+
 function Daemon:detect_platform()
     if self.platform then
         return self.platform
@@ -208,18 +220,34 @@ function Daemon:host_backend_suffix()
     return os_name .. "-" .. arch
 end
 
+function Daemon:host_backend_platform()
+    local kernel = command_output("uname -s 2>/dev/null"):lower()
+    if kernel == "linux" then
+        return "linux"
+    elseif kernel == "darwin" then
+        return "darwin"
+    end
+    return nil
+end
+
 function Daemon:bundled_backend_candidates()
     local dir = self:bundled_backend_dir()
     local platform = self:detect_platform()
     if platform == "kobo" or platform == "kindle" then
         local abi = self:detect_abi()
-        return { dir .. "/zenpm-" .. abi, dir .. "/zenpm" }
+        return { dir .. "/zenpm-ereader", dir .. "/zenpm-" .. abi, dir .. "/zenpm" }
     end
+    local host_platform = self:host_backend_platform()
     local suffix = self:host_backend_suffix()
-    if suffix then
-        return { dir .. "/zenpm-" .. suffix, dir .. "/zenpm" }
+    local candidates = {}
+    if host_platform then
+        table.insert(candidates, dir .. "/zenpm-" .. host_platform)
     end
-    return { dir .. "/zenpm" }
+    if suffix then
+        table.insert(candidates, dir .. "/zenpm-" .. suffix)
+    end
+    table.insert(candidates, dir .. "/zenpm")
+    return candidates
 end
 
 function Daemon:bundled_backend()
@@ -239,13 +267,28 @@ function Daemon:bundled_backend_version()
     return read_text(Constants.PLUGIN_DIR .. "/VERSION")
 end
 
+function Daemon:bundled_backend_companions(source)
+    if basename(source) == "zenpm-linux" then
+        local dir = dirname(source)
+        return {
+            dir .. "/zenpm-linux-amd64",
+            dir .. "/zenpm-linux-arm64",
+        }
+    end
+    return {}
+end
+
 function Daemon:desired_marker(source)
-    return table.concat({
+    local marker = {
         "plugin_version=" .. self:plugin_version(),
         "backend_version=" .. self:bundled_backend_version(),
         "backend_source=" .. tostring(source or ""),
         "backend_signature=" .. file_signature(source),
-    }, "\n") .. "\n"
+    }
+    for _, companion in ipairs(self:bundled_backend_companions(source)) do
+        table.insert(marker, "backend_companion=" .. companion .. " " .. file_signature(companion))
+    end
+    return table.concat(marker, "\n") .. "\n"
 end
 
 function Daemon:runtime_dirs()
@@ -318,8 +361,16 @@ function Daemon:ensure_backend_files()
     local backend = self:standalone_backend()
     local marker = self:desired_marker(source)
     local changed = dirs_missing or read_all(self:standalone_marker()) ~= marker or not path_exists(backend)
+    for _, companion in ipairs(self:bundled_backend_companions(source)) do
+        if not path_exists(backend_dir .. "/" .. basename(companion)) then
+            changed = true
+        end
+    end
     if not changed then
         os.execute("chmod +x " .. Util.sh_quote(backend))
+        for _, companion in ipairs(self:bundled_backend_companions(source)) do
+            os.execute("chmod +x " .. Util.sh_quote(backend_dir .. "/" .. basename(companion)))
+        end
         self.backend_path = backend
         return false, nil
     end
@@ -327,6 +378,16 @@ function Daemon:ensure_backend_files()
         return false, _("Could not install bundled ZenPM backend to: ") .. backend
     end
     os.execute("chmod +x " .. Util.sh_quote(backend))
+    for _, companion in ipairs(self:bundled_backend_companions(source)) do
+        if not path_exists(companion) then
+            return false, _("Bundled ZenPM backend not found. Expected ") .. companion .. "."
+        end
+        local target = backend_dir .. "/" .. basename(companion)
+        if not copy_file(companion, target) then
+            return false, _("Could not install bundled ZenPM backend to: ") .. target
+        end
+        os.execute("chmod +x " .. Util.sh_quote(target))
+    end
     write_text(self:standalone_backend_dir() .. "/VERSION", self:bundled_backend_version() .. "\n")
     write_text(self:standalone_marker(), marker)
     self.backend_path = backend

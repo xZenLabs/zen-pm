@@ -376,6 +376,14 @@ function Chrome:draw_content(bb, x, y, w, h)
     local scroll = state.scroll[scroll_key] or 0
     local max_scroll = 0
 
+    if state.loading then
+        P.rect(bb, x, y, w, h, Theme.bg)
+        P.text(bb, state.loading, x + Theme.scale(16), y + Theme.scale(10), w - Theme.scale(32), "default", { color = Theme.muted })
+        self:set_list_bounds(x, y, w, h, h)
+        self.max_scroll = 0
+        return
+    end
+
     if page == "home" then
         max_scroll = self:draw_featured(bb, x, y, w, h, scroll)
     elseif page == "search" then
@@ -400,8 +408,6 @@ function Chrome:draw_content(bb, x, y, w, h)
 
     if state.error then
         P.text(bb, state.error, x + Theme.scale(16), y + Theme.scale(10), w - Theme.scale(32), "default", { color = Theme.muted })
-    elseif state.loading then
-        P.text(bb, state.loading, x + Theme.scale(16), y + Theme.scale(10), w - Theme.scale(32), "default", { color = Theme.muted })
     end
 
     self:draw_scrollbar(bb, max_scroll, scroll)

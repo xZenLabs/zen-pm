@@ -190,8 +190,8 @@ msgstr "本当に再インストールしますか: "
 msgid "Are you sure you want to uninstall "
 msgstr "本当にアンインストールしますか: "
 
-msgid "Connecting to ZenPM..."
-msgstr "ZenPMに接続中..."
+msgid "Loading packages, please wait"
+msgstr "パッケージを読み込んでいます。お待ちください"
 
 msgid "Could not add source: "
 msgstr "ソースを追加できませんでした: "

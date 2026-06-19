@@ -190,8 +190,8 @@ msgstr "Opravdu chcete přeinstalovat "
 msgid "Are you sure you want to uninstall "
 msgstr "Opravdu chcete odinstalovat "
 
-msgid "Connecting to ZenPM..."
-msgstr "Připojování k ZenPM..."
+msgid "Loading packages, please wait"
+msgstr "Načítání balíčků, počkejte prosím"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "

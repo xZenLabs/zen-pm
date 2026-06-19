@@ -54,7 +54,10 @@ fi
 
 KINDLE_STAGE="$BUILD_DIR/kindle"
 KOBO_STAGE="$BUILD_DIR/kobo"
-KOREADER_PLUGIN_STAGE="$BUILD_DIR/koreader-plugin"
+KOREADER_PLUGIN_BASE_STAGE="$BUILD_DIR/koreader-plugin-base"
+KOREADER_EREADER_STAGE="$BUILD_DIR/koreader-ereader"
+KOREADER_MACOS_STAGE="$BUILD_DIR/koreader-macos"
+KOREADER_LINUX_STAGE="$BUILD_DIR/koreader-linux"
 
 copy_tree() {
     src="$1"
@@ -66,7 +69,7 @@ copy_tree() {
 ensure_exec() {
     target="$1"
     if [ -d "$target" ]; then
-        find "$target" -type f \( -name '*.sh' -o -name 'zenpm' -o -name 'zenpm-hf' -o -name 'zenpm-sf' -o -name 'zenpm-linux-arm64' -o -name 'zenpm-linux-amd64' -o -name 'zenpm-darwin-arm64' -o -name 'zenpm-darwin-amd64' \) -exec chmod +x {} +
+        find "$target" -type f \( -name '*.sh' -o -name 'zenpm' -o -name 'zenpm-hf' -o -name 'zenpm-sf' -o -name 'zenpm-ereader' -o -name 'zenpm-linux' -o -name 'zenpm-linux-arm64' -o -name 'zenpm-linux-amd64' -o -name 'zenpm-darwin' -o -name 'zenpm-darwin-arm64' -o -name 'zenpm-darwin-amd64' \) -exec chmod +x {} +
     fi
 }
 
@@ -79,17 +82,44 @@ build_go() {
     LDFLAGS="-X main.version=$VERSION"
     GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
     GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-sf" ./cmd/zenpm
+    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-ereader" ./cmd/zenpm
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-arm64" ./cmd/zenpm
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-amd64" ./cmd/zenpm
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm
     GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-amd64" ./cmd/zenpm
-    echo "Go binaries: zenpm-hf (ARMhf) zenpm-sf (ARMsf) zenpm-linux-arm64 zenpm-linux-amd64 zenpm-darwin-arm64 zenpm-darwin-amd64"
+    command -v lipo >/dev/null 2>&1 || {
+        echo "lipo not found; required to build the macOS universal KOReader backend"
+        exit 1
+    }
+    lipo -create -output "$BUILD_DIR/zenpm-darwin" "$BUILD_DIR/zenpm-darwin-amd64" "$BUILD_DIR/zenpm-darwin-arm64"
+    cat > "$BUILD_DIR/zenpm-linux" <<'EOF'
+#!/bin/sh
+set -eu
+
+DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+MACHINE=$(uname -m 2>/dev/null || echo unknown)
+
+case "$MACHINE" in
+    x86_64|amd64)
+        exec "$DIR/zenpm-linux-amd64" "$@"
+        ;;
+    arm64|aarch64)
+        exec "$DIR/zenpm-linux-arm64" "$@"
+        ;;
+    *)
+        echo "Unsupported Linux architecture: $MACHINE" >&2
+        exit 1
+        ;;
+esac
+EOF
+    chmod +x "$BUILD_DIR/zenpm-linux"
+    echo "Go binaries: zenpm-hf (ARMhf) zenpm-sf (ARMsf) zenpm-ereader zenpm-linux zenpm-linux-arm64 zenpm-linux-amd64 zenpm-darwin"
 }
 
 trap cleanup_stage EXIT INT TERM
 
 rm -rf "$DIST_DIR"
-mkdir -p "$KINDLE_STAGE" "$KOBO_STAGE" "$KOREADER_PLUGIN_STAGE" "$DIST_DIR"
+mkdir -p "$KINDLE_STAGE" "$KOBO_STAGE" "$KOREADER_PLUGIN_BASE_STAGE" "$DIST_DIR"
 
 build_go
 
@@ -129,22 +159,39 @@ copy_tree "$ROOT_DIR/installers" "$KOBO_STAGE/.adds/ZenPM"
 
 ensure_exec "$KOBO_STAGE/.adds/ZenPM"
 
-copy_tree "$ROOT_DIR/frontend/koreader/zenpm.koplugin" "$KOREADER_PLUGIN_STAGE"
-cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/VERSION"
-sed -E "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/_meta.lua" > "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/_meta.lua.tmp" && mv "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/_meta.lua.tmp" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/_meta.lua"
-mkdir -p "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend"
-cp "$BUILD_DIR/zenpm-hf" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/zenpm-hf"
-cp "$BUILD_DIR/zenpm-sf" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/zenpm-sf"
-cp "$BUILD_DIR/zenpm-linux-arm64" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/zenpm-linux-arm64"
-cp "$BUILD_DIR/zenpm-linux-amd64" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/zenpm-linux-amd64"
-cp "$BUILD_DIR/zenpm-darwin-arm64" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/zenpm-darwin-arm64"
-cp "$BUILD_DIR/zenpm-darwin-amd64" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/zenpm-darwin-amd64"
-cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_STAGE/zenpm.koplugin/backend/VERSION"
-ensure_exec "$KOREADER_PLUGIN_STAGE/zenpm.koplugin"
+copy_tree "$ROOT_DIR/frontend/koreader/zenpm.koplugin" "$KOREADER_PLUGIN_BASE_STAGE"
+cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/VERSION"
+sed -E "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua" > "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua.tmp" && mv "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua.tmp" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua"
+
+stage_koreader_plugin() {
+    stage="$1"
+    rm -rf "$stage"
+    mkdir -p "$stage"
+    cp -R "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin" "$stage/"
+    rm -rf "$stage/zenpm.koplugin/backend"
+    mkdir -p "$stage/zenpm.koplugin/backend"
+    cp "$ROOT_DIR/VERSION" "$stage/zenpm.koplugin/backend/VERSION"
+}
+
+stage_koreader_plugin "$KOREADER_EREADER_STAGE"
+cp "$BUILD_DIR/zenpm-ereader" "$KOREADER_EREADER_STAGE/zenpm.koplugin/backend/zenpm-ereader"
+ensure_exec "$KOREADER_EREADER_STAGE/zenpm.koplugin"
+
+stage_koreader_plugin "$KOREADER_MACOS_STAGE"
+cp "$BUILD_DIR/zenpm-darwin" "$KOREADER_MACOS_STAGE/zenpm.koplugin/backend/zenpm-darwin"
+ensure_exec "$KOREADER_MACOS_STAGE/zenpm.koplugin"
+
+stage_koreader_plugin "$KOREADER_LINUX_STAGE"
+cp "$BUILD_DIR/zenpm-linux" "$KOREADER_LINUX_STAGE/zenpm.koplugin/backend/zenpm-linux"
+cp "$BUILD_DIR/zenpm-linux-arm64" "$KOREADER_LINUX_STAGE/zenpm.koplugin/backend/zenpm-linux-arm64"
+cp "$BUILD_DIR/zenpm-linux-amd64" "$KOREADER_LINUX_STAGE/zenpm.koplugin/backend/zenpm-linux-amd64"
+ensure_exec "$KOREADER_LINUX_STAGE/zenpm.koplugin"
 
 KINDLE_ZIP="$DIST_DIR/ZenPM-kindle-$VERSION.zip"
 KOBO_ZIP="$DIST_DIR/ZenPM-kobo-$VERSION.zip"
-KOREADER_PLUGIN_ZIP="$DIST_DIR/ZenPM-koreader-plugin-$VERSION.zip"
+KOREADER_EREADER_ZIP="$DIST_DIR/ZenPM-koreader-ereader-$VERSION.zip"
+KOREADER_MACOS_ZIP="$DIST_DIR/ZenPM-koreader-macos-$VERSION.zip"
+KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 
 (
     cd "$KINDLE_STAGE"
@@ -157,15 +204,27 @@ KOREADER_PLUGIN_ZIP="$DIST_DIR/ZenPM-koreader-plugin-$VERSION.zip"
 )
 
 (
-    cd "$KOREADER_PLUGIN_STAGE"
-    zip -qr "$KOREADER_PLUGIN_ZIP" zenpm.koplugin
+    cd "$KOREADER_EREADER_STAGE"
+    zip -qr "$KOREADER_EREADER_ZIP" zenpm.koplugin
+)
+
+(
+    cd "$KOREADER_MACOS_STAGE"
+    zip -qr "$KOREADER_MACOS_ZIP" zenpm.koplugin
+)
+
+(
+    cd "$KOREADER_LINUX_STAGE"
+    zip -qr "$KOREADER_LINUX_ZIP" zenpm.koplugin
 )
 
 echo "Build complete"
 echo "Version:          $VERSION"
 echo "Kindle package: $KINDLE_ZIP"
 echo "Kobo package:   $KOBO_ZIP"
-echo "KOReader plugin: $KOREADER_PLUGIN_ZIP"
+echo "KOReader e-reader plugin: $KOREADER_EREADER_ZIP"
+echo "KOReader macOS plugin:    $KOREADER_MACOS_ZIP"
+echo "KOReader Linux plugin:    $KOREADER_LINUX_ZIP"
 
 # Bump patch for the next build.
 _major=$(printf '%s' "$VERSION" | cut -d. -f1)

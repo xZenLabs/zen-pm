@@ -41,9 +41,11 @@ Outputs:
 
 - `dist/ZenPM-kindle-<version>.zip`
 - `dist/ZenPM-kobo-<version>.zip`
-- `dist/ZenPM-koreader-plugin-<version>.zip`
+- `dist/ZenPM-koreader-ereader-<version>.zip`
+- `dist/ZenPM-koreader-macos-<version>.zip`
+- `dist/ZenPM-koreader-linux-<version>.zip`
 
-Kindle and Kobo packages contain ARMhf (`zenpm-hf`) and ARMsf (`zenpm-sf`) binaries. The KOReader plugin zip bundles ARMhf, ARMsf, Linux ARM64 (`zenpm-linux-arm64`), Linux AMD64 (`zenpm-linux-amd64`), macOS ARM64 (`zenpm-darwin-arm64`), and macOS AMD64 (`zenpm-darwin-amd64`) backend binaries under `zenpm.koplugin/backend/`.
+Kindle and Kobo packages contain ARMhf (`zenpm-hf`) and ARMsf (`zenpm-sf`) binaries. KOReader plugin zips are platform-specific: e-reader builds include `zenpm-ereader`, macOS builds include a universal `zenpm-darwin`, and Linux desktop builds include a `zenpm-linux` wrapper with ARM64 and AMD64 payloads.
 
 ## Local development
 
@@ -104,7 +106,10 @@ sh /mnt/onboard/.adds/zenpm/installers/kobo/ZenPM.sh
 
 ## Install KOReader plugin
 
-1. Extract `dist/ZenPM-koreader-plugin-<version>.zip`.
+1. Extract the KOReader plugin zip for your platform:
+   - `dist/ZenPM-koreader-ereader-<version>.zip` for Kindle/Kobo e-readers
+   - `dist/ZenPM-koreader-macos-<version>.zip` for macOS
+   - `dist/ZenPM-koreader-linux-<version>.zip` for Linux desktop
 2. Copy `zenpm.koplugin/` into KOReader's `plugins/` directory.
 3. Restart KOReader and open **ZenPM** from the KOReader menu.
 

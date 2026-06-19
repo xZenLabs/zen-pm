@@ -190,8 +190,8 @@ msgstr "Вы уверены, что хотите переустановить "
 msgid "Are you sure you want to uninstall "
 msgstr "Вы уверены, что хотите удалить "
 
-msgid "Connecting to ZenPM..."
-msgstr "Подключение к ZenPM..."
+msgid "Loading packages, please wait"
+msgstr "Загрузка пакетов, пожалуйста, подождите"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "

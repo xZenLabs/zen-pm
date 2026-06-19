@@ -190,8 +190,8 @@ msgstr "Sei sicuro di voler reinstallare "
 msgid "Are you sure you want to uninstall "
 msgstr "Sei sicuro di voler disinstallare "
 
-msgid "Connecting to ZenPM..."
-msgstr "Connessione a ZenPM..."
+msgid "Loading packages, please wait"
+msgstr "Caricamento pacchetti in corso, attendere"
 
 msgid "Could not add source: "
 msgstr "Impossibile aggiungere la sorgente: "

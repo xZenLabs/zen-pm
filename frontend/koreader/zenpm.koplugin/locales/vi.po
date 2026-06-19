@@ -190,8 +190,8 @@ msgstr "Bạn có chắc muốn cài lại "
 msgid "Are you sure you want to uninstall "
 msgstr "Bạn có chắc muốn gỡ cài đặt "
 
-msgid "Connecting to ZenPM..."
-msgstr "Đang kết nối ZenPM..."
+msgid "Loading packages, please wait"
+msgstr "Đang tải các gói, vui lòng đợi"
 
 msgid "Could not add source: "
 msgstr "Không thể thêm nguồn: "
