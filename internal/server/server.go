@@ -72,8 +72,8 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
 
 	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
-	if _, err := s.repos.ReadCatalog(); err != nil {
-		log.Info("No catalog found — running initial repo refresh")
+	catalog, needsRefresh := s.initialCatalogState()
+	if needsRefresh {
 		go func() {
 			if err := s.repos.Refresh(); err != nil {
 				log.Warnf("Initial refresh failed: %v", err)
@@ -81,9 +81,7 @@ func (s *Server) ListenAndServe() error {
 		}()
 	} else {
 		go func() {
-			if catalog, err := s.repos.ReadCatalog(); err == nil {
-				s.repos.CacheInstalledUninstallScripts(catalog)
-			}
+			s.repos.CacheInstalledUninstallScripts(catalog)
 		}()
 	}
 
@@ -94,6 +92,19 @@ func (s *Server) ListenAndServe() error {
 	}
 	log.Infof("ZenPM server listening on %s", addr)
 	return http.Serve(ln, mux)
+}
+
+func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		log.Info("No catalog found — running initial repo refresh")
+		return nil, true
+	}
+	if len(catalog) == 0 {
+		log.Info("Catalog is empty — running initial repo refresh")
+		return nil, true
+	}
+	return catalog, false
 }
 
 // responseRecorder captures the status code written by a handler.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"ZPM/internal/log"
 	"ZPM/internal/platform"
@@ -55,7 +56,7 @@ func (m *Manager) Install(id string) error {
 			continue
 		}
 		entry := byID[pkgID]
-		log.Infof("Installing %s v%s from repo %s", entry.ID, entry.Version, entry.Repo)
+		log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(entry.Version), entry.Repo)
 
 		j.Record("fetch-script", "ok", "pkg="+pkgID)
 		scriptPath, err := m.repos.FetchScript(entry.InstallURL)
@@ -65,7 +66,7 @@ func (m *Manager) Install(id string) error {
 		}
 
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, entry.Version))
-		if err := platform.ExecuteScript(scriptPath); err != nil {
+		if err := platform.ExecuteScriptWithEnv(scriptPath, installEnv(entry)); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 		}
@@ -83,7 +84,7 @@ func (m *Manager) Install(id string) error {
 			j.Abort("record failed: " + err.Error())
 			return err
 		}
-		log.Infof("Installed: %s v%s", pkgID, installedVersion)
+		log.Infof("Installed: %s %s", pkgID, displayVersion(installedVersion))
 	}
 
 	j.Commit()
@@ -159,6 +160,48 @@ func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0755)
+}
+
+func installEnv(entry *repo.CatalogEntry) map[string]string {
+	env := map[string]string{
+		"ZENPM_PACKAGE_ID": entry.ID,
+	}
+	if entry.Source != "" {
+		env["ZENPM_PACKAGE_SOURCE"] = entry.Source
+	}
+	if entry.SourceAsset != "" {
+		log.Infof("Package %s using source asset pattern %q", entry.ID, entry.SourceAsset)
+		env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
+	} else if entry.Source != "" && isGenericKOReaderPlugin(entry) {
+		log.Warnf("Package %s has no source_asset; falling back to .koplugin.zip asset pattern", entry.ID)
+		env["ZENPM_PACKAGE_SOURCE_ASSET"] = ".koplugin.zip"
+	} else if entry.Source != "" {
+		log.Warnf("Package %s has source but no source_asset; install script may choose its default asset", entry.ID)
+	}
+	return env
+}
+
+func displayVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "v0.0.0"
+	}
+	if strings.HasPrefix(strings.ToLower(version), "v") {
+		return version
+	}
+	return "v" + version
+}
+
+func isGenericKOReaderPlugin(entry *repo.CatalogEntry) bool {
+	if entry == nil || !strings.HasSuffix(entry.InstallURL, "/install-plugin.sh") {
+		return false
+	}
+	for _, platform := range entry.Platforms {
+		if strings.EqualFold(strings.TrimSpace(platform), "koreader") {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) Update(id string) error {

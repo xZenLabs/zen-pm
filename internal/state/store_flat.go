@@ -29,6 +29,7 @@ type CatalogEntry struct {
 	FeaturedImage string
 	Category      string
 	Source        string
+	SourceAsset   string
 }
 
 type flatFileStore struct {
@@ -223,18 +224,12 @@ func serializeCatalogEntry(e CatalogEntry) string {
 		e.FeaturedImage,
 		e.Category,
 		e.Source,
-		"v2",
+		e.SourceAsset,
 	}, "|")
 }
 
 func parseCatalogLine(line string) (CatalogEntry, error) {
 	parts := strings.Split(line, "|")
-	if len(parts) >= 21 && parts[20] == "v2" {
-		return parseModernCatalogLine(parts)
-	}
-	if len(parts) >= 20 {
-		return parseLegacyCatalogLine(parts)
-	}
 	return parseModernCatalogLine(parts)
 }
 
@@ -285,6 +280,9 @@ func parseModernCatalogLine(parts []string) (CatalogEntry, error) {
 	}
 	if len(parts) >= 20 {
 		e.Source = parts[19]
+	}
+	if len(parts) >= 21 {
+		e.SourceAsset = parts[20]
 	}
 	return e, nil
 }

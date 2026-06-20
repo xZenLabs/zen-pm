@@ -13,6 +13,14 @@ function Modals.info(text)
     UIManager:show(InfoMessage:new{ text = text })
 end
 
+function Modals.info_for(text, seconds)
+    local modal = InfoMessage:new{ text = text }
+    UIManager:show(modal)
+    UIManager:scheduleIn(seconds, function()
+        UIManager:close(modal)
+    end)
+end
+
 function Modals.status(text)
     Modals.close_status()
     status_modal = InfoMessage:new{
@@ -145,6 +153,29 @@ function Modals.actions(title, rows)
     dialog = ButtonDialog:new{
         title = title,
         buttons = buttons,
+    }
+    UIManager:show(dialog)
+end
+
+function Modals.restart_koreader(text, restart_callback)
+    local dialog
+    dialog = ButtonDialog:new{
+        title = text,
+        buttons = {
+            {
+                {
+                    text = _("Restart later"),
+                    callback = function() UIManager:close(dialog) end,
+                },
+                {
+                    text = _("Restart now"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        restart_callback()
+                    end,
+                },
+            },
+        },
     }
     UIManager:show(dialog)
 end

@@ -98,6 +98,22 @@ local function action_done(action)
     return _("uninstalled")
 end
 
+local function package_is_koreader_plugin(pkg)
+    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    for _, platform in ipairs(pkg.platforms) do
+        if Util.trim(tostring(platform or "")):lower() == "koreader" then
+            return true
+        end
+    end
+    return false
+end
+
+local function action_installs_package(action)
+    return action == "install" or action == "reinstall" or action == "update"
+end
+
 function App:show()
     if not self.view then
         self.view = Chrome:new{ app = self }
@@ -817,7 +833,7 @@ function App:start_package_action(pkg, action, on_done)
     if not ok then
         self.busy = false
         Modals.close_status()
-        Modals.info(_("Failed to start package action: ") .. tostring(err))
+        Modals.info_for(_("Failed to start package action: ") .. tostring(err), Constants.PACKAGE_NOTICE_SECONDS)
         return
     end
     self:poll_package_action({
@@ -826,6 +842,7 @@ function App:start_package_action(pkg, action, on_done)
         action = action,
         was_installed = pkg.installed and true or false,
         target_version = pkg.latest_version,
+        prompt_restart = action_installs_package(action) and package_is_koreader_plugin(pkg),
         failure_baseline = failure_baseline,
         on_done = on_done,
     }, 1)
@@ -883,7 +900,7 @@ function App:poll_package_action(op, attempt)
         if detail then
             self.busy = false
             Modals.close_status()
-            Modals.info(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail)
+            Modals.info_for(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail, Constants.PACKAGE_NOTICE_SECONDS)
             return
         end
 
@@ -892,7 +909,7 @@ function App:poll_package_action(op, attempt)
             if attempt >= Constants.MAX_POLL_RETRIES then
                 self.busy = false
                 Modals.close_status()
-                Modals.info(_("Package operation status could not be checked. See Debug log."))
+                Modals.info_for(_("Package operation status could not be checked. See Debug log."), Constants.PACKAGE_NOTICE_SECONDS)
                 return
             end
             self:poll_package_action(op, attempt + 1)
@@ -906,7 +923,13 @@ function App:poll_package_action(op, attempt)
             self.busy = false
             local done = action_done(op.action)
             Modals.close_status()
-            Modals.info(op.name .. " " .. done .. _(" successfully."))
+            if op.prompt_restart then
+                Modals.restart_koreader(op.name .. " " .. done .. _(" successfully.\n\nRestart KOReader to load the plugin."), function()
+                    UIManager:restartKOReader()
+                end)
+            else
+                Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
+            end
             if op.on_done then op.on_done() end
         elseif attempt >= Constants.MAX_POLL_RETRIES then
             self.busy = false
@@ -918,7 +941,7 @@ function App:poll_package_action(op, attempt)
                 message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
             end
             Modals.close_status()
-            Modals.info(message)
+            Modals.info_for(message, Constants.PACKAGE_NOTICE_SECONDS)
         else
             self:poll_package_action(op, attempt + 1)
         end

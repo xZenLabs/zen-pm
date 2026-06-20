@@ -23,7 +23,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|v2
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -45,6 +45,7 @@ type CatalogEntry struct {
 	FeaturedImage string
 	Category      string
 	Source        string
+	SourceAsset   string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -80,18 +81,12 @@ func (e *CatalogEntry) serialize() string {
 		e.FeaturedImage,
 		e.Category,
 		e.Source,
-		"v2",
+		e.SourceAsset,
 	}, "|")
 }
 
 func parseCatalogLine(line string) (*CatalogEntry, error) {
 	parts := strings.Split(line, "|")
-	if len(parts) >= 21 && parts[20] == "v2" {
-		return parseModernCatalogLine(parts)
-	}
-	if len(parts) >= 20 {
-		return parseLegacyCatalogLine(parts)
-	}
 	return parseModernCatalogLine(parts)
 }
 
@@ -142,6 +137,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 20 {
 		e.Source = parts[19]
+	}
+	if len(parts) >= 21 {
+		e.SourceAsset = parts[20]
 	}
 	return e, nil
 }
@@ -315,6 +313,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			FeaturedImage: featuredImage,
 			Category:      p.Category,
 			Source:        source,
+			SourceAsset:   p.SourceAsset,
 		})
 	}
 	return entries

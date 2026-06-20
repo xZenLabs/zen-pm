@@ -197,7 +197,7 @@ function Chrome:draw_header(bb, x, y, w)
     if page == "home" then
         local h = Theme.scale(78)
         P.box(bb, x, y, w, h, { border = false })
-        self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(18))
+        self:draw_actions(bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
         local logo = Theme.scale(52)
         local logo_y = y + Theme.scale(13)
         if not P.image(bb, Images.asset("zenpm.svg"), x + pad, y + Theme.scale(13), logo, logo, { is_icon = true }) then

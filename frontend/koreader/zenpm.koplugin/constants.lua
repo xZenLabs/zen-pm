@@ -12,6 +12,7 @@ return {
     REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
 
     FEATURED_IDS = { "zen-reader", "kindle-browser", "zen-mtp" },
+    PACKAGE_NOTICE_SECONDS = 3,
     POLL_DELAY_SECONDS = 3.5,
     MAX_POLL_RETRIES = 20,
     CONNECT_RETRIES = 8,

@@ -58,6 +58,27 @@ func TestParseKindleForgeCatalogMapsTagsToCategory(t *testing.T) {
 	}
 }
 
+func TestCatalogSourceAssetRoundTrip(t *testing.T) {
+	entry := &CatalogEntry{
+		Repo:        "ZenLabs",
+		Priority:    10,
+		ID:          "sudoku-koplugin",
+		Name:        "Sudoku",
+		Version:     "1.2.1",
+		InstallURL:  "install.sh",
+		Source:      "omer-faruq/sudoku.koplugin",
+		SourceAsset: "sudoku.koplugin.zip",
+	}
+
+	got, err := parseCatalogLine(entry.serialize())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SourceAsset != entry.SourceAsset {
+		t.Fatalf("SourceAsset = %q, want %q", got.SourceAsset, entry.SourceAsset)
+	}
+}
+
 func assertEntryIDs(t *testing.T, entries []*CatalogEntry, want []string) {
 	t.Helper()
 	if len(entries) != len(want) {
