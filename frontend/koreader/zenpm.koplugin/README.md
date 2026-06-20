@@ -26,6 +26,16 @@ The settings copy is refreshed whenever either of these changes:
 State, cache, logs, and the managed backend live in the settings `ZenPM/`
 directory so they survive plugin updates.
 
+The plugin starts its managed backend with `ZENPM_STATE_BACKEND=sqlite`, so
+repositories, installed package records, and the merged catalog live in
+`ZenPM/state/zenpm.sqlite3`. Logs, journals, locks, downloaded scripts, and raw
+repo manifests remain regular files.
+
+On Kindle, when the standalone ZenPM WAF install also exists, the KOReader
+database imports missing repositories, installed package records, and catalog
+entries from the standalone Kindle flat files on startup. Existing KOReader
+database rows are not overwritten.
+
 ## Parity Targets
 
 - Featured, Search, Installed, Sources, Source Details, Package Details, Debug

@@ -172,6 +172,18 @@ Files in the state directory:
 | `repos.db` | Configured repositories |
 | `installed.db` | Installed package tracking |
 
+When ZenPM is launched by the KOReader plugin, the plugin starts its managed
+backend with `ZENPM_STATE_BACKEND=sqlite`. In that mode, repositories,
+installed package records, and the merged catalog are stored in
+`<ZENPM_HOME>/state/zenpm.sqlite3`; logs, locks, journals, cached scripts, and
+raw fetched manifests remain regular files. Standalone Kindle and Kobo installs
+continue to use the flat files above.
+
+On Kindle, if both the standalone WAF install and the KOReader plugin are
+present, the KOReader SQLite database imports missing values from the standalone
+Kindle flat files under `/mnt/us/.ZenPM/` and `/mnt/us/ZenPM/cache/` on startup.
+Existing KOReader database rows are kept as authoritative.
+
 On first startup, the daemon scans for known apps already on the device and tracks them automatically:
 
 | App | Detection path |
@@ -207,6 +219,7 @@ The log includes: startup info (platform, home dir, log path), every HTTP reques
 |---|---|---|
 | `ZENPM_HOME` | platform default | State directory root |
 | `ZENPM_PLATFORM` | auto-detected | Force `kindle`, `kobo`, or `host` |
+| `ZENPM_STATE_BACKEND` | `flat` | Use `flat` files or `sqlite` state storage |
 | `ZENPM_DRY_RUN` | unset | Set to `1` for no-op installs |
 | `ZENPM_DEFAULT_REPO_URL` | derived from binary path | Override default repo URL |
 | `ZENPM_REPO_PUBKEY` | ZenLabs key | Override Ed25519 public key for sig verification (hex-encoded 32 bytes) |

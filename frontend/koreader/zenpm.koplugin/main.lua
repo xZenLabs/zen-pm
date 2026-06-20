@@ -20,8 +20,6 @@ function ZenPM:onDispatcherRegisterActions()
         general = true,
     }
     Dispatcher:registerAction("zenpm", action)
-    Dispatcher:registerAction("zenpm_open", action)
-    Dispatcher:registerAction("open_zenpm", action)
 end
 
 function ZenPM:init()

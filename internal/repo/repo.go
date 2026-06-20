@@ -92,7 +92,7 @@ func (m *Manager) Refresh() error {
 		all = append(all, entries...)
 	}
 	merged := MergeCatalogs(all)
-	if err := WriteMergedCatalog(m.catalogPath(), merged); err != nil {
+	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
 		return fmt.Errorf("write merged catalog: %w", err)
 	}
 	m.CacheInstalledUninstallScripts(merged)
@@ -132,12 +132,12 @@ func (m *Manager) CacheInstalledUninstallScripts(catalog []*CatalogEntry) {
 	}
 }
 
-func (m *Manager) catalogPath() string {
-	return filepath.Join(m.st.CacheDir, "catalog.merged")
-}
-
 func (m *Manager) ReadCatalog() ([]*CatalogEntry, error) {
-	return ReadMergedCatalog(m.catalogPath())
+	entries, err := m.st.ReadCatalog()
+	if err != nil {
+		return nil, err
+	}
+	return fromStateCatalog(entries), nil
 }
 
 // FetchScript downloads a script URL to a temp file and returns its path.
@@ -152,4 +152,35 @@ func (m *Manager) FetchScript(scriptURL string) (string, error) {
 		return "", fmt.Errorf("write script: %w", err)
 	}
 	return dst, nil
+}
+
+func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
+	out := make([]state.CatalogEntry, 0, len(entries))
+	for _, e := range entries {
+		if e == nil {
+			continue
+		}
+		out = append(out, state.CatalogEntry{
+			Repo: e.Repo, Priority: e.Priority, ID: e.ID, Name: e.Name, Version: e.Version,
+			Platforms: e.Platforms, Deps: e.Deps, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
+			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
+			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
+			Featured: e.Featured, FeaturedImage: e.FeaturedImage, Category: e.Category, Source: e.Source,
+		})
+	}
+	return out
+}
+
+func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
+	out := make([]*CatalogEntry, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, &CatalogEntry{
+			Repo: e.Repo, Priority: e.Priority, ID: e.ID, Name: e.Name, Version: e.Version,
+			Platforms: e.Platforms, Deps: e.Deps, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
+			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
+			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
+			Featured: e.Featured, FeaturedImage: e.FeaturedImage, Category: e.Category, Source: e.Source,
+		})
+	}
+	return out
 }

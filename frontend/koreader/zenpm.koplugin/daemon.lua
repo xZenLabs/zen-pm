@@ -464,6 +464,7 @@ function Daemon:start()
     local cmd = "ZENPM_PLATFORM=" .. Util.sh_quote(platform)
     if home then
         cmd = cmd .. " ZENPM_HOME=" .. Util.sh_quote(home)
+        cmd = cmd .. " ZENPM_STATE_BACKEND=sqlite"
     end
     if home then
         cmd = cmd .. " "

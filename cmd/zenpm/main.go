@@ -181,6 +181,7 @@ func runPackage(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, plat st
 func runDoctor(st *state.State, plat string) {
 	fmt.Printf("Platform:   %s\n", plat)
 	fmt.Printf("ZENPM_HOME: %s\n", st.Home)
+	fmt.Printf("State:      %s\n", st.StateBackend)
 
 	check := func(label, path string) {
 		if _, err := os.Stat(path); err == nil {
@@ -189,8 +190,12 @@ func runDoctor(st *state.State, plat string) {
 			fmt.Printf("  [!!] %s: %s (missing)\n", label, path)
 		}
 	}
-	check("repos.db", st.ReposDB)
-	check("installed.db", st.InstalledDB)
+	if st.StateBackend == "sqlite" {
+		check("zenpm.sqlite3", st.SQLiteDB)
+	} else {
+		check("repos.db", st.ReposDB)
+		check("installed.db", st.InstalledDB)
+	}
 	check("cache dir", st.CacheDir)
 	check("log file", st.LogFile)
 

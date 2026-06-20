@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -24,6 +23,8 @@ type State struct {
 	Home          string
 	ReposDB       string
 	InstalledDB   string
+	SQLiteDB      string
+	StateBackend  string
 	CacheDir      string
 	ScriptDir     string
 	TmpDir        string
@@ -31,6 +32,18 @@ type State struct {
 	JournalDir    string
 	LogFile       string
 	SeededRepoURL string // non-empty only when repos.db was just created
+	store         Store
+}
+
+type Store interface {
+	ReadRepos() ([]RepoEntry, error)
+	WriteRepos([]RepoEntry) error
+	ReadInstalled() ([]InstalledEntry, error)
+	AppendInstalled(InstalledEntry) error
+	RemoveInstalled(string) error
+	IsInstalled(string) (bool, string)
+	ReadCatalog() ([]CatalogEntry, error)
+	WriteCatalog([]CatalogEntry) error
 }
 
 // Init resolves ZENPM_HOME (or a platform default), creates all directories,
@@ -60,6 +73,7 @@ func Init(platform string) (*State, error) {
 		Home:        home,
 		ReposDB:     filepath.Join(persistDir, "repos.db"),
 		InstalledDB: filepath.Join(persistDir, "installed.db"),
+		SQLiteDB:    filepath.Join(persistDir, "zenpm.sqlite3"),
 		ScriptDir:   filepath.Join(persistDir, "scripts"),
 		CacheDir:    filepath.Join(home, "cache"),
 		TmpDir:      filepath.Join(home, "tmp"),
@@ -77,10 +91,26 @@ func Init(platform string) (*State, error) {
 		}
 	}
 
-	// Migrate state DBs from old home/state/ to persistent location.
-	oldStateDir := filepath.Join(home, "state")
-	migrateDB(filepath.Join(oldStateDir, "repos.db"), s.ReposDB)
-	migrateDB(filepath.Join(oldStateDir, "installed.db"), s.InstalledDB)
+	s.StateBackend = os.Getenv("ZENPM_STATE_BACKEND")
+	if s.StateBackend == "" {
+		s.StateBackend = "flat"
+	}
+	switch s.StateBackend {
+	case "flat":
+		// Migrate state DBs from old home/state/ to persistent location.
+		oldStateDir := filepath.Join(home, "state")
+		migrateDB(filepath.Join(oldStateDir, "repos.db"), s.ReposDB)
+		migrateDB(filepath.Join(oldStateDir, "installed.db"), s.InstalledDB)
+		s.store = &flatFileStore{s: s}
+	case "sqlite":
+		store, err := newSQLiteStore(s, platform)
+		if err != nil {
+			return nil, err
+		}
+		s.store = store
+	default:
+		return nil, fmt.Errorf("unsupported ZENPM_STATE_BACKEND %q", s.StateBackend)
+	}
 
 	if err := seedReposDB(s); err != nil {
 		return nil, err
@@ -90,6 +120,11 @@ func Init(platform string) (*State, error) {
 	}
 	if err := seedInstalledDB(s); err != nil {
 		return nil, err
+	}
+	if store, ok := s.store.(*sqliteStore); ok {
+		if err := store.importStartupState(platform); err != nil {
+			return nil, err
+		}
 	}
 
 	// Scan for known apps already on the device and ensure they're tracked.
@@ -147,8 +182,19 @@ func migrateDB(oldPath, newPath string) {
 }
 
 func seedReposDB(s *State) error {
-	if _, err := os.Stat(s.ReposDB); err == nil {
-		return nil // already exists
+	if s.StateBackend == "flat" {
+		if _, err := os.Stat(s.ReposDB); err == nil {
+			return nil // already exists
+		}
+	}
+	if s.StateBackend == "sqlite" {
+		repos, err := s.ReadRepos()
+		if err != nil {
+			return err
+		}
+		if len(repos) > 0 {
+			return nil
+		}
 	}
 
 	// Default repos seeded on first run.
@@ -165,15 +211,7 @@ func seedReposDB(s *State) error {
 	}
 
 	s.SeededRepoURL = defaults[0].URL
-	var sb strings.Builder
-	for _, r := range defaults {
-		defFlag := ""
-		if r.Default {
-			defFlag = "default"
-		}
-		fmt.Fprintf(&sb, "%s|%s|%d|%s|%s\n", r.Name, r.URL, r.Priority, r.Trust, defFlag)
-	}
-	return os.WriteFile(s.ReposDB, []byte(sb.String()), 0644)
+	return s.WriteRepos(defaults)
 }
 
 func reconcileDefaultRepos(s *State) error {
@@ -222,16 +260,20 @@ func reconcileDefaultRepos(s *State) error {
 	if err := s.WriteRepos(repos); err != nil {
 		return err
 	}
-	_ = os.Remove(filepath.Join(s.CacheDir, "catalog.merged"))
+	if s.StateBackend == "sqlite" {
+		_ = s.WriteCatalog(nil)
+	} else {
+		_ = os.Remove(filepath.Join(s.CacheDir, "catalog.merged"))
+	}
 	s.SeededRepoURL = DefaultZenLabsRepoURL
 	return nil
 }
 
 func seedInstalledDB(s *State) error {
-	if _, err := os.Stat(s.InstalledDB); err == nil {
+	if s.StateBackend == "sqlite" {
 		return nil
 	}
-	return os.WriteFile(s.InstalledDB, []byte(""), 0644)
+	return (&flatFileStore{s: s}).seedInstalled()
 }
 
 // knownApp describes an app that may be pre-installed outside of ZenPM.
@@ -326,41 +368,11 @@ type RepoEntry struct {
 }
 
 func (s *State) ReadRepos() ([]RepoEntry, error) {
-	data, err := os.ReadFile(s.ReposDB)
-	if err != nil {
-		return nil, err
-	}
-	var repos []RepoEntry
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "|", 5)
-		if len(parts) < 4 {
-			continue
-		}
-		var priority int
-		fmt.Sscanf(parts[2], "%d", &priority)
-		isDefault := len(parts) >= 5 && parts[4] == "default"
-		repos = append(repos, RepoEntry{
-			Name: parts[0], URL: parts[1], Priority: priority, Trust: parts[3],
-			Default: isDefault,
-		})
-	}
-	return repos, nil
+	return s.store.ReadRepos()
 }
 
 func (s *State) WriteRepos(repos []RepoEntry) error {
-	var sb strings.Builder
-	for _, r := range repos {
-		defFlag := ""
-		if r.Default {
-			defFlag = "default"
-		}
-		fmt.Fprintf(&sb, "%s|%s|%d|%s|%s\n", r.Name, r.URL, r.Priority, r.Trust, defFlag)
-	}
-	return os.WriteFile(s.ReposDB, []byte(sb.String()), 0644)
+	return s.store.WriteRepos(repos)
 }
 
 func (s *State) CachedUninstallScriptPath(id string) string {
@@ -396,75 +408,25 @@ type InstalledEntry struct {
 }
 
 func (s *State) ReadInstalled() ([]InstalledEntry, error) {
-	data, err := os.ReadFile(s.InstalledDB)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var entries []InstalledEntry
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "|", 5)
-		if len(parts) < 4 {
-			continue
-		}
-		entry := InstalledEntry{
-			ID: parts[0], Version: parts[1], Repo: parts[2], InstalledAt: parts[3],
-		}
-		if len(parts) >= 5 {
-			entry.Name = parts[4]
-		}
-		if entry.Name == "" {
-			entry.Name = entry.ID
-		}
-		entries = append(entries, entry)
-	}
-	return entries, nil
+	return s.store.ReadInstalled()
 }
 
 func (s *State) AppendInstalled(e InstalledEntry) error {
-	if e.InstalledAt == "" {
-		e.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
-	}
-	line := fmt.Sprintf("%s|%s|%s|%s|%s\n", e.ID, e.Version, e.Repo, e.InstalledAt, e.Name)
-	f, err := os.OpenFile(s.InstalledDB, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(line)
-	return err
+	return s.store.AppendInstalled(e)
 }
 
 func (s *State) RemoveInstalled(id string) error {
-	entries, err := s.ReadInstalled()
-	if err != nil {
-		return err
-	}
-	var out []InstalledEntry
-	for _, e := range entries {
-		if e.ID != id {
-			out = append(out, e)
-		}
-	}
-	var sb strings.Builder
-	for _, e := range out {
-		fmt.Fprintf(&sb, "%s|%s|%s|%s|%s\n", e.ID, e.Version, e.Repo, e.InstalledAt, e.Name)
-	}
-	return os.WriteFile(s.InstalledDB, []byte(sb.String()), 0644)
+	return s.store.RemoveInstalled(id)
 }
 
 func (s *State) IsInstalled(id string) (bool, string) {
-	entries, _ := s.ReadInstalled()
-	for _, e := range entries {
-		if e.ID == id {
-			return true, e.Version
-		}
-	}
-	return false, ""
+	return s.store.IsInstalled(id)
+}
+
+func (s *State) ReadCatalog() ([]CatalogEntry, error) {
+	return s.store.ReadCatalog()
+}
+
+func (s *State) WriteCatalog(entries []CatalogEntry) error {
+	return s.store.WriteCatalog(entries)
 }
