@@ -15,8 +15,9 @@ return {
     PACKAGE_NOTICE_SECONDS = 3,
     POLL_DELAY_SECONDS = 3.5,
     MAX_POLL_RETRIES = 20,
-    CONNECT_RETRIES = 8,
-    CONNECT_RETRY_DELAY_SECONDS = 3,
+    CONNECT_RETRIES = 40,
+    CONNECT_RETRY_DELAY_SECONDS = 0.5,
+    CONNECT_INITIAL_DELAY_SECONDS = 0.2,
 
     DAEMON_UNAVAILABLE_MESSAGE = "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running.",
 

@@ -86,7 +86,7 @@ func (m *Manager) InstallAsset(id, assetOverride string) error {
 			log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
 		}
 
-		installedVersion := releaseVersion(entry)
+		installedVersion := entry.Version
 
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
@@ -272,7 +272,7 @@ func (m *Manager) Update(id string) error {
 			log.Warnf("Package %s not in any repo, skipping", e.ID)
 			continue
 		}
-		latestVersion := releaseVersion(latest)
+		latestVersion := latest.Version
 		if releases.VersionGreater(latestVersion, e.Version) {
 			log.Infof("Updating %s: %s -> %s", e.ID, e.Version, latestVersion)
 			if err := m.Install(e.ID); err != nil {
@@ -283,14 +283,4 @@ func (m *Manager) Update(id string) error {
 		}
 	}
 	return nil
-}
-
-func releaseVersion(entry *repo.CatalogEntry) string {
-	if entry == nil {
-		return ""
-	}
-	if latest, err := releases.LatestGitHubReleaseTag(entry.Source); err == nil && latest != "" {
-		return latest
-	}
-	return entry.Version
 }

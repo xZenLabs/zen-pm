@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"ZPM/internal/log"
 	"ZPM/internal/pkg"
@@ -22,10 +23,11 @@ var Version = "dev"
 
 // Server is the ZenPM HTTP API server.
 type Server struct {
-	st    *state.State
-	repos *repo.Manager
-	pkgs  *pkg.Manager
-	port  int
+	st        *state.State
+	repos     *repo.Manager
+	pkgs      *pkg.Manager
+	port      int
+	StartedAt time.Time
 }
 
 type pkgJSON struct {
@@ -95,7 +97,11 @@ func (s *Server) ListenAndServe() error {
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
-	log.Infof("ZenPM server listening on %s", addr)
+	if !s.StartedAt.IsZero() {
+		log.Infof("Timing: server listening on %s, %dms after process start", addr, time.Since(s.StartedAt).Milliseconds())
+	} else {
+		log.Infof("ZenPM server listening on %s", addr)
+	}
 	return http.Serve(ln, mux)
 }
 
@@ -353,7 +359,6 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		repoDefault[r.Name] = r.Default
 	}
 	seen := make(map[string]bool, len(filtered))
-	releaseCache := make(map[string]string)
 	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
 		seen[e.ID] = true
@@ -379,7 +384,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
 			if checkUpdates {
-				applyUpdateInfo(&item, e.Source, releaseCache)
+				applyUpdateInfo(&item)
 			}
 		}
 		result = append(result, item)
@@ -416,21 +421,11 @@ func platformValues(platform string) []string {
 	return out
 }
 
-func applyUpdateInfo(item *pkgJSON, source string, cache map[string]string) {
-	if item == nil || source == "" {
+func applyUpdateInfo(item *pkgJSON) {
+	if item == nil {
 		return
 	}
-	latest, ok := cache[source]
-	if !ok {
-		var err error
-		latest, err = releases.LatestGitHubReleaseTag(source)
-		if err != nil {
-			log.Debugf("GitHub update check failed for %s: %v", source, err)
-			cache[source] = ""
-			return
-		}
-		cache[source] = latest
-	}
+	latest := item.Version // catalog (repo) version
 	if latest == "" {
 		return
 	}

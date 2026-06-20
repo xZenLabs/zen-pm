@@ -1,95 +1,10 @@
 package releases
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 )
-
-const githubTimeout = 8 * time.Second
-
-func LatestGitHubReleaseTag(source string) (string, error) {
-	api, ok := githubLatestReleaseURL(source)
-	if !ok {
-		return "", fmt.Errorf("not a github repository URL")
-	}
-	tag, err := fetchGitHubReleaseTag(api)
-	if err == nil && tag != "" {
-		return tag, nil
-	}
-	tagsAPI := strings.TrimSuffix(api, "/releases/latest") + "/tags?per_page=1"
-	return fetchGitHubTag(tagsAPI)
-}
-
-func githubLatestReleaseURL(source string) (string, bool) {
-	u, err := url.Parse(strings.TrimSpace(source))
-	if err != nil || u.Host == "" {
-		return "", false
-	}
-	host := strings.ToLower(u.Host)
-	if host != "github.com" && host != "www.github.com" {
-		return "", false
-	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", false
-	}
-	repo := strings.TrimSuffix(parts[1], ".git")
-	if repo == "" {
-		return "", false
-	}
-	return "https://api.github.com/repos/" + url.PathEscape(parts[0]) + "/" + url.PathEscape(repo) + "/releases/latest", true
-}
-
-func fetchGitHubReleaseTag(api string) (string, error) {
-	var body struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := fetchJSON(api, &body); err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(body.TagName) == "" {
-		return "", fmt.Errorf("latest release had no tag")
-	}
-	return body.TagName, nil
-}
-
-func fetchGitHubTag(api string) (string, error) {
-	var body []struct {
-		Name string `json:"name"`
-	}
-	if err := fetchJSON(api, &body); err != nil {
-		return "", err
-	}
-	if len(body) == 0 || strings.TrimSpace(body[0].Name) == "" {
-		return "", fmt.Errorf("repository had no tags")
-	}
-	return body[0].Name, nil
-}
-
-func fetchJSON(api string, target interface{}) error {
-	client := &http.Client{Timeout: githubTimeout}
-	req, err := http.NewRequest(http.MethodGet, api, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "ZenPM")
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("github returned HTTP %d", resp.StatusCode)
-	}
-	return json.NewDecoder(resp.Body).Decode(target)
-}
 
 func NormalizeVersion(value string) string {
 	value = strings.TrimSpace(value)

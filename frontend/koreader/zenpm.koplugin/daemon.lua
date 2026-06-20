@@ -56,26 +56,18 @@ local function read_text(path)
     return Util.trim(read_all(path))
 end
 
-local function content_hash(data)
-    local hash = 5381
-    data = tostring(data or "")
-    for i = 1, #data do
-        hash = (hash * 33 + data:byte(i)) % 4294967296
-    end
-    return string.format("%08x", hash)
-end
-
+-- Signature uses size+mtime only. Hashing the (14MB) binary in interpreted Lua
+-- cost ~1.7s per call on-device and ran several times per startup. Size+mtime
+-- changes whenever the bundled backend is updated, which is all we need here.
 local function file_signature(path)
-    local parts = {}
     if ok_lfs then
         local attrs = lfs.attributes(path)
         if attrs then
-            table.insert(parts, "size=" .. tostring(attrs.size or ""))
-            table.insert(parts, "mtime=" .. tostring(attrs.modification or ""))
+            return "size=" .. tostring(attrs.size or "") .. " mtime=" .. tostring(attrs.modification or "")
         end
     end
-    table.insert(parts, "hash=" .. content_hash(read_all(path)))
-    return table.concat(parts, " ")
+    -- No lfs: fall back to presence only (cannot detect content changes cheaply).
+    return path_exists(path) and "exists" or "missing"
 end
 
 local function write_text(path, value)
@@ -498,8 +490,12 @@ function Daemon:ensure(client, force_start)
         return false, err
     end
 
-    for _ = 1, Constants.CONNECT_RETRIES do
-        socket.sleep(Constants.CONNECT_RETRY_DELAY_SECONDS)
+    for attempt = 1, Constants.CONNECT_RETRIES do
+        if attempt <= 1 then
+            socket.sleep(Constants.CONNECT_INITIAL_DELAY_SECONDS)
+        else
+            socket.sleep(Constants.CONNECT_RETRY_DELAY_SECONDS)
+        end
         ok, data = client:health()
         if ok and self:health_matches(data) then
             return true, data

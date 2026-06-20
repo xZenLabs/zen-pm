@@ -123,6 +123,7 @@ function App:show()
     if self.backend_ready then
         self:navigate(self.state.active_tab or "home")
     else
+        self.t_open = socket.gettime()
         self:set_loading(_("Loading packages, please wait"))
         self:start_backend_then_reload()
     end
@@ -163,10 +164,22 @@ function App:clear_status()
     self.state.error = nil
 end
 
+function App:log_timing(label, since)
+    local now = socket.gettime()
+    local elapsed = since and (now - since) or 0
+    pcall(function()
+        self.client:post_log(string.format("[timing] %s: %.0fms", label, elapsed * 1000))
+    end)
+    return now
+end
+
 function App:backend_started(data, on_ready)
     self.backend_starting = false
     self.backend_ready = true
     self.version = data and data.version or self.version or "?"
+    if self.t_open then
+        self:log_timing("backend ready (open -> health ok)", self.t_open)
+    end
     self:clear_status()
     if on_ready then
         on_ready()
@@ -183,7 +196,10 @@ function App:backend_failed(message)
 end
 
 function App:poll_backend_ready(attempt, on_ready)
-    UIManager:scheduleIn(Constants.CONNECT_RETRY_DELAY_SECONDS, function()
+    local delay = attempt <= 1
+        and Constants.CONNECT_INITIAL_DELAY_SECONDS
+        or Constants.CONNECT_RETRY_DELAY_SECONDS
+    UIManager:scheduleIn(delay, function()
         local ok, data = self.client:health()
         if ok and self.daemon:health_matches(data) then
             self:backend_started(data, on_ready)
@@ -463,16 +479,61 @@ function App:show_featured()
     self.state.active_tab = "home"
     if not self:ensure_backend() then return end
     self:set_loading(_("Loading featured packages..."))
+    local t_load = socket.gettime()
     local ok, packages, err = self:load_packages()
     if not ok then
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local ok_manifest, manifest = self.client:request("GET", Constants.REPO_ZENLABS_URL:gsub("/+$", "") .. "/manifest.json", nil)
+    self:log_timing("load_packages (catalog read)", t_load)
+    -- Render cached catalog immediately; manifest enrichment is network-bound,
+    -- so defer it and re-render once it returns (or fails).
     self.state.packages = packages
-    self.state.featured_packages = Models.select_featured(packages, ok_manifest and manifest or nil)
+    self.state.featured_packages = Models.select_featured(packages, nil)
     self:clear_status()
     self:refresh()
+    if self.t_open then
+        self:log_timing("home rendered from cache (open -> paint)", self.t_open)
+        self.t_open = nil
+    end
+
+    local cache_empty = #packages == 0
+    local manifest_url = Constants.REPO_ZENLABS_URL:gsub("/+$", "") .. "/manifest.json"
+    UIManager:scheduleIn(0.05, function()
+        if self.state.page ~= "home" then return end
+        -- First run: catalog cache was empty and the backend is refreshing repos
+        -- in the background. Reload packages so the DB results appear.
+        if cache_empty then
+            self:reload_featured_until_ready(1)
+        end
+        local t_manifest = socket.gettime()
+        local ok_manifest, manifest = self.client:request("GET", manifest_url, nil)
+        self:log_timing("manifest fetch", t_manifest)
+        if not ok_manifest or type(manifest) ~= "table" then return end
+        if self.state.page ~= "home" then return end
+        self.state.featured_packages = Models.select_featured(self.state.packages, manifest)
+        self:refresh()
+    end)
+end
+
+-- Poll the catalog after a first-run background refresh until packages appear.
+function App:reload_featured_until_ready(attempt)
+    if self.state.page ~= "home" then return end
+    local ok, packages = self:load_packages()
+    if ok and #packages > 0 then
+        self.state.packages = packages
+        self.state.featured_packages = Models.select_featured(packages, nil)
+        self:refresh()
+        if self.t_open then
+            self:log_timing("home populated after refresh (open -> packages)", self.t_open)
+            self.t_open = nil
+        end
+        return
+    end
+    if attempt >= Constants.MAX_POLL_RETRIES then return end
+    UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
+        self:reload_featured_until_ready(attempt + 1)
+    end)
 end
 
 function App:show_search()
