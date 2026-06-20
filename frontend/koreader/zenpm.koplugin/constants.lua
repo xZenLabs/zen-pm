@@ -7,7 +7,7 @@ return {
     API_BASE = "http://127.0.0.1:8080",
 
     REPO_ZENLABS_NAME = "ZenLabs",
-    REPO_ZENLABS_URL = "https://xzenlabs.github.io/repo",
+    REPO_ZENLABS_URL = "https://repo.zen-labs.org",
     REPO_KINDLEFORGE_NAME = "KindleForge",
     REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
 
@@ -34,5 +34,6 @@ return {
         { id = "utility", label = "Utility", icon = "utility.svg" },
         { id = "productivity", label = "Productivity", icon = "productivity.svg" },
         { id = "games", label = "Games", icon = "games.svg.svg" },
+        { id = "theme", label = "Theme", icon = "theme.svg" },
     },
 }

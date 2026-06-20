@@ -13,7 +13,7 @@ const (
 	kindlePersistDir           = "/mnt/us/.ZenPM"
 	koboPersistDir             = "/mnt/onboard/.adds/.ZenPM"
 	DefaultZenLabsRepoName     = "ZenLabs"
-	DefaultZenLabsRepoURL      = "https://xzenlabs.github.io/repo"
+	DefaultZenLabsRepoURL      = "https://repo.zen-labs.org"
 	DefaultKindleForgeRepoName = "KindleForge"
 	DefaultKindleForgeRepoURL  = "https://kf.penguins184.xyz"
 )

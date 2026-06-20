@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ZPM/internal/assets"
 	"ZPM/internal/log"
 	"ZPM/internal/platform"
 	"ZPM/internal/releases"
@@ -26,6 +27,12 @@ func New(st *state.State, repos *repo.Manager, plat string) *Manager {
 }
 
 func (m *Manager) Install(id string) error {
+	return m.InstallAsset(id, "")
+}
+
+// InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
+// When empty, the asset is auto-selected for the current device.
+func (m *Manager) InstallAsset(id, assetOverride string) error {
 	catalog, err := m.repos.ReadCatalog()
 	if err != nil {
 		return fmt.Errorf("read catalog: %w", err)
@@ -65,8 +72,12 @@ func (m *Manager) Install(id string) error {
 			return fmt.Errorf("fetch install script for %s: %w", pkgID, err)
 		}
 
+		override := ""
+		if pkgID == id {
+			override = assetOverride
+		}
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, entry.Version))
-		if err := platform.ExecuteScriptWithEnv(scriptPath, installEnv(entry)); err != nil {
+		if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(entry, override)); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 		}
@@ -162,14 +173,48 @@ func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
 	return os.WriteFile(path, data, 0755)
 }
 
-func installEnv(entry *repo.CatalogEntry) map[string]string {
+func (m *Manager) device() assets.Device {
+	dev := assets.Device{Platform: m.plat}
+	if m.plat == platform.Kindle {
+		dev.KindleHF = platform.KindleABI() == "hf"
+		dev.CortexA9 = platform.KindleIsCortexA9()
+	}
+	return dev
+}
+
+// SelectAsset resolves asset selection for id against the current device.
+func (m *Manager) SelectAsset(id string) (assets.Result, error) {
+	catalog, err := m.repos.ReadCatalog()
+	if err != nil {
+		return assets.Result{}, err
+	}
+	for _, e := range catalog {
+		if e.ID == id {
+			return assets.Select(e.Assets, m.device()), nil
+		}
+	}
+	return assets.Result{}, fmt.Errorf("package %q not found", id)
+}
+
+func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[string]string {
 	env := map[string]string{
 		"ZENPM_PACKAGE_ID": entry.ID,
 	}
 	if entry.Source != "" {
 		env["ZENPM_PACKAGE_SOURCE"] = entry.Source
 	}
-	if entry.SourceAsset != "" {
+
+	asset := strings.TrimSpace(override)
+	if asset == "" {
+		if res := assets.Select(entry.Assets, m.device()); res.Auto != "" {
+			asset = res.Auto
+		}
+	}
+
+	if asset != "" {
+		log.Infof("Package %s using release asset %q", entry.ID, asset)
+		env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+	} else if entry.SourceAsset != "" {
 		log.Infof("Package %s using source asset pattern %q", entry.ID, entry.SourceAsset)
 		env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
 	} else if entry.Source != "" && isGenericKOReaderPlugin(entry) {

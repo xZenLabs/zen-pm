@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/hex"
@@ -18,12 +19,11 @@ import (
 	"time"
 
 	"ZPM/internal/log"
-	"ZPM/internal/releases"
 )
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -46,6 +46,11 @@ type CatalogEntry struct {
 	Category      string
 	Source        string
 	SourceAsset   string
+	SourceType    string
+	SourceURL     string
+	Stars         string
+	Assets        string
+	Constraints   string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -82,6 +87,11 @@ func (e *CatalogEntry) serialize() string {
 		e.Category,
 		e.Source,
 		e.SourceAsset,
+		e.SourceType,
+		e.SourceURL,
+		e.Stars,
+		e.Assets,
+		e.Constraints,
 	}, "|")
 }
 
@@ -140,6 +150,25 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 21 {
 		e.SourceAsset = parts[20]
+	}
+	if len(parts) == 22 {
+		e.Stars = parts[21]
+		return e, nil
+	}
+	if len(parts) >= 22 {
+		e.SourceType = parts[21]
+	}
+	if len(parts) >= 23 {
+		e.SourceURL = parts[22]
+	}
+	if len(parts) >= 24 {
+		e.Stars = parts[23]
+	}
+	if len(parts) >= 25 {
+		e.Assets = parts[24]
+	}
+	if len(parts) >= 26 {
+		e.Constraints = parts[25]
 	}
 	return e, nil
 }
@@ -208,25 +237,30 @@ type manifestJSON struct {
 		IconURL string `json:"icon_url,omitempty"`
 	} `json:"repo"`
 	Packages []struct {
-		ID            string   `json:"id"`
-		Name          string   `json:"name"`
-		Version       string   `json:"version"`
-		Description   string   `json:"description"`
-		Author        string   `json:"author"`
-		Platforms     []string `json:"platforms"`
-		Dependencies  []string `json:"dependencies"`
-		InstallURL    string   `json:"install_url"`
-		UninstallURL  string   `json:"uninstall_url"`
-		Size          string   `json:"size"`
-		IconURL       string   `json:"icon_url,omitempty"`
-		ImageURL      string   `json:"image_url,omitempty"`
-		Source        string   `json:"source,omitempty"`
-		SourceAsset   string   `json:"source_asset,omitempty"`
-		Featured      bool     `json:"featured,omitempty"`
-		FeaturedImage string   `json:"featured_image,omitempty"`
-		Category      string   `json:"category,omitempty"`
-		Images        []string `json:"images,omitempty"`
-		Screenshots   []string `json:"screenshots,omitempty"`
+		ID            string          `json:"id"`
+		Name          string          `json:"name"`
+		Version       string          `json:"version"`
+		Description   string          `json:"description"`
+		Author        string          `json:"author"`
+		Platforms     []string        `json:"platforms"`
+		Dependencies  []string        `json:"dependencies"`
+		InstallURL    string          `json:"install_url"`
+		UninstallURL  string          `json:"uninstall_url"`
+		Size          string          `json:"size"`
+		IconURL       string          `json:"icon_url,omitempty"`
+		ImageURL      string          `json:"image_url,omitempty"`
+		Source        string          `json:"source,omitempty"`
+		SourceAsset   string          `json:"source_asset,omitempty"`
+		SourceType    string          `json:"source_type,omitempty"`
+		SourceURL     string          `json:"source_url,omitempty"`
+		Stars         string          `json:"stars,omitempty"`
+		Assets        json.RawMessage `json:"assets,omitempty"`
+		Constraints   json.RawMessage `json:"constraints,omitempty"`
+		Featured      bool            `json:"featured,omitempty"`
+		FeaturedImage string          `json:"featured_image,omitempty"`
+		Category      string          `json:"category,omitempty"`
+		Images        []string        `json:"images,omitempty"`
+		Screenshots   []string        `json:"screenshots,omitempty"`
 	} `json:"packages"`
 }
 
@@ -298,7 +332,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Priority:      priority,
 			ID:            p.ID,
 			Name:          p.Name,
-			Version:       releaseVersion(source, p.Version),
+			Version:       p.Version,
 			Description:   p.Description,
 			Author:        p.Author,
 			Platforms:     p.Platforms,
@@ -314,16 +348,26 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Category:      p.Category,
 			Source:        source,
 			SourceAsset:   p.SourceAsset,
+			SourceType:    p.SourceType,
+			SourceURL:     resolveURL(repoURL, p.SourceURL),
+			Stars:         strings.TrimSpace(p.Stars),
+			Assets:        compactJSONField(p.Assets),
+			Constraints:   compactJSONField(p.Constraints),
 		})
 	}
 	return entries
 }
 
-func releaseVersion(source, fallback string) string {
-	if latest, err := releases.LatestGitHubReleaseTag(source); err == nil && latest != "" {
-		return latest
+func compactJSONField(value json.RawMessage) string {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return ""
 	}
-	return fallback
+	var out bytes.Buffer
+	if err := json.Compact(&out, trimmed); err != nil {
+		return string(trimmed)
+	}
+	return out.String()
 }
 
 // parseKindleForgeCatalog converts the KindleForge registry.json flat array to CatalogEntry list.
@@ -379,6 +423,8 @@ func categoryFromTag(tag string) string {
 		return "productivity"
 	case "utility", "utilities", "tool", "tools", "system", "network", "internet", "browser", "font", "fonts":
 		return "utility"
+	case "theme", "themes":
+		return "theme"
 	default:
 		return ""
 	}
@@ -551,7 +597,7 @@ func resolveURL(base, rel string) string {
 }
 
 // KnownPubKeyURL is the URL where the ZenLabs Ed25519 public key is hosted.
-const KnownPubKeyURL = "https://xzenlabs.github.io/zenpm-key.pub"
+const KnownPubKeyURL = "https://repo.zen-labs.org/zenpm-key.pub"
 
 var (
 	knownRepoPubKey     ed25519.PublicKey

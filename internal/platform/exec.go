@@ -46,12 +46,13 @@ func lookupEnv(env []string, key string) (string, bool) {
 func defaultHome() string {
 	switch os.Getenv("ZENPM_PLATFORM") {
 	case "kindle":
-		return "/mnt/us"
+		return "/mnt/base-us"
 	case "kobo":
-		return "/mnt/onboard"
-	}
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return home
+		return "/mnt/onboard/.adds"
+	case "pocketbook":
+		return "/mnt/ext1/applications"
+	case "android":
+		return "/sdcard"
 	}
 	return "/tmp"
 }

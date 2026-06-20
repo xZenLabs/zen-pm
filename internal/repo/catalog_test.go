@@ -1,6 +1,9 @@
 package repo
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestFilterByPlatformRequiresAllEntryPlatforms(t *testing.T) {
 	entries := []*CatalogEntry{
@@ -68,6 +71,11 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		InstallURL:  "install.sh",
 		Source:      "omer-faruq/sudoku.koplugin",
 		SourceAsset: "sudoku.koplugin.zip",
+		SourceType:  "release",
+		SourceURL:   "https://example.invalid/source.zip",
+		Stars:       "42",
+		Assets:      `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`,
+		Constraints: `{"abi":["hf","sf"]}`,
 	}
 
 	got, err := parseCatalogLine(entry.serialize())
@@ -76,6 +84,67 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	}
 	if got.SourceAsset != entry.SourceAsset {
 		t.Fatalf("SourceAsset = %q, want %q", got.SourceAsset, entry.SourceAsset)
+	}
+	if got.Stars != entry.Stars {
+		t.Fatalf("Stars = %q, want %q", got.Stars, entry.Stars)
+	}
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints {
+		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
+	}
+}
+
+func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
+	manifest := manifestJSON{}
+	if err := json.Unmarshal([]byte(`{
+		"packages": [
+			{
+				"id": "koreader-rsvp-plugin",
+				"name": "Koreader Rsvp Plugin",
+				"version": "0.0.0-source",
+				"platforms": ["koreader"],
+				"install_url": "packages/koreader/install-plugin.sh",
+				"source": "https://github.com/karpushchenko/koreader-rsvp-plugin",
+				"source_type": "source",
+				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
+				"stars": "31",
+				"assets": [{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}],
+				"constraints": {"abi":["hf","sf"]},
+				"launcher": {"kobo":{"type":"nickelmenu"}}
+			},
+			{
+				"id": "koreader-null-stars",
+				"name": "Koreader Null Stars",
+				"version": "0.0.0-source",
+				"platforms": ["koreader"],
+				"install_url": "packages/koreader/install-plugin.sh",
+				"stars": null
+			}
+		]
+	}`), &manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	entries := parseZenPMCatalog("ZenLabs", "https://example.invalid/repo", 10, manifest)
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+	if entries[0].Stars != "31" {
+		t.Fatalf("Stars = %q, want %q", entries[0].Stars, "31")
+	}
+	if entries[0].SourceType != "source" {
+		t.Fatalf("SourceType = %q, want source", entries[0].SourceType)
+	}
+	if entries[0].SourceURL != "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main" {
+		t.Fatalf("SourceURL = %q", entries[0].SourceURL)
+	}
+	if entries[0].Assets != `[{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}]` {
+		t.Fatalf("Assets = %q", entries[0].Assets)
+	}
+	if entries[0].Constraints != `{"abi":["hf","sf"]}` {
+		t.Fatalf("Constraints = %q", entries[0].Constraints)
+	}
+	if entries[1].Stars != "" {
+		t.Fatalf("null Stars = %q, want empty", entries[1].Stars)
 	}
 }
 

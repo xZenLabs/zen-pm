@@ -166,8 +166,16 @@ function Client:list_packages(platform, check_updates)
     return self:request("GET", path, nil)
 end
 
-function Client:package_action(id, action)
-    return self:request("POST", "/packages/" .. url_encode(id) .. "/" .. action, nil)
+function Client:package_action(id, action, asset)
+    local path = "/packages/" .. url_encode(id) .. "/" .. action
+    if asset and asset ~= "" then
+        path = path .. "?asset=" .. url_encode(asset)
+    end
+    return self:request("POST", path, nil)
+end
+
+function Client:get_package_assets(id)
+    return self:request("GET", "/packages/" .. url_encode(id) .. "/assets", nil)
 end
 
 function Client:get_log(tail)

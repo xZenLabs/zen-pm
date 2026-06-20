@@ -60,12 +60,13 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 }
 
 func TestInstallEnvFallsBackToKopluginAssetPattern(t *testing.T) {
-	env := installEnv(&repo.CatalogEntry{
+	m := &Manager{plat: "host"}
+	env := m.installEnv(&repo.CatalogEntry{
 		ID:         "zen-mtp-koplugin",
 		InstallURL: "https://xzenlabs.github.io/repo/packages/koreader/install-plugin.sh",
 		Platforms:  []string{"koreader", "kindle"},
 		Source:     "https://github.com/xZenLabs/ZenMTP",
-	})
+	}, "")
 
 	got := env["ZENPM_PACKAGE_SOURCE_ASSET"]
 	if got != ".koplugin.zip" {

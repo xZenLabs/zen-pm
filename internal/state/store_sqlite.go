@@ -82,7 +82,12 @@ func (s *sqliteStore) migrate() error {
 			featured_image TEXT NOT NULL,
 			category TEXT NOT NULL,
 			source TEXT NOT NULL,
-			source_asset TEXT NOT NULL DEFAULT ''
+			source_asset TEXT NOT NULL DEFAULT '',
+			source_type TEXT NOT NULL DEFAULT '',
+			source_url TEXT NOT NULL DEFAULT '',
+			stars TEXT NOT NULL DEFAULT '',
+			assets TEXT NOT NULL DEFAULT '',
+			constraints TEXT NOT NULL DEFAULT ''
 		)`,
 		`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`,
 	}
@@ -92,6 +97,21 @@ func (s *sqliteStore) migrate() error {
 		}
 	}
 	if err := s.ensureColumn("catalog_packages", "source_asset", "source_asset TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "source_type", "source_type TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "source_url", "source_url TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "stars", "stars TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "assets", "assets TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "constraints", "constraints TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	for _, column := range []string{"platforms", "deps", "tags"} {
@@ -291,7 +311,7 @@ func (s *sqliteStore) IsInstalled(id string) (bool, string) {
 }
 
 func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
-	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset FROM catalog_packages ORDER BY position`)
+	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset, source_type, source_url, stars, assets, constraints FROM catalog_packages ORDER BY position`)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +321,7 @@ func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
 		var e CatalogEntry
 		var featured int
 		var platforms, deps, tags string
-		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &deps, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &e.Category, &e.Source, &e.SourceAsset); err != nil {
+		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &deps, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints); err != nil {
 			return nil, err
 		}
 		e.Platforms = splitCatalogList(platforms)
@@ -324,9 +344,9 @@ func (s *sqliteStore) WriteCatalog(entries []CatalogEntry) error {
 	}
 	for i, e := range entries {
 		if _, err := tx.Exec(
-			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.Category, e.Source, e.SourceAsset,
+			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset, source_type, source_url, stars, assets, constraints)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints,
 		); err != nil {
 			tx.Rollback()
 			return err
@@ -412,9 +432,9 @@ func (s *sqliteStore) importCatalog(tx *sql.Tx, entries []CatalogEntry) error {
 			continue
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, position, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.Category, e.Source, e.SourceAsset,
+			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset, source_type, source_url, stars, assets, constraints)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			e.ID, position, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints,
 		); err != nil {
 			return err
 		}

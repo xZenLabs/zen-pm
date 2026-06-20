@@ -29,28 +29,33 @@ type Server struct {
 }
 
 type pkgJSON struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Version       string   `json:"version"`
-	Description   string   `json:"description"`
-	Author        string   `json:"author"`
-	Tags          []string `json:"tags"`
-	Category      string   `json:"category,omitempty"`
-	Platforms     []string `json:"platforms"`
-	Repo          string   `json:"repo"`
-	RepoTrust     string   `json:"repo_trust,omitempty"`
-	RepoDefault   bool     `json:"repo_default,omitempty"`
-	Installed     bool     `json:"installed"`
-	InstalledVer  string   `json:"installed_version,omitempty"`
-	LatestVersion string   `json:"latest_version,omitempty"`
-	UpdateAvail   bool     `json:"update_available,omitempty"`
-	IconURL       string   `json:"icon_url,omitempty"`
-	RepoIconURL   string   `json:"repo_icon_url,omitempty"`
-	ImageURL      string   `json:"image_url,omitempty"`
-	Images        []string `json:"images,omitempty"`
-	Featured      bool     `json:"featured,omitempty"`
-	FeaturedImage string   `json:"featured_image,omitempty"`
-	Source        string   `json:"source,omitempty"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Version       string          `json:"version"`
+	Description   string          `json:"description"`
+	Author        string          `json:"author"`
+	Tags          []string        `json:"tags"`
+	Category      string          `json:"category,omitempty"`
+	Platforms     []string        `json:"platforms"`
+	Repo          string          `json:"repo"`
+	RepoTrust     string          `json:"repo_trust,omitempty"`
+	RepoDefault   bool            `json:"repo_default,omitempty"`
+	Installed     bool            `json:"installed"`
+	InstalledVer  string          `json:"installed_version,omitempty"`
+	LatestVersion string          `json:"latest_version,omitempty"`
+	UpdateAvail   bool            `json:"update_available,omitempty"`
+	IconURL       string          `json:"icon_url,omitempty"`
+	RepoIconURL   string          `json:"repo_icon_url,omitempty"`
+	ImageURL      string          `json:"image_url,omitempty"`
+	Images        []string        `json:"images,omitempty"`
+	Featured      bool            `json:"featured,omitempty"`
+	FeaturedImage string          `json:"featured_image,omitempty"`
+	Source        string          `json:"source,omitempty"`
+	SourceType    string          `json:"source_type,omitempty"`
+	SourceURL     string          `json:"source_url,omitempty"`
+	Stars         string          `json:"stars,omitempty"`
+	Assets        json.RawMessage `json:"assets,omitempty"`
+	Constraints   json.RawMessage `json:"constraints,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -365,6 +370,11 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Featured:      e.Featured,
 			FeaturedImage: e.FeaturedImage,
 			Source:        e.Source,
+			SourceType:    e.SourceType,
+			SourceURL:     e.SourceURL,
+			Stars:         e.Stars,
+			Assets:        rawJSON(e.Assets),
+			Constraints:   rawJSON(e.Constraints),
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
@@ -439,6 +449,14 @@ func firstString(values []string) string {
 	return values[0]
 }
 
+func rawJSON(value string) json.RawMessage {
+	value = strings.TrimSpace(value)
+	if value == "" || !json.Valid([]byte(value)) {
+		return nil
+	}
+	return json.RawMessage(value)
+}
+
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	// Expects: /packages/{id}/install  or  /packages/{id}/uninstall
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
@@ -448,6 +466,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, action := parts[0], parts[1]
+	if action == "assets" {
+		s.handlePackageAssets(w, r, id)
+		return
+	}
 	if action != "install" && action != "uninstall" {
 		http.Error(w, "unknown action: "+action, http.StatusBadRequest)
 		return
@@ -457,12 +479,14 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	asset := r.URL.Query().Get("asset")
+
 	// Fire async; the WAF polls /log after a delay.
 	log.Infof("Package %s: starting %s", id, action)
 	go func() {
 		var err error
 		if action == "install" {
-			err = s.pkgs.Install(id)
+			err = s.pkgs.InstallAsset(id, asset)
 		} else {
 			err = s.pkgs.Uninstall(id)
 		}
@@ -474,6 +498,23 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) handlePackageAssets(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	res, err := s.pkgs.SelectAsset(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"auto":         res.Auto,
+		"needs_choice": res.NeedsChoice,
+		"candidates":   res.Candidates,
+	})
 }
 
 func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {

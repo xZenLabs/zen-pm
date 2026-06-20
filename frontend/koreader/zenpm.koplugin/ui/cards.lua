@@ -25,10 +25,38 @@ local function draw_verification_icon(bb, verified, x, y, size)
     return P.image(bb, verification_icon(verified), x, y, size, size, { is_icon = true })
 end
 
+local function package_has_platform(pkg, platform)
+    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    platform = tostring(platform or ""):lower()
+    for _, value in ipairs(pkg.platforms) do
+        if Util.trim(tostring(value or "")):lower() == platform then
+            return true
+        end
+    end
+    return false
+end
+
+local function package_stars(pkg)
+    local stars = Util.trim(tostring(pkg and pkg.stars or ""))
+    if stars == "" then
+        return nil
+    end
+    return stars
+end
+
+local function should_show_stars(view, pkg)
+    return package_stars(pkg) ~= nil
+        and package_has_platform(pkg, "koreader")
+        and not pkg.installed
+        and view.app.state.active_tab ~= "installed"
+end
+
 local function package_meta_text(pkg)
     local parts = {}
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
-        table.insert(parts, "v" .. pkg.version)
+        table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
     end
     table.insert(parts, I18n.dynamic_or(pkg and pkg.repo, "?"))
     return table.concat(parts, " - ")
@@ -68,10 +96,10 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     if icon_w > 0 then
         local ix = x + pad
         local iy = y + math.floor((h - icon_w) / 2)
-        local icon_file, icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
+        local icon_file, _icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
         local zoom = package_icon_zoom(icon_value, icon_source)
-        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = icon_is_icon })
-            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = icon_is_icon })
+        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = true })
+            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = true })
         if not painted then
             P.center_text_box(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy, icon_w, icon_w, "small", { bold = true })
         end
@@ -104,6 +132,17 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         local cy = y + Theme.scale(5)
         if not P.image(bb, Images.asset("checkmark.svg"), cx, cy, check, check, { is_icon = true }) then
             P.center_text(bb, "v", cx, cy + Theme.scale(2), check, "small", { bold = true })
+        end
+    elseif should_show_stars(view, pkg) then
+        local star = Theme.scale(28)
+        local sx = x + w - Theme.scale(34)
+        local sy = y + Theme.scale(5)
+        local stars = package_stars(pkg)
+        local gap = Theme.scale(4)
+        local number_size = P.text_size(stars, Theme.scale(72), "small", { bold = true })
+        P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true })
+        if not P.image(bb, Images.asset("star.svg"), sx, sy, star, star, { is_icon = true }) then
+            P.center_text(bb, "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
         end
     end
 
@@ -182,20 +221,24 @@ end
 
 function Cards.category(view, bb, category, x, y, w)
     local m = Theme.metrics()
-    local h = m.repo_h
+    local h = m.category_h
     P.box(bb, x, y, w, h)
     local pad = Theme.scale(10)
-    local icon = Theme.scale(62)
+    local icon = Theme.scale(52)
     local ix = x + pad
     local iy = y + math.floor((h - icon) / 2)
     if not P.image(bb, Images.asset(category.icon or "packages.svg"), ix, iy, icon, icon, { is_icon = true }) then
-        P.center_text(bb, tostring(category.label or "?"):sub(1, 1), ix, iy + Theme.scale(18), icon, "small", { bold = true })
+        P.center_text(bb, tostring(category.label or "?"):sub(1, 1), ix, iy + Theme.scale(14), icon, "small", { bold = true })
     end
 
     local text_x = x + pad + icon + Theme.scale(10)
     local text_w = w - (text_x - x) - pad
-    local title_y = y + Theme.scale(24)
-    local subtitle_y = y + Theme.scale(66)
+    local title_size = P.text_size(I18n.dynamic_or(category.label, _("Category")), text_w, "heading", { bold = true })
+    local sub_size = P.text_size("0 " .. _("packages"), text_w, "small")
+    local gap = Theme.scale(4)
+    local stack_h = title_size.h + sub_size.h + gap
+    local title_y = y + math.floor((h - stack_h) / 2)
+    local subtitle_y = title_y + title_size.h + gap
     P.text(bb, I18n.dynamic_or(category.label, _("Category")), text_x, title_y, text_w, "heading", { bold = true })
     P.text(bb, tostring(category.count or 0) .. " " .. _("packages"), text_x, subtitle_y, text_w, "small")
 

@@ -28,6 +28,7 @@ function App:new(plugin)
             page = "home",
             active_tab = "home",
             filters = { search = "", installed = "", categories = "", category = "" },
+            sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
             scroll = {},
             packages = {},
             visible_packages = {},
@@ -141,7 +142,7 @@ end
 
 function App:refresh()
     if self.view then
-        self.view:refresh()
+        self.view:refresh(self._full_refresh)
     end
 end
 
@@ -329,6 +330,7 @@ function App:reset_scroll(key)
 end
 
 function App:navigate(tab_id)
+    self._full_refresh = true
     if tab_id == "home" then
         self:show_featured()
     elseif tab_id == "categories" then
@@ -342,6 +344,7 @@ function App:navigate(tab_id)
     else
         self:show_search()
     end
+    self._full_refresh = nil
 end
 
 function App:reload_current_page()
@@ -483,7 +486,7 @@ function App:show_search()
         return
     end
     self.state.packages = packages
-    self.state.visible_packages = Models.filter_packages(packages, self.state.filters.search)
+    self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(packages, self.state.filters.search))
     self:clear_status()
     self:refresh()
 end
@@ -526,7 +529,7 @@ function App:show_category_details(category_id)
     self.state.packages = packages
     self.state.current_category = category
     self.state.category_packages = category_packages
-    self.state.visible_packages = Models.filter_packages(category_packages, self.state.filters.category)
+    self.state.visible_packages = self:sorted_packages("category", Models.filter_packages(category_packages, self.state.filters.category))
     self:clear_status()
     self:refresh()
 end
@@ -544,7 +547,7 @@ function App:show_installed()
     local installed = Models.installed_packages(packages)
     self.state.packages = packages
     self.state.installed_packages = installed
-    self.state.visible_packages = Models.filter_packages(installed, self.state.filters.installed)
+    self.state.visible_packages = self:sorted_packages("installed", Models.filter_packages(installed, self.state.filters.installed))
     self:clear_status()
     self:refresh()
 end
@@ -594,12 +597,20 @@ function App:show_source_details(name)
     self.state.repos = repos
     self.state.packages = packages
     self.state.current_repo = repo
-    self.state.visible_packages = visible
+    self.state.visible_packages = self:sorted_packages("source", visible)
     self:clear_status()
     self:refresh()
 end
 
 function App:show_package_details(package_id, from_tab)
+    if self.state.page ~= "package_details" then
+        self.state.details_origin = {
+            page = self.state.page,
+            tab = self.state.active_tab,
+            repo = self.state.current_repo,
+            category = self.state.current_category,
+        }
+    end
     self.state.page = "package_details"
     self.state.active_tab = from_tab or self.state.active_tab or "search"
     self.state.details_from = from_tab or self.state.active_tab or "search"
@@ -622,6 +633,19 @@ function App:show_package_details(package_id, from_tab)
 end
 
 function App:go_back_from_details()
+    local origin = self.state.details_origin
+    self.state.details_origin = nil
+    if origin then
+        if origin.page == "source_details" and origin.repo then
+            self.state.current_repo = origin.repo
+            self:show_source_details(origin.repo.name)
+            return
+        elseif origin.page == "category_details" and origin.category then
+            self.state.current_category = origin.category
+            self:show_category_details(origin.category.id)
+            return
+        end
+    end
     self:navigate(self.state.details_from or "search")
 end
 
@@ -670,6 +694,10 @@ function App:show_debug()
     self:refresh()
 end
 
+function App:sorted_packages(kind, packages)
+    return Models.sort_packages(packages, self.state.sorts[kind])
+end
+
 function App:set_filter(kind, value)
     self.state.filters[kind] = value or ""
     if kind == "installed" then
@@ -690,6 +718,44 @@ function App:set_filter(kind, value)
     else
         self:show_search()
     end
+end
+
+function App:set_sort(kind, value)
+    self.state.sorts[kind] = value or "stars"
+    self:reset_scroll(self:scroll_key())
+    if kind == "installed" then
+        self:show_installed()
+    elseif kind == "category" and self.state.current_category then
+        self:show_category_details(self.state.current_category.id)
+    elseif kind == "source" and self.state.current_repo then
+        self:show_source_details(self.state.current_repo.name)
+    else
+        self:show_search()
+    end
+end
+
+function App:prompt_sort(kind)
+    local current = self.state.sorts[kind] or "stars"
+    local function label(key, text)
+        if current == key then
+            return "• " .. text
+        end
+        return text
+    end
+    Modals.actions(_("Sort packages"), {
+        {
+            text = label("stars", _("Stars")),
+            callback = function() self:set_sort(kind, "stars") end,
+        },
+        {
+            text = label("name", _("Name")),
+            callback = function() self:set_sort(kind, "name") end,
+        },
+        {
+            text = label("repo", _("Source")),
+            callback = function() self:set_sort(kind, "repo") end,
+        },
+    })
 end
 
 function App:prompt_filter(kind)
@@ -816,12 +882,44 @@ function App:confirm_package_action(pkg, action, on_done)
 end
 
 function App:start_package_action(pkg, action, on_done)
-    local backend_action = backend_action_for(action)
     local id = pkg.id or pkg.name
     if not id then
         Modals.info(_("Package has no id."))
         return
     end
+    if action_installs_package(action) then
+        local ok, info = self.client:get_package_assets(id)
+        if ok and type(info) == "table" and info.needs_choice and type(info.candidates) == "table" then
+            self:choose_package_asset(pkg, action, info.candidates, on_done)
+            return
+        end
+    end
+    self:run_package_action(pkg, action, nil, on_done)
+end
+
+function App:choose_package_asset(pkg, action, candidates, on_done)
+    local rows = {}
+    for _, asset in ipairs(candidates) do
+        local name = asset.asset
+        if name and name ~= "" then
+            table.insert(rows, {
+                text = name,
+                callback = function()
+                    self:run_package_action(pkg, action, name, on_done)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then
+        self:run_package_action(pkg, action, nil, on_done)
+        return
+    end
+    Modals.actions(_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name), rows)
+end
+
+function App:run_package_action(pkg, action, asset, on_done)
+    local backend_action = backend_action_for(action)
+    local id = pkg.id or pkg.name
     local failure_baseline = self:package_action_failure_stats({
         id = id,
         action = action,
@@ -829,7 +927,7 @@ function App:start_package_action(pkg, action, on_done)
     self.busy = true
     Modals.status(action_progress(action) .. " "
         .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
-    local ok, err = self.client:package_action(id, backend_action)
+    local ok, err = self.client:package_action(id, backend_action, asset)
     if not ok then
         self.busy = false
         Modals.close_status()
@@ -949,10 +1047,17 @@ function App:poll_package_action(op, attempt)
 end
 
 function App:refresh_repos()
-    Modals.info(_("Refreshing repositories..."))
+    Modals.status(_("Refreshing repositories..."))
     local ok, data = self.client:refresh_repos()
+    Modals.close_status()
     if ok then
+        local found, packages = self:load_packages()
         self:reload_current_page()
+        if found then
+            Modals.info_for(string.format(_("Updated: %d packages"), #packages), Constants.PACKAGE_NOTICE_SECONDS)
+        else
+            Modals.info_for(_("Packages updated"), Constants.PACKAGE_NOTICE_SECONDS)
+        end
     else
         Modals.info(_("Refresh failed: ") .. tostring(data))
     end
@@ -963,11 +1068,7 @@ function App:show_actions()
         {
             text = _("Refresh"),
             callback = function()
-                if self.state.page == "search" or self.state.active_tab == "search" then
-                    self:refresh_repos()
-                else
-                    self:reload_current_page()
-                end
+                self:refresh_repos()
             end,
         },
         {

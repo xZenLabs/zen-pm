@@ -1,6 +1,7 @@
 local Geom = require("ui/geometry")
 local ImageWidget = require("ui/widget/imagewidget")
 local TextWidget = require("ui/widget/textwidget")
+local TextBoxWidget = require("ui/widget/textboxwidget")
 
 local Theme = require("ui/theme")
 
@@ -86,6 +87,25 @@ function P.text(bb, text, x, y, width, role, opts)
         bold = opts.bold,
         fgcolor = opts.color or Theme.ink,
         max_width = width,
+    }
+    widget:paintTo(bb, x, y)
+    local size = widget:getSize()
+    widget:free()
+    return size
+end
+
+function P.paragraph(bb, text, x, y, width, height, role, opts)
+    opts = opts or {}
+    local widget = TextBoxWidget:new{
+        text = tostring(text or ""),
+        face = opts.face or Theme.face(role),
+        bold = opts.bold,
+        fgcolor = opts.color or Theme.ink,
+        width = width,
+        height = height,
+        height_adjust = true,
+        height_overflow_show_ellipsis = true,
+        line_height = opts.line_height,
     }
     widget:paintTo(bb, x, y)
     local size = widget:getSize()

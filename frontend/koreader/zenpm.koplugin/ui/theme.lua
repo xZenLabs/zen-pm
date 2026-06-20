@@ -29,6 +29,7 @@ function Theme.metrics()
         card_h = Theme.scale(128),
         featured_h = Theme.scale(304),
         repo_h = Theme.scale(118),
+        category_h = Theme.scale(84),
         action_w = Theme.scale(104),
         action_h = Theme.scale(42),
         search_h = Theme.scale(46),

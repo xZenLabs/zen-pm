@@ -166,6 +166,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
+			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 		})
 	}
 	return out
@@ -180,6 +181,7 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
+			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 		})
 	}
 	return out

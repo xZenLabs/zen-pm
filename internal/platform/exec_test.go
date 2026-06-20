@@ -27,3 +27,20 @@ func TestExecuteScriptWithEnvSetsFallbackHome(t *testing.T) {
 		t.Fatalf("ExecuteScriptWithEnv() error = %v", err)
 	}
 }
+
+func TestDefaultHomeMatchesKOReaderPluginParents(t *testing.T) {
+	tests := map[string]string{
+		"kobo":       "/mnt/onboard/.adds",
+		"kindle":     "/mnt/base-us",
+		"pocketbook": "/mnt/ext1/applications",
+		"android":    "/sdcard",
+		"host":       "/tmp",
+		"":           "/tmp",
+	}
+	for platform, want := range tests {
+		t.Setenv("ZENPM_PLATFORM", platform)
+		if got := defaultHome(); got != want {
+			t.Fatalf("defaultHome() for %q = %q, want %q", platform, got, want)
+		}
+	}
+}

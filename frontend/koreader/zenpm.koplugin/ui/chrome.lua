@@ -153,8 +153,8 @@ function Chrome:onSwipeZenPM(_, ges)
     return true
 end
 
-function Chrome:refresh()
-    UIManager:setDirty(self, "ui", self.dimen)
+function Chrome:refresh(full)
+    UIManager:setDirty(self, full and "full" or "ui", self.dimen)
 end
 
 function Chrome:onCloseWidget()
@@ -187,6 +187,18 @@ function Chrome:draw_actions(bb, x, y)
         P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, { border = false, background = Theme.ink, radius = math.floor(dot / 2) })
     end
     P.hit(self, x, y, s, s, function() self.app:show_actions() end, "actions")
+    return s
+end
+
+function Chrome:draw_sort_button(bb, x, y, kind)
+    local s = Theme.scale(42)
+    local icon = Theme.scale(32)
+    P.box(bb, x, y, s, s, { border = false })
+    local icon_y = y + math.floor((s - icon) / 2) + Theme.scale(8)
+    if not P.image(bb, Images.asset("sort.svg"), x + math.floor((s - icon) / 2), icon_y, icon, icon, { is_icon = true }) then
+        P.center_text_box(bb, "Sort", x, y + Theme.scale(8), s, s, "small", { bold = true })
+    end
+    P.hit(self, x, y, s, s, function() self.app:prompt_sort(kind) end, "sort:" .. tostring(kind))
     return s
 end
 
@@ -442,7 +454,10 @@ function Chrome:draw_packages_page(bb, x, y, w, h, scroll, title, kind, visible,
         count = count .. "/" .. tostring(#(total or {}))
     end
     local cy = y
-    P.text(bb, title .. " (" .. count .. ")", x + pad, cy + Theme.scale(6), w - pad * 2, "heading", { bold = true })
+    local sort_s = Theme.scale(42)
+    local sort_x = x + w - pad - sort_s
+    P.text(bb, title .. " (" .. count .. ")", x + pad, cy + Theme.scale(6), sort_x - x - pad - Theme.scale(8), "heading", { bold = true })
+    self:draw_sort_button(bb, sort_x, cy + Theme.scale(6), kind)
     cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
@@ -499,11 +514,12 @@ function Chrome:draw_categories(bb, x, y, w, h, scroll)
     if #categories == 0 then
         local msg = query and query ~= "" and _("No categories match the filter.") or _("No categories found.")
         P.text(bb, msg, x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
-        self:set_list_bounds(x, list_y, w, list_h, m.repo_h + m.card_gap)
+        self:set_list_bounds(x, list_y, w, list_h, m.category_h + m.card_gap)
         return 0
     end
-    return self:draw_scrolled_list(bb, categories, x, list_y, w, list_h, scroll, m.repo_h, m.card_gap, function(category, row_y)
-        Cards.category(self, bb, category, x + pad, row_y, w - pad * 2)
+    return self:draw_scrolled_list(bb, categories, x, list_y, w, list_h, scroll, m.category_h, m.card_gap, function(category, row_y, scrollable)
+        local gutter = scrollable and Theme.scale(14) or 0
+        Cards.category(self, bb, category, x + pad, row_y, w - pad * 2 - gutter)
     end)
 end
 
@@ -512,7 +528,10 @@ function Chrome:draw_source_details(bb, x, y, w, h, scroll)
     local pad = m.pad
     local cy = y + Theme.scale(8)
     local visible = self.app.state.visible_packages or {}
-    P.text(bb, _("Packages") .. " (" .. tostring(#visible) .. ")", x + pad, cy, w - pad * 2, "heading", { bold = true })
+    local sort_s = Theme.scale(42)
+    local sort_x = x + w - pad - sort_s
+    P.text(bb, _("Packages") .. " (" .. tostring(#visible) .. ")", x + pad, cy, sort_x - x - pad - Theme.scale(8), "heading", { bold = true })
+    self:draw_sort_button(bb, sort_x, cy, "source")
     cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
@@ -565,7 +584,11 @@ function Chrome:draw_package_details(bb, x, y, w, h)
     iy = description_y
     P.text(bb, _("Description"), inner_x, iy, inner_w, "small", { bold = true })
     iy = iy + Theme.scale(34)
-    P.text(bb, I18n.dynamic_or(pkg.description, _("No description available.")), inner_x, iy, inner_w, "small")
+    local desc_bottom = cy + panel_h - Theme.scale(14)
+    local desc_h = desc_bottom - iy
+    if desc_h > 0 then
+        P.paragraph(bb, I18n.dynamic_or(pkg.description, _("No description available.")), inner_x, iy, inner_w, desc_h, "small")
+    end
     return cy + panel_h - Theme.scale(12)
 end
 

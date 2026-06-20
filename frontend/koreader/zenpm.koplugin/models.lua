@@ -142,6 +142,65 @@ function Models.filter_categories(categories, query)
     return out
 end
 
+local function package_name(pkg)
+    return I18n.dynamic_or(pkg and (pkg.name or pkg.id), ""):lower()
+end
+
+local function package_repo(pkg)
+    return I18n.dynamic_or(pkg and pkg.repo, ""):lower()
+end
+
+local function package_stars_value(pkg)
+    local stars = Util.trim(tostring(pkg and pkg.stars or ""))
+    if stars == "" then
+        return nil
+    end
+    return tonumber(stars)
+end
+
+local function compare_text(a, b)
+    local an, bn = package_name(a), package_name(b)
+    if an ~= bn then
+        return an < bn
+    end
+    local ar, br = package_repo(a), package_repo(b)
+    if ar ~= br then
+        return ar < br
+    end
+    return tostring(a and a.id or "") < tostring(b and b.id or "")
+end
+
+function Models.sort_packages(packages, sort_key)
+    local out = {}
+    for _, pkg in ipairs(packages or {}) do
+        table.insert(out, pkg)
+    end
+    sort_key = sort_key or "stars"
+    table.sort(out, function(a, b)
+        if sort_key == "name" then
+            return compare_text(a, b)
+        elseif sort_key == "repo" then
+            local ar, br = package_repo(a), package_repo(b)
+            if ar ~= br then
+                return ar < br
+            end
+            return compare_text(a, b)
+        end
+        local as, bs = package_stars_value(a), package_stars_value(b)
+        if as and bs and as ~= bs then
+            return as > bs
+        end
+        if as and not bs then
+            return true
+        end
+        if bs and not as then
+            return false
+        end
+        return compare_text(a, b)
+    end)
+    return out
+end
+
 function Models.installed_packages(packages)
     local out = {}
     for _, pkg in ipairs(packages or {}) do
@@ -225,7 +284,7 @@ end
 function Models.package_meta(pkg)
     local parts = {}
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
-        table.insert(parts, "v" .. pkg.version)
+        table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
     end
     table.insert(parts, I18n.dynamic_or(pkg and pkg.repo, "?"))
     return table.concat(parts, " - ")

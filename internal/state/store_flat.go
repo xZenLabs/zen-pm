@@ -30,6 +30,11 @@ type CatalogEntry struct {
 	Category      string
 	Source        string
 	SourceAsset   string
+	SourceType    string
+	SourceURL     string
+	Stars         string
+	Assets        string
+	Constraints   string
 }
 
 type flatFileStore struct {
@@ -225,6 +230,11 @@ func serializeCatalogEntry(e CatalogEntry) string {
 		e.Category,
 		e.Source,
 		e.SourceAsset,
+		e.SourceType,
+		e.SourceURL,
+		e.Stars,
+		e.Assets,
+		e.Constraints,
 	}, "|")
 }
 
@@ -283,6 +293,25 @@ func parseModernCatalogLine(parts []string) (CatalogEntry, error) {
 	}
 	if len(parts) >= 21 {
 		e.SourceAsset = parts[20]
+	}
+	if len(parts) == 22 {
+		e.Stars = parts[21]
+		return e, nil
+	}
+	if len(parts) >= 22 {
+		e.SourceType = parts[21]
+	}
+	if len(parts) >= 23 {
+		e.SourceURL = parts[22]
+	}
+	if len(parts) >= 24 {
+		e.Stars = parts[23]
+	}
+	if len(parts) >= 25 {
+		e.Assets = parts[24]
+	}
+	if len(parts) >= 26 {
+		e.Constraints = parts[25]
 	}
 	return e, nil
 }
