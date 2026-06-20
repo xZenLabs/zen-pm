@@ -190,9 +190,24 @@ function Daemon:detect_abi()
     return "sf"
 end
 
+-- uname output never changes within a session; cache the two reads on self.
+function Daemon:uname_kernel()
+    if self._uname_kernel == nil then
+        self._uname_kernel = command_output("uname -s 2>/dev/null"):lower()
+    end
+    return self._uname_kernel
+end
+
+function Daemon:uname_machine()
+    if self._uname_machine == nil then
+        self._uname_machine = command_output("uname -m 2>/dev/null"):lower()
+    end
+    return self._uname_machine
+end
+
 function Daemon:host_backend_suffix()
-    local kernel = command_output("uname -s 2>/dev/null"):lower()
-    local machine = command_output("uname -m 2>/dev/null"):lower()
+    local kernel = self:uname_kernel()
+    local machine = self:uname_machine()
     local os_name = nil
     local arch = nil
     if kernel == "linux" then
@@ -213,7 +228,7 @@ function Daemon:host_backend_suffix()
 end
 
 function Daemon:host_backend_platform()
-    local kernel = command_output("uname -s 2>/dev/null"):lower()
+    local kernel = self:uname_kernel()
     if kernel == "linux" then
         return "linux"
     elseif kernel == "darwin" then

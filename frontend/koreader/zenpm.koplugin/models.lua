@@ -211,49 +211,8 @@ function Models.installed_packages(packages)
     return out
 end
 
-function Models.resolve_repo_url(base, value)
-    return Util.join_url(base, value)
-end
-
-function Models.merge_repo_metadata(pkg, repo_pkg, repo_url)
-    if not pkg or not repo_pkg then
-        return pkg
-    end
-    for _, key in ipairs({ "name", "description", "author", "version", "image_url", "image", "repo_icon_url" }) do
-        if repo_pkg[key] then
-            pkg[key] = repo_pkg[key]
-        end
-    end
-    if type(repo_pkg.images) == "table" then
-        pkg.images = repo_pkg.images
-    end
-    if repo_pkg.icon_url then
-        pkg.icon_url = Models.resolve_repo_url(repo_url, repo_pkg.icon_url)
-    end
-    if repo_pkg.featured_image then
-        pkg.featured_image = Models.resolve_repo_url(repo_url, repo_pkg.featured_image)
-    end
-    if repo_pkg.featured then
-        pkg.featured = true
-    end
-    return pkg
-end
-
-function Models.select_featured(packages, zenlabs_index)
+function Models.select_featured(packages)
     local featured = {}
-    if type(zenlabs_index) == "table" and type(zenlabs_index.packages) == "table" then
-        for _, repo_pkg in ipairs(zenlabs_index.packages) do
-            if repo_pkg.featured then
-                local pkg = Models.find_package(packages, repo_pkg.id)
-                if pkg then
-                    table.insert(featured, Models.merge_repo_metadata(pkg, repo_pkg, Constants.REPO_ZENLABS_URL))
-                end
-            end
-        end
-    end
-    if #featured > 0 then
-        return featured
-    end
     for _, pkg in ipairs(packages or {}) do
         if pkg.featured then
             table.insert(featured, pkg)

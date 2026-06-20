@@ -15,16 +15,6 @@ function Util.endswith(value, suffix)
     return suffix == "" or value:sub(-#suffix) == suffix
 end
 
-function Util.join_url(base, value)
-    if not value or value == "" then
-        return ""
-    end
-    if value:match("^https?://") or Util.startswith(value, "file://") then
-        return value
-    end
-    return tostring(base):gsub("/+$", "") .. "/" .. tostring(value):gsub("^/+", "")
-end
-
 function Util.url_encode(value)
     value = tostring(value or "")
     return (value:gsub("([^%w%-_%.~])", function(c)

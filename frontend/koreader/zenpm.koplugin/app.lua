@@ -254,6 +254,13 @@ function App:ensure_backend()
         return false
     end
 
+    -- Backend already verified healthy this session: skip the per-navigate
+    -- ensure_backend_files() (shells out to uname) + synchronous /health.
+    -- A daemon restart or /repo/refresh clears backend_ready to force re-check.
+    if self.backend_ready then
+        return true
+    end
+
     local changed, prepare_err = self.daemon:ensure_backend_files()
     if prepare_err then
         self:set_error(prepare_err)
@@ -365,7 +372,7 @@ end
 
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
-        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from)
+        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true)
     elseif self.state.page == "category_details" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
@@ -443,7 +450,14 @@ local function merge_compatible_packages(out, seen, packages, platforms)
     end
 end
 
-function App:load_packages(check_updates)
+-- Serve the package catalog from an in-memory session cache. The Go daemon's
+-- catalog already carries every field the UI needs, so once loaded we reuse it
+-- across tab/filter/sort/detail navigation with no further /packages calls.
+-- force=true (install/uninstall/refresh) or check_updates bypass the cache.
+function App:load_packages(check_updates, force)
+    if not force and not check_updates and self.state.packages and #self.state.packages > 0 then
+        return true, self.state.packages
+    end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
     local ok, data = self.client:list_packages(filter, check_updates)
@@ -454,6 +468,7 @@ function App:load_packages(check_updates)
     local seen = {}
     merge_compatible_packages(packages, seen, type(data) == "table" and data or {}, capability_set)
     if #packages > 0 or #capabilities <= 1 then
+        self.state.packages = packages
         return true, packages
     end
     for _, platform in ipairs(capabilities) do
@@ -463,15 +478,21 @@ function App:load_packages(check_updates)
         end
         merge_compatible_packages(packages, seen, type(data) == "table" and data or {}, capability_set)
     end
+    self.state.packages = packages
     return true, packages
 end
 
-function App:load_repos()
+function App:load_repos(force)
+    if not force and self.state.repos and #self.state.repos > 0 then
+        return true, self.state.repos
+    end
     local ok, data = self.client:list_repos()
     if not ok then
         return false, {}, data
     end
-    return true, type(data) == "table" and data or {}
+    local repos = type(data) == "table" and data or {}
+    self.state.repos = repos
+    return true, repos
 end
 
 function App:show_featured()
@@ -486,10 +507,8 @@ function App:show_featured()
         return
     end
     self:log_timing("load_packages (catalog read)", t_load)
-    -- Render cached catalog immediately; manifest enrichment is network-bound,
-    -- so defer it and re-render once it returns (or fails).
     self.state.packages = packages
-    self.state.featured_packages = Models.select_featured(packages, nil)
+    self.state.featured_packages = Models.select_featured(packages)
     self:clear_status()
     self:refresh()
     if self.t_open then
@@ -497,23 +516,14 @@ function App:show_featured()
         self.t_open = nil
     end
 
-    local cache_empty = #packages == 0
-    local manifest_url = Constants.REPO_ZENLABS_URL:gsub("/+$", "") .. "/manifest.json"
-    UIManager:scheduleIn(0.05, function()
-        if self.state.page ~= "home" then return end
-        -- First run: catalog cache was empty and the backend is refreshing repos
-        -- in the background. Reload packages so the DB results appear.
-        if cache_empty then
+    -- First run: catalog cache was empty and the backend is refreshing repos in
+    -- the background. Poll until the DB results appear, then re-render.
+    if #packages == 0 then
+        UIManager:scheduleIn(0.05, function()
+            if self.state.page ~= "home" then return end
             self:reload_featured_until_ready(1)
-        end
-        local t_manifest = socket.gettime()
-        local ok_manifest, manifest = self.client:request("GET", manifest_url, nil)
-        self:log_timing("manifest fetch", t_manifest)
-        if not ok_manifest or type(manifest) ~= "table" then return end
-        if self.state.page ~= "home" then return end
-        self.state.featured_packages = Models.select_featured(self.state.packages, manifest)
-        self:refresh()
-    end)
+        end)
+    end
 end
 
 -- Poll the catalog after a first-run background refresh until packages appear.
@@ -522,7 +532,7 @@ function App:reload_featured_until_ready(attempt)
     local ok, packages = self:load_packages()
     if ok and #packages > 0 then
         self.state.packages = packages
-        self.state.featured_packages = Models.select_featured(packages, nil)
+        self.state.featured_packages = Models.select_featured(packages)
         self:refresh()
         if self.t_open then
             self:log_timing("home populated after refresh (open -> packages)", self.t_open)
@@ -663,7 +673,7 @@ function App:show_source_details(name)
     self:refresh()
 end
 
-function App:show_package_details(package_id, from_tab)
+function App:show_package_details(package_id, from_tab, force_reload)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -676,8 +686,11 @@ function App:show_package_details(package_id, from_tab)
     self.state.active_tab = from_tab or self.state.active_tab or "search"
     self.state.details_from = from_tab or self.state.active_tab or "search"
     if not self:ensure_backend() then return end
-    self:set_loading(_("Loading package..."))
-    local ok, packages, err = self:load_packages()
+    -- Catalog already carries every field the details view needs (description,
+    -- author, images, icons). load_packages serves from the in-memory session
+    -- cache, so this is a local lookup with no network round-trip unless a
+    -- force_reload (post install/uninstall/refresh) invalidates the cache.
+    local ok, packages, err = self:load_packages(false, force_reload)
     if not ok then
         self:set_error(_("Failed to load package: ") .. tostring(err))
         return
@@ -688,7 +701,7 @@ function App:show_package_details(package_id, from_tab)
         return
     end
     self.state.packages = packages
-    self.state.current_package = self:enrich_package_from_repo(pkg)
+    self.state.current_package = pkg
     self:clear_status()
     self:refresh()
 end
@@ -708,30 +721,6 @@ function App:go_back_from_details()
         end
     end
     self:navigate(self.state.details_from or "search")
-end
-
-function App:enrich_package_from_repo(pkg)
-    if not pkg or not pkg.repo then
-        return pkg
-    end
-    local ok, repos = self:load_repos()
-    if not ok then
-        return pkg
-    end
-    local repo = Util.table_find(repos, function(r) return r.name == pkg.repo end)
-    if not repo or not repo.url then
-        return pkg
-    end
-    local ok_manifest, manifest = self.client:request("GET", repo.url:gsub("/+$", "") .. "/manifest.json", nil)
-    if not ok_manifest or type(manifest) ~= "table" or type(manifest.packages) ~= "table" then
-        return pkg
-    end
-    for _, repo_pkg in ipairs(manifest.packages) do
-        if repo_pkg.id == pkg.id then
-            return Models.merge_repo_metadata(pkg, repo_pkg, repo.url)
-        end
-    end
-    return pkg
 end
 
 function App:show_debug()
@@ -1063,7 +1052,10 @@ function App:poll_package_action(op, attempt)
             return
         end
 
-        local ok, packages = self:load_packages()
+        -- Force a fresh catalog read each tick: the session cache would mask the
+        -- install/uninstall status change we're polling for. On success this also
+        -- leaves state.packages holding the updated status for the list/detail view.
+        local ok, packages = self:load_packages(false, true)
         if not ok then
             if attempt >= Constants.MAX_POLL_RETRIES then
                 self.busy = false
@@ -1112,7 +1104,8 @@ function App:refresh_repos()
     local ok, data = self.client:refresh_repos()
     Modals.close_status()
     if ok then
-        local found, packages = self:load_packages()
+        local found, packages = self:load_packages(false, true)
+        self:load_repos(true)
         self:reload_current_page()
         if found then
             Modals.info_for(string.format(_("Updated: %d packages"), #packages), Constants.PACKAGE_NOTICE_SECONDS)
@@ -1148,9 +1141,7 @@ function App:show_actions()
 end
 
 function App:show_about()
-    local ok, data = self.client:health()
-    local version = ok and data and data.version or self.version or "?"
-    version = tostring(version):gsub("^v", "")
+    local version = tostring(self.version or "?"):gsub("^v", "")
     Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
 end
 
@@ -1158,6 +1149,8 @@ function App:start_update()
     Modals.confirm(_("Check for and start a ZenPM update?"), _("Update"), function()
         local ok, data = self.client:start_update()
         if ok then
+            -- Daemon may restart under us; force ensure_backend to re-verify health.
+            self.backend_ready = false
             Modals.info(_("Update accepted. The daemon may restart."))
         else
             Modals.info(_("Update failed: ") .. tostring(data))

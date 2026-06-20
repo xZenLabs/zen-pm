@@ -92,6 +92,10 @@ func (s *Server) ListenAndServe() error {
 		}()
 	}
 
+	// Keep the catalog fresh in the background so the client never has to fetch
+	// repo manifests itself: refresh once a day for long-running daemons.
+	go s.periodicRefresh()
+
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -105,6 +109,9 @@ func (s *Server) ListenAndServe() error {
 	return http.Serve(ln, mux)
 }
 
+// catalogMaxAge is how stale the catalog may get before a refresh is forced.
+const catalogMaxAge = 24 * time.Hour
+
 func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
@@ -115,7 +122,24 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 		log.Info("Catalog is empty — running initial repo refresh")
 		return nil, true
 	}
+	if age := s.repos.CatalogAge(); age >= catalogMaxAge {
+		log.Infof("Catalog is %s old — running repo refresh", age.Round(time.Hour))
+		return catalog, true
+	}
 	return catalog, false
+}
+
+// periodicRefresh refreshes the catalog once per catalogMaxAge for the lifetime
+// of the daemon. Errors are logged and the loop continues.
+func (s *Server) periodicRefresh() {
+	ticker := time.NewTicker(catalogMaxAge)
+	defer ticker.Stop()
+	for range ticker.C {
+		log.Info("Periodic catalog refresh")
+		if err := s.repos.Refresh(); err != nil {
+			log.Warnf("Periodic refresh failed: %v", err)
+		}
+	}
 }
 
 // responseRecorder captures the status code written by a handler.

@@ -96,8 +96,33 @@ func (m *Manager) Refresh() error {
 		return fmt.Errorf("write merged catalog: %w", err)
 	}
 	m.CacheInstalledUninstallScripts(merged)
+	m.touchRefreshMarker()
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
 	return nil
+}
+
+// refreshMarkerPath is a tiny file whose mtime records the last successful
+// catalog refresh. Backend-agnostic (works for both flat and sqlite stores).
+func (m *Manager) refreshMarkerPath() string {
+	return filepath.Join(m.st.CacheDir, "catalog.refreshed")
+}
+
+func (m *Manager) touchRefreshMarker() {
+	if err := os.WriteFile(m.refreshMarkerPath(), []byte(time.Now().UTC().Format(time.RFC3339)), 0644); err != nil {
+		log.Warnf("Could not write refresh marker: %v", err)
+	}
+}
+
+// CatalogAge returns how long ago the catalog was last refreshed, or 0 when no
+// refresh marker exists yet. A missing marker means we can't prove staleness
+// (e.g. catalog written by an older build), so callers treat it as fresh and
+// rely on the empty-catalog check instead of forcing a surprise refresh.
+func (m *Manager) CatalogAge() time.Duration {
+	info, err := os.Stat(m.refreshMarkerPath())
+	if err != nil {
+		return 0
+	}
+	return time.Since(info.ModTime())
 }
 
 func (m *Manager) CacheInstalledUninstallScripts(catalog []*CatalogEntry) {
