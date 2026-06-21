@@ -47,7 +47,7 @@ function Nav.draw(view, bb, x, y, w, h)
         if not P.image(bb, Images.asset(ICONS[tab.id] or "packages.svg"), tx + math.floor((tw - icon_size) / 2), y + Theme.scale(5), icon_size, icon_size, { is_icon = true }) then
             P.center_text(bb, label:sub(1, 1), tx, y + Theme.scale(14), tw, "heading", { bold = true })
         end
-        local label_size = P.center_text(bb, label, tx, y + Theme.scale(50), tw, "nav", { bold = view.app.state.active_tab == tab.id })
+        local label_size = P.center_text(bb, label, tx, y + Theme.scale(50), tw, "nav")
         if view.app.state.active_tab == tab.id then
             local ux = tx + math.max(0, math.floor((tw - label_size.w) / 2))
             P.rect(bb, ux, y + h - Theme.scale(5), label_size.w, Theme.scale(3), Theme.border)
