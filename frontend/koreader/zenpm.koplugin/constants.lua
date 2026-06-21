@@ -26,7 +26,7 @@ return {
         { id = "categories", label = "Categories" },
         { id = "sources", label = "Sources" },
         { id = "installed", label = "Installed" },
-        { id = "debug", label = "Debug" },
+        -- { id = "debug", label = "Debug" },
         { id = "search", label = "Search" },
     },
 
