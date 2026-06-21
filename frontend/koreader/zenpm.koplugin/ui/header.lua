@@ -61,13 +61,19 @@ function Header.draw(view, bb, x, y, w)
     if page == "home" then
         local h = Theme.scale(78)
         P.box(bb, x, y, w, h, { border = false })
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
-        local logo = Theme.scale(52)
-        local logo_y = y + Theme.scale(13)
-        if not P.image(bb, Images.asset("zenpm.svg"), x + pad, y + Theme.scale(13), logo, logo, { is_icon = true }) then
-            P.center_text(bb, "Z", x + pad, y + Theme.scale(30), logo, "title", { bold = true })
+        local row_h = Theme.scale(42)
+        local row_y = y + Theme.scale(12)
+        local action_x = x + w - pad - row_h
+        Header.draw_actions(view, bb, action_x, row_y)
+        local logo = Theme.scale(42)
+        if not P.image(bb, Images.asset("zenpm.svg"), x + pad, row_y, logo, logo, { is_icon = true }) then
+            P.center_text_box(bb, "Z", x + pad, row_y, logo, logo, "title", { bold = true })
         end
-        P.vcenter_text(bb, _("Welcome") .. " ZenPM", x + pad + Theme.scale(66), logo_y, w - pad * 2 - Theme.scale(112), logo, "title", { bold = true })
+        local text_x = x + pad + logo + Theme.scale(14)
+        local title = _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM")
+        local title_size = P.text_size(title, action_x - text_x - Theme.scale(8), "title", { bold = true })
+        local title_y = row_y + math.floor((row_h - title_size.h) / 2) - Theme.scale(3)
+        P.text(bb, title, text_x, title_y, action_x - text_x - Theme.scale(8), "title", { bold = true })
         return y + h
     elseif page == "search" then
         local h = Theme.scale(68)

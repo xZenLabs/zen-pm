@@ -142,26 +142,28 @@ function Pages.package_details(view, bb, x, y, w, h)
     local inner_w = w - pad * 2 - Theme.scale(24)
     local iy = cy + Theme.scale(12)
     if pkg.featured_image then
-        local art_h = math.min(Theme.scale(146), math.floor(panel_h * 0.318))
-        if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), inner_x, iy, inner_w, art_h, 1.5, {
+        local art_h = m.featured_h - Theme.scale(118)
+        local border = Theme.scale(2)
+        if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), panel_x + border, cy + border, panel_w - border * 2, art_h - border, 1.25, {
             is_icon = false,
             outer_bounds = { x = panel_x, y = cy, w = panel_w, h = panel_h },
-            mask_bounds = { x = panel_x + Theme.scale(2), y = cy + Theme.scale(2), w = panel_w - Theme.scale(4), h = panel_h - Theme.scale(4) },
+            mask_bounds = { x = panel_x + border, y = cy + border, w = panel_w - border * 2, h = panel_h - border * 2 },
         }) then
-            P.center_text(bb, _("Featured"), inner_x, iy + Theme.scale(60), inner_w, "heading", { bold = true, color = Theme.muted })
+            P.center_text(bb, _("Featured"), panel_x, cy + Theme.scale(60), panel_w, "heading", { bold = true, color = Theme.muted })
         end
-        iy = iy + art_h
+        iy = cy + art_h
         P.rect(bb, panel_x + Theme.scale(2), iy, panel_w - Theme.scale(4), Theme.scale(1), Theme.border)
         iy = iy + Theme.scale(10)
     end
+    local summary_h = m.card_h
     Cards.package(view, bb, pkg, inner_x, iy, inner_w, {
-        height = Theme.scale(148),
+        height = summary_h,
         second_line = _("By ") .. I18n.dynamic_or(pkg.author, "?"),
         text_gap = Theme.scale(6),
         border = false,
     })
-    local card_bottom = iy + Theme.scale(148)
-    local description_y = iy + Theme.scale(166)
+    local card_bottom = iy + summary_h
+    local description_y = card_bottom + Theme.scale(18)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y

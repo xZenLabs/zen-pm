@@ -162,11 +162,11 @@ function Cards.featured(view, bb, pkg, x, y, w)
     local h = m.featured_h
     P.box(bb, x, y, w, h)
     local art_h = h - Theme.scale(118)
-    local inset = Theme.scale(3)
-    if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), x + inset, y + inset, w - inset * 2, art_h - inset * 2, 1.25, {
+    local border = Theme.scale(2)
+    if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), x + border, y + border, w - border * 2, art_h - border, 1.25, {
         is_icon = false,
         outer_bounds = { x = x, y = y, w = w, h = h },
-        mask_bounds = { x = x + Theme.scale(2), y = y + Theme.scale(2), w = w - Theme.scale(4), h = h - Theme.scale(4) },
+        mask_bounds = { x = x + border, y = y + border, w = w - border * 2, h = h - border * 2 },
     }) then
         P.center_text(bb, _("Featured"), x, y + math.floor(art_h / 2) - Theme.scale(14), w, "heading", { bold = true, color = Theme.muted })
     end

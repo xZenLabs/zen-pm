@@ -237,14 +237,17 @@ function P.image_zoomed(bb, file, x, y, w, h, zoom, opts)
         base:getSize()
         local image = base._bb
         if image then
+            local iw, ih = image:getWidth(), image:getHeight()
             local widget = ImageWidget:new{
                 image = image,
                 image_disposable = false,
                 width = w,
                 height = h,
-                scale_factor = zoom,
+                scale_factor = math.max(w / iw, h / ih) * zoom,
                 alpha = opts.alpha ~= false,
                 is_icon = opts.is_icon,
+                center_x_ratio = 0.5,
+                center_y_ratio = 0.5,
             }
             painted = pcall(function()
                 widget:paintTo(bb, x, y)

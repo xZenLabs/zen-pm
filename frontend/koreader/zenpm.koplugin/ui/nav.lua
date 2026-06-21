@@ -27,7 +27,7 @@ local function tab_label(tab_id)
 end
 
 local ICONS = {
-    home = "home.svg",
+    home = "star.svg",
     categories = "categories.svg",
     sources = "sources.svg",
     installed = "packages.svg",
