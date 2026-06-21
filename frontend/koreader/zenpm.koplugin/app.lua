@@ -2,7 +2,7 @@ local socket = require("socket")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
-local Chrome = require("ui/chrome")
+local AppView = require("ui/app_view")
 local Client = require("client")
 local Constants = require("constants")
 local Daemon = require("daemon")
@@ -117,7 +117,7 @@ end
 
 function App:show()
     if not self.view then
-        self.view = Chrome:new{ app = self }
+        self.view = AppView:new{ app = self }
     end
     UIManager:show(self.view)
     if self.backend_ready then
