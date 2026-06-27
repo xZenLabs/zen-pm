@@ -1,0 +1,689 @@
+openapi: 3.0.3
+info:
+  title: ZenPM Local Daemon API
+  version: 1.0.0
+  description: |
+    OpenAPI reference for the Zen Package Manager HTTP daemon.
+
+    The daemon binds to loopback only (`127.0.0.1`) and is intended for calls
+    from the Kindle WAF frontend, on-device scripts, and local development
+    tools. It does not use HTTP authentication; access control is enforced by
+    accepting requests only from `127.0.0.1` or `::1`.
+
+    CORS is enabled for local browser/WAF clients. All routes return `204` for
+    `OPTIONS` preflight requests.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Default local daemon
+tags:
+  - name: Health
+  - name: Repositories
+  - name: Packages
+  - name: Logs
+  - name: Kindle UI
+  - name: Maintenance
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check daemon health and version
+      operationId: getHealth
+      responses:
+        "200":
+          description: Daemon is reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                ok: true
+                version: 1.2.3
+  /repos:
+    get:
+      tags:
+        - Repositories
+      summary: List configured repositories
+      operationId: listRepos
+      responses:
+        "200":
+          description: Configured repositories, including built-in defaults.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Repository"
+              example:
+                - name: ZenLabs
+                  url: https://xzenlabs.github.io/repo
+                  priority: 10
+                  trust: trusted
+                  default: true
+                - name: my-repo
+                  url: https://example.com/my-repo/
+                  priority: 100
+                  trust: warn-unsigned
+                  default: false
+        "500":
+          $ref: "#/components/responses/JsonError"
+    post:
+      tags:
+        - Repositories
+      summary: Add a repository
+      description: |
+        Adds a user repository. Priority and trust are determined by the daemon:
+        user-added repositories receive priority `100`, and trust is inferred
+        from repository signing and URL safety checks.
+      operationId: addRepo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddRepositoryRequest"
+            example:
+              name: my-repo
+              url: https://example.com/my-repo/
+      responses:
+        "201":
+          description: Repository was added.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddRepositoryResponse"
+              examples:
+                added:
+                  value:
+                    ok: true
+                addedWithWarning:
+                  value:
+                    ok: true
+                    warning: repo URL uses plain HTTP - consider using HTTPS for security
+        "400":
+          $ref: "#/components/responses/TextError"
+        "409":
+          $ref: "#/components/responses/JsonError"
+        "500":
+          $ref: "#/components/responses/JsonError"
+  /repos/{name}:
+    parameters:
+      - $ref: "#/components/parameters/RepoName"
+    put:
+      tags:
+        - Repositories
+      summary: Replace a user repository
+      description: |
+        Replaces an existing non-default repository by removing and re-adding it
+        under the same name. Built-in default repositories cannot be modified.
+      operationId: updateRepo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRepositoryRequest"
+            example:
+              url: https://example.com/my-repo/
+              priority: 100
+              trust: warn-unsigned
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "400":
+          $ref: "#/components/responses/TextError"
+        "403":
+          $ref: "#/components/responses/JsonError"
+        "404":
+          $ref: "#/components/responses/JsonError"
+        "500":
+          $ref: "#/components/responses/JsonError"
+    delete:
+      tags:
+        - Repositories
+      summary: Remove a user repository
+      description: Built-in default repositories cannot be removed.
+      operationId: deleteRepo
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "400":
+          $ref: "#/components/responses/TextError"
+        "403":
+          $ref: "#/components/responses/JsonError"
+        "404":
+          $ref: "#/components/responses/JsonError"
+  /repo/refresh:
+    post:
+      tags:
+        - Repositories
+      summary: Refresh the merged package catalog
+      description: Fetches all configured repositories, merges catalog entries by priority, and caches uninstall scripts for installed packages.
+      operationId: refreshRepos
+      responses:
+        "200":
+          description: Catalog refresh completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+              example:
+                ok: true
+                log: "Refreshing repo ZenLabs from https://xzenlabs.github.io/repo\nCatalog refreshed: 12 packages total"
+        "405":
+          $ref: "#/components/responses/TextError"
+        "500":
+          description: Refresh failed. The response includes the current log tail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+              example:
+                ok: false
+                error: no repositories configured
+                log: ""
+  /packages:
+    get:
+      tags:
+        - Packages
+      summary: List packages
+      description: |
+        Returns packages from the merged catalog, optionally filtered by
+        platform capabilities. A package is returned only when every declared
+        platform is present in the filter. Packages already installed on the
+        device but missing from the catalog are included as installed device
+        packages.
+      operationId: listPackages
+      parameters:
+        - name: platform
+          in: query
+          required: false
+          description: Comma-separated platform capability filter. Omit to return all packages.
+          schema:
+            type: string
+          example: kindle,koreader
+      responses:
+        "200":
+          description: Package list. If the catalog has not been built yet, this may be an empty array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Package"
+              example:
+                - id: koreader-kindle
+                  name: KOReader
+                  version: 2026.05
+                  description: E-book reader for Kindle.
+                  author: KOReader contributors
+                  tags:
+                    - reader
+                  category: Media
+                  platforms:
+                    - kindle
+                    - koreader
+                  repo: ZenLabs
+                  repo_trust: trusted
+                  repo_default: true
+                  installed: false
+                  installed_version: ""
+                  latest_version: v2026.05
+                  update_available: false
+                  icon_url: https://example.com/favicon.svg
+                  repo_icon_url: https://example.com/favicon.svg
+                  image_url: https://example.com/packages/koreader/screenshot.png
+                  images:
+                    - https://example.com/packages/koreader/screenshot.png
+                  featured: true
+                  featured_image: https://example.com/packages/koreader/featured.png
+                  source: https://github.com/koreader/koreader
+        "405":
+          $ref: "#/components/responses/TextError"
+  /packages/{id}/install:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    post:
+      tags:
+        - Packages
+      summary: Start package installation
+      description: |
+        Starts installation asynchronously and returns immediately. Clients can
+        poll `/log` to observe progress and failures.
+      operationId: installPackage
+      responses:
+        "202":
+          $ref: "#/components/responses/Started"
+        "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /packages/{id}/uninstall:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    post:
+      tags:
+        - Packages
+      summary: Start package removal
+      description: |
+        Starts uninstallation asynchronously and returns immediately. Clients can
+        poll `/log` to observe progress and failures.
+      operationId: uninstallPackage
+      responses:
+        "202":
+          $ref: "#/components/responses/Started"
+        "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /log:
+    get:
+      tags:
+        - Logs
+      summary: Read recent daemon log output
+      operationId: getLog
+      parameters:
+        - name: tail
+          in: query
+          required: false
+          description: Number of log lines to return. Defaults to 200.
+          schema:
+            type: integer
+            minimum: 1
+            default: 200
+          example: 500
+      responses:
+        "200":
+          description: Log tail as plain text.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "ZenPM server listening on 127.0.0.1:8080\nGET /health 200"
+        "404":
+          $ref: "#/components/responses/TextError"
+  /log/client:
+    post:
+      tags:
+        - Logs
+      summary: Relay a frontend log message
+      description: Writes a Kindle WAF JavaScript diagnostic message into the daemon log file.
+      operationId: postClientLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientLogRequest"
+            example:
+              message: "[sources] refresh tapped"
+      responses:
+        "204":
+          description: Message accepted.
+        "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /dialog:
+    post:
+      tags:
+        - Kindle UI
+      summary: Show a native Kindle dialog
+      description: Uses the Kindle pillow alert LIPC interface to show a native alert dialog.
+      operationId: showDialog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialogRequest"
+            example:
+              title: ZenPM
+              message: "Version: 1.2.3"
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+        "500":
+          $ref: "#/components/responses/JsonError"
+  /foreground:
+    post:
+      tags:
+        - Kindle UI
+      summary: Bring the ZenPM WAF app to the foreground
+      operationId: foregroundApp
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /update:
+    post:
+      tags:
+        - Maintenance
+      summary: Start Kindle self-update
+      description: |
+        Starts `/mnt/us/ZenPM/installers/kindle/update.sh` asynchronously. The
+        updater may stop and restart the daemon.
+      operationId: startUpdate
+      responses:
+        "202":
+          description: Update script was started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+              example:
+                ok: true
+        "404":
+          description: Update script is not present on the device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: update script not found
+        "405":
+          $ref: "#/components/responses/TextError"
+        "500":
+          $ref: "#/components/responses/JsonError"
+components:
+  parameters:
+    RepoName:
+      name: name
+      in: path
+      required: true
+      description: Repository name as stored in `repos.db`.
+      schema:
+        type: string
+        minLength: 1
+      example: my-repo
+    PackageId:
+      name: id
+      in: path
+      required: true
+      description: Package identifier from the merged catalog.
+      schema:
+        type: string
+        minLength: 1
+      example: koreader-kindle
+  responses:
+    Ok:
+      description: Operation completed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OkResponse"
+          example:
+            ok: true
+    Started:
+      description: Operation was accepted and started asynchronously.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/StartedResponse"
+          example:
+            ok: true
+            started: true
+    JsonError:
+      description: JSON error response.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: repo "my-repo" already exists
+    TextError:
+      description: Plain-text error response emitted by legacy handlers.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            badRequest:
+              value: "bad request\n"
+            method:
+              value: "POST required\n"
+            forbidden:
+              value: "forbidden\n"
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - ok
+        - version
+      properties:
+        ok:
+          type: boolean
+          example: true
+        version:
+          type: string
+          description: Version injected at build time or `dev` in local builds.
+          example: 1.2.3
+    Repository:
+      type: object
+      required:
+        - name
+        - url
+        - priority
+        - trust
+        - default
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        priority:
+          type: integer
+          description: Lower numbers have higher precedence.
+          example: 100
+        trust:
+          $ref: "#/components/schemas/TrustLevel"
+        default:
+          type: boolean
+          description: Built-in repositories are protected from modification and removal.
+        icon_url:
+          type: string
+          format: uri
+          description: Resolved repository icon URL from `manifest.json` repo metadata, when available.
+    TrustLevel:
+      type: string
+      enum:
+        - trusted
+        - signed
+        - warn-unsigned
+      description: |
+        `trusted` is used for built-in repositories, `signed` for repositories
+        with a valid `manifest.json.sig`, and `warn-unsigned` for unsigned or
+        plain-HTTP repositories.
+    AddRepositoryRequest:
+      type: object
+      required:
+        - name
+        - url
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          minLength: 1
+          description: Repository base URL. A trailing slash is recommended.
+          example: https://example.com/my-repo/
+    UpdateRepositoryRequest:
+      type: object
+      required:
+        - url
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          minLength: 1
+        priority:
+          type: integer
+          default: 100
+          description: Defaults to `100` when omitted or `0`.
+        trust:
+          allOf:
+            - $ref: "#/components/schemas/TrustLevel"
+          default: warn-unsigned
+    AddRepositoryResponse:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          example: true
+        warning:
+          type: string
+          description: Present when the repository URL has a safety warning.
+    RefreshResponse:
+      type: object
+      required:
+        - ok
+        - log
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+          description: Present when `ok` is false.
+        log:
+          type: string
+          description: Tail of the daemon log captured after refresh.
+    Package:
+      type: object
+      required:
+        - id
+        - name
+        - version
+        - description
+        - author
+        - tags
+        - platforms
+        - repo
+        - installed
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        author:
+          type: string
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+        category:
+          type: string
+          description: Repository-provided category, such as Media, Utility, Productivity, or Games.
+        platforms:
+          type: array
+          nullable: true
+          items:
+            type: string
+            enum:
+              - kindle
+              - kobo
+              - host
+              - koreader
+        repo:
+          type: string
+        repo_trust:
+          $ref: "#/components/schemas/TrustLevel"
+        repo_default:
+          type: boolean
+        installed:
+          type: boolean
+        installed_version:
+          type: string
+          description: Version recorded at install time, when the package is installed.
+        latest_version:
+          type: string
+          description: Latest GitHub release tag when update checks are requested.
+        update_available:
+          type: boolean
+          description: True when `latest_version` is newer than `installed_version`.
+        icon_url:
+          type: string
+          format: uri
+        repo_icon_url:
+          type: string
+          format: uri
+        image_url:
+          type: string
+          format: uri
+          description: First image URL from `images`, when present.
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+        featured:
+          type: boolean
+        featured_image:
+          type: string
+          format: uri
+        source:
+          type: string
+          format: uri
+          description: Upstream source URL, used for GitHub release update checks when available.
+    OkResponse:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          example: true
+    StartedResponse:
+      type: object
+      required:
+        - ok
+        - started
+      properties:
+        ok:
+          type: boolean
+          example: true
+        started:
+          type: boolean
+          example: true
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+    ClientLogRequest:
+      type: object
+      required:
+        - message
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+          minLength: 1
+    DialogRequest:
+      type: object
+      required:
+        - title
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          default: ""

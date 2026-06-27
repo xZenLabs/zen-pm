@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: zh_CN
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "打开 ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "适用于 KOReader 的 Zen Package Manager 前端。"
+
+msgid "Featured"
+msgstr "精选"
+
+msgid "Sources"
+msgstr "来源"
+
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Debug"
+msgstr "调试"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Welcome"
+msgstr "欢迎"
+
+msgid "Add Source"
+msgstr "添加来源"
+
+msgid "Add"
+msgstr "添加"
+
+msgid "Search..."
+msgstr "搜索..."
+
+msgid "Filter installed..."
+msgstr "筛选已安装..."
+
+msgid "Packages"
+msgstr "软件包"
+
+msgid "Source Details"
+msgstr "来源详情"
+
+msgid "Package Details"
+msgstr "软件包详情"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - 调试"
+
+msgid "Featured packages coming soon."
+msgstr "精选软件包即将推出。"
+
+msgid "No packages found. Try Refresh."
+msgstr "未找到软件包。请尝试刷新。"
+
+msgid "No installed packages match the filter."
+msgstr "没有已安装的软件包符合筛选条件。"
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "尚未安装软件包。请使用搜索查找软件包。"
+
+msgid "No packages match the filter."
+msgstr "没有软件包符合筛选条件。"
+
+msgid "No repositories configured."
+msgstr "未配置仓库。"
+
+msgid "No packages found for this source."
+msgstr "此来源没有找到软件包。"
+
+msgid "By "
+msgstr "作者："
+
+msgid "Description"
+msgstr "描述"
+
+msgid "No description available."
+msgstr "没有可用描述。"
+
+msgid "Unknown package"
+msgstr "未知软件包"
+
+msgid "No description"
+msgstr "无描述"
+
+msgid "Source"
+msgstr "来源"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Modify"
+msgstr "修改"
+
+msgid "Get"
+msgstr "获取"
+
+msgid "OK"
+msgstr "确定"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Info"
+msgstr "信息"
+
+msgid "Reinstall"
+msgstr "重新安装"
+
+msgid "Uninstall"
+msgstr "卸载"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "About"
+msgstr "关于"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Quit"
+msgstr "退出"
+
+msgid "Filter installed packages"
+msgstr "筛选已安装的软件包"
+
+msgid "Search packages"
+msgstr "搜索软件包"
+
+msgid "Please enter a URL."
+msgstr "请输入 URL。"
+
+msgid "Detecting repo..."
+msgstr "正在检测仓库..."
+
+msgid "Could not detect repo format."
+msgstr "无法检测仓库格式。"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "另一个操作正在进行。请稍候。"
+
+msgid "Package has no id."
+msgstr "软件包没有 id。"
+
+msgid "Downloading... Please wait."
+msgstr "正在下载... 请稍候。"
+
+msgid "Refreshing repositories..."
+msgstr "正在刷新仓库..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "检查并开始 ZenPM 更新？"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "已接受更新。守护进程可能会重启。"
+
+msgid "None"
+msgstr "无"
+
+msgid "Version: "
+msgstr "版本："
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "作者：Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " did not complete.\n\nCheck the debug log for details."
+
+msgid " successfully."
+msgstr "成功。"
+
+msgid "Are you sure you want to download "
+msgstr "确定要下载 "
+
+msgid "Are you sure you want to reinstall "
+msgstr "确定要重新安装 "
+
+msgid "Are you sure you want to uninstall "
+msgstr "确定要卸载 "
+
+msgid "Loading packages, please wait"
+msgstr "正在加载软件包，请稍候"
+
+msgid "Could not add source: "
+msgstr "Could not add source: "
+
+msgid "Could not read log: "
+msgstr "Could not read log: "
+
+msgid "Could not remove source: "
+msgstr "Could not remove source: "
+
+msgid "Failed to load package: "
+msgstr "Failed to load package: "
+
+msgid "Failed to load packages: "
+msgstr "Failed to load packages: "
+
+msgid "Failed to load source: "
+msgstr "Failed to load source: "
+
+msgid "Failed to load sources: "
+msgstr "Failed to load sources: "
+
+msgid "Failed to start package action: "
+msgstr "Failed to start package action: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "Installing"
+msgstr "正在安装"
+
+msgid "Loading featured packages..."
+msgstr "正在加载精选软件包..."
+
+msgid "Loading installed packages..."
+msgstr "正在加载已安装软件包..."
+
+msgid "Loading log..."
+msgstr "正在加载日志..."
+
+msgid "Loading package..."
+msgstr "正在加载软件包..."
+
+msgid "Loading packages..."
+msgstr "正在加载软件包..."
+
+msgid "Loading source..."
+msgstr "正在加载来源..."
+
+msgid "Loading sources..."
+msgstr "正在加载来源..."
+
+msgid "Log is empty."
+msgstr "日志为空。"
+
+msgid "Package"
+msgstr "软件包"
+
+msgid "Package not found."
+msgstr "未找到软件包。"
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Package operation status could not be checked. See Debug log."
+
+msgid "Refresh failed: "
+msgstr "Refresh failed: "
+
+msgid "Reinstalling"
+msgstr "正在重新安装"
+
+msgid "Remove source "
+msgstr "移除来源 "
+
+msgid "Source not found."
+msgstr "未找到来源。"
+
+msgid "Uninstalling"
+msgstr "正在卸载"
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPM backend not found. Expected "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "install"
+msgstr "安装"
+
+msgid "installed"
+msgstr "已安装"
+
+msgid "network error"
+msgstr "网络错误"
+
+msgid "of"
+msgstr "的"
+
+msgid "or"
+msgstr "或"
+
+msgid "reinstall"
+msgstr "重新安装"
+
+msgid "reinstalled"
+msgstr "已重新安装"
+
+msgid "request failed"
+msgstr "request failed"
+
+msgid "uninstall"
+msgstr "卸载"
+
+msgid "uninstalled"
+msgstr "已卸载"

@@ -157,10 +157,7 @@
     }
 
     function repoIconURL(repo) {
-        if (repo.name === ZenUtils.REPO_KINDLEFORGE_NAME) {
-            return "../../assets/kindleforge.svg";
-        }
-        return repo.url.replace(/\/+$/, "") + "/favicon.svg";
+        return ZenUtils.repoIconURL(repo, "../../assets/sources.svg");
     }
 
     function repoIsVerified(repo) {
@@ -179,7 +176,7 @@
     function renderSourceHeader() {
         if (!state.repo) return;
 
-        el.heading.textContent = state.repo.name;
+        el.heading.textContent = ZenUtils.repoDisplayName(state.repo.name);
         el.url.textContent = state.repo.url;
         el.packagesHeading.textContent = "Packages (" + state.visible.length + ")";
         el.verificationIcon.src = repoVerificationIcon(state.repo);

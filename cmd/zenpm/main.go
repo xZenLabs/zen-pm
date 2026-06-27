@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"ZPM/internal/log"
 	"ZPM/internal/pkg"
@@ -18,12 +19,14 @@ import (
 var version = "dev"
 
 func main() {
+	startedAt := time.Now()
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(1)
 	}
 
 	plat := platform.Detect()
+	initStart := time.Now()
 	st, err := state.Init(plat)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing state: %v\n", err)
@@ -31,6 +34,7 @@ func main() {
 	}
 	log.Init(st.LogFile)
 	log.Infof("ZenPM %s | platform=%s | home=%s | log=%s", version, plat, st.Home, st.LogFile)
+	log.Infof("Timing: state.Init took %dms (process %dms in)", time.Since(initStart).Milliseconds(), time.Since(startedAt).Milliseconds())
 	if st.SeededRepoURL != "" {
 		log.Infof("Seeded default repo: %s", st.SeededRepoURL)
 	}
@@ -48,7 +52,7 @@ func main() {
 	case "logs":
 		runLogs(st, os.Args[2:])
 	case "serve":
-		runServe(st, repos, pkgs, os.Args[2:])
+		runServe(st, repos, pkgs, startedAt, os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
 		usage()
@@ -83,9 +87,13 @@ func runRepo(repos *repo.Manager, args []string) {
 		}
 		// Priority and trust are backend-determined.
 		priority := repo.UserAddedPriority
-		trust, sigErr := repo.VerifyRepoSignature(args[2])
-		if sigErr != nil {
-			trust = "warn-unsigned"
+		trust := "trusted"
+		if !repo.IsKindleForgeRepo(args[1], args[2]) {
+			var sigErr error
+			trust, sigErr = repo.VerifyRepoSignature(args[2])
+			if sigErr != nil {
+				trust = "warn-unsigned"
+			}
 		}
 		// Warn on plain-HTTP repos.
 		if safety := repo.CheckRepoURLSafety(args[2]); safety != "" {
@@ -189,8 +197,7 @@ func runDoctor(st *state.State, plat string) {
 			fmt.Printf("  [!!] %s: %s (missing)\n", label, path)
 		}
 	}
-	check("repos.db", st.ReposDB)
-	check("installed.db", st.InstalledDB)
+	check("zenpm.sqlite3", st.SQLiteDB)
 	check("cache dir", st.CacheDir)
 	check("log file", st.LogFile)
 
@@ -230,7 +237,7 @@ func runLogs(st *state.State, args []string) {
 	fmt.Println(strings.Join(lines, "\n"))
 }
 
-func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, args []string) {
+func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, startedAt time.Time, args []string) {
 	port := 8080
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	fs.IntVar(&port, "port", 8080, "port to bind on 127.0.0.1")
@@ -238,6 +245,7 @@ func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, args []st
 
 	server.Version = version
 	srv := server.New(st, repos, pkgs, port)
+	srv.StartedAt = startedAt
 	if err := srv.ListenAndServe(); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 		os.Exit(1)

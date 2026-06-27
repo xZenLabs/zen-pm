@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: en
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "Open ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Zen Package Manager frontend for KOReader."
+
+msgid "Featured"
+msgstr "Featured"
+
+msgid "Sources"
+msgstr "Sources"
+
+msgid "Installed"
+msgstr "Installed"
+
+msgid "Debug"
+msgstr "Debug"
+
+msgid "Search"
+msgstr "Search"
+
+msgid "Welcome"
+msgstr "Welcome"
+
+msgid "Add Source"
+msgstr "Add Source"
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Search..."
+msgstr "Search..."
+
+msgid "Filter installed..."
+msgstr "Filter installed..."
+
+msgid "Packages"
+msgstr "Packages"
+
+msgid "Source Details"
+msgstr "Source Details"
+
+msgid "Package Details"
+msgstr "Package Details"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Debug"
+
+msgid "Featured packages coming soon."
+msgstr "Featured packages coming soon."
+
+msgid "No packages found. Try Refresh."
+msgstr "No packages found. Try Refresh."
+
+msgid "No installed packages match the filter."
+msgstr "No installed packages match the filter."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "No packages installed. Browse Search to find packages."
+
+msgid "No packages match the filter."
+msgstr "No packages match the filter."
+
+msgid "No repositories configured."
+msgstr "No repositories configured."
+
+msgid "No packages found for this source."
+msgstr "No packages found for this source."
+
+msgid "By "
+msgstr "By "
+
+msgid "Description"
+msgstr "Description"
+
+msgid "No description available."
+msgstr "No description available."
+
+msgid "Unknown package"
+msgstr "Unknown package"
+
+msgid "No description"
+msgstr "No description"
+
+msgid "Source"
+msgstr "Source"
+
+msgid "Remove"
+msgstr "Remove"
+
+msgid "Modify"
+msgstr "Modify"
+
+msgid "Get"
+msgstr "Get"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Clear"
+msgstr "Clear"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Reinstall"
+msgstr "Reinstall"
+
+msgid "Uninstall"
+msgstr "Uninstall"
+
+msgid "Refresh"
+msgstr "Refresh"
+
+msgid "About"
+msgstr "About"
+
+msgid "Update"
+msgstr "Update"
+
+msgid "Quit"
+msgstr "Quit"
+
+msgid "Filter installed packages"
+msgstr "Filter installed packages"
+
+msgid "Search packages"
+msgstr "Search packages"
+
+msgid "Please enter a URL."
+msgstr "Please enter a URL."
+
+msgid "Detecting repo..."
+msgstr "Detecting repo..."
+
+msgid "Could not detect repo format."
+msgstr "Could not detect repo format."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Another operation is in progress. Please wait."
+
+msgid "Package has no id."
+msgstr "Package has no id."
+
+msgid "Downloading... Please wait."
+msgstr "Downloading... Please wait."
+
+msgid "Refreshing repositories..."
+msgstr "Refreshing repositories..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Check for and start a ZenPM update?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Update accepted. The daemon may restart."
+
+msgid "None"
+msgstr "None"
+
+msgid "Version: "
+msgstr "Version: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Author: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " did not complete.\n\nCheck the debug log for details."
+
+msgid " successfully."
+msgstr " successfully."
+
+msgid "Are you sure you want to download "
+msgstr "Are you sure you want to download "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Are you sure you want to reinstall "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Are you sure you want to uninstall "
+
+msgid "Loading packages, please wait"
+msgstr "Loading packages, please wait"
+
+msgid "Could not add source: "
+msgstr "Could not add source: "
+
+msgid "Could not read log: "
+msgstr "Could not read log: "
+
+msgid "Could not remove source: "
+msgstr "Could not remove source: "
+
+msgid "Failed to load package: "
+msgstr "Failed to load package: "
+
+msgid "Failed to load packages: "
+msgstr "Failed to load packages: "
+
+msgid "Failed to load source: "
+msgstr "Failed to load source: "
+
+msgid "Failed to load sources: "
+msgstr "Failed to load sources: "
+
+msgid "Failed to start package action: "
+msgstr "Failed to start package action: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "Installing"
+msgstr "Installing"
+
+msgid "Loading featured packages..."
+msgstr "Loading featured packages..."
+
+msgid "Loading installed packages..."
+msgstr "Loading installed packages..."
+
+msgid "Loading log..."
+msgstr "Loading log..."
+
+msgid "Loading package..."
+msgstr "Loading package..."
+
+msgid "Loading packages..."
+msgstr "Loading packages..."
+
+msgid "Loading source..."
+msgstr "Loading source..."
+
+msgid "Loading sources..."
+msgstr "Loading sources..."
+
+msgid "Log is empty."
+msgstr "Log is empty."
+
+msgid "Package"
+msgstr "Package"
+
+msgid "Package not found."
+msgstr "Package not found."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Package operation status could not be checked. See Debug log."
+
+msgid "Refresh failed: "
+msgstr "Refresh failed: "
+
+msgid "Reinstalling"
+msgstr "Reinstalling"
+
+msgid "Remove source "
+msgstr "Remove source "
+
+msgid "Source not found."
+msgstr "Source not found."
+
+msgid "Uninstalling"
+msgstr "Uninstalling"
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPM backend not found. Expected "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "install"
+msgstr "install"
+
+msgid "installed"
+msgstr "installed"
+
+msgid "network error"
+msgstr "network error"
+
+msgid "of"
+msgstr "of"
+
+msgid "or"
+msgstr "or"
+
+msgid "reinstall"
+msgstr "reinstall"
+
+msgid "reinstalled"
+msgstr "reinstalled"
+
+msgid "request failed"
+msgstr "request failed"
+
+msgid "uninstall"
+msgstr "uninstall"
+
+msgid "uninstalled"
+msgstr "uninstalled"

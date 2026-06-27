@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: vi
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "Mở ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Giao diện Zen Package Manager cho KOReader."
+
+msgid "Featured"
+msgstr "Nổi bật"
+
+msgid "Sources"
+msgstr "Nguồn"
+
+msgid "Installed"
+msgstr "Đã cài"
+
+msgid "Debug"
+msgstr "Gỡ lỗi"
+
+msgid "Search"
+msgstr "Tìm kiếm"
+
+msgid "Welcome"
+msgstr "Chào mừng"
+
+msgid "Add Source"
+msgstr "Thêm nguồn"
+
+msgid "Add"
+msgstr "Thêm"
+
+msgid "Search..."
+msgstr "Tìm kiếm..."
+
+msgid "Filter installed..."
+msgstr "Lọc đã cài..."
+
+msgid "Packages"
+msgstr "Gói"
+
+msgid "Source Details"
+msgstr "Chi tiết nguồn"
+
+msgid "Package Details"
+msgstr "Chi tiết gói"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Gỡ lỗi"
+
+msgid "Featured packages coming soon."
+msgstr "Các gói nổi bật sẽ sớm có."
+
+msgid "No packages found. Try Refresh."
+msgstr "Không tìm thấy gói. Hãy thử làm mới."
+
+msgid "No installed packages match the filter."
+msgstr "Không có gói đã cài nào khớp với bộ lọc."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Chưa cài gói nào. Dùng Tìm kiếm để tìm gói."
+
+msgid "No packages match the filter."
+msgstr "Không có gói nào khớp với bộ lọc."
+
+msgid "No repositories configured."
+msgstr "Chưa cấu hình kho nào."
+
+msgid "No packages found for this source."
+msgstr "Không tìm thấy gói cho nguồn này."
+
+msgid "By "
+msgstr "Bởi "
+
+msgid "Description"
+msgstr "Mô tả"
+
+msgid "No description available."
+msgstr "Không có mô tả."
+
+msgid "Unknown package"
+msgstr "Gói không xác định"
+
+msgid "No description"
+msgstr "Không có mô tả"
+
+msgid "Source"
+msgstr "Nguồn"
+
+msgid "Remove"
+msgstr "Xóa"
+
+msgid "Modify"
+msgstr "Sửa"
+
+msgid "Get"
+msgstr "Tải"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Hủy"
+
+msgid "Clear"
+msgstr "Xóa"
+
+msgid "Info"
+msgstr "Thông tin"
+
+msgid "Reinstall"
+msgstr "Cài lại"
+
+msgid "Uninstall"
+msgstr "Gỡ cài đặt"
+
+msgid "Refresh"
+msgstr "Làm mới"
+
+msgid "About"
+msgstr "Giới thiệu"
+
+msgid "Update"
+msgstr "Cập nhật"
+
+msgid "Quit"
+msgstr "Thoát"
+
+msgid "Filter installed packages"
+msgstr "Lọc gói đã cài"
+
+msgid "Search packages"
+msgstr "Tìm gói"
+
+msgid "Please enter a URL."
+msgstr "Vui lòng nhập URL."
+
+msgid "Detecting repo..."
+msgstr "Đang phát hiện kho..."
+
+msgid "Could not detect repo format."
+msgstr "Không thể phát hiện định dạng kho."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Một thao tác khác đang chạy. Vui lòng chờ."
+
+msgid "Package has no id."
+msgstr "Gói không có id."
+
+msgid "Downloading... Please wait."
+msgstr "Đang tải xuống... Vui lòng chờ."
+
+msgid "Refreshing repositories..."
+msgstr "Đang làm mới kho..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Kiểm tra và bắt đầu cập nhật ZenPM?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Đã chấp nhận cập nhật. Tiến trình nền có thể khởi động lại."
+
+msgid "None"
+msgstr "Không có"
+
+msgid "Version: "
+msgstr "Phiên bản: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Tác giả: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " chưa hoàn tất.\n\nKiểm tra nhật ký gỡ lỗi để biết chi tiết."
+
+msgid " successfully."
+msgstr " thành công."
+
+msgid "Are you sure you want to download "
+msgstr "Bạn có chắc muốn tải xuống "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Bạn có chắc muốn cài lại "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Bạn có chắc muốn gỡ cài đặt "
+
+msgid "Loading packages, please wait"
+msgstr "Đang tải các gói, vui lòng đợi"
+
+msgid "Could not add source: "
+msgstr "Không thể thêm nguồn: "
+
+msgid "Could not read log: "
+msgstr "Không thể đọc nhật ký: "
+
+msgid "Could not remove source: "
+msgstr "Không thể xóa nguồn: "
+
+msgid "Failed to load package: "
+msgstr "Không tải được gói: "
+
+msgid "Failed to load packages: "
+msgstr "Không tải được các gói: "
+
+msgid "Failed to load source: "
+msgstr "Không tải được nguồn: "
+
+msgid "Failed to load sources: "
+msgstr "Không tải được các nguồn: "
+
+msgid "Failed to start package action: "
+msgstr "Không thể bắt đầu thao tác gói: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "Bản KOReader này không hỗ trợ HTTPS."
+
+msgid "Installing"
+msgstr "Đang cài đặt"
+
+msgid "Loading featured packages..."
+msgstr "Đang tải gói nổi bật..."
+
+msgid "Loading installed packages..."
+msgstr "Đang tải gói đã cài..."
+
+msgid "Loading log..."
+msgstr "Đang tải nhật ký..."
+
+msgid "Loading package..."
+msgstr "Đang tải gói..."
+
+msgid "Loading packages..."
+msgstr "Đang tải các gói..."
+
+msgid "Loading source..."
+msgstr "Đang tải nguồn..."
+
+msgid "Loading sources..."
+msgstr "Đang tải các nguồn..."
+
+msgid "Log is empty."
+msgstr "Nhật ký trống."
+
+msgid "Package"
+msgstr "Gói"
+
+msgid "Package not found."
+msgstr "Không tìm thấy gói."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Không thể kiểm tra trạng thái thao tác gói. Xem nhật ký gỡ lỗi."
+
+msgid "Refresh failed: "
+msgstr "Làm mới thất bại: "
+
+msgid "Reinstalling"
+msgstr "Đang cài lại"
+
+msgid "Remove source "
+msgstr "Xóa nguồn "
+
+msgid "Source not found."
+msgstr "Không tìm thấy nguồn."
+
+msgid "Uninstalling"
+msgstr "Đang gỡ cài đặt"
+
+msgid "Update failed: "
+msgstr "Cập nhật thất bại: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "Không tìm thấy backend ZenPM. Dự kiến "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "Không thể kết nối tiến trình nền ZenPM. Chạy lại trình cài đặt ZenPM nếu nó chưa chạy."
+
+msgid "download failed"
+msgstr "tải xuống thất bại"
+
+msgid "install"
+msgstr "cài đặt"
+
+msgid "installed"
+msgstr "đã cài"
+
+msgid "network error"
+msgstr "lỗi mạng"
+
+msgid "of"
+msgstr "của"
+
+msgid "or"
+msgstr "hoặc"
+
+msgid "reinstall"
+msgstr "cài lại"
+
+msgid "reinstalled"
+msgstr "đã cài lại"
+
+msgid "request failed"
+msgstr "yêu cầu thất bại"
+
+msgid "uninstall"
+msgstr "gỡ cài đặt"
+
+msgid "uninstalled"
+msgstr "đã gỡ cài đặt"

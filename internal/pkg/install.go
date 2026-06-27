@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"ZPM/internal/assets"
 	"ZPM/internal/log"
 	"ZPM/internal/platform"
+	"ZPM/internal/releases"
 	"ZPM/internal/repo"
 	"ZPM/internal/state"
 	"ZPM/internal/tx"
@@ -24,11 +27,18 @@ func New(st *state.State, repos *repo.Manager, plat string) *Manager {
 }
 
 func (m *Manager) Install(id string) error {
-	catalog, err := m.repos.ReadCatalog()
-	if err != nil {
-		return fmt.Errorf("read catalog: %w", err)
-	}
-	plan, err := ResolvePlan(id, catalog)
+	return m.InstallAsset(id, "")
+}
+
+func (m *Manager) CheckInstall(id string) error {
+	_, _, _, err := m.installPlan(id)
+	return err
+}
+
+// InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
+// When empty, the asset is auto-selected for the current device.
+func (m *Manager) InstallAsset(id, assetOverride string) error {
+	catalog, plan, installedSet, err := m.installPlan(id)
 	if err != nil {
 		return err
 	}
@@ -43,19 +53,13 @@ func (m *Manager) Install(id string) error {
 		byID[e.ID] = e
 	}
 
-	installed, _ := m.st.ReadInstalled()
-	installedSet := make(map[string]bool, len(installed))
-	for _, e := range installed {
-		installedSet[e.ID] = true
-	}
-
 	for _, pkgID := range plan {
 		if installedSet[pkgID] && pkgID != id {
 			log.Infof("Already installed: %s", pkgID)
 			continue
 		}
 		entry := byID[pkgID]
-		log.Infof("Installing %s v%s from repo %s", entry.ID, entry.Version, entry.Repo)
+		log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(entry.Version), entry.Repo)
 
 		j.Record("fetch-script", "ok", "pkg="+pkgID)
 		scriptPath, err := m.repos.FetchScript(entry.InstallURL)
@@ -64,8 +68,12 @@ func (m *Manager) Install(id string) error {
 			return fmt.Errorf("fetch install script for %s: %w", pkgID, err)
 		}
 
+		override := ""
+		if pkgID == id {
+			override = assetOverride
+		}
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, entry.Version))
-		if err := platform.ExecuteScript(scriptPath); err != nil {
+		if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(entry, override)); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 		}
@@ -74,18 +82,45 @@ func (m *Manager) Install(id string) error {
 			log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
 		}
 
+		installedVersion := entry.Version
+
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
-			ID: pkgID, Name: entry.Name, Version: entry.Version, Repo: entry.Repo,
+			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
 		}); err != nil {
 			j.Abort("record failed: " + err.Error())
 			return err
 		}
-		log.Infof("Installed: %s v%s", pkgID, entry.Version)
+		log.Infof("Installed: %s %s", pkgID, displayVersion(installedVersion))
 	}
 
 	j.Commit()
 	return nil
+}
+
+func (m *Manager) installPlan(id string) ([]*repo.CatalogEntry, []string, map[string]bool, error) {
+	catalog, err := m.repos.ReadCatalog()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("read catalog: %w", err)
+	}
+	installed, _ := m.st.ReadInstalled()
+	installedSet := m.installedDependencySet(installed)
+	plan, err := ResolvePlanWithInstalled(id, catalog, installedSet)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return catalog, plan, installedSet, nil
+}
+
+func (m *Manager) installedDependencySet(installed []state.InstalledEntry) map[string]bool {
+	installedSet := make(map[string]bool, len(installed)+1)
+	for _, e := range installed {
+		installedSet[e.ID] = true
+	}
+	if m.plat == platform.Kindle && platform.KindleHasKUAL() {
+		installedSet["kual"] = true
+	}
+	return installedSet
 }
 
 func (m *Manager) Uninstall(id string) error {
@@ -93,13 +128,15 @@ func (m *Manager) Uninstall(id string) error {
 	if !ok {
 		return fmt.Errorf("package %q is not installed", id)
 	}
+	log.Infof("Uninstalling %s", id)
 
-	catalog, _ := m.repos.ReadCatalog()
-	var entry *repo.CatalogEntry
-	for _, e := range catalog {
-		if e.ID == id {
-			entry = e
-			break
+	entry := m.findCatalogEntry(id)
+	if entry == nil || entry.UninstallURL == "" {
+		log.Warnf("Package %s uninstall script missing from catalog; refreshing catalog", id)
+		if err := m.repos.Refresh(); err != nil {
+			log.Warnf("Package %s catalog refresh before uninstall failed: %v", id, err)
+		} else {
+			entry = m.findCatalogEntry(id)
 		}
 	}
 
@@ -110,7 +147,8 @@ func (m *Manager) Uninstall(id string) error {
 
 	scriptPath := ""
 	if entry != nil && entry.UninstallURL != "" {
-		scriptPath, err := m.repos.FetchScript(entry.UninstallURL)
+		log.Infof("Package %s uninstall metadata: repo=%s version=%s uninstall_url=%s", id, entry.Repo, displayVersion(entry.Version), entry.UninstallURL)
+		scriptPath, err = m.repos.FetchScript(entry.UninstallURL)
 		if err != nil {
 			log.Warnf("Fetch uninstall script failed for %s, trying cached script: %v", id, err)
 			scriptPath = m.st.CachedUninstallScriptPath(id)
@@ -118,19 +156,28 @@ func (m *Manager) Uninstall(id string) error {
 				j.Abort("fetch failed: " + err.Error())
 				return fmt.Errorf("fetch uninstall script: %w", err)
 			}
+			log.Infof("Package %s using cached uninstall script: %s", id, scriptPath)
+		} else {
+			log.Infof("Package %s fetched uninstall script to %s", id, scriptPath)
 		}
 	} else {
 		scriptPath = m.st.CachedUninstallScriptPath(id)
 		if _, err := os.Stat(scriptPath); err != nil {
 			scriptPath = ""
+		} else {
+			log.Infof("Package %s using cached uninstall script: %s", id, scriptPath)
 		}
 	}
 
 	if scriptPath != "" {
-		if err := platform.ExecuteScript(scriptPath); err != nil {
+		log.Infof("Package %s executing uninstall script: %s", id, scriptPath)
+		if err := platform.ExecuteScriptWithEnv(scriptPath, map[string]string{"ZENPM_PACKAGE_ID": id}); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("uninstall script failed: %w", err)
 		}
+		log.Infof("Package %s uninstall script completed", id)
+	} else {
+		log.Warnf("Package %s has no uninstall script; removing installed record only", id)
 	}
 
 	if err := m.st.RemoveInstalled(id); err != nil {
@@ -141,6 +188,20 @@ func (m *Manager) Uninstall(id string) error {
 
 	log.Infof("Uninstalled: %s", id)
 	j.Commit()
+	return nil
+}
+
+func (m *Manager) findCatalogEntry(id string) *repo.CatalogEntry {
+	catalog, err := m.repos.ReadCatalog()
+	if err != nil {
+		log.Warnf("Read catalog before uninstall failed for %s: %v", id, err)
+		return nil
+	}
+	for _, e := range catalog {
+		if e.ID == id {
+			return e
+		}
+	}
 	return nil
 }
 
@@ -157,6 +218,82 @@ func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0755)
+}
+
+func (m *Manager) device() assets.Device {
+	dev := assets.Device{Platform: m.plat}
+	if m.plat == platform.Kindle {
+		dev.KindleHF = platform.KindleABI() == "hf"
+		dev.CortexA9 = platform.KindleIsCortexA9()
+	}
+	return dev
+}
+
+// SelectAsset resolves asset selection for id against the current device.
+func (m *Manager) SelectAsset(id string) (assets.Result, error) {
+	catalog, err := m.repos.ReadCatalog()
+	if err != nil {
+		return assets.Result{}, err
+	}
+	for _, e := range catalog {
+		if e.ID == id {
+			return assets.Select(e.Assets, m.device()), nil
+		}
+	}
+	return assets.Result{}, fmt.Errorf("package %q not found", id)
+}
+
+func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[string]string {
+	env := map[string]string{
+		"ZENPM_PACKAGE_ID": entry.ID,
+	}
+	if entry.Source != "" {
+		env["ZENPM_PACKAGE_SOURCE"] = entry.Source
+	}
+
+	asset := strings.TrimSpace(override)
+	if asset == "" {
+		if res := assets.Select(entry.Assets, m.device()); res.Auto != "" {
+			asset = res.Auto
+		}
+	}
+
+	if asset != "" {
+		log.Infof("Package %s using release asset %q", entry.ID, asset)
+		env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+	} else if entry.SourceAsset != "" {
+		log.Infof("Package %s using source asset pattern %q", entry.ID, entry.SourceAsset)
+		env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
+	} else if entry.Source != "" && isGenericKOReaderPlugin(entry) {
+		log.Warnf("Package %s has no source_asset; falling back to .koplugin.zip asset pattern", entry.ID)
+		env["ZENPM_PACKAGE_SOURCE_ASSET"] = ".koplugin.zip"
+	} else if entry.Source != "" {
+		log.Warnf("Package %s has source but no source_asset; install script may choose its default asset", entry.ID)
+	}
+	return env
+}
+
+func displayVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "v0.0.0"
+	}
+	if strings.HasPrefix(strings.ToLower(version), "v") {
+		return version
+	}
+	return "v" + version
+}
+
+func isGenericKOReaderPlugin(entry *repo.CatalogEntry) bool {
+	if entry == nil || !strings.HasSuffix(entry.InstallURL, "/install-plugin.sh") {
+		return false
+	}
+	for _, platform := range entry.Platforms {
+		if strings.EqualFold(strings.TrimSpace(platform), "koreader") {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) Update(id string) error {
@@ -182,8 +319,9 @@ func (m *Manager) Update(id string) error {
 			log.Warnf("Package %s not in any repo, skipping", e.ID)
 			continue
 		}
-		if versionGT(latest.Version, e.Version) {
-			log.Infof("Updating %s: %s -> %s", e.ID, e.Version, latest.Version)
+		latestVersion := latest.Version
+		if releases.VersionGreater(latestVersion, e.Version) {
+			log.Infof("Updating %s: %s -> %s", e.ID, e.Version, latestVersion)
 			if err := m.Install(e.ID); err != nil {
 				return err
 			}
@@ -192,23 +330,4 @@ func (m *Manager) Update(id string) error {
 		}
 	}
 	return nil
-}
-
-// versionGT returns true if a > b using simple numeric semver comparison.
-func versionGT(a, b string) bool {
-	parse := func(v string) [3]int {
-		var maj, min, pat int
-		fmt.Sscanf(v, "%d.%d.%d", &maj, &min, &pat)
-		return [3]int{maj, min, pat}
-	}
-	av, bv := parse(a), parse(b)
-	for i := range av {
-		if av[i] > bv[i] {
-			return true
-		}
-		if av[i] < bv[i] {
-			return false
-		}
-	}
-	return false
 }

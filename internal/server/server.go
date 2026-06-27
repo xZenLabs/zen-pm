@@ -9,9 +9,11 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"ZPM/internal/log"
 	"ZPM/internal/pkg"
+	"ZPM/internal/releases"
 	"ZPM/internal/repo"
 	"ZPM/internal/state"
 )
@@ -21,10 +23,42 @@ var Version = "dev"
 
 // Server is the ZenPM HTTP API server.
 type Server struct {
-	st    *state.State
-	repos *repo.Manager
-	pkgs  *pkg.Manager
-	port  int
+	st        *state.State
+	repos     *repo.Manager
+	pkgs      *pkg.Manager
+	port      int
+	StartedAt time.Time
+}
+
+type pkgJSON struct {
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Version       string          `json:"version"`
+	Description   string          `json:"description"`
+	Author        string          `json:"author"`
+	Tags          []string        `json:"tags"`
+	Category      string          `json:"category,omitempty"`
+	Platforms     []string        `json:"platforms"`
+	Repo          string          `json:"repo"`
+	RepoTrust     string          `json:"repo_trust,omitempty"`
+	RepoDefault   bool            `json:"repo_default,omitempty"`
+	Installed     bool            `json:"installed"`
+	InstalledVer  string          `json:"installed_version,omitempty"`
+	LatestVersion string          `json:"latest_version,omitempty"`
+	UpdateAvail   bool            `json:"update_available,omitempty"`
+	IconURL       string          `json:"icon_url,omitempty"`
+	RepoIconURL   string          `json:"repo_icon_url,omitempty"`
+	ImageURL      string          `json:"image_url,omitempty"`
+	Images        []string        `json:"images,omitempty"`
+	Featured      bool            `json:"featured,omitempty"`
+	FeaturedImage string          `json:"featured_image,omitempty"`
+	Source        string          `json:"source,omitempty"`
+	SourceType    string          `json:"source_type,omitempty"`
+	SourceURL     string          `json:"source_url,omitempty"`
+	Stars         string          `json:"stars,omitempty"`
+	PluginModule  string          `json:"plugin_module,omitempty"`
+	Assets        json.RawMessage `json:"assets,omitempty"`
+	Constraints   json.RawMessage `json:"constraints,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -46,8 +80,8 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
 
 	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
-	if _, err := s.repos.ReadCatalog(); err != nil {
-		log.Info("No catalog found — running initial repo refresh")
+	catalog, needsRefresh := s.initialCatalogState()
+	if needsRefresh {
 		go func() {
 			if err := s.repos.Refresh(); err != nil {
 				log.Warnf("Initial refresh failed: %v", err)
@@ -55,19 +89,58 @@ func (s *Server) ListenAndServe() error {
 		}()
 	} else {
 		go func() {
-			if catalog, err := s.repos.ReadCatalog(); err == nil {
-				s.repos.CacheInstalledUninstallScripts(catalog)
-			}
+			s.repos.CacheInstalledUninstallScripts(catalog)
 		}()
 	}
+
+	// Keep the catalog fresh in the background so the client never has to fetch
+	// repo manifests itself: refresh once a day for long-running daemons.
+	go s.periodicRefresh()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
-	log.Infof("ZenPM server listening on %s", addr)
+	if !s.StartedAt.IsZero() {
+		log.Infof("Timing: server listening on %s, %dms after process start", addr, time.Since(s.StartedAt).Milliseconds())
+	} else {
+		log.Infof("ZenPM server listening on %s", addr)
+	}
 	return http.Serve(ln, mux)
+}
+
+// catalogMaxAge is how stale the catalog may get before a refresh is forced.
+const catalogMaxAge = 24 * time.Hour
+
+func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		log.Info("No catalog found — running initial repo refresh")
+		return nil, true
+	}
+	if len(catalog) == 0 {
+		log.Info("Catalog is empty — running initial repo refresh")
+		return nil, true
+	}
+	if age := s.repos.CatalogAge(); age >= catalogMaxAge {
+		log.Infof("Catalog is %s old — running repo refresh", age.Round(time.Hour))
+		return catalog, true
+	}
+	return catalog, false
+}
+
+// periodicRefresh refreshes the catalog once per catalogMaxAge for the lifetime
+// of the daemon. Errors are logged and the loop continues.
+func (s *Server) periodicRefresh() {
+	ticker := time.NewTicker(catalogMaxAge)
+	defer ticker.Stop()
+	for range ticker.C {
+		log.Info("Periodic catalog refresh")
+		if err := s.repos.Refresh(); err != nil {
+			log.Warnf("Periodic refresh failed: %v", err)
+		}
+	}
 }
 
 // responseRecorder captures the status code written by a handler.
@@ -98,10 +171,27 @@ func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 		}
 		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		h(rec, r)
-		// Skip access logging for client log relay to avoid noise.
-		if r.URL.Path != "/log/client" {
+		if shouldLogAccess(r, rec.status) {
 			log.Infof("%s %s %d", r.Method, r.URL.RequestURI(), rec.status)
 		}
+	}
+}
+
+func shouldLogAccess(r *http.Request, status int) bool {
+	if status >= http.StatusBadRequest {
+		return true
+	}
+	if r.URL.Path == "/log/client" {
+		return false
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return true
+	}
+	switch r.URL.Path {
+	case "/health", "/log", "/packages", "/repos":
+		return false
+	default:
+		return true
 	}
 }
 
@@ -112,7 +202,12 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "version": Version})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":        true,
+		"version":   Version,
+		"home":      s.st.Home,
+		"cache_dir": s.st.CacheDir,
+	})
 }
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
@@ -129,10 +224,19 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 			Priority int    `json:"priority"`
 			Trust    string `json:"trust"`
 			Default  bool   `json:"default"`
+			IconURL  string `json:"icon_url,omitempty"`
+		}
+		repoIcons := make(map[string]string)
+		if catalog, err := s.repos.ReadCatalog(); err == nil {
+			for _, entry := range catalog {
+				if entry.RepoIconURL != "" && repoIcons[entry.Repo] == "" {
+					repoIcons[entry.Repo] = entry.RepoIconURL
+				}
+			}
 		}
 		result := make([]repoJSON, len(repos))
 		for i, e := range repos {
-			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust, Default: e.Default}
+			result[i] = repoJSON{Name: e.Name, URL: e.URL, Priority: e.Priority, Trust: e.Trust, Default: e.Default, IconURL: repoIcons[e.Name]}
 		}
 		writeJSON(w, http.StatusOK, result)
 	case http.MethodPost:
@@ -148,13 +252,19 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 		// Priority and trust are backend-determined — callers cannot set them.
 		priority := repo.UserAddedPriority
 
-		// Auto-detect trust via index.json.sig signature.
-		trust, sigErr := repo.VerifyRepoSignature(body.URL)
-		if sigErr != nil {
-			trust = "warn-unsigned"
-			log.Infof("Repo %s: %v — trust=%s", body.Name, sigErr, trust)
+		trust := "trusted"
+		if repo.IsKindleForgeRepo(body.Name, body.URL) {
+			log.Infof("Repo %s: KindleForge registry — trust=%s", body.Name, trust)
 		} else {
-			log.Infof("Repo %s signature: trust=%s", body.Name, trust)
+			// Auto-detect trust via manifest.json.sig signature.
+			var sigErr error
+			trust, sigErr = repo.VerifyRepoSignature(body.URL)
+			if sigErr != nil {
+				trust = "warn-unsigned"
+				log.Infof("Repo %s: %v — trust=%s", body.Name, sigErr, trust)
+			} else {
+				log.Infof("Repo %s signature: trust=%s", body.Name, trust)
+			}
 		}
 
 		// Warn on plain-HTTP repos (signatures are meaningless over HTTP).
@@ -267,6 +377,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plat := r.URL.Query().Get("platform")
+	checkUpdates := r.URL.Query().Get("check_updates") == "1" || r.URL.Query().Get("check_updates") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		// Catalog doesn't exist yet — return empty list so WAF can show "no packages" instead of error.
@@ -280,33 +391,14 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 
 	installed, _ := s.st.ReadInstalled()
 	installedSet := make(map[string]bool, len(installed))
-	installedName := make(map[string]string, len(installed))
+	installedVersion := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
-		installedName[e.ID] = e.Name
-	}
-
-	type pkgJSON struct {
-		ID            string   `json:"id"`
-		Name          string   `json:"name"`
-		Version       string   `json:"version"`
-		Description   string   `json:"description"`
-		Author        string   `json:"author"`
-		Tags          []string `json:"tags"`
-		Platforms     []string `json:"platforms"`
-		Repo          string   `json:"repo"`
-		RepoTrust     string   `json:"repo_trust,omitempty"`
-		RepoDefault   bool     `json:"repo_default,omitempty"`
-		Installed     bool     `json:"installed"`
-		IconURL       string   `json:"icon_url,omitempty"`
-		RepoIconURL   string   `json:"repo_icon_url,omitempty"`
-		ImageURL      string   `json:"image_url,omitempty"`
-		Images        []string `json:"images,omitempty"`
-		Featured      bool     `json:"featured,omitempty"`
-		FeaturedImage string   `json:"featured_image,omitempty"`
+		installedVersion[e.ID] = e.Version
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
+	platformList := platformValues(plat)
 	repoEntries, _ := s.repos.List()
 	repoTrust := make(map[string]string, len(repoEntries))
 	repoDefault := make(map[string]bool, len(repoEntries))
@@ -318,10 +410,11 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
 		seen[e.ID] = true
-		result = append(result, pkgJSON{
+		item := pkgJSON{
 			ID: e.ID, Name: e.Name, Version: e.Version,
 			Description: e.Description, Author: e.Author,
 			Tags:      e.Tags,
+			Category:  e.Category,
 			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID],
 			IconURL:       e.IconURL,
 			RepoIconURL:   e.RepoIconURL,
@@ -329,25 +422,68 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Images:        e.Images,
 			Featured:      e.Featured,
 			FeaturedImage: e.FeaturedImage,
-		})
+			Source:        e.Source,
+			SourceType:    e.SourceType,
+			SourceURL:     e.SourceURL,
+			Stars:         e.Stars,
+			PluginModule:  e.PluginModule,
+			Assets:        rawJSON(e.Assets),
+			Constraints:   rawJSON(e.Constraints),
+		}
+		if item.Installed {
+			item.InstalledVer = installedVersion[e.ID]
+			if checkUpdates {
+				applyUpdateInfo(&item)
+			}
+		}
+		result = append(result, item)
 	}
 
-	// Include device-installed packages not in any catalog (e.g. detected via scanKnownApps).
+	// Include installed packages not in any catalog.
 	for _, e := range installed {
 		if !seen[e.ID] {
 			name := e.Name
 			if name == "" {
 				name = e.ID
 			}
-			result = append(result, pkgJSON{
+			item := pkgJSON{
 				ID: e.ID, Name: name, Version: e.Version,
 				Repo: e.Repo, Installed: true,
-				Platforms: []string{plat},
-			})
+				InstalledVer: e.Version,
+				Platforms:    platformList,
+			}
+			result = append(result, item)
 		}
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func platformValues(platform string) []string {
+	var out []string
+	for _, value := range strings.Split(platform, ",") {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func applyUpdateInfo(item *pkgJSON) {
+	if item == nil {
+		return
+	}
+	latest := item.Version // catalog (repo) version
+	if latest == "" {
+		return
+	}
+	item.LatestVersion = latest
+	base := item.InstalledVer
+	if base == "" {
+		base = item.Version
+	}
+	item.UpdateAvail = releases.VersionGreater(latest, base)
 }
 
 func firstString(values []string) string {
@@ -355,6 +491,14 @@ func firstString(values []string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func rawJSON(value string) json.RawMessage {
+	value = strings.TrimSpace(value)
+	if value == "" || !json.Valid([]byte(value)) {
+		return nil
+	}
+	return json.RawMessage(value)
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
@@ -366,6 +510,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, action := parts[0], parts[1]
+	if action == "assets" {
+		s.handlePackageAssets(w, r, id)
+		return
+	}
 	if action != "install" && action != "uninstall" {
 		http.Error(w, "unknown action: "+action, http.StatusBadRequest)
 		return
@@ -375,12 +523,22 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	asset := r.URL.Query().Get("asset")
+
+	if action == "install" {
+		if err := s.pkgs.CheckInstall(id); err != nil {
+			log.Errorf("Package %s %s failed: %v", id, action, err)
+			writeJSON(w, http.StatusConflict, map[string]interface{}{"ok": false, "error": err.Error()})
+			return
+		}
+	}
+
 	// Fire async; the WAF polls /log after a delay.
 	log.Infof("Package %s: starting %s", id, action)
 	go func() {
 		var err error
 		if action == "install" {
-			err = s.pkgs.Install(id)
+			err = s.pkgs.InstallAsset(id, asset)
 		} else {
 			err = s.pkgs.Uninstall(id)
 		}
@@ -392,6 +550,23 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) handlePackageAssets(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	res, err := s.pkgs.SelectAsset(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"auto":         res.Auto,
+		"needs_choice": res.NeedsChoice,
+		"candidates":   res.Candidates,
+	})
 }
 
 func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +586,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, content)
 }
 
-// handleClientLog receives a WAF JS log message and writes it to the server log file.
+// handleClientLog receives frontend log messages and writes them to the server log file.
 func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -424,13 +599,29 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	// Route noisy per-package-card and image-fallback logs to debug level.
-	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") {
-		log.Debugf("[WAF] %s", body.Message)
-	} else {
-		log.Infof("[WAF] %s", body.Message)
+	if shouldLogClientMessage(body.Message) {
+		log.Infof("[client] %s", body.Message)
+	} else if os.Getenv("ZENPM_CLIENT_DEBUG") == "1" {
+		log.Debugf("[client] %s", body.Message)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func shouldLogClientMessage(message string) bool {
+	lower := strings.ToLower(message)
+	if strings.Contains(message, "JS ERROR") {
+		return true
+	}
+	for _, word := range []string{
+		"error", "failed", "unreachable", "package action",
+		"install started", "uninstall started", "reinstall started",
+		"refreshsources", "update failed",
+	} {
+		if strings.Contains(lower, word) {
+			return true
+		}
+	}
+	return false
 }
 
 func tailLog(path string, n int) (string, error) {

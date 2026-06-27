@@ -87,21 +87,6 @@
         });
     }
 
-    function refreshPackages() {
-        if (state.busy) return;
-        if (!state.connected) { detectRuntime(); return; }
-        state.busy = true;
-        fetchJSON("POST", "/repo/refresh", null).then(function () {
-            return loadPackages();
-        }).then(function () {
-            setBusy(false, "");
-        }).catch(function (err) {
-            postLog("Refresh failed: " + String(err));
-            el.hint.textContent = "Refresh failed.";
-            setBusy(false, "");
-        });
-    }
-
     function pollAfterOp() {
         var op = state.pendingOp;
         var attempt = 0;
@@ -200,7 +185,7 @@
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('ZenPM - Search', refreshPackages);
+        ZenUtils.setupPageChrome('ZenPM - Search', loadPackages);
     }
 
     function bindEvents() {

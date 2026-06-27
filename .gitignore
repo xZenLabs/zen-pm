@@ -10,6 +10,8 @@
 
 # Local runtime state
 .zenpm/
+AGENTS.md
+.codex
 
 # Logs / temp
 *.log
@@ -17,4 +19,3 @@
 
 # Build artifacts
 dist/
-AGENTS.md

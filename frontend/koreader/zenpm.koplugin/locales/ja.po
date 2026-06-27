@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: ja
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "ZenPMを開く"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "KOReader用Zen Package Managerフロントエンド。"
+
+msgid "Featured"
+msgstr "注目"
+
+msgid "Sources"
+msgstr "ソース"
+
+msgid "Installed"
+msgstr "インストール済み"
+
+msgid "Debug"
+msgstr "デバッグ"
+
+msgid "Search"
+msgstr "検索"
+
+msgid "Welcome"
+msgstr "ようこそ"
+
+msgid "Add Source"
+msgstr "ソースを追加"
+
+msgid "Add"
+msgstr "追加"
+
+msgid "Search..."
+msgstr "検索..."
+
+msgid "Filter installed..."
+msgstr "インストール済みを絞り込み..."
+
+msgid "Packages"
+msgstr "パッケージ"
+
+msgid "Source Details"
+msgstr "ソースの詳細"
+
+msgid "Package Details"
+msgstr "パッケージの詳細"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - デバッグ"
+
+msgid "Featured packages coming soon."
+msgstr "注目パッケージは近日公開予定です。"
+
+msgid "No packages found. Try Refresh."
+msgstr "パッケージが見つかりません。更新を試してください。"
+
+msgid "No installed packages match the filter."
+msgstr "絞り込み条件に一致するインストール済みパッケージはありません。"
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "インストール済みパッケージはありません。検索でパッケージを探してください。"
+
+msgid "No packages match the filter."
+msgstr "絞り込み条件に一致するパッケージはありません。"
+
+msgid "No repositories configured."
+msgstr "リポジトリが設定されていません。"
+
+msgid "No packages found for this source."
+msgstr "このソースにはパッケージが見つかりません。"
+
+msgid "By "
+msgstr "作成者: "
+
+msgid "Description"
+msgstr "説明"
+
+msgid "No description available."
+msgstr "説明はありません。"
+
+msgid "Unknown package"
+msgstr "不明なパッケージ"
+
+msgid "No description"
+msgstr "説明なし"
+
+msgid "Source"
+msgstr "ソース"
+
+msgid "Remove"
+msgstr "削除"
+
+msgid "Modify"
+msgstr "変更"
+
+msgid "Get"
+msgstr "取得"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Info"
+msgstr "情報"
+
+msgid "Reinstall"
+msgstr "再インストール"
+
+msgid "Uninstall"
+msgstr "アンインストール"
+
+msgid "Refresh"
+msgstr "更新"
+
+msgid "About"
+msgstr "情報"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Quit"
+msgstr "終了"
+
+msgid "Filter installed packages"
+msgstr "インストール済みパッケージを絞り込み"
+
+msgid "Search packages"
+msgstr "パッケージを検索"
+
+msgid "Please enter a URL."
+msgstr "URLを入力してください。"
+
+msgid "Detecting repo..."
+msgstr "リポジトリを検出中..."
+
+msgid "Could not detect repo format."
+msgstr "リポジトリ形式を検出できませんでした。"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "別の操作が進行中です。お待ちください。"
+
+msgid "Package has no id."
+msgstr "パッケージにIDがありません。"
+
+msgid "Downloading... Please wait."
+msgstr "ダウンロード中... お待ちください。"
+
+msgid "Refreshing repositories..."
+msgstr "リポジトリを更新中..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "ZenPMの更新を確認して開始しますか？"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "更新を受け付けました。デーモンが再起動する場合があります。"
+
+msgid "None"
+msgstr "なし"
+
+msgid "Version: "
+msgstr "バージョン: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "作者: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " は完了しませんでした。\n\n詳細はデバッグログを確認してください。"
+
+msgid " successfully."
+msgstr " に成功しました。"
+
+msgid "Are you sure you want to download "
+msgstr "本当にダウンロードしますか: "
+
+msgid "Are you sure you want to reinstall "
+msgstr "本当に再インストールしますか: "
+
+msgid "Are you sure you want to uninstall "
+msgstr "本当にアンインストールしますか: "
+
+msgid "Loading packages, please wait"
+msgstr "パッケージを読み込んでいます。お待ちください"
+
+msgid "Could not add source: "
+msgstr "ソースを追加できませんでした: "
+
+msgid "Could not read log: "
+msgstr "ログを読み取れませんでした: "
+
+msgid "Could not remove source: "
+msgstr "ソースを削除できませんでした: "
+
+msgid "Failed to load package: "
+msgstr "パッケージの読み込みに失敗しました: "
+
+msgid "Failed to load packages: "
+msgstr "パッケージの読み込みに失敗しました: "
+
+msgid "Failed to load source: "
+msgstr "ソースの読み込みに失敗しました: "
+
+msgid "Failed to load sources: "
+msgstr "ソースの読み込みに失敗しました: "
+
+msgid "Failed to start package action: "
+msgstr "パッケージ操作を開始できませんでした: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "このKOReaderビルドではHTTPSサポートを利用できません。"
+
+msgid "Installing"
+msgstr "インストール中"
+
+msgid "Loading featured packages..."
+msgstr "注目パッケージを読み込み中..."
+
+msgid "Loading installed packages..."
+msgstr "インストール済みパッケージを読み込み中..."
+
+msgid "Loading log..."
+msgstr "ログを読み込み中..."
+
+msgid "Loading package..."
+msgstr "パッケージを読み込み中..."
+
+msgid "Loading packages..."
+msgstr "パッケージを読み込み中..."
+
+msgid "Loading source..."
+msgstr "ソースを読み込み中..."
+
+msgid "Loading sources..."
+msgstr "ソースを読み込み中..."
+
+msgid "Log is empty."
+msgstr "ログは空です。"
+
+msgid "Package"
+msgstr "パッケージ"
+
+msgid "Package not found."
+msgstr "パッケージが見つかりません。"
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "パッケージ操作の状態を確認できませんでした。デバッグログを参照してください。"
+
+msgid "Refresh failed: "
+msgstr "更新に失敗しました: "
+
+msgid "Reinstalling"
+msgstr "再インストール中"
+
+msgid "Remove source "
+msgstr "ソースを削除 "
+
+msgid "Source not found."
+msgstr "ソースが見つかりません。"
+
+msgid "Uninstalling"
+msgstr "アンインストール中"
+
+msgid "Update failed: "
+msgstr "更新に失敗しました: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPMバックエンドが見つかりません。期待される場所: "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPMデーモンに接続できません。実行中でない場合はZenPMインストーラーを再実行してください。"
+
+msgid "download failed"
+msgstr "ダウンロードに失敗しました"
+
+msgid "install"
+msgstr "インストール"
+
+msgid "installed"
+msgstr "インストール済み"
+
+msgid "network error"
+msgstr "ネットワークエラー"
+
+msgid "of"
+msgstr "の"
+
+msgid "or"
+msgstr "または"
+
+msgid "reinstall"
+msgstr "再インストール"
+
+msgid "reinstalled"
+msgstr "再インストール済み"
+
+msgid "request failed"
+msgstr "リクエストに失敗しました"
+
+msgid "uninstall"
+msgstr "アンインストール"
+
+msgid "uninstalled"
+msgstr "アンインストール済み"

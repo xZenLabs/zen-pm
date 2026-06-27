@@ -8,7 +8,6 @@ PAYLOAD_DIR="/mnt/us/ZenPM"
 VERSION_FILE="$PAYLOAD_DIR/VERSION"
 REPO="AnthonyGress/ZenPackageManager"
 API_URL="https://api.github.com/repos/$REPO/releases/latest"
-ZIP_ASSET="zenpm-kindle.zip"
 
 alert() {
     TITLE="$1"
@@ -71,6 +70,12 @@ if [ -z "$LATEST_TAG" ]; then
 fi
 
 LATEST_VERSION=$(printf '%s' "$LATEST_TAG" | sed 's/^v//')
+if [ -f /lib/ld-linux-armhf.so.3 ]; then
+    ABI=hf
+else
+    ABI=sf
+fi
+ZIP_ASSET="ZenPM-kindle-$ABI-$LATEST_VERSION.zip"
 
 # --- Version comparison ---
 CMP=$(semver_cmp "$LATEST_VERSION" "$CURRENT_VERSION")
@@ -80,7 +85,7 @@ if [ "$CMP" -le 0 ]; then
 fi
 
 # --- Parse download URL, expected size, and SHA256 from release assets ---
-# grep the asset block for zenpm-kindle.zip, then extract url, size, and sha256 digest.
+# grep the asset block for the matching Kindle ABI zip, then extract url, size, and sha256 digest.
 ASSET_BLOCK=$(grep -A 50 '"name"[[:space:]]*:[[:space:]]*"'"$ZIP_ASSET"'"' "$API_JSON")
 DOWNLOAD_URL=$(echo "$ASSET_BLOCK" | grep '"browser_download_url"' | head -1 | sed 's/.*"\(https:[^"]*\)".*/\1/')
 EXPECTED_SIZE=$(echo "$ASSET_BLOCK" | grep '"size"' | head -1 | sed 's/[^0-9]//g')
@@ -146,12 +151,6 @@ sleep 2
 rm -rf "$PAYLOAD_DIR"
 cp -r "$TMPDIR/ZenPM" "$PAYLOAD_DIR"
 
-# Select correct ABI binary.
-if [ -f /lib/ld-linux-armhf.so.3 ]; then
-    ABI=hf
-else
-    ABI=sf
-fi
 cp "$PAYLOAD_DIR/backend/zenpm-$ABI" "$PAYLOAD_DIR/backend/zenpm"
 chmod +x "$PAYLOAD_DIR/backend/zenpm"
 

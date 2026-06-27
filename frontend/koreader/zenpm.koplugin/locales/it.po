@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: it
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "Apri ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Frontend di Zen Package Manager per KOReader."
+
+msgid "Featured"
+msgstr "In evidenza"
+
+msgid "Sources"
+msgstr "Sorgenti"
+
+msgid "Installed"
+msgstr "Installati"
+
+msgid "Debug"
+msgstr "Debug"
+
+msgid "Search"
+msgstr "Cerca"
+
+msgid "Welcome"
+msgstr "Benvenuto"
+
+msgid "Add Source"
+msgstr "Aggiungi sorgente"
+
+msgid "Add"
+msgstr "Aggiungi"
+
+msgid "Search..."
+msgstr "Cerca..."
+
+msgid "Filter installed..."
+msgstr "Filtra installati..."
+
+msgid "Packages"
+msgstr "Pacchetti"
+
+msgid "Source Details"
+msgstr "Dettagli sorgente"
+
+msgid "Package Details"
+msgstr "Dettagli pacchetto"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Debug"
+
+msgid "Featured packages coming soon."
+msgstr "Pacchetti in evidenza in arrivo."
+
+msgid "No packages found. Try Refresh."
+msgstr "Nessun pacchetto trovato. Prova ad aggiornare."
+
+msgid "No installed packages match the filter."
+msgstr "Nessun pacchetto installato corrisponde al filtro."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Nessun pacchetto installato. Usa Cerca per trovare pacchetti."
+
+msgid "No packages match the filter."
+msgstr "Nessun pacchetto corrisponde al filtro."
+
+msgid "No repositories configured."
+msgstr "Nessun repository configurato."
+
+msgid "No packages found for this source."
+msgstr "Nessun pacchetto trovato per questa sorgente."
+
+msgid "By "
+msgstr "Di "
+
+msgid "Description"
+msgstr "Descrizione"
+
+msgid "No description available."
+msgstr "Nessuna descrizione disponibile."
+
+msgid "Unknown package"
+msgstr "Pacchetto sconosciuto"
+
+msgid "No description"
+msgstr "Nessuna descrizione"
+
+msgid "Source"
+msgstr "Sorgente"
+
+msgid "Remove"
+msgstr "Rimuovi"
+
+msgid "Modify"
+msgstr "Modifica"
+
+msgid "Get"
+msgstr "Ottieni"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Annulla"
+
+msgid "Clear"
+msgstr "Cancella"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Reinstall"
+msgstr "Reinstalla"
+
+msgid "Uninstall"
+msgstr "Disinstalla"
+
+msgid "Refresh"
+msgstr "Aggiorna"
+
+msgid "About"
+msgstr "Informazioni"
+
+msgid "Update"
+msgstr "Aggiorna"
+
+msgid "Quit"
+msgstr "Esci"
+
+msgid "Filter installed packages"
+msgstr "Filtra pacchetti installati"
+
+msgid "Search packages"
+msgstr "Cerca pacchetti"
+
+msgid "Please enter a URL."
+msgstr "Inserisci un URL."
+
+msgid "Detecting repo..."
+msgstr "Rilevamento repository..."
+
+msgid "Could not detect repo format."
+msgstr "Impossibile rilevare il formato del repository."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Un altra operazione e in corso. Attendi."
+
+msgid "Package has no id."
+msgstr "Il pacchetto non ha un id."
+
+msgid "Downloading... Please wait."
+msgstr "Download in corso... Attendi."
+
+msgid "Refreshing repositories..."
+msgstr "Aggiornamento repository..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Controllare e avviare un aggiornamento di ZenPM?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Aggiornamento accettato. Il demone potrebbe riavviarsi."
+
+msgid "None"
+msgstr "Nessuno"
+
+msgid "Version: "
+msgstr "Versione: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Autore: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " non e stata completata.\n\nControlla il log di debug per i dettagli."
+
+msgid " successfully."
+msgstr " con successo."
+
+msgid "Are you sure you want to download "
+msgstr "Sei sicuro di voler scaricare "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Sei sicuro di voler reinstallare "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Sei sicuro di voler disinstallare "
+
+msgid "Loading packages, please wait"
+msgstr "Caricamento pacchetti in corso, attendere"
+
+msgid "Could not add source: "
+msgstr "Impossibile aggiungere la sorgente: "
+
+msgid "Could not read log: "
+msgstr "Impossibile leggere il log: "
+
+msgid "Could not remove source: "
+msgstr "Impossibile rimuovere la sorgente: "
+
+msgid "Failed to load package: "
+msgstr "Caricamento pacchetto non riuscito: "
+
+msgid "Failed to load packages: "
+msgstr "Caricamento pacchetti non riuscito: "
+
+msgid "Failed to load source: "
+msgstr "Caricamento sorgente non riuscito: "
+
+msgid "Failed to load sources: "
+msgstr "Caricamento sorgenti non riuscito: "
+
+msgid "Failed to start package action: "
+msgstr "Impossibile avviare l azione sul pacchetto: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "Il supporto HTTPS non e disponibile in questa build di KOReader."
+
+msgid "Installing"
+msgstr "Installazione"
+
+msgid "Loading featured packages..."
+msgstr "Caricamento pacchetti in evidenza..."
+
+msgid "Loading installed packages..."
+msgstr "Caricamento pacchetti installati..."
+
+msgid "Loading log..."
+msgstr "Caricamento log..."
+
+msgid "Loading package..."
+msgstr "Caricamento pacchetto..."
+
+msgid "Loading packages..."
+msgstr "Caricamento pacchetti..."
+
+msgid "Loading source..."
+msgstr "Caricamento sorgente..."
+
+msgid "Loading sources..."
+msgstr "Caricamento sorgenti..."
+
+msgid "Log is empty."
+msgstr "Il log e vuoto."
+
+msgid "Package"
+msgstr "Pacchetto"
+
+msgid "Package not found."
+msgstr "Pacchetto non trovato."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Impossibile controllare lo stato dell operazione. Vedi il log di debug."
+
+msgid "Refresh failed: "
+msgstr "Aggiornamento non riuscito: "
+
+msgid "Reinstalling"
+msgstr "Reinstallazione"
+
+msgid "Remove source "
+msgstr "Rimuovere sorgente "
+
+msgid "Source not found."
+msgstr "Sorgente non trovata."
+
+msgid "Uninstalling"
+msgstr "Disinstallazione"
+
+msgid "Update failed: "
+msgstr "Aggiornamento non riuscito: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "Backend ZenPM non trovato. Previsto "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "Demone ZenPM non raggiungibile. Riesegui l installer di ZenPM se non e in esecuzione."
+
+msgid "download failed"
+msgstr "download non riuscito"
+
+msgid "install"
+msgstr "installazione"
+
+msgid "installed"
+msgstr "installato"
+
+msgid "network error"
+msgstr "errore di rete"
+
+msgid "of"
+msgstr "di"
+
+msgid "or"
+msgstr "o"
+
+msgid "reinstall"
+msgstr "reinstallazione"
+
+msgid "reinstalled"
+msgstr "reinstallato"
+
+msgid "request failed"
+msgstr "richiesta non riuscita"
+
+msgid "uninstall"
+msgstr "disinstallazione"
+
+msgid "uninstalled"
+msgstr "disinstallato"

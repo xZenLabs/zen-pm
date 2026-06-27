@@ -15,9 +15,11 @@ Package manager for jailbroken Kindle devices, with Kobo support. Browse and ins
 cmd/zenpm/          CLI entry point (serve, repo, package, doctor, logs)
 internal/           Go packages (server, state, repo, pkg, platform, launcher, log, tx)
 frontend/kindle/    Kindle WAF frontend (HTML/CSS/JS)
+frontend/koreader/  KOReader native plugin frontend
 installers/kindle/  ZenPM.sh — on-device installer
 installers/kobo/    ZenPM.sh / uninstall-zenpm.sh
 docs/architecture/  Schema and behavior contracts
+docs/api/           OpenAPI reference for the local daemon
 ```
 
 ## Design goals
@@ -37,10 +39,34 @@ Requires Go 1.22+. Set the version in `VERSION` (SemVer):
 
 Outputs:
 
-- `dist/zenpm-kindle-<version>.zip`
-- `dist/zenpm-kobo-<version>.zip`
+- `dist/ZenPM-kindle-hf-<version>.zip`
+- `dist/ZenPM-kindle-sf-<version>.zip`
+- `dist/ZenPM-kobo-hf-<version>.zip`
+- `dist/ZenPM-kobo-sf-<version>.zip`
+- `dist/ZenPM-koreader-ereader-hf-<version>.zip`
+- `dist/ZenPM-koreader-ereader-sf-<version>.zip`
+- `dist/ZenPM-koreader-macos-<version>.zip`
+- `dist/ZenPM-koreader-linux-<version>.zip`
 
-Each zip contains ARMhf (`zenpm-hf`) and ARMsf (`zenpm-sf`) binaries. The installer selects the correct one at install time.
+Use the `hf` package on devices with the ARM hard-float loader, and the `sf`
+package on older soft-float devices. To check on the device:
+
+```sh
+if [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
+```
+
+Package guide:
+
+| Device/runtime | Use this package |
+|---|---|
+| Kindle standalone app, ABI check prints `hf` | `ZenPM-kindle-hf-<version>.zip` |
+| Kindle standalone app, ABI check prints `sf` | `ZenPM-kindle-sf-<version>.zip` |
+| Kobo standalone install, ABI check prints `hf` | `ZenPM-kobo-hf-<version>.zip` |
+| Kobo standalone install, ABI check prints `sf` | `ZenPM-kobo-sf-<version>.zip` |
+| KOReader on Kindle/Kobo, ABI check prints `hf` | `ZenPM-koreader-ereader-hf-<version>.zip` |
+| KOReader on Kindle/Kobo, ABI check prints `sf` | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| KOReader on macOS | `ZenPM-koreader-macos-<version>.zip` |
+| KOReader on Linux desktop ARM64/AMD64 | `ZenPM-koreader-linux-<version>.zip` |
 
 ## Local development
 
@@ -59,13 +85,18 @@ ZENPM_HOME=/tmp/.zenpm ZENPM_PLATFORM=host ./zenpm serve --port 8080
 ZENPM_DRY_RUN=1 ./zenpm package install koreader-kindle
 ```
 
+## API reference
+
+The local daemon API is documented as OpenAPI 3.0 in
+[`docs/api/openapi.yaml`](docs/api/openapi.yaml).
+
 ## Install on Kindle
 
 Prerequisites: jailbroken Kindle with root, `sqlite3` on device.
 
 1. Build: `./build.sh`
-2. Extract `dist/zenpm-kindle-<version>.zip` to the Kindle USB root.
-   - Places `documents/ZenPM.sh` and the payload under `zenpm/` at the USB root.
+2. Extract `dist/ZenPM-kindle-hf-<version>.zip` or `dist/ZenPM-kindle-sf-<version>.zip` to the Kindle USB root.
+   - Places `documents/ZenPM.sh` and the payload under `ZenPM/` at the USB root.
 3. Eject and run `documents/ZenPM.sh` from your script launcher (KUAL, etc.).
 4. The installer:
    - Detects ABI (ARMhf/ARMsf) and copies the correct binary to `zenpm/backend/zenpm`.
@@ -84,15 +115,31 @@ lipc-set-prop com.lab126.appmgrd start app://com.zenpm.waf
 Prerequisites: Kobo with SSH/telnet access.
 
 1. Build: `./build.sh`
-2. Extract `dist/zenpm-kobo-<version>.zip` to the Kobo USB root.
+2. Extract `dist/ZenPM-kobo-hf-<version>.zip` or `dist/ZenPM-kobo-sf-<version>.zip` to the Kobo USB root.
 3. On device:
 
 ```sh
-sh /mnt/onboard/.adds/zenpm/installers/kobo/ZenPM.sh
+sh /mnt/onboard/.adds/ZenPM/installers/kobo/ZenPM.sh
 ```
 
 4. If NickelMenu is absent, the installer stages it and prompts for reboot. Re-run after reboot.
 5. ZenPM entries appear in the NickelMenu main menu.
+
+## Install KOReader plugin
+
+1. Extract the KOReader plugin zip for your platform:
+   - `dist/ZenPM-koreader-ereader-hf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `hf`
+   - `dist/ZenPM-koreader-ereader-sf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `sf`
+   - `dist/ZenPM-koreader-macos-<version>.zip` for macOS
+   - `dist/ZenPM-koreader-linux-<version>.zip` for Linux desktop
+2. Copy `zenpm.koplugin/` into KOReader's `plugins/` directory.
+3. Restart KOReader and open **ZenPM** from the KOReader menu.
+
+On KOReader startup, the plugin copies the matching bundled backend into
+KOReader's settings `ZenPM/backend/` directory and runs it from there. The
+settings copy is refreshed whenever the plugin `_meta.lua` version or bundled
+backend `VERSION` changes, so backend binaries survive plugin updates but still
+track the installed plugin.
 
 ## Updating ZenPM (Kindle)
 
@@ -101,7 +148,7 @@ ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Upd
 1. Reads the current version from `/mnt/us/ZenPM/VERSION`
 2. Queries the GitHub Releases API for the latest tag
 3. If the latest version is ≤ current, shows "up to date" and exits
-4. Downloads the latest `zenpm-kindle.zip`
+4. Downloads the latest matching `ZenPM-kindle-hf-<version>.zip` or `ZenPM-kindle-sf-<version>.zip`
 5. Validates the download (size + SHA256 digest from the GitHub API release metadata)
 6. Stops the daemon and WAF, replaces the payload
 7. Restarts the daemon and relaunches ZenPM
@@ -147,6 +194,18 @@ Files in the state directory:
 | `repos.db` | Configured repositories |
 | `installed.db` | Installed package tracking |
 
+When ZenPM is launched by the KOReader plugin, the plugin starts its managed
+backend with `ZENPM_STATE_BACKEND=sqlite`. In that mode, repositories,
+installed package records, and the merged catalog are stored in
+`<ZENPM_HOME>/state/zenpm.sqlite3`; logs, locks, journals, cached scripts, and
+raw fetched manifests remain regular files. Standalone Kindle and Kobo installs
+continue to use the flat files above.
+
+On Kindle, if both the standalone WAF install and the KOReader plugin are
+present, the KOReader SQLite database imports missing values from the standalone
+Kindle flat files under `/mnt/us/.ZenPM/` and `/mnt/us/ZenPM/cache/` on startup.
+Existing KOReader database rows are kept as authoritative.
+
 On first startup, the daemon scans for known apps already on the device and tracks them automatically:
 
 | App | Detection path |
@@ -182,6 +241,7 @@ The log includes: startup info (platform, home dir, log path), every HTTP reques
 |---|---|---|
 | `ZENPM_HOME` | platform default | State directory root |
 | `ZENPM_PLATFORM` | auto-detected | Force `kindle`, `kobo`, or `host` |
+| `ZENPM_STATE_BACKEND` | `flat` | Use `flat` files or `sqlite` state storage |
 | `ZENPM_DRY_RUN` | unset | Set to `1` for no-op installs |
 | `ZENPM_DEFAULT_REPO_URL` | derived from binary path | Override default repo URL |
 | `ZENPM_REPO_PUBKEY` | ZenLabs key | Override Ed25519 public key for sig verification (hex-encoded 32 bytes) |
@@ -190,18 +250,18 @@ The log includes: startup info (platform, home dir, log path), every HTTP reques
 
 ZenPM supports two registry formats with auto-detection:
 
-- **ZenPM native** — `index.json` at the repo root (preferred for custom repos)
+- **ZenPM native** — `manifest.json` at the repo root (preferred for custom repos)
 - **KindleForge** — `registry.json` flat array (for compatibility with existing KindleForge registries)
 
 ### Hosting a ZenPM repository
 
-Each package lives in a `packages/<id>/scripts/` directory. The repo root exposes an `index.json` catalog that contains ALL package metadata — there is no separate manifest file.
+Each package lives in a `packages/<id>/scripts/` directory. The repo root exposes a `manifest.json` catalog that contains package metadata.
 
 #### Directory structure
 
 ```
 my-repo/
-  index.json
+  manifest.json
   packages/
     my-package/
       scripts/
@@ -209,9 +269,9 @@ my-repo/
         uninstall.sh
 ```
 
-#### `index.json` — package catalog (single source of truth)
+#### `manifest.json` — package catalog
 
-Top-level JSON object listing every package in the repo. Fetched on every `repo refresh`. All per-package metadata (description, author, launcher config, ABI constraints) lives here — not in a separate manifest.
+Top-level JSON object listing every package in the repo. Fetched on every `repo refresh`.
 
 ```json
 {
@@ -243,7 +303,6 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
           "entry_name": "My Package"
         }
       },
-      "sha256": "",
       "size": "0"
     }
   ]
@@ -269,7 +328,6 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].uninstall_url` | no | Path to uninstall script |
 | `packages[].constraints.abi` | no | Restrict to ARMhf (`hf`) or ARMsf (`sf`) — planned, not yet enforced |
 | `packages[].launcher` | no | Auto-create a launcher entry after install — planned, not yet implemented |
-| `packages[].sha256` | no | SHA-256 of package archive (future use) |
 | `packages[].size` | no | Size in bytes (future use) |
 
 **Launcher config (planned):**
@@ -370,7 +428,7 @@ Users can also add repos interactively from the ZenPM Sources tab in the Kindle 
 
 Priority is always `100` for user-added repos (default repos use `10` for higher precedence). Trust level is auto-detected:
 
-- `signed` — repo has a valid `index.json.sig` Ed25519 signature
+- `signed` — repo has a valid `manifest.json.sig` Ed25519 signature
 - `warn-unsigned` — no valid signature found, or repo uses plain HTTP
 - `trusted` — built-in default repos (KindleForge, ZenLabs)
 
@@ -441,23 +499,23 @@ This works because the Kindle browser can make HTTP requests to localhost — no
 
 #### Auto-detection notes
 
-ZenPM fetches `index.json` first. If that returns 404 or isn't a valid ZenPM catalog object, it falls back to trying `registry.json` as a KindleForge-format flat array. This means a single repo URL can serve both formats — or you can host exclusively one format and ZenPM will detect it automatically.
+ZenPM fetches `manifest.json` first. If that returns 404 or isn't a valid ZenPM catalog object, it falls back to trying `registry.json` as a KindleForge-format flat array. This means a single repo URL can serve both formats — or you can host exclusively one format and ZenPM will detect it automatically.
 
-#### Repo signing with `index.json.sig`
+#### Repo signing with `manifest.json.sig`
 
-Repos can include an Ed25519 detached signature to earn the `signed` trust level. Place an `index.json.sig` file alongside `index.json` at the repo root:
+Repos can include an Ed25519 detached signature to earn the `signed` trust level. Place a `manifest.json.sig` file alongside `manifest.json` at the repo root:
 
 ```
 my-repo/
-  index.json
-  index.json.sig    ← hex-encoded Ed25519 signature of SHA-256(index.json)
+  manifest.json
+  manifest.json.sig    ← hex-encoded Ed25519 signature of SHA-256(manifest.json)
 ```
 
-The `.sig` file contains the raw 64-byte Ed25519 signature of `index.json`'s raw bytes (or hex-encoded — both are accepted). ZenPM uses the ZenLabs public key by default; override via `ZENPM_REPO_PUBKEY` (hex-encoded 32-byte key).
+The `.sig` file contains the raw 64-byte Ed25519 signature of `manifest.json`'s raw bytes (or hex-encoded — both are accepted). ZenPM uses the ZenLabs public key by default; override via `ZENPM_REPO_PUBKEY` (hex-encoded 32-byte key).
 
 ```sh
-# Sign index.json with your Ed25519 private key (raw binary output):
-openssl pkeyutl -sign -inkey private.pem -rawin -in index.json -out index.json.sig
+# Sign manifest.json with your Ed25519 private key (raw binary output):
+openssl pkeyutl -sign -inkey private.pem -rawin -in manifest.json -out manifest.json.sig
 ```
 
 **Trust levels:**
@@ -465,7 +523,7 @@ openssl pkeyutl -sign -inkey private.pem -rawin -in index.json -out index.json.s
 | Trust | Meaning |
 |---|---|
 | `trusted` | Built-in default repo (KindleForge, ZenLabs) |
-| `signed` | Valid `index.json.sig` found and verified |
+| `signed` | Valid `manifest.json.sig` found and verified |
 | `warn-unsigned` | No valid signature, or plain HTTP repo |
 
 #### HTTPS requirement

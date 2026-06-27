@@ -1,0 +1,314 @@
+# ZenPM translations
+# Locale: cs
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "Open ZenPM"
+msgstr "Otevřít ZenPM"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Rozhraní Zen Package Manageru pro KOReader."
+
+msgid "Featured"
+msgstr "Doporučené"
+
+msgid "Sources"
+msgstr "Zdroje"
+
+msgid "Installed"
+msgstr "Nainstalované"
+
+msgid "Debug"
+msgstr "Ladění"
+
+msgid "Search"
+msgstr "Hledat"
+
+msgid "Welcome"
+msgstr "Vítejte"
+
+msgid "Add Source"
+msgstr "Přidat zdroj"
+
+msgid "Add"
+msgstr "Přidat"
+
+msgid "Search..."
+msgstr "Hledat..."
+
+msgid "Filter installed..."
+msgstr "Filtrovat nainstalované..."
+
+msgid "Packages"
+msgstr "Balíčky"
+
+msgid "Source Details"
+msgstr "Podrobnosti zdroje"
+
+msgid "Package Details"
+msgstr "Podrobnosti balíčku"
+
+msgid "ZenPM - Debug"
+msgstr "ZenPM - Ladění"
+
+msgid "Featured packages coming soon."
+msgstr "Doporučené balíčky budou brzy."
+
+msgid "No packages found. Try Refresh."
+msgstr "Nebyly nalezeny žádné balíčky. Zkuste Obnovit."
+
+msgid "No installed packages match the filter."
+msgstr "Filtru neodpovídají žádné nainstalované balíčky."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Nejsou nainstalované žádné balíčky. Balíčky najdete v Hledání."
+
+msgid "No packages match the filter."
+msgstr "Filtru neodpovídají žádné balíčky."
+
+msgid "No repositories configured."
+msgstr "Nejsou nastavena žádná úložiště."
+
+msgid "No packages found for this source."
+msgstr "Pro tento zdroj nebyly nalezeny žádné balíčky."
+
+msgid "By "
+msgstr "Autor: "
+
+msgid "Description"
+msgstr "Popis"
+
+msgid "No description available."
+msgstr "Popis není k dispozici."
+
+msgid "Unknown package"
+msgstr "Neznámý balíček"
+
+msgid "No description"
+msgstr "Bez popisu"
+
+msgid "Source"
+msgstr "Zdroj"
+
+msgid "Remove"
+msgstr "Odebrat"
+
+msgid "Modify"
+msgstr "Upravit"
+
+msgid "Get"
+msgstr "Získat"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Zrušit"
+
+msgid "Clear"
+msgstr "Vymazat"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Reinstall"
+msgstr "Přeinstalovat"
+
+msgid "Uninstall"
+msgstr "Odinstalovat"
+
+msgid "Refresh"
+msgstr "Obnovit"
+
+msgid "About"
+msgstr "O aplikaci"
+
+msgid "Update"
+msgstr "Aktualizovat"
+
+msgid "Quit"
+msgstr "Ukončit"
+
+msgid "Filter installed packages"
+msgstr "Filtrovat nainstalované balíčky"
+
+msgid "Search packages"
+msgstr "Hledat balíčky"
+
+msgid "Please enter a URL."
+msgstr "Zadejte URL."
+
+msgid "Detecting repo..."
+msgstr "Zjišťuji úložiště..."
+
+msgid "Could not detect repo format."
+msgstr "Nepodařilo se zjistit formát úložiště."
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Probíhá jiná operace. Počkejte prosím."
+
+msgid "Package has no id."
+msgstr "Balíček nemá id."
+
+msgid "Downloading... Please wait."
+msgstr "Stahování... Počkejte prosím."
+
+msgid "Refreshing repositories..."
+msgstr "Obnovuji úložiště..."
+
+msgid "Check for and start a ZenPM update?"
+msgstr "Zkontrolovat a spustit aktualizaci ZenPM?"
+
+msgid "Update accepted. The daemon may restart."
+msgstr "Aktualizace přijata. Démon se může restartovat."
+
+msgid "None"
+msgstr "Žádné"
+
+msgid "Version: "
+msgstr "Verze: "
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Autor: Anthony Gress (ZenLabs)"
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " did not complete.\n\nCheck the debug log for details."
+
+msgid " successfully."
+msgstr " úspěšně."
+
+msgid "Are you sure you want to download "
+msgstr "Opravdu chcete stáhnout "
+
+msgid "Are you sure you want to reinstall "
+msgstr "Opravdu chcete přeinstalovat "
+
+msgid "Are you sure you want to uninstall "
+msgstr "Opravdu chcete odinstalovat "
+
+msgid "Loading packages, please wait"
+msgstr "Načítání balíčků, počkejte prosím"
+
+msgid "Could not add source: "
+msgstr "Could not add source: "
+
+msgid "Could not read log: "
+msgstr "Could not read log: "
+
+msgid "Could not remove source: "
+msgstr "Could not remove source: "
+
+msgid "Failed to load package: "
+msgstr "Failed to load package: "
+
+msgid "Failed to load packages: "
+msgstr "Failed to load packages: "
+
+msgid "Failed to load source: "
+msgstr "Failed to load source: "
+
+msgid "Failed to load sources: "
+msgstr "Failed to load sources: "
+
+msgid "Failed to start package action: "
+msgstr "Failed to start package action: "
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "Installing"
+msgstr "Instalace"
+
+msgid "Loading featured packages..."
+msgstr "Načítání doporučených balíčků..."
+
+msgid "Loading installed packages..."
+msgstr "Načítání nainstalovaných balíčků..."
+
+msgid "Loading log..."
+msgstr "Načítání protokolu..."
+
+msgid "Loading package..."
+msgstr "Načítání balíčku..."
+
+msgid "Loading packages..."
+msgstr "Načítání balíčků..."
+
+msgid "Loading source..."
+msgstr "Načítání zdroje..."
+
+msgid "Loading sources..."
+msgstr "Načítání zdrojů..."
+
+msgid "Log is empty."
+msgstr "Protokol je prázdný."
+
+msgid "Package"
+msgstr "Balíček"
+
+msgid "Package not found."
+msgstr "Balíček nebyl nalezen."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Package operation status could not be checked. See Debug log."
+
+msgid "Refresh failed: "
+msgstr "Refresh failed: "
+
+msgid "Reinstalling"
+msgstr "Přeinstalace"
+
+msgid "Remove source "
+msgstr "Odebrat zdroj "
+
+msgid "Source not found."
+msgstr "Zdroj nebyl nalezen."
+
+msgid "Uninstalling"
+msgstr "Odinstalace"
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "ZenPM backend not found. Expected "
+msgstr "ZenPM backend not found. Expected "
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "install"
+msgstr "instalace"
+
+msgid "installed"
+msgstr "nainstalováno"
+
+msgid "network error"
+msgstr "chyba sítě"
+
+msgid "of"
+msgstr "z"
+
+msgid "or"
+msgstr "nebo"
+
+msgid "reinstall"
+msgstr "přeinstalace"
+
+msgid "reinstalled"
+msgstr "přeinstalováno"
+
+msgid "request failed"
+msgstr "request failed"
+
+msgid "uninstall"
+msgstr "odinstalace"
+
+msgid "uninstalled"
+msgstr "odinstalováno"

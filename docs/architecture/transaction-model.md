@@ -12,7 +12,8 @@ ZenPM uses lock files and journals to make package operations recoverable.
 
 - `locks/operation.lock/` - active operation lock directory.
 - `journal/<timestamp>-<op>-<target>.journal` - transaction journal.
-- `state/installed.db` - installed package records.
+- `state/installed.db` - installed package records in the standalone flat-file backend.
+- `state/zenpm.sqlite3` - KOReader plugin state database when `ZENPM_STATE_BACKEND=sqlite`.
 
 ## Locking
 
@@ -50,6 +51,9 @@ Status values:
 ```text
 id|version|repo|installed_at
 ```
+
+The KOReader plugin backend stores installed package records in SQLite instead
+of this flat-file format. Runtime journals remain TSV files in both modes.
 
 ## Recovery behavior (v1)
 

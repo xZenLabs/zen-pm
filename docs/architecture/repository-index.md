@@ -1,15 +1,14 @@
-# Repository Index Contract (v1)
+# Repository Manifest Contract (v1)
 
-ZenPM repositories are static-hostable and contain two index formats.
+ZenPM repositories are static-hostable and expose a package manifest.
 
 ## Required files
 
-- `index.json` - canonical metadata and tooling source.
-- `catalog.tsv` - shell-friendly package index consumed by the client.
+- `manifest.json` - canonical metadata and tooling source.
 
-## index.json
+## manifest.json
 
-`index.json` must include:
+`manifest.json` must include:
 
 - `schema_version` (string)
 - `repo` (object): repository metadata.
@@ -23,43 +22,37 @@ Example:
   "repo": {
     "id": "zenpm-default",
     "name": "ZenPM Repository",
-    "url": "https://example.invalid/zenpm/default"
+    "url": "https://example.invalid/zenpm/default",
+    "icon_url": "assets/repo-icon.svg"
   },
   "packages": [
     {
       "id": "koreader-kindle",
       "name": "KOReader (Kindle)",
       "version": "2026.03.0",
-      "platforms": ["kindle"],
+      "category": "utility",
+      "platforms": ["kindle", "koreader"],
       "featured": true,
       "featured_image": "packages/koreader-kindle/featured.png",
+      "source": "https://github.com/koreader/koreader",
       "dependencies": ["kual"],
       "install_url": "packages/koreader-kindle/scripts/install.sh",
       "uninstall_url": "packages/koreader-kindle/scripts/uninstall.sh",
-      "manifest_url": "packages/koreader-kindle/manifest.json",
-      "sha256": "",
       "size": ""
     }
   ]
 }
 ```
 
-## catalog.tsv
-
-`catalog.tsv` is tab-separated with header:
-
-```text
-id	name	version	platforms	dependencies	install_url	uninstall_url	manifest_url	sha256	size
-```
-
-Rules:
-
-- `platforms` is comma-separated.
-- `dependencies` is comma-separated package ids.
-- URLs may be absolute or relative to repository root.
-- Comments start with `#`.
+`platforms` are required compatibility capabilities, not alternatives. For
+example, `["kindle", "koreader"]` is shown only when both Kindle and KOReader
+compatibility are present.
 
 ## Merge and precedence behavior
+
+Package `icon_url` is package-specific. When it is omitted, clients should fall
+back to `repo.icon_url`; if that is omitted too, clients may fall back to the
+repository favicon.
 
 When multiple repositories define the same package id:
 
