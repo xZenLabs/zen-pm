@@ -157,6 +157,32 @@ function Modals.actions(title, rows)
     UIManager:show(dialog)
 end
 
+function Modals.plugin_settings_cleanup(text, callback)
+    local dialog
+    dialog = ButtonDialog:new{
+        title = text,
+        buttons = {
+            {
+                {
+                    text = _("Keep settings"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        if callback then callback(false) end
+                    end,
+                },
+                {
+                    text = _("Remove settings"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        if callback then callback(true) end
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+end
+
 function Modals.restart_koreader(text, restart_callback)
     local dialog
     dialog = ButtonDialog:new{

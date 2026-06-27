@@ -157,6 +157,10 @@ function Daemon:plugin_version()
 end
 
 function Daemon:standalone_home()
+    local platform = self:detect_platform()
+    if platform == "kindle" or platform == "kobo" then
+        return self:state_home()
+    end
     if ok_datastorage and DataStorage and DataStorage.getSettingsDir then
         return DataStorage:getSettingsDir() .. "/ZenPM"
     end
@@ -164,9 +168,9 @@ function Daemon:standalone_home()
 end
 
 -- state_home is the ZENPM_HOME the backend resolves to. On kindle/kobo this is
--- the platform default so state (sqlite DB + script cache) is shared with the
--- Kindle WAF; host runs stay isolated under DataStorage. Must mirror the Go
--- defaults in internal/state/state.go.
+-- the platform default so state (sqlite DB + script cache) and the managed
+-- backend are shared with the Kindle WAF; host runs stay isolated under
+-- DataStorage. Must mirror the Go defaults in internal/state/state.go.
 function Daemon:state_home()
     local platform = self:detect_platform()
     if platform == "kindle" then

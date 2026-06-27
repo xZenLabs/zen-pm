@@ -56,6 +56,7 @@ type pkgJSON struct {
 	SourceType    string          `json:"source_type,omitempty"`
 	SourceURL     string          `json:"source_url,omitempty"`
 	Stars         string          `json:"stars,omitempty"`
+	PluginModule  string          `json:"plugin_module,omitempty"`
 	Assets        json.RawMessage `json:"assets,omitempty"`
 	Constraints   json.RawMessage `json:"constraints,omitempty"`
 }
@@ -425,6 +426,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			SourceType:    e.SourceType,
 			SourceURL:     e.SourceURL,
 			Stars:         e.Stars,
+			PluginModule:  e.PluginModule,
 			Assets:        rawJSON(e.Assets),
 			Constraints:   rawJSON(e.Constraints),
 		}

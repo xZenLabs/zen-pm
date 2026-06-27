@@ -115,6 +115,167 @@ local function action_installs_package(action)
     return action == "install" or action == "reinstall" or action == "update"
 end
 
+-- The KOReader plugin name is its .koplugin directory basename.
+local function koplugin_dir_basename(path)
+    if type(path) ~= "string" then return nil end
+    local base = path:gsub("[/\\]+$", ""):match("[^/\\]+$")
+    if not base then return nil end
+    return (base:gsub("%.koplugin$", ""))
+end
+
+-- Resolve the live KOReader plugin instance for a package by enumerating the
+-- loaded plugins and matching on each instance's actual install directory
+-- basename. This avoids guessing PluginLoader's internal key: we compare against
+-- the directory KOReader really loaded the plugin from (instance.path). The
+-- daemon-derived plugin_module is preferred, then the package id/name, since the
+-- generic uninstall path leaves plugin_module empty but the id usually matches.
+local function koreader_plugin_instance(pkg)
+    if type(pkg) ~= "table" then return nil end
+    local ok, PluginLoader = pcall(require, "pluginloader")
+    if not ok or type(PluginLoader) ~= "table" then return nil end
+    local loaded = PluginLoader.loaded_plugins
+    if type(loaded) ~= "table" then return nil end
+
+    local by_dir = {}
+    for _, inst in pairs(loaded) do
+        if type(inst) == "table" then
+            local dir = koplugin_dir_basename(inst.path)
+            if dir and dir ~= "" then
+                by_dir[dir] = inst
+            end
+            if type(inst.name) == "string" and inst.name ~= "" then
+                by_dir[inst.name] = by_dir[inst.name] or inst
+            end
+        end
+    end
+
+    for _, candidate in ipairs({ pkg.plugin_module, pkg.id, pkg.name }) do
+        if type(candidate) == "string" and candidate ~= "" and by_dir[candidate] then
+            return by_dir[candidate]
+        end
+    end
+    return nil
+end
+
+local function plugin_has_delete_settings(inst)
+    return type(inst) == "table"
+        and (type(inst.deletePluginSettings) == "function" or inst.settings_file or inst.settings_key)
+end
+
+-- Locate a package's .koplugin directory on disk, even if the plugin is not
+-- loaded (disabled, or only active in the other UI). Uses PluginLoader's own
+-- discovery so we honour DEFAULT_PLUGIN_PATH and extra_plugin_paths.
+local function find_koplugin_dir(pkg)
+    if type(pkg) ~= "table" then return nil end
+    local ok, PluginLoader = pcall(require, "pluginloader")
+    if not ok or type(PluginLoader) ~= "table" or type(PluginLoader._discover) ~= "function" then
+        return nil
+    end
+    local ok2, discovered = pcall(function() return PluginLoader:_discover() end)
+    if not ok2 or type(discovered) ~= "table" then return nil end
+    local by_key = {}
+    for _, d in ipairs(discovered) do
+        if type(d) == "table" then
+            if type(d.name) == "string" and d.name ~= "" then
+                by_key[d.name] = by_key[d.name] or d.path
+            end
+            local base = koplugin_dir_basename(d.path)
+            if base and base ~= "" then
+                by_key[base] = by_key[base] or d.path
+            end
+        end
+    end
+    for _, candidate in ipairs({ pkg.plugin_module, pkg.id, pkg.name }) do
+        if type(candidate) == "string" and candidate ~= "" and by_key[candidate] then
+            return by_key[candidate]
+        end
+    end
+    return nil
+end
+
+-- Load a plugin's main.lua without requiring it to be active in this KOReader
+-- session. KOReader temporarily prepends the plugin root to package.path when
+-- loading plugins; do the same so plugins with require("lib/...") still load.
+local function load_plugin_from_disk(dir_path)
+    if type(dir_path) ~= "string" or dir_path == "" then return nil end
+    local mainfile = dir_path .. "/main.lua"
+    local package_path = package.path
+    local package_cpath = package.cpath
+    package.path = string.format("%s/?.lua;%s", dir_path, package_path)
+    package.cpath = string.format("%s/lib/?.so;%s", dir_path, package_cpath)
+    local ok, mod = pcall(dofile, mainfile)
+    package.path = package_path
+    package.cpath = package_cpath
+    if not ok or type(mod) ~= "table" then return nil end
+    return mod
+end
+
+local function delete_default_plugin_settings(plugin_name)
+    if type(plugin_name) ~= "string" or plugin_name == "" then return end
+    local ok_ds, DataStorage = pcall(require, "datastorage")
+    if ok_ds and DataStorage and DataStorage.getSettingsDir then
+        local settings_file = DataStorage:getSettingsDir() .. "/" .. plugin_name .. ".lua"
+        os.remove(settings_file)
+        os.remove(settings_file .. ".old")
+    end
+    if G_reader_settings and G_reader_settings.delSetting then
+        G_reader_settings:delSetting(plugin_name)
+    end
+end
+
+-- Delete plugin settings from either a live instance or a module loaded from
+-- disk, using KOReader's wrapper when available so settings_file/settings_key
+-- are handled the same way KOReader handles its own plugin manager.
+local function delete_plugin_settings(plugin, plugin_name)
+    if type(plugin) ~= "table" then
+        delete_default_plugin_settings(plugin_name)
+        return
+    end
+    local ok_pl, PluginLoader = pcall(require, "pluginloader")
+    if ok_pl and type(PluginLoader) == "table"
+            and type(PluginLoader.deletePluginSettings) == "function" then
+        pcall(function() PluginLoader:deletePluginSettings(plugin) end)
+    else
+        if type(plugin.deletePluginSettings) == "function" then
+            pcall(function() plugin:deletePluginSettings() end)
+        end
+        if plugin.settings_file then
+            os.remove(plugin.settings_file)
+            os.remove(plugin.settings_file .. ".old")
+        end
+        if plugin.settings_key and G_reader_settings and G_reader_settings.delSetting then
+            G_reader_settings:delSetting(plugin.settings_key)
+        end
+    end
+    delete_default_plugin_settings(plugin_name)
+end
+
+-- Resolve a best-effort settings deleter before the backend uninstall purges
+-- the .koplugin directory. The returned closure captures any loaded module from
+-- disk, so deletePluginSettings can still run after the directory is removed.
+local function resolve_plugin_settings_deleter(pkg)
+    local dir_path = find_koplugin_dir(pkg)
+    local plugin_name = koplugin_dir_basename(dir_path)
+    if type(plugin_name) ~= "string" or plugin_name == "" then
+        plugin_name = pkg and (pkg.plugin_module or pkg.id or pkg.name)
+    end
+
+    local inst = koreader_plugin_instance(pkg)
+    if plugin_has_delete_settings(inst) then
+        return function() delete_plugin_settings(inst, plugin_name) end
+    end
+
+    local mod = load_plugin_from_disk(dir_path)
+    if plugin_has_delete_settings(mod) then
+        return function() delete_plugin_settings(mod, plugin_name) end
+    end
+
+    if dir_path or package_is_koreader_plugin(pkg) then
+        return function() delete_plugin_settings(nil, plugin_name) end
+    end
+    return nil
+end
+
 function App:show()
     if not self.view then
         self.view = AppView:new{ app = self }
@@ -926,12 +1087,16 @@ function App:confirm_package_action(pkg, action, on_done)
         question = _("Are you sure you want to uninstall ") .. name .. "?"
         label = _("Uninstall")
     end
+    local opts = nil
+    if action == "uninstall" then
+        opts = { settings_deleter = resolve_plugin_settings_deleter(pkg) }
+    end
     Modals.confirm(question, label, function()
-        self:start_package_action(pkg, action, on_done)
+        self:start_package_action(pkg, action, on_done, opts)
     end)
 end
 
-function App:start_package_action(pkg, action, on_done)
+function App:start_package_action(pkg, action, on_done, opts)
     local id = pkg.id or pkg.name
     if not id then
         Modals.info(_("Package has no id."))
@@ -940,14 +1105,14 @@ function App:start_package_action(pkg, action, on_done)
     if action_installs_package(action) then
         local ok, info = self.client:get_package_assets(id)
         if ok and type(info) == "table" and info.needs_choice and type(info.candidates) == "table" then
-            self:choose_package_asset(pkg, action, info.candidates, on_done)
+            self:choose_package_asset(pkg, action, info.candidates, on_done, opts)
             return
         end
     end
-    self:run_package_action(pkg, action, nil, on_done)
+    self:run_package_action(pkg, action, nil, on_done, opts)
 end
 
-function App:choose_package_asset(pkg, action, candidates, on_done)
+function App:choose_package_asset(pkg, action, candidates, on_done, opts)
     local rows = {}
     for _, asset in ipairs(candidates) do
         local name = asset.asset
@@ -955,19 +1120,19 @@ function App:choose_package_asset(pkg, action, candidates, on_done)
             table.insert(rows, {
                 text = name,
                 callback = function()
-                    self:run_package_action(pkg, action, name, on_done)
+                    self:run_package_action(pkg, action, name, on_done, opts)
                 end,
             })
         end
     end
     if #rows == 0 then
-        self:run_package_action(pkg, action, nil, on_done)
+        self:run_package_action(pkg, action, nil, on_done, opts)
         return
     end
     Modals.actions(_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name), rows)
 end
 
-function App:run_package_action(pkg, action, asset, on_done)
+function App:run_package_action(pkg, action, asset, on_done, opts)
     local backend_action = backend_action_for(action)
     local id = pkg.id or pkg.name
     local failure_baseline = self:package_action_failure_stats({
@@ -991,6 +1156,7 @@ function App:run_package_action(pkg, action, asset, on_done)
         was_installed = pkg.installed and true or false,
         target_version = pkg.latest_version,
         prompt_restart = action_installs_package(action) and package_is_koreader_plugin(pkg),
+        settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
         on_done = on_done,
     }, 1)
@@ -1074,14 +1240,26 @@ function App:poll_package_action(op, attempt)
             self.busy = false
             local done = action_done(op.action)
             Modals.close_status()
-            if op.prompt_restart then
-                Modals.restart_koreader(op.name .. " " .. done .. _(" successfully.\n\nRestart KOReader to load the plugin."), function()
-                    UIManager:restartKOReader()
-                end)
-            else
-                Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
+            local finish = function()
+                if op.prompt_restart then
+                    Modals.restart_koreader(op.name .. " " .. done .. _(" successfully.\n\nRestart KOReader to load the plugin."), function()
+                        UIManager:restartKOReader()
+                    end)
+                else
+                    Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
+                end
+                if op.on_done then op.on_done() end
             end
-            if op.on_done then op.on_done() end
+            if op.action == "uninstall" and type(op.settings_deleter) == "function" then
+                Modals.plugin_settings_cleanup(op.name .. " " .. done .. _(" successfully.\n\nRemove plugin settings?"), function(remove_settings)
+                    if remove_settings then
+                        op.settings_deleter()
+                    end
+                    finish()
+                end)
+                return
+            end
+            finish()
         elseif attempt >= Constants.MAX_POLL_RETRIES then
             self.busy = false
             detail = self:package_action_failure_detail(op)

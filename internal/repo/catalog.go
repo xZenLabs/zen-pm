@@ -23,7 +23,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|plugin_module
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -51,6 +51,7 @@ type CatalogEntry struct {
 	Stars         string
 	Assets        string
 	Constraints   string
+	PluginModule  string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -92,6 +93,7 @@ func (e *CatalogEntry) serialize() string {
 		e.Stars,
 		e.Assets,
 		e.Constraints,
+		e.PluginModule,
 	}, "|")
 }
 
@@ -153,6 +155,7 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) == 22 {
 		e.Stars = parts[21]
+		e.ensurePluginModule()
 		return e, nil
 	}
 	if len(parts) >= 22 {
@@ -170,7 +173,29 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	if len(parts) >= 26 {
 		e.Constraints = parts[25]
 	}
+	if len(parts) >= 27 {
+		e.PluginModule = parts[26]
+	}
+	e.ensurePluginModule()
 	return e, nil
+}
+
+// ensurePluginModule derives PluginModule from SourceAsset when not set
+// explicitly (e.g. "sudoku.koplugin.zip" -> "sudoku"), so existing catalogs
+// without the field still resolve a KOReader plugin directory name.
+func (e *CatalogEntry) ensurePluginModule() {
+	if e.PluginModule != "" {
+		return
+	}
+	asset := strings.TrimSpace(e.SourceAsset)
+	if asset == "" {
+		return
+	}
+	asset = filepath.Base(asset)
+	asset = strings.TrimSuffix(asset, ".zip")
+	if strings.HasSuffix(asset, ".koplugin") {
+		e.PluginModule = strings.TrimSuffix(asset, ".koplugin")
+	}
 }
 
 func parseLegacyCatalogLine(parts []string) (*CatalogEntry, error) {
@@ -338,7 +363,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			featuredImage = resolveURL(repoURL, p.FeaturedImage)
 		}
 		source := resolveURL(repoURL, p.Source)
-		entries = append(entries, &CatalogEntry{
+		entry := &CatalogEntry{
 			Repo:          repoName,
 			Priority:      priority,
 			ID:            p.ID,
@@ -364,7 +389,9 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Stars:         strings.TrimSpace(p.Stars),
 			Assets:        compactJSONField(p.Assets),
 			Constraints:   compactJSONField(p.Constraints),
-		})
+		}
+		entry.ensurePluginModule()
+		entries = append(entries, entry)
 	}
 	return entries
 }

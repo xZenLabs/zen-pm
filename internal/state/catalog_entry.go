@@ -27,4 +27,5 @@ type CatalogEntry struct {
 	Stars         string
 	Assets        string
 	Constraints   string
+	PluginModule  string
 }
