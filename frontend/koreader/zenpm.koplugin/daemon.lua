@@ -156,29 +156,32 @@ function Daemon:plugin_version()
     return read_text(Constants.PLUGIN_DIR .. "/VERSION")
 end
 
-function Daemon:standalone_home()
-    local platform = self:detect_platform()
-    if platform == "kindle" or platform == "kobo" then
-        return self:state_home()
-    end
-    if ok_datastorage and DataStorage and DataStorage.getSettingsDir then
-        return DataStorage:getSettingsDir() .. "/ZenPM"
-    end
-    return Constants.PLUGIN_DIR .. "/data"
-end
-
--- state_home is the ZENPM_HOME the backend resolves to. On kindle/kobo this is
--- the platform default so state (sqlite DB + script cache) and the managed
--- backend are shared with the Kindle WAF; host runs stay isolated under
--- DataStorage. Must mirror the Go defaults in internal/state/state.go.
-function Daemon:state_home()
+function Daemon:native_home()
     local platform = self:detect_platform()
     if platform == "kindle" then
         return "/mnt/us/ZenPM"
     elseif platform == "kobo" then
         return "/mnt/onboard/.adds/ZenPM"
     end
-    return self:standalone_home()
+    return nil
+end
+
+function Daemon:device_home()
+    if ok_datastorage and DataStorage and DataStorage.getSettingsDir then
+        return DataStorage:getSettingsDir() .. "/ZenPM"
+    end
+    return Constants.PLUGIN_DIR .. "/data"
+end
+
+function Daemon:standalone_home()
+    return self:native_home() or self:device_home()
+end
+
+-- state_home is the ZENPM_HOME the backend resolves to. On kindle/kobo this is
+-- the platform default so state (sqlite DB + script cache) can be shared with a
+-- native install; other KOReader ports stay under KOReader's settings home.
+function Daemon:state_home()
+    return self:native_home() or self:device_home()
 end
 
 function Daemon:standalone_backend_dir()
@@ -258,8 +261,8 @@ end
 function Daemon:bundled_backend_candidates()
     local dir = self:bundled_backend_dir()
     local platform = self:detect_platform()
+    local abi = self:detect_abi()
     if platform == "kobo" or platform == "kindle" then
-        local abi = self:detect_abi()
         return { dir .. "/zenpm-ereader", dir .. "/zenpm-" .. abi, dir .. "/zenpm" }
     end
     local host_platform = self:host_backend_platform()
@@ -271,6 +274,8 @@ function Daemon:bundled_backend_candidates()
     if suffix then
         table.insert(candidates, dir .. "/zenpm-" .. suffix)
     end
+    table.insert(candidates, dir .. "/zenpm-ereader")
+    table.insert(candidates, dir .. "/zenpm-" .. abi)
     table.insert(candidates, dir .. "/zenpm")
     return candidates
 end
@@ -367,6 +372,12 @@ function Daemon:health_matches(data)
 end
 
 function Daemon:ensure_backend_files()
+    local native = self:native_install_backend()
+    if native then
+        self.backend_path = native
+        return false, nil
+    end
+
     local dirs_missing, dirs_err = self:ensure_runtime_dirs()
     if dirs_err then
         return false, dirs_err
@@ -416,6 +427,25 @@ function Daemon:ensure_backend_files()
     return true, nil
 end
 
+function Daemon:native_install_backend()
+    local home = self:native_home()
+    if not home then
+        return nil
+    end
+    local backend = home .. "/backend/zenpm"
+    if not path_exists(backend) then
+        return nil
+    end
+    local platform = self:detect_platform()
+    if platform == "kindle" and path_exists(home .. "/frontend/kindle") then
+        return backend
+    end
+    if platform == "kobo" and (path_exists(home .. "/bin/ZenPM-menu.sh") or path_exists("/mnt/onboard/.adds/nm/ZenPM-main")) then
+        return backend
+    end
+    return nil
+end
+
 function Daemon:candidate_backends()
     local platform = self:detect_platform()
     local candidates = { self:standalone_backend() }
@@ -462,8 +492,8 @@ function Daemon:start()
     end
 
     local platform = self:detect_platform()
-    -- set_home is the ZENPM_HOME to export; nil lets the backend resolve the
-    -- platform default so device state is shared with the Kindle WAF.
+    -- set_home is the ZENPM_HOME to export; nil on native Kindle/Kobo paths lets
+    -- the backend resolve its platform default and share native persistent state.
     local set_home = nil
     local write_pid = false
     local log_path = nil
@@ -476,8 +506,8 @@ function Daemon:start()
             backend = self:standalone_backend()
         end
         write_pid = true
-        if platform == "host" then
-            set_home = self:standalone_home()
+        if not self:native_home() then
+            set_home = self:state_home()
         end
         log_path = self:state_home() .. "/ZenPM.log"
     elseif platform == "kobo" then

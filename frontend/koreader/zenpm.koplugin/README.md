@@ -22,8 +22,8 @@ To check an e-reader's ABI, run this on the device:
 if [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
 ```
 
-On KOReader startup, the plugin copies the bundled backend into KOReader's
-settings `ZenPM/backend/zenpm` path and runs it from there.
+On KOReader startup, the plugin prepares a backend path for the device and runs
+the backend from there.
 
 The settings copy is refreshed whenever either of these changes:
 
@@ -33,12 +33,14 @@ The settings copy is refreshed whenever either of these changes:
 The managed backend binary lives in the settings `ZenPM/backend/` directory so
 it survives plugin updates.
 
-SQLite is the backend's only state store. On Kindle and Kobo the plugin starts
-the managed backend with no `ZENPM_HOME`, so it resolves the platform default
-(`/mnt/us/.ZenPM/zenpm.sqlite3` on Kindle) and shares one database and uninstall
-script cache with the standalone ZenPM WAF. On host (development), state stays
-isolated under the settings `ZenPM/` directory. Logs, journals, locks,
-downloaded scripts, and raw repo manifests remain regular files.
+SQLite is the backend's only state store. On Kindle and Kobo the plugin uses an
+existing native ZenPM backend when the native install is present; otherwise it
+can install the bundled backend under the platform default path and let the
+backend share native persistent state. On other KOReader devices and host
+development, the plugin exports `ZENPM_HOME` under KOReader's settings
+`ZenPM/` directory so Android, PocketBook, Boox, and similar ports do not depend
+on a hardcoded device root. Logs, journals, locks, downloaded scripts, and raw
+repo manifests remain regular files.
 
 ## Parity Targets
 
