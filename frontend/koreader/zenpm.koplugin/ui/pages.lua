@@ -144,7 +144,7 @@ function Pages.package_details(view, bb, x, y, w, h)
     if pkg.featured_image then
         local art_h = m.featured_h - Theme.scale(118)
         local border = Theme.scale(2)
-        if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), panel_x + border, cy + border, panel_w - border * 2, art_h - border, 1.25, {
+        if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), panel_x + border, cy + border, panel_w - border * 2, art_h - border, 1.1, {
             is_icon = false,
             outer_bounds = { x = panel_x, y = cy, w = panel_w, h = panel_h },
             mask_bounds = { x = panel_x + border, y = cy + border, w = panel_w - border * 2, h = panel_h - border * 2 },

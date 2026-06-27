@@ -3,6 +3,7 @@
 -- AppView instance so it can register hitboxes via P.hit(view, ...).
 
 local Images = require("ui/images")
+local Models = require("models")
 
 local I18n = require("i18n")
 local P = require("ui/primitives")
@@ -142,7 +143,7 @@ function Header.draw(view, bb, x, y, w)
             P.center_text(bb, "SRC", icon_x, icon_y + Theme.scale(27), icon, "small", { bold = true })
         end
         local text_x = icon_x + icon + Theme.scale(18)
-        P.text(bb, ellipsize(I18n.dynamic_or(repo.name, _("Source Details")), 60), text_x, y + Theme.scale(13), w - text_x - pad - Theme.scale(48), "heading", { bold = true })
+        P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source Details"))), 60), text_x, y + Theme.scale(13), w - text_x - pad - Theme.scale(48), "heading", { bold = true })
         P.text(bb, ellipsize(repo.url or "", 70), text_x, y + Theme.scale(44), w - text_x - pad - Theme.scale(48), "small")
         return y + h
     elseif page == "package_details" then

@@ -2,6 +2,9 @@ package repo
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -41,6 +44,17 @@ func TestFilterByPlatformDoesNotShowKindleKoreaderOnKoboKoreader(t *testing.T) {
 	assertEntryIDs(t, filtered, []string{"koreader-only", "kobo-only"})
 }
 
+func TestFilterByPlatformTreatsKindleForgeAsKindle(t *testing.T) {
+	entries := []*CatalogEntry{
+		{ID: "kindle-only", Platforms: []string{"kindle"}},
+		{ID: "kindleforge-only", Platforms: []string{"kindleforge"}},
+	}
+
+	filtered := FilterByPlatform(entries, "kindle")
+
+	assertEntryIDs(t, filtered, []string{"kindle-only", "kindleforge-only"})
+}
+
 func TestKindleForgeCategoryUsesFirstMappedTag(t *testing.T) {
 	got := kindleForgeCategory([]string{"unknown", "Audio", "Games"})
 	if got != "media" {
@@ -59,6 +73,32 @@ func TestParseKindleForgeCatalogMapsTagsToCategory(t *testing.T) {
 	if entries[0].Category != "utility" {
 		t.Fatalf("Category = %q, want %q", entries[0].Category, "utility")
 	}
+}
+
+func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
+	var manifestRequests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/manifest.json":
+			atomic.AddInt32(&manifestRequests, 1)
+			http.Error(w, "manifest should not be fetched", http.StatusInternalServerError)
+		case "/registry.json":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"name":"Notebook","uri":"notebook","tags":["tools"]}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	entries, err := FetchCatalog("KindleForge", srv.URL, 1, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := atomic.LoadInt32(&manifestRequests); got != 0 {
+		t.Fatalf("manifest requests = %d, want 0", got)
+	}
+	assertEntryIDs(t, entries, []string{"notebook"})
 }
 
 func TestCatalogSourceAssetRoundTrip(t *testing.T) {
@@ -103,6 +143,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"version": "0.0.0-source",
 				"platforms": ["koreader"],
 				"install_url": "packages/koreader/install-plugin.sh",
+				"uninstall_url": "packages/koreader/uninstall-plugin.sh",
 				"source": "https://github.com/karpushchenko/koreader-rsvp-plugin",
 				"source_type": "source",
 				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
@@ -136,6 +177,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].SourceURL != "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main" {
 		t.Fatalf("SourceURL = %q", entries[0].SourceURL)
+	}
+	if entries[0].UninstallURL != "https://example.invalid/repo/packages/koreader/uninstall-plugin.sh" {
+		t.Fatalf("UninstallURL = %q", entries[0].UninstallURL)
 	}
 	if entries[0].Assets != `[{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}]` {
 		t.Fatalf("Assets = %q", entries[0].Assets)

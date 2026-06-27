@@ -28,7 +28,6 @@
             ZenUtils.postLog("[home] script loaded");
             ZenUtils.renderNavbar('home');
 
-            var FEATURED_IDS = ["zen-reader", "kindle-browser", "zen-mtp"];
             var POLL_DELAY = 3500;
             var MAX_POLL_RETRIES = 20;
 
@@ -82,7 +81,7 @@
                 if (repoPkg.icon_url) pkg.icon_url = resolveRepoURL(repoURL, repoPkg.icon_url);
                 if (repoPkg.featured_image) pkg.featured_image = resolveRepoURL(repoURL, repoPkg.featured_image);
                 if (repoPkg.featured) pkg.featured = true;
-                ZenUtils.postLog("[home] merge featured id=" + (pkg.id || "") + " name=" + (pkg.name || "") + " description=" + (pkg.description || "") + " icon_url=" + (pkg.icon_url || "") + " featured_image=" + (pkg.featured_image || "") + " repo_icon_url=" + (pkg.repo_icon_url || ""));
+                ZenUtils.postLog("[home] merge featured id=" + (pkg.id || "") + " featured_image=" + (pkg.featured_image || "") + " icon_url=" + (pkg.icon_url || ""));
                 return pkg;
             }
 
@@ -103,47 +102,41 @@
                     return resp.json();
                 }).then(function (manifest) {
                     var repoPackages = manifest && Array.isArray(manifest.packages) ? manifest.packages : [];
-                    ZenUtils.postLog("[home] ZenLabs repo packages count=" + repoPackages.length);
                     var featured = [];
                     for (var i = 0; i < repoPackages.length; i++) {
                         if (repoPackages[i].featured) {
                             var pkg = findPackage(all, repoPackages[i].id);
-                            if (pkg) {
+                            if (pkg && ZenUtils.isZenLabsRepoName(pkg.repo)) {
                                 featured.push(mergeFeaturedMetadata(pkg, repoPackages[i], repoURL));
-                            } else {
-                                ZenUtils.postLog("[home] featured package missing from API id=" + repoPackages[i].id);
+                                if (featured.length >= 4) return featured;
                             }
                         }
                     }
-                    ZenUtils.postLog("[home] ZenLabs featured matched count=" + featured.length);
-                    return featured.length ? featured : selectFeatured(all);
+                    return featured;
                 }).catch(function (err) {
-                    ZenUtils.postLog("[home] ZenLabs featured fallback: " + String(err));
-                    return selectFeatured(all);
+                    ZenUtils.postLog("[home] ZenLabs featured source fallback: " + String(err));
+                    return selectZenLabsFeatured(all);
                 });
             }
 
-            function selectFeatured(all) {
+            function selectZenLabsFeatured(all) {
                 var featured = [];
-                var i;
-                for (i = 0; i < all.length; i++) {
-                    if (all[i].featured) {
+                for (var i = 0; i < all.length; i++) {
+                    if (ZenUtils.isZenLabsRepoName(all[i].repo) && all[i].featured) {
                         featured.push(all[i]);
                         if (featured.length >= 4) return featured;
-                    }
-                }
-                for (var _f = 0; _f < FEATURED_IDS.length && featured.length < 4; _f++) {
-                    for (var _a = 0; _a < all.length; _a++) {
-                        if (all[_a].id === FEATURED_IDS[_f]) {
-                            featured.push(all[_a]);
-                            break;
-                        }
                     }
                 }
                 return featured;
             }
 
             function repoIcon(pkg) {
+                if (ZenUtils.isZenLabsRepoName(pkg.repo)) {
+                    return "assets/zen.svg";
+                }
+                if (pkg.repo === ZenUtils.REPO_KINDLEFORGE_NAME) {
+                    return "assets/kindleforge.svg";
+                }
                 return pkg.repo_icon_url || "assets/packages.svg";
             }
 

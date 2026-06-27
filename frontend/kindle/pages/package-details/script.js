@@ -88,6 +88,7 @@
 
     function enrichPackageFromRepoManifest(pkg) {
         if (!pkg || !pkg.repo) return Promise.resolve(pkg);
+        if (pkg.repo === ZenUtils.REPO_KINDLEFORGE_NAME) return Promise.resolve(pkg);
         return fetchJSON("GET", "/repos", null).then(function (repos) {
             var repoURL = findRepoURL(Array.isArray(repos) ? repos : [], pkg.repo);
             if (!repoURL) throw new Error("repo URL not found for " + pkg.repo);

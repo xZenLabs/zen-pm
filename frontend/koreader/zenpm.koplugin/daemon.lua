@@ -163,6 +163,20 @@ function Daemon:standalone_home()
     return Constants.PLUGIN_DIR .. "/data"
 end
 
+-- state_home is the ZENPM_HOME the backend resolves to. On kindle/kobo this is
+-- the platform default so state (sqlite DB + script cache) is shared with the
+-- Kindle WAF; host runs stay isolated under DataStorage. Must mirror the Go
+-- defaults in internal/state/state.go.
+function Daemon:state_home()
+    local platform = self:detect_platform()
+    if platform == "kindle" then
+        return "/mnt/us/ZenPM"
+    elseif platform == "kobo" then
+        return "/mnt/onboard/.adds/ZenPM"
+    end
+    return self:standalone_home()
+end
+
 function Daemon:standalone_backend_dir()
     return self:standalone_home() .. "/backend"
 end
@@ -300,14 +314,10 @@ end
 
 function Daemon:runtime_dirs()
     local home = self:standalone_home()
+    -- The backend's state.Init MkdirAll's its own runtime/state dirs; we only
+    -- ensure the dir holding the bundled backend binary exists here.
     return {
         home,
-        home .. "/cache",
-        home .. "/tmp",
-        home .. "/locks",
-        home .. "/journal",
-        home .. "/state",
-        home .. "/state/scripts",
         self:standalone_backend_dir(),
     }
 end
@@ -349,7 +359,7 @@ function Daemon:health_matches(data)
     if type(data) ~= "table" then
         return false
     end
-    return tostring(data.home or "") == self:standalone_home()
+    return tostring(data.home or "") == self:state_home()
 end
 
 function Daemon:ensure_backend_files()
@@ -448,7 +458,10 @@ function Daemon:start()
     end
 
     local platform = self:detect_platform()
-    local home = nil
+    -- set_home is the ZENPM_HOME to export; nil lets the backend resolve the
+    -- platform default so device state is shared with the Kindle WAF.
+    local set_home = nil
+    local write_pid = false
     local log_path = nil
     if backend == self:standalone_backend() or tostring(backend):find(self:bundled_backend_dir(), 1, true) == 1 then
         if backend ~= self:standalone_backend() then
@@ -458,8 +471,11 @@ function Daemon:start()
             end
             backend = self:standalone_backend()
         end
-        home = self:standalone_home()
-        log_path = home .. "/ZenPM.log"
+        write_pid = true
+        if platform == "host" then
+            set_home = self:standalone_home()
+        end
+        log_path = self:state_home() .. "/ZenPM.log"
     elseif platform == "kobo" then
         log_path = "/mnt/onboard/.adds/ZenPM/ZenPM.log"
     elseif platform == "kindle" then
@@ -469,18 +485,14 @@ function Daemon:start()
     end
 
     local cmd = "ZENPM_PLATFORM=" .. Util.sh_quote(platform)
-    if home then
-        cmd = cmd .. " ZENPM_HOME=" .. Util.sh_quote(home)
-        cmd = cmd .. " ZENPM_STATE_BACKEND=sqlite"
-    end
-    if home then
-        cmd = cmd .. " "
+    if set_home then
+        cmd = cmd .. " ZENPM_HOME=" .. Util.sh_quote(set_home)
     end
     cmd = cmd
         .. " nohup " .. Util.sh_quote(backend)
         .. " serve --port 8080 >>" .. Util.sh_quote(log_path)
         .. " 2>&1 &"
-    if home then
+    if write_pid then
         cmd = cmd .. " echo $! >" .. Util.sh_quote(self:standalone_pid_file())
     end
 

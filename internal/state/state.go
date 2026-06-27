@@ -21,17 +21,14 @@ const (
 // State holds all resolved paths for ZenPM's working directories.
 type State struct {
 	Home          string
-	ReposDB       string
-	InstalledDB   string
 	SQLiteDB      string
-	StateBackend  string
 	CacheDir      string
 	ScriptDir     string
 	TmpDir        string
 	LockDir       string
 	JournalDir    string
 	LogFile       string
-	SeededRepoURL string // non-empty only when repos.db was just created
+	SeededRepoURL string // non-empty only when the database was just created
 	store         Store
 }
 
@@ -70,16 +67,14 @@ func Init(platform string) (*State, error) {
 	persistDir := resolvePersistDir(platform, home, explicitHome)
 
 	s := &State{
-		Home:        home,
-		ReposDB:     filepath.Join(persistDir, "repos.db"),
-		InstalledDB: filepath.Join(persistDir, "installed.db"),
-		SQLiteDB:    filepath.Join(persistDir, "zenpm.sqlite3"),
-		ScriptDir:   filepath.Join(persistDir, "scripts"),
-		CacheDir:    filepath.Join(home, "cache"),
-		TmpDir:      filepath.Join(home, "tmp"),
-		LockDir:     filepath.Join(home, "locks"),
-		JournalDir:  filepath.Join(home, "journal"),
-		LogFile:     filepath.Join(home, "ZenPM.log"),
+		Home:       home,
+		SQLiteDB:   filepath.Join(persistDir, "zenpm.sqlite3"),
+		ScriptDir:  filepath.Join(persistDir, "scripts"),
+		CacheDir:   filepath.Join(home, "cache"),
+		TmpDir:     filepath.Join(home, "tmp"),
+		LockDir:    filepath.Join(home, "locks"),
+		JournalDir: filepath.Join(home, "journal"),
+		LogFile:    filepath.Join(home, "ZenPM.log"),
 	}
 
 	for _, dir := range []string{
@@ -91,26 +86,11 @@ func Init(platform string) (*State, error) {
 		}
 	}
 
-	s.StateBackend = os.Getenv("ZENPM_STATE_BACKEND")
-	if s.StateBackend == "" {
-		s.StateBackend = "flat"
+	store, err := newSQLiteStore(s)
+	if err != nil {
+		return nil, err
 	}
-	switch s.StateBackend {
-	case "flat":
-		// Migrate state DBs from old home/state/ to persistent location.
-		oldStateDir := filepath.Join(home, "state")
-		migrateDB(filepath.Join(oldStateDir, "repos.db"), s.ReposDB)
-		migrateDB(filepath.Join(oldStateDir, "installed.db"), s.InstalledDB)
-		s.store = &flatFileStore{s: s}
-	case "sqlite":
-		store, err := newSQLiteStore(s, platform)
-		if err != nil {
-			return nil, err
-		}
-		s.store = store
-	default:
-		return nil, fmt.Errorf("unsupported ZENPM_STATE_BACKEND %q", s.StateBackend)
-	}
+	s.store = store
 
 	if err := seedReposDB(s); err != nil {
 		return nil, err
@@ -118,17 +98,6 @@ func Init(platform string) (*State, error) {
 	if err := reconcileDefaultRepos(s); err != nil {
 		return nil, err
 	}
-	if err := seedInstalledDB(s); err != nil {
-		return nil, err
-	}
-	if store, ok := s.store.(*sqliteStore); ok {
-		if err := store.importStartupState(platform); err != nil {
-			return nil, err
-		}
-	}
-
-	// Scan for known apps already on the device and ensure they're tracked.
-	scanKnownApps(s, platform)
 
 	// Clean up stale temp dirs and locks from interrupted operations.
 	cleanupStaleDirs(platform, s.LockDir)
@@ -166,35 +135,13 @@ func resolvePersistDir(platform, home string, explicitHome bool) string {
 	}
 }
 
-func migrateDB(oldPath, newPath string) {
-	if _, err := os.Stat(newPath); err == nil {
-		return // new path already exists
-	}
-	if _, err := os.Stat(oldPath); err != nil {
-		return // nothing to migrate
-	}
-	data, err := os.ReadFile(oldPath)
-	if err != nil {
-		return
-	}
-	_ = os.MkdirAll(filepath.Dir(newPath), 0755)
-	_ = os.WriteFile(newPath, data, 0644)
-}
-
 func seedReposDB(s *State) error {
-	if s.StateBackend == "flat" {
-		if _, err := os.Stat(s.ReposDB); err == nil {
-			return nil // already exists
-		}
+	repos, err := s.ReadRepos()
+	if err != nil {
+		return err
 	}
-	if s.StateBackend == "sqlite" {
-		repos, err := s.ReadRepos()
-		if err != nil {
-			return err
-		}
-		if len(repos) > 0 {
-			return nil
-		}
+	if len(repos) > 0 {
+		return nil
 	}
 
 	// Default repos seeded on first run.
@@ -260,85 +207,9 @@ func reconcileDefaultRepos(s *State) error {
 	if err := s.WriteRepos(repos); err != nil {
 		return err
 	}
-	if s.StateBackend == "sqlite" {
-		_ = s.WriteCatalog(nil)
-	} else {
-		_ = os.Remove(filepath.Join(s.CacheDir, "catalog.merged"))
-	}
+	_ = s.WriteCatalog(nil)
 	s.SeededRepoURL = DefaultZenLabsRepoURL
 	return nil
-}
-
-func seedInstalledDB(s *State) error {
-	if s.StateBackend == "sqlite" {
-		return nil
-	}
-	return (&flatFileStore{s: s}).seedInstalled()
-}
-
-// knownApp describes an app that may be pre-installed outside of ZenPM.
-type knownApp struct {
-	ID          string
-	DisplayName string
-	CheckDir    string // directory or file that confirms installation
-}
-
-func scanKnownApps(s *State, platform string) {
-	fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: platform=%s\n", platform)
-	if platform != "kindle" {
-		fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: skipping — not kindle\n")
-		return
-	}
-
-	apps := []knownApp{
-		{ID: "koreader-kindle", DisplayName: "KOReader", CheckDir: "/mnt/us/koreader"},
-		{ID: "kual", DisplayName: "KUAL", CheckDir: "/mnt/us/extensions/kual"},
-		{ID: "zen-reader", DisplayName: "ZenReader", CheckDir: "/mnt/us/documents/ZenReader.sh"},
-		{ID: "zen-mtp", DisplayName: "ZenMTP", CheckDir: "/mnt/us/documents/ZenMTP"},
-		{ID: "kindle-browser", DisplayName: "Kindle Browser", CheckDir: "/mnt/us/documents/Browser.sh"},
-	}
-
-	installed, err := s.ReadInstalled()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: ReadInstalled error: %v\n", err)
-	}
-	installedSet := make(map[string]bool, len(installed))
-	for _, e := range installed {
-		installedSet[e.ID] = true
-	}
-	fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: %d already tracked\n", len(installedSet))
-
-	var added int
-	for _, app := range apps {
-		if installedSet[app.ID] {
-			fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: %s — already tracked, skip\n", app.ID)
-			continue
-		}
-		if _, err := os.Stat(app.CheckDir); err == nil {
-			fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: %s — found at %s, adding\n", app.ID, app.CheckDir)
-			if appendErr := s.AppendInstalled(InstalledEntry{
-				ID:      app.ID,
-				Name:    app.DisplayName,
-				Version: "0.0.0",
-				Repo:    "device",
-			}); appendErr != nil {
-				fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: AppendInstalled %s failed: %v\n", app.ID, appendErr)
-			} else {
-				added++
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: %s — not found at %s (%v)\n", app.ID, app.CheckDir, err)
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "[zenpm] scanKnownApps: added %d new apps\n", added)
-
-	if added > 0 {
-		_ = os.WriteFile(
-			filepath.Join(filepath.Dir(s.InstalledDB), ".known-apps-scanned"),
-			[]byte("done"), 0644,
-		)
-	}
 }
 
 // LockAcquire grabs a named lock via mkdir (atomic on Linux/macOS).

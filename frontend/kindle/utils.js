@@ -3,7 +3,8 @@ var ZenUtils = (function () {
     var API    = "http://127.0.0.1:8080";
     var APP_ID = "com.zenlabs.zenpm";
     var REPO_ZENLABS_NAME = "ZenLabs";
-    var REPO_ZENLABS_URL = "https://xzenlabs.github.io/repo";
+    var REPO_ZENLABS_DISPLAY = "ZenLabs Repo";
+    var REPO_ZENLABS_URL = "https://repo.zen-labs.org";
     var REPO_KINDLEFORGE_NAME = "KindleForge";
     var REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz";
 
@@ -25,14 +26,22 @@ var ZenUtils = (function () {
     // Returns a Promise that resolves with parsed JSON (or raw text on parse error).
     function fetchJSON(method, path, body) {
         var opts = { method: method, headers: {} };
+        var packageAction = isPackageActionRequest(method, path);
+        if (packageAction) postLog("[waf] package action request: " + method + " " + path);
         if (body !== null && body !== undefined) {
             opts.headers["Content-Type"] = "application/json";
             opts.body = JSON.stringify(body);
         }
         return fetch(API + path, opts).then(function (resp) {
+            if (packageAction) postLog("[waf] package action response: " + method + " " + path + " -> " + resp.status);
             if (!resp.ok) {
                 return resp.text().then(function (t) {
-                    throw new Error("HTTP " + resp.status + ": " + t);
+                    var message = "HTTP " + resp.status + (t ? ": " + t : "");
+                    try {
+                        var parsed = JSON.parse(t);
+                        if (parsed && parsed.error) message = parsed.error;
+                    } catch (_e) {}
+                    throw new Error(message);
                 });
             }
             return resp.text().then(function (t) {
@@ -40,6 +49,10 @@ var ZenUtils = (function () {
                 catch (_e) { return t; }
             });
         });
+    }
+
+    function isPackageActionRequest(method, path) {
+        return method === "POST" && /^\/packages\/[^\/]+\/(install|uninstall)(\?|$)/.test(path || "");
     }
 
     // Returns a Promise that resolves with the response body text.
@@ -144,6 +157,19 @@ var ZenUtils = (function () {
         };
     }
 
+    function refreshSources(refreshHandler) {
+        postLog("[utils] refreshSources: refreshing repositories");
+        return fetchJSON("POST", "/repo/refresh", null).then(function () {
+            postLog("[utils] refreshSources: repositories refreshed");
+            if (refreshHandler) return refreshHandler();
+            return null;
+        }).catch(function (err) {
+            postLog("[utils] refreshSources failed: " + String(err));
+            if (refreshHandler) return refreshHandler();
+            return null;
+        });
+    }
+
     // Sets up the chrome bar with Refresh + About menu items for any page.
     function setupPageChrome(title, refreshHandler) {
         var k = getKindle();
@@ -165,7 +191,7 @@ var ZenUtils = (function () {
         };
 
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
-            if (data === "ZEN_REFRESH" && refreshHandler) refreshHandler();
+            if (data === "ZEN_REFRESH") refreshSources(refreshHandler);
             if (data === "ZEN_UPDATE") startUpdate();
             if (data === "ZEN_ABOUT") showAboutModal();
         });
@@ -396,9 +422,48 @@ var ZenUtils = (function () {
         return window.location.pathname.indexOf('/pages/') !== -1 ? '../..' : '.';
     }
 
+    function isZenLabsRepoName(name) {
+        return name === REPO_ZENLABS_NAME || name === REPO_ZENLABS_DISPLAY;
+    }
+
+    function repoDisplayName(name) {
+        return isZenLabsRepoName(name) ? REPO_ZENLABS_DISPLAY : name;
+    }
+
+    function isFaviconURL(value) {
+        value = (value || "").toLowerCase();
+        return value.indexOf("favicon") !== -1 || (value.length >= 4 && value.lastIndexOf(".ico") === value.length - 4);
+    }
+
+    function repoIconURL(repo, fallback) {
+        var bp = fallback || basePath() + '/assets/sources.svg';
+        if (repo && repo.icon_url && !isFaviconURL(repo.icon_url)) {
+            return repo.icon_url;
+        }
+        if (repo && isZenLabsRepoName(repo.name)) {
+            return basePath() + '/assets/zen.svg';
+        }
+        if (repo && repo.name === REPO_KINDLEFORGE_NAME) {
+            return basePath() + '/assets/kindleforge.svg';
+        }
+        if (repo && repo.icon_url) {
+            return repo.icon_url;
+        }
+        if (repo && repo.url) {
+            return repo.url.replace(/\/+$/, "") + "/favicon.svg";
+        }
+        return bp;
+    }
+
     function bundledRepoIcon(pkg) {
+        if (pkg && isZenLabsRepoName(pkg.repo)) {
+            return basePath() + '/assets/zen.svg';
+        }
         if (pkg && pkg.repo === REPO_KINDLEFORGE_NAME) {
             return basePath() + '/assets/kindleforge.svg';
+        }
+        if (pkg && pkg.repo_icon_url && !isFaviconURL(pkg.repo_icon_url)) {
+            return pkg.repo_icon_url;
         }
         return pkg && pkg.repo_icon_url ? pkg.repo_icon_url : basePath() + '/assets/packages.svg';
     }
@@ -434,7 +499,7 @@ var ZenUtils = (function () {
     }
 
     function packageVersionRepoText(pkg) {
-        var repoDisplay = pkg.repo || "?";
+        var repoDisplay = repoDisplayName(pkg.repo || "?");
         if (pkg.version && pkg.version !== "0.0.0") {
             return "v" + pkg.version + " \u2022 " + repoDisplay;
         }
@@ -450,7 +515,7 @@ var ZenUtils = (function () {
 
     function packageRepoVerified(pkg) {
         var trust = pkg.repo_trust || "";
-        return !!pkg.repo_default || trust === "trusted" || trust === "signed" || pkg.repo === REPO_ZENLABS_NAME || pkg.repo === REPO_KINDLEFORGE_NAME;
+        return !!pkg.repo_default || trust === "trusted" || trust === "signed" || isZenLabsRepoName(pkg.repo) || pkg.repo === REPO_KINDLEFORGE_NAME;
     }
 
     function packageRepoVerificationIcon(pkg) {
@@ -609,7 +674,7 @@ var ZenUtils = (function () {
 
             var repoName = document.createElement("span");
             repoName.className = "package-meta-repo";
-            repoName.textContent = pkg.repo || "?";
+            repoName.textContent = repoDisplayName(pkg.repo || "?");
             metaRow.appendChild(repoName);
 
             var verifyCell = document.createElement("span");
@@ -814,9 +879,14 @@ var ZenUtils = (function () {
         API:             API,
         APP_ID:          APP_ID,
         REPO_ZENLABS_NAME: REPO_ZENLABS_NAME,
+        REPO_ZENLABS_DISPLAY: REPO_ZENLABS_DISPLAY,
         REPO_ZENLABS_URL: REPO_ZENLABS_URL,
         REPO_KINDLEFORGE_NAME: REPO_KINDLEFORGE_NAME,
         REPO_KINDLEFORGE_URL: REPO_KINDLEFORGE_URL,
+        isZenLabsRepoName: isZenLabsRepoName,
+        repoDisplayName: repoDisplayName,
+        isFaviconURL: isFaviconURL,
+        repoIconURL: repoIconURL,
         getKindle:       getKindle,
         postLog:         postLog,
         fetchJSON:       fetchJSON,

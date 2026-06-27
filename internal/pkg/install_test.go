@@ -17,7 +17,6 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	out := filepath.Join(t.TempDir(), "env.out")
 	t.Setenv("ZENPM_HOME", home)
-	t.Setenv("ZENPM_STATE_BACKEND", "flat")
 	t.Setenv("ZENPM_ENV_OUT", out)
 
 	st, err := state.Init("host")
@@ -56,6 +55,63 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	want := "zen-mtp-koplugin|https://github.com/xZenLabs/ZenMTP|zen_mtp.koplugin.zip"
 	if got != want {
 		t.Fatalf("env output = %q, want %q", got, want)
+	}
+}
+
+func TestUninstallRefreshesCatalogWhenUninstallURLMissing(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	out := filepath.Join(t.TempDir(), "uninstall.out")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/manifest.json":
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"packages":[{"id":"zen-koreader","name":"Zen KOReader","version":"1.0.5","platforms":["kindle"],"install_url":"install.sh","uninstall_url":"uninstall.sh"}]}`)
+		case "/uninstall.sh":
+			io.WriteString(w, "#!/bin/sh\nset -eu\necho \"$ZENPM_PACKAGE_ID\" > "+out+"\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ZenLabs", URL: srv.URL, Priority: 10, Trust: "trusted"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:         "zen-koreader",
+		Name:       "Zen KOReader",
+		Version:    "1.0.5",
+		Repo:       "ZenLabs",
+		Platforms:  []string{"kindle"},
+		InstallURL: "install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "zen-koreader", Name: "Zen KOReader", Version: "1.0.5", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	if err := manager.Uninstall("zen-koreader"); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "zen-koreader" {
+		t.Fatalf("uninstall script output = %q, want package id", got)
+	}
+	if ok, _ := st.IsInstalled("zen-koreader"); ok {
+		t.Fatal("package still installed after uninstall")
 	}
 }
 

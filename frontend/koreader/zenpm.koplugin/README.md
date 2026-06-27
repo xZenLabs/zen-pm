@@ -11,9 +11,16 @@ Open **ZenPM** from the KOReader menu.
 
 Release zips are platform-specific:
 
-- `ZenPM-koreader-ereader-<version>.zip` for Kindle/Kobo e-readers
+- `ZenPM-koreader-ereader-hf-<version>.zip` for Kindle/Kobo e-readers with the ARM hard-float loader
+- `ZenPM-koreader-ereader-sf-<version>.zip` for older Kindle/Kobo e-readers without the ARM hard-float loader
 - `ZenPM-koreader-macos-<version>.zip` for macOS
 - `ZenPM-koreader-linux-<version>.zip` for Linux desktop
+
+To check an e-reader's ABI, run this on the device:
+
+```sh
+if [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
+```
 
 On KOReader startup, the plugin copies the bundled backend into KOReader's
 settings `ZenPM/backend/zenpm` path and runs it from there.
@@ -23,18 +30,15 @@ The settings copy is refreshed whenever either of these changes:
 - `_meta.lua` plugin `version`
 - bundled `backend/VERSION`
 
-State, cache, logs, and the managed backend live in the settings `ZenPM/`
-directory so they survive plugin updates.
+The managed backend binary lives in the settings `ZenPM/backend/` directory so
+it survives plugin updates.
 
-The plugin starts its managed backend with `ZENPM_STATE_BACKEND=sqlite`, so
-repositories, installed package records, and the merged catalog live in
-`ZenPM/state/zenpm.sqlite3`. Logs, journals, locks, downloaded scripts, and raw
-repo manifests remain regular files.
-
-On Kindle, when the standalone ZenPM WAF install also exists, the KOReader
-database imports missing repositories, installed package records, and catalog
-entries from the standalone Kindle flat files on startup. Existing KOReader
-database rows are not overwritten.
+SQLite is the backend's only state store. On Kindle and Kobo the plugin starts
+the managed backend with no `ZENPM_HOME`, so it resolves the platform default
+(`/mnt/us/.ZenPM/zenpm.sqlite3` on Kindle) and shares one database and uninstall
+script cache with the standalone ZenPM WAF. On host (development), state stays
+isolated under the settings `ZenPM/` directory. Logs, journals, locks,
+downloaded scripts, and raw repo manifests remain regular files.
 
 ## Parity Targets
 

@@ -47,34 +47,42 @@
 
         var base = url.replace(/\/+$/, "") + "/";
 
-        // Try manifest.json first for ZenPM-format repos.
-        fetch(base + "manifest.json")
-            .then(function (resp) {
-                if (!resp.ok) throw new Error("no manifest");
+        var nameRequest;
+        if (url.indexOf(REPO_KINDLEFORGE_HOST) !== -1) {
+            nameRequest = fetch(base + "registry.json").then(function (resp) {
+                if (!resp.ok) throw new Error("no registry");
                 return resp.text();
-            })
-            .then(function (text) {
-                var data = JSON.parse(text);
-                if (data && data.repo && data.repo.name) return data.repo.name;
-                throw new Error("no name in manifest");
-            })
-            .catch(function () {
-                // Fall back to registry.json — KindleForge format.
-                return fetch(base + "registry.json").then(function (resp) {
-                    if (!resp.ok) throw new Error("no registry");
+            }).then(function () {
+                return REPO_KINDLEFORGE_NAME;
+            });
+        } else {
+            // Try manifest.json first for ZenPM-format repos.
+            nameRequest = fetch(base + "manifest.json")
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error("no manifest");
                     return resp.text();
-                }).then(function (text) {
-                    var arr = JSON.parse(text);
-                    // Only default to "KindleForge" for the known source.
-                    if (url.indexOf(REPO_KINDLEFORGE_HOST) !== -1) {
-                        return REPO_KINDLEFORGE_NAME;
-                    }
-                    if (Array.isArray(arr) && arr.length && arr[0].uri) {
-                        return arr[0].uri.split("/")[0];
-                    }
-                    throw new Error("unknown registry");
+                })
+                .then(function (text) {
+                    var data = JSON.parse(text);
+                    if (data && data.repo && data.repo.name) return data.repo.name;
+                    throw new Error("no name in manifest");
+                })
+                .catch(function () {
+                    // Fall back to registry.json for registry-format repos.
+                    return fetch(base + "registry.json").then(function (resp) {
+                        if (!resp.ok) throw new Error("no registry");
+                        return resp.text();
+                    }).then(function (text) {
+                        var arr = JSON.parse(text);
+                        if (Array.isArray(arr) && arr.length && arr[0].uri) {
+                            return arr[0].uri.split("/")[0];
+                        }
+                        throw new Error("unknown registry");
+                    });
                 });
-            })
+        }
+
+        nameRequest
             .then(function (name) {
                 el.addSourceMsg.textContent = "Adding " + name + "...";
                 return ZenUtils.fetchJSON("POST", "/repos", { name: name, url: url });
@@ -110,11 +118,7 @@
     }
 
     function repoIconURL(repo) {
-        if (repo.name === REPO_KINDLEFORGE_NAME) {
-            return "../../assets/kindleforge.svg";
-        }
-        var base = repo.url.replace(/\/+$/, "");
-        return base + "/favicon.svg";
+        return ZenUtils.repoIconURL(repo, "../../assets/sources.svg");
     }
 
     function repoIsVerified(repo) {
@@ -161,7 +165,7 @@
                     className: "repo-row",
                     imageSrc: repoIconURL(r),
                     imageFallback: "../../assets/sources.svg",
-                    title: r.name,
+                    title: ZenUtils.repoDisplayName(r.name),
                     line2: r.url,
                     action: actionBtn,
                     clickHandler: function () {
@@ -175,7 +179,7 @@
                 if (titleEl) {
                     titleEl.textContent = "";
                     var titleSpan = document.createElement("span");
-                    titleSpan.textContent = r.name;
+                    titleSpan.textContent = ZenUtils.repoDisplayName(r.name);
                     titleSpan.style.display = "inline-block";
                     titleSpan.style.verticalAlign = "middle";
                     titleEl.appendChild(titleSpan);

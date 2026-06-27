@@ -170,10 +170,27 @@ func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 		}
 		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		h(rec, r)
-		// Skip access logging for client log relay to avoid noise.
-		if r.URL.Path != "/log/client" {
+		if shouldLogAccess(r, rec.status) {
 			log.Infof("%s %s %d", r.Method, r.URL.RequestURI(), rec.status)
 		}
+	}
+}
+
+func shouldLogAccess(r *http.Request, status int) bool {
+	if status >= http.StatusBadRequest {
+		return true
+	}
+	if r.URL.Path == "/log/client" {
+		return false
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return true
+	}
+	switch r.URL.Path {
+	case "/health", "/log", "/packages", "/repos":
+		return false
+	default:
+		return true
 	}
 }
 
@@ -234,13 +251,19 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 		// Priority and trust are backend-determined — callers cannot set them.
 		priority := repo.UserAddedPriority
 
-		// Auto-detect trust via manifest.json.sig signature.
-		trust, sigErr := repo.VerifyRepoSignature(body.URL)
-		if sigErr != nil {
-			trust = "warn-unsigned"
-			log.Infof("Repo %s: %v — trust=%s", body.Name, sigErr, trust)
+		trust := "trusted"
+		if repo.IsKindleForgeRepo(body.Name, body.URL) {
+			log.Infof("Repo %s: KindleForge registry — trust=%s", body.Name, trust)
 		} else {
-			log.Infof("Repo %s signature: trust=%s", body.Name, trust)
+			// Auto-detect trust via manifest.json.sig signature.
+			var sigErr error
+			trust, sigErr = repo.VerifyRepoSignature(body.URL)
+			if sigErr != nil {
+				trust = "warn-unsigned"
+				log.Infof("Repo %s: %v — trust=%s", body.Name, sigErr, trust)
+			} else {
+				log.Infof("Repo %s signature: trust=%s", body.Name, trust)
+			}
 		}
 
 		// Warn on plain-HTTP repos (signatures are meaningless over HTTP).
@@ -414,7 +437,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		result = append(result, item)
 	}
 
-	// Include device-installed packages not in any catalog (e.g. detected via scanKnownApps).
+	// Include installed packages not in any catalog.
 	for _, e := range installed {
 		if !seen[e.ID] {
 			name := e.Name
@@ -500,6 +523,14 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 
 	asset := r.URL.Query().Get("asset")
 
+	if action == "install" {
+		if err := s.pkgs.CheckInstall(id); err != nil {
+			log.Errorf("Package %s %s failed: %v", id, action, err)
+			writeJSON(w, http.StatusConflict, map[string]interface{}{"ok": false, "error": err.Error()})
+			return
+		}
+	}
+
 	// Fire async; the WAF polls /log after a delay.
 	log.Infof("Package %s: starting %s", id, action)
 	go func() {
@@ -566,13 +597,29 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	// Route noisy per-package-card and image-fallback logs to debug level.
-	if strings.HasPrefix(body.Message, "[package-card]") || strings.HasPrefix(body.Message, "[image]") {
-		log.Debugf("[client] %s", body.Message)
-	} else {
+	if shouldLogClientMessage(body.Message) {
 		log.Infof("[client] %s", body.Message)
+	} else if os.Getenv("ZENPM_CLIENT_DEBUG") == "1" {
+		log.Debugf("[client] %s", body.Message)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func shouldLogClientMessage(message string) bool {
+	lower := strings.ToLower(message)
+	if strings.Contains(message, "JS ERROR") {
+		return true
+	}
+	for _, word := range []string{
+		"error", "failed", "unreachable", "package action",
+		"install started", "uninstall started", "reinstall started",
+		"refreshsources", "update failed",
+	} {
+		if strings.Contains(lower, word) {
+			return true
+		}
+	}
+	return false
 }
 
 func tailLog(path string, n int) (string, error) {

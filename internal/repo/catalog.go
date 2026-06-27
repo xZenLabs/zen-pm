@@ -278,6 +278,10 @@ type kfRegistryEntry struct {
 // FetchCatalog downloads the repo catalog, auto-detecting between ZenPM manifest.json
 // and KindleForge registry.json formats.
 func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	if IsKindleForgeRepo(repoName, repoURL) {
+		return fetchKindleForgeCatalog(repoName, repoURL, priority, cacheDir)
+	}
+
 	// Try ZenPM manifest.json first.
 	manifestURL := joinURL(repoURL, "manifest.json")
 	log.Infof("Fetching %s", manifestURL)
@@ -304,6 +308,13 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 	}
 
 	return nil, fmt.Errorf("unrecognized catalog format from %s", repoName)
+}
+
+// IsKindleForgeRepo reports whether a repo is the known KindleForge registry.
+func IsKindleForgeRepo(repoName, repoURL string) bool {
+	name := strings.ToLower(strings.TrimSpace(repoName))
+	url := strings.ToLower(strings.TrimRight(strings.TrimSpace(repoURL), "/"))
+	return name == "kindleforge" || url == "https://kf.penguins184.xyz"
 }
 
 // parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.
@@ -558,7 +569,11 @@ func parsePlatformFilter(platform string) map[string]bool {
 }
 
 func normalizePlatform(platform string) string {
-	return strings.ToLower(strings.TrimSpace(platform))
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	if platform == "kindleforge" {
+		return "kindle"
+	}
+	return platform
 }
 
 // FetchBytes downloads or reads (file://) a URL and returns raw bytes.

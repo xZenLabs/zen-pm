@@ -46,6 +46,12 @@ function Theme.face(role)
         return Font:getFace("cfont", Theme.scale(15))
     elseif role == "small" then
         return Font:getFace("smallinfofont", Theme.scale(11))
+    elseif role == "card_title" then
+        return Font:getFace("smallinfofont", Theme.scale(10))
+    elseif role == "tiny" then
+        return Font:getFace("smallinfofont", Theme.scale(9))
+    elseif role == "tiny_lg" then
+        return Font:getFace("smallinfofont", Theme.scale(10))
     elseif role == "nav" then
         return Font:getFace("smallinfofont", Theme.scale(9))
     elseif role == "mono" then

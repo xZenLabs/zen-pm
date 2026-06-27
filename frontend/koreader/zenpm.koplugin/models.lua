@@ -5,6 +5,13 @@ local _ = require("gettext")
 
 local Models = {}
 
+function Models.repo_display_name(name)
+    if name == Constants.REPO_ZENLABS_NAME then
+        return Constants.REPO_ZENLABS_DISPLAY
+    end
+    return name
+end
+
 function Models.package_verified(pkg)
     local trust = pkg and pkg.repo_trust or ""
     return pkg and (pkg.repo_default
@@ -245,7 +252,7 @@ function Models.package_meta(pkg)
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
         table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
     end
-    table.insert(parts, I18n.dynamic_or(pkg and pkg.repo, "?"))
+    table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " - ")
 end
 

@@ -2,8 +2,6 @@ package state
 
 import (
 	"database/sql"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +13,7 @@ type sqliteStore struct {
 	db *sql.DB
 }
 
-func newSQLiteStore(s *State, platform string) (*sqliteStore, error) {
+func newSQLiteStore(s *State) (*sqliteStore, error) {
 	db, err := sql.Open("sqlite", s.SQLiteDB)
 	if err != nil {
 		return nil, err
@@ -355,94 +353,6 @@ func (s *sqliteStore) WriteCatalog(entries []CatalogEntry) error {
 	return tx.Commit()
 }
 
-func (s *sqliteStore) importLegacyState(reposPath, installedPath, catalogPath string) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	if repos, err := readReposFile(reposPath); err == nil {
-		for _, r := range repos {
-			if err := insertRepo(tx, r, true); err != nil {
-				tx.Rollback()
-				return err
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		tx.Rollback()
-		return err
-	}
-	if installed, err := readInstalledFile(installedPath); err == nil {
-		for _, e := range installed {
-			if e.Name == "" {
-				e.Name = e.ID
-			}
-			if _, err := tx.Exec(
-				`INSERT OR IGNORE INTO installed_packages(id, name, version, repo, installed_at) VALUES(?, ?, ?, ?, ?)`,
-				e.ID, e.Name, e.Version, e.Repo, e.InstalledAt,
-			); err != nil {
-				tx.Rollback()
-				return err
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		tx.Rollback()
-		return err
-	}
-	if catalog, err := readCatalogFile(catalogPath); err == nil {
-		if err := s.importCatalog(tx, catalog); err != nil {
-			tx.Rollback()
-			return err
-		}
-	} else if !os.IsNotExist(err) {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
-}
-
-func (s *sqliteStore) importStartupState(platform string) error {
-	if err := s.importLegacyState(s.s.ReposDB, s.s.InstalledDB, filepath.Join(s.s.CacheDir, "catalog.merged")); err != nil {
-		return err
-	}
-	if platform != "kindle" {
-		return nil
-	}
-	if err := s.importLegacyState(
-		filepath.Join(kindlePersistDir, "repos.db"),
-		filepath.Join(kindlePersistDir, "installed.db"),
-		filepath.Join(defaultKindleHome, "cache", "catalog.merged"),
-	); err != nil {
-		return err
-	}
-	return s.setKV("imported_standalone_kindle_at", time.Now().UTC().Format("2006-01-02T15:04:05Z"))
-}
-
-func (s *sqliteStore) importCatalog(tx *sql.Tx, entries []CatalogEntry) error {
-	var count int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM catalog_packages`).Scan(&count); err != nil {
-		return err
-	}
-	position := count
-	for _, e := range entries {
-		var exists int
-		if err := tx.QueryRow(`SELECT COUNT(*) FROM catalog_packages WHERE id = ?`, e.ID).Scan(&exists); err != nil {
-			return err
-		}
-		if exists > 0 {
-			continue
-		}
-		if _, err := tx.Exec(
-			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, category, source, source_asset, source_type, source_url, stars, assets, constraints)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, position, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints,
-		); err != nil {
-			return err
-		}
-		position++
-	}
-	return nil
-}
-
 func (s *sqliteStore) catalogListValues(table string) (map[string][]string, error) {
 	rows, err := s.db.Query("SELECT package_id, value FROM " + table + " ORDER BY package_id, position")
 	if err != nil {
@@ -458,11 +368,6 @@ func (s *sqliteStore) catalogListValues(table string) (map[string][]string, erro
 		values[packageID] = append(values[packageID], value)
 	}
 	return values, rows.Err()
-}
-
-func (s *sqliteStore) setKV(key, value string) error {
-	_, err := s.db.Exec(`INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)`, key, value)
-	return err
 }
 
 func insertRepo(tx *sql.Tx, r RepoEntry, ignore bool) error {

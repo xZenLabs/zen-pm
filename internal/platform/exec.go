@@ -1,9 +1,14 @@
 package platform
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"ZPM/internal/log"
 )
 
 // ExecuteScript runs a shell script at the given path.
@@ -21,8 +26,6 @@ func ExecuteScriptWithEnv(scriptPath string, env map[string]string) error {
 		return fmt.Errorf("chmod %s: %w", scriptPath, err)
 	}
 	cmd := exec.Command("/bin/sh", scriptPath)
-	cmd.Stdout = os.Stderr // script stdout goes to our log stream
-	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	if home, ok := lookupEnv(cmd.Env, "HOME"); !ok || home == "" {
 		cmd.Env = append(cmd.Env, "HOME="+defaultHome())
@@ -30,7 +33,20 @@ func ExecuteScriptWithEnv(scriptPath string, env map[string]string) error {
 	for key, value := range env {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	logScriptOutput(scriptPath, output)
+	return err
+}
+
+func logScriptOutput(scriptPath string, output []byte) {
+	output = bytes.TrimSpace(output)
+	if len(output) == 0 {
+		return
+	}
+	name := filepath.Base(scriptPath)
+	for _, line := range strings.Split(string(output), "\n") {
+		log.Infof("[script %s] %s", name, line)
+	}
 }
 
 func lookupEnv(env []string, key string) (string, bool) {

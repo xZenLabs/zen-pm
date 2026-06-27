@@ -7,6 +7,7 @@ return {
     API_BASE = "http://127.0.0.1:8080",
 
     REPO_ZENLABS_NAME = "ZenLabs",
+    REPO_ZENLABS_DISPLAY = "ZenLabs Repo",
     REPO_ZENLABS_URL = "https://repo.zen-labs.org",
     REPO_KINDLEFORGE_NAME = "KindleForge",
     REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",

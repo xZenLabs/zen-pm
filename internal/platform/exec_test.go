@@ -3,7 +3,10 @@ package platform
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"ZPM/internal/log"
 )
 
 func TestExecuteScriptWithEnvSetsFallbackHome(t *testing.T) {
@@ -25,6 +28,30 @@ func TestExecuteScriptWithEnvSetsFallbackHome(t *testing.T) {
 
 	if err := ExecuteScriptWithEnv(scriptPath, nil); err != nil {
 		t.Fatalf("ExecuteScriptWithEnv() error = %v", err)
+	}
+}
+
+func TestExecuteScriptWithEnvLogsScriptOutput(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "zenpm.log")
+	log.Init(logPath)
+	defer log.Init("")
+
+	scriptPath := filepath.Join(t.TempDir(), "script.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho uninstall detail\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ExecuteScriptWithEnv(scriptPath, nil); err != nil {
+		t.Fatalf("ExecuteScriptWithEnv() error = %v", err)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "[script script.sh] uninstall detail") {
+		t.Fatalf("log = %q, want script output", got)
 	}
 }
 

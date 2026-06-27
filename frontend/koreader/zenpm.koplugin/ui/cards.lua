@@ -53,13 +53,17 @@ local function should_show_stars(view, pkg)
         and view.app.state.active_tab ~= "installed"
 end
 
-local function package_meta_text(pkg)
+local function package_author_text(pkg)
+    return Util.trim(I18n.dynamic_or(pkg and pkg.author, ""))
+end
+
+local function package_version_repo_text(pkg)
     local parts = {}
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
         table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
     end
-    table.insert(parts, I18n.dynamic_or(pkg and pkg.repo, "?"))
-    return table.concat(parts, " - ")
+    table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
+    return table.concat(parts, " • ")
 end
 
 local function action_pill(view, bb, text, x, y, w, h, callback)
@@ -106,25 +110,68 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     end
 
     local title = ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Unknown package")), 60)
-    local second_line = ellipsize(opts.second_line or I18n.dynamic_or(pkg.description, _("No description")), 54)
-    local meta_text = ellipsize(package_meta_text(pkg), 48)
-    local text_gap = opts.text_gap or Theme.scale(4)
-    local title_size = P.text_size(title, text_w, "small", { bold = true })
-    local line2_size = P.text_size(second_line, text_w, "small")
-    local meta_size = P.text_size(meta_text, text_w - Theme.scale(24), "small")
-    local stack_h = title_size.h + line2_size.h + meta_size.h + text_gap * 2
-    local title_y = y + pad
-    local max_bottom = y + h - pad
-    if title_y + stack_h > max_bottom then
-        title_y = math.max(y + Theme.scale(4), max_bottom - stack_h)
+    local description = ellipsize(opts.second_line or I18n.dynamic_or(pkg.description, _("No description")), 56)
+    -- When a caller overrides second_line (e.g. details "By <author>"), skip the separate author row.
+    local author = opts.second_line and "" or ellipsize(package_author_text(pkg), 56)
+    local meta_text = ellipsize(package_version_repo_text(pkg), 56)
+    local body_role = opts.body_role or "tiny"
+    local title_role = opts.title_role or "card_title"
+    -- Vertical text padding kept tighter than the horizontal pad so 4 rows fit.
+    local vpad = opts.vpad or Theme.scale(5)
+    local title_y = y + vpad
+    local max_bottom = y + h - vpad
+    -- Meta row reserves room for the verification icon, so wrap it tighter.
+    local meta_w = text_w - Theme.scale(24)
+
+    -- Stack order: title, author, description, version/repo. Author/meta rows
+    -- skip when empty (e.g. details view overrides second_line for the author).
+    local rows = {
+        { text = title, w = text_w, role = title_role, bold = true },
+    }
+    if author ~= "" then
+        table.insert(rows, { text = author, w = text_w, role = body_role })
     end
-    local line2_y = title_y + title_size.h + text_gap
-    local meta_y = line2_y + line2_size.h + text_gap
-    P.text(bb, title, text_x, title_y, text_w, "small", { bold = true })
-    P.text(bb, second_line, text_x, line2_y, text_w, "small")
-    P.text(bb, meta_text, text_x, meta_y, text_w - Theme.scale(24), "small")
+    table.insert(rows, { text = description, w = text_w, role = body_role })
+    table.insert(rows, { text = meta_text, w = meta_w, role = body_role, meta = true })
+    for _, row in ipairs(rows) do
+        row.size = P.text_size(row.text, row.w, row.role, { bold = row.bold })
+    end
+
+    -- Equal gap between rows, capped small so lines sit tight, then clamped to
+    -- the slack so the last row's bottom can never spill past the card border.
+    local total_text_h = 0
+    for _, row in ipairs(rows) do
+        total_text_h = total_text_h + row.size.h
+    end
+    local slack = (max_bottom - title_y) - total_text_h
+    local gap = opts.text_gap or Theme.scale(4)
+    if #rows > 1 then
+        gap = math.max(0, math.min(gap, math.floor(slack / (#rows - 1))))
+    end
+
+    -- Center the whole text block vertically, matching the icon's centering.
+    local block_h = total_text_h + gap * (#rows - 1)
+    local cursor = y + math.floor((h - block_h) / 2)
+    cursor = math.max(cursor, title_y)
+    for _, row in ipairs(rows) do
+        row.y = cursor
+        cursor = cursor + row.size.h + gap
+    end
+    -- Hard clamp: pull rows up if the last would overrun the card bottom.
+    local last = rows[#rows]
+    local overrun = (last.y + last.size.h) - max_bottom
+    if overrun > 0 then
+        for _, row in ipairs(rows) do
+            row.y = row.y - overrun
+        end
+    end
+
+    for _, row in ipairs(rows) do
+        P.text(bb, row.text, text_x, row.y, row.w, row.role, { bold = row.bold })
+    end
+    local meta_row = rows[#rows]
     local verify_size = Theme.scale(16)
-    draw_verification_icon(bb, Models.package_verified(pkg), text_x + math.min(meta_size.w + Theme.scale(5), text_w - verify_size), meta_y + math.floor((meta_size.h - verify_size) / 2), verify_size)
+    draw_verification_icon(bb, Models.package_verified(pkg), text_x + math.min(meta_row.size.w + Theme.scale(5), text_w - verify_size), meta_row.y + math.floor((meta_row.size.h - verify_size) / 2), verify_size)
 
     if pkg.installed then
         local check = Theme.scale(28)
@@ -161,9 +208,9 @@ function Cards.featured(view, bb, pkg, x, y, w)
     local m = Theme.metrics()
     local h = m.featured_h
     P.box(bb, x, y, w, h)
-    local art_h = h - Theme.scale(118)
+    local art_h = h - Theme.scale(150)
     local border = Theme.scale(2)
-    if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), x + border, y + border, w - border * 2, art_h - border, 1.25, {
+    if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), x + border, y + border, w - border * 2, art_h - border, 1.1, {
         is_icon = false,
         outer_bounds = { x = x, y = y, w = w, h = h },
         mask_bounds = { x = x + border, y = y + border, w = w - border * 2, h = h - border * 2 },
@@ -178,7 +225,8 @@ function Cards.featured(view, bb, pkg, x, y, w)
         compact = true,
         height = h - art_h - Theme.scale(3),
         pad = Theme.scale(6),
-        text_gap = Theme.scale(2),
+        text_gap = Theme.scale(1),
+        body_role = "tiny_lg",
         action_w = Theme.scale(104),
         action_h = Theme.scale(42),
         border = false,
@@ -203,7 +251,7 @@ function Cards.source(view, bb, repo, x, y, w)
     local text_w = w - (text_x - x) - pad - action_w - (action_w > 0 and Theme.scale(12) or 0)
     local title_y = y + Theme.scale(24)
     local url_y = y + Theme.scale(66)
-    local title_size = P.text(bb, ellipsize(I18n.dynamic_or(repo.name, _("Source")), 60), text_x, title_y, text_w - Theme.scale(22), "heading", { bold = true })
+    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, text_w - Theme.scale(22), "heading", { bold = true })
     local verify_size = Theme.scale(18)
     draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + Theme.scale(5), text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
     P.text(bb, ellipsize(repo.url or "", 54), text_x, url_y, text_w, "small")
@@ -235,7 +283,7 @@ function Cards.category(view, bb, category, x, y, w)
     local text_w = w - (text_x - x) - pad
     local title_size = P.text_size(I18n.dynamic_or(category.label, _("Category")), text_w, "heading", { bold = true })
     local sub_size = P.text_size("0 " .. _("packages"), text_w, "small")
-    local gap = Theme.scale(4)
+    local gap = Theme.scale(1)
     local stack_h = title_size.h + sub_size.h + gap
     local title_y = y + math.floor((h - stack_h) / 2)
     local subtitle_y = title_y + title_size.h + gap
