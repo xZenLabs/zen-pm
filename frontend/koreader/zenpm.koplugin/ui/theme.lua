@@ -17,6 +17,10 @@ function Theme.scale(value)
     return Screen:scaleBySize(value)
 end
 
+function Theme.has_color()
+    return Device:hasColorScreen()
+end
+
 function Theme.metrics()
     local w, h = Screen:getWidth(), Screen:getHeight()
     return {
@@ -25,8 +29,9 @@ function Theme.metrics()
         pad = Theme.scale(10),
         header_h = Theme.scale(78),
         nav_h = Theme.scale(86),
+        nav_bottom_margin = Theme.has_color() and Theme.scale(5) or 0,
         card_gap = Theme.scale(8),
-        card_h = Theme.scale(128),
+        card_h = Theme.scale(144),
         featured_h = Theme.scale(304),
         repo_h = Theme.scale(118),
         category_h = Theme.scale(84),

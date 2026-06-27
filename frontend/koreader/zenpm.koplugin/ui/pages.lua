@@ -11,6 +11,11 @@ local Theme = require("ui/theme")
 local _ = require("gettext")
 
 local Pages = {}
+local PACKAGE_ROWS_PER_SCREEN = 4
+
+local function package_card_height(list_h, gap)
+    return math.max(1, math.floor((list_h - gap * (PACKAGE_ROWS_PER_SCREEN - 1)) / PACKAGE_ROWS_PER_SCREEN))
+end
 
 function Pages.featured(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
@@ -44,6 +49,7 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
+    local card_h = package_card_height(list_h, m.card_gap)
     if #(visible or {}) == 0 then
         local msg = _("No packages found. Try Refresh.")
         if kind == "installed" then
@@ -54,12 +60,12 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
             msg = _("No packages match the filter.")
         end
         P.text(bb, msg, x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
-        Scroll.set_list_bounds(view, x, list_y, w, list_h, m.card_h + m.card_gap)
+        Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, m.card_h, m.card_gap, function(pkg, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter)
+        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
     end)
 end
 
@@ -118,14 +124,15 @@ function Pages.source_details(view, bb, x, y, w, h, scroll)
     cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
+    local card_h = package_card_height(list_h, m.card_gap)
     if #visible == 0 then
         P.text(bb, _("No packages found for this source."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
-        Scroll.set_list_bounds(view, x, list_y, w, list_h, m.card_h + m.card_gap)
+        Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, m.card_h, m.card_gap, function(pkg, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter)
+        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
     end)
 end
 

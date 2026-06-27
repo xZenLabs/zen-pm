@@ -181,6 +181,10 @@ function Scroll.scrolled_list(view, bb, items, x, y, w, h, scroll, item_h, gap, 
     if max_scroll > 0 then
         max_scroll = math.ceil(max_scroll / step) * step
     end
+    scroll = snap_scroll(scroll or 0, step, max_scroll)
+    if view.app and view.app.state and view.app.state.scroll and view.app.scroll_key then
+        view.app.state.scroll[view.app:scroll_key()] = scroll
+    end
     local scrollable = max_scroll > 0
     local cy = y - scroll
     for _, item in ipairs(items or {}) do

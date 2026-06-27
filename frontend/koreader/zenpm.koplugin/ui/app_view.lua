@@ -258,7 +258,7 @@ function AppView:paintTo(bb, x, y)
 
     local content_top = y
     content_top = Header.draw(self, bb, x, content_top, m.screen_w)
-    local nav_top = y + m.screen_h - m.nav_h
+    local nav_top = y + m.screen_h - m.nav_h - m.nav_bottom_margin
     local content_h = nav_top - content_top
     self:draw_content(bb, x, content_top, m.screen_w, content_h)
     Nav.draw(self, bb, x, nav_top, m.screen_w, m.nav_h)
