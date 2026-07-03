@@ -5,6 +5,7 @@
 local Cards = require("ui/cards")
 local Header = require("ui/header")
 local I18n = require("i18n")
+local Models = require("models")
 local P = require("ui/primitives")
 local Scroll = require("ui/scroll")
 local Theme = require("ui/theme")
@@ -136,7 +137,7 @@ function Pages.source_details(view, bb, x, y, w, h, scroll)
     end)
 end
 
-function Pages.package_details(view, bb, x, y, w, h)
+function Pages.package_details(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
     local pkg = view.app.state.current_package or {}
@@ -174,14 +175,23 @@ function Pages.package_details(view, bb, x, y, w, h)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
-    P.text(bb, _("Description"), inner_x, iy, inner_w, "small", { bold = true })
-    iy = iy + Theme.scale(34)
-    local desc_bottom = cy + panel_h - Theme.scale(14)
-    local desc_h = desc_bottom - iy
-    if desc_h > 0 then
-        P.paragraph(bb, I18n.dynamic_or(pkg.description, _("No description available.")), inner_x, iy, inner_w, desc_h, "small")
+    local readme = Models.readme_text(pkg.github_readme)
+    local content = readme
+    local heading = _("GitHub README")
+    if content == "" then
+        content = I18n.dynamic_or(pkg.description, _("No description available."))
+        heading = _("Description")
     end
-    return cy + panel_h - Theme.scale(12)
+    P.text(bb, heading, inner_x, iy, inner_w, "small", { bold = true })
+    iy = iy + Theme.scale(34)
+    local content_h = cy + panel_h - Theme.scale(14) - iy
+    if content_h <= 0 then
+        Scroll.set_list_bounds(view, panel_x, cy, panel_w, panel_h, panel_h)
+        return 0
+    end
+    local max_scroll, line_h = P.scrollable_paragraph(bb, content, inner_x, iy, inner_w - Theme.scale(12), content_h, "small", scroll)
+    Scroll.set_list_bounds(view, inner_x, iy, inner_w, content_h, line_h)
+    return max_scroll
 end
 
 function Pages.debug(view, bb, x, y, w, h, scroll)

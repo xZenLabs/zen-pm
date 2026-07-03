@@ -38,6 +38,16 @@ func (m *Manager) CheckInstall(id string) error {
 // InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
 // When empty, the asset is auto-selected for the current device.
 func (m *Manager) InstallAsset(id, assetOverride string) error {
+	return m.installAssetRelease(id, assetOverride, "")
+}
+
+// InstallRelease installs a specific GitHub release and records its tag as the
+// installed version.
+func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
+	return m.installAssetRelease(id, assetOverride, tag)
+}
+
+func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) error {
 	catalog, plan, installedSet, err := m.installPlan(id)
 	if err != nil {
 		return err
@@ -72,8 +82,20 @@ func (m *Manager) InstallAsset(id, assetOverride string) error {
 		if pkgID == id {
 			override = assetOverride
 		}
-		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, entry.Version))
-		if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(entry, override)); err != nil {
+		installEntry := entry
+		if pkgID == id && releaseTag != "" {
+			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
+			if err != nil {
+				j.Abort("release failed: " + err.Error())
+				return err
+			}
+			entryCopy := *entry
+			entryCopy.Source = releaseSource
+			entryCopy.Version = releaseTag
+			installEntry = &entryCopy
+		}
+		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
+		if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(installEntry, override)); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 		}
@@ -82,7 +104,7 @@ func (m *Manager) InstallAsset(id, assetOverride string) error {
 			log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
 		}
 
-		installedVersion := entry.Version
+		installedVersion := installEntry.Version
 
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{

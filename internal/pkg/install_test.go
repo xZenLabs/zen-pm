@@ -58,6 +58,57 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	}
 }
 
+func TestInstallReleasePassesSpecificGitHubReleaseAndRecordsVersion(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	out := filepath.Join(t.TempDir(), "env.out")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_ENV_OUT", out)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "#!/bin/sh\n")
+		io.WriteString(w, "printf '%s|%s\\n' \"$ZENPM_PACKAGE_SOURCE\" \"$ZENPM_PACKAGE_SOURCE_ASSET\" > \"$ZENPM_ENV_OUT\"\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:          "reader",
+		Name:        "Reader",
+		Version:     "2.0.0",
+		Repo:        "ZenLabs",
+		InstallURL:  srv.URL,
+		Source:      "https://github.com/owner/reader",
+		SourceAsset: "reader-v2.0.0.zip",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	if err := manager.InstallRelease("reader", "v1.5.0", "reader-v1.5.0.zip"); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://github.com/owner/reader/releases/tag/v1.5.0|reader-v1.5.0.zip"
+	if got := strings.TrimSpace(string(data)); got != want {
+		t.Fatalf("env output = %q, want %q", got, want)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(installed) != 1 || installed[0].Version != "v1.5.0" {
+		t.Fatalf("installed = %#v", installed)
+	}
+}
+
 func TestUninstallRefreshesCatalogWhenUninstallURLMissing(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	out := filepath.Join(t.TempDir(), "uninstall.out")

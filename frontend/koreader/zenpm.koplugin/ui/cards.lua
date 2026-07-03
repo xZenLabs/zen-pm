@@ -59,8 +59,12 @@ end
 
 local function package_version_repo_text(pkg)
     local parts = {}
-    if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
-        table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
+    local version = pkg and pkg.version
+    if pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
+        version = pkg.installed_version
+    end
+    if version and version ~= "" and version ~= "0.0.0" then
+        table.insert(parts, "v" .. tostring(version):gsub("^[vV]", ""))
     end
     table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " • ")

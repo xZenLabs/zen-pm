@@ -89,43 +89,55 @@ end
 
 function Modals.package_modify(pkg, callbacks)
     local dialog
-    dialog = ButtonDialog:new{
-        title = I18n.dynamic_or(pkg.name or pkg.id, _("Package")),
-        buttons = {
+    local buttons = {
+        {
             {
-                {
-                    text = _("Info"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        if callbacks.info then callbacks.info() end
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Reinstall"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        callbacks.reinstall()
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Uninstall"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        callbacks.uninstall()
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Cancel"),
-                    callback = function() UIManager:close(dialog) end,
-                },
+                text = _("Info"),
+                callback = function()
+                    UIManager:close(dialog)
+                    if callbacks.info then callbacks.info() end
+                end,
             },
         },
+        {
+            {
+                text = _("Reinstall"),
+                callback = function()
+                    UIManager:close(dialog)
+                    callbacks.reinstall()
+                end,
+            },
+        },
+    }
+    if callbacks.downgrade then
+        table.insert(buttons, {
+            {
+                text = _("Downgrade"),
+                callback = function()
+                    UIManager:close(dialog)
+                    callbacks.downgrade()
+                end,
+            },
+        })
+    end
+    table.insert(buttons, {
+        {
+            text = _("Uninstall"),
+            callback = function()
+                UIManager:close(dialog)
+                callbacks.uninstall()
+            end,
+        },
+    })
+    table.insert(buttons, {
+        {
+            text = _("Cancel"),
+            callback = function() UIManager:close(dialog) end,
+        },
+    })
+    dialog = ButtonDialog:new{
+        title = I18n.dynamic_or(pkg.name or pkg.id, _("Package")),
+        buttons = buttons,
     }
     UIManager:show(dialog)
 end

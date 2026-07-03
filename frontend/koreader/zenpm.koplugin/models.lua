@@ -247,6 +247,25 @@ function Models.package_action_label(pkg)
     return pkg and pkg.installed and _("Modify") or _("Get")
 end
 
+function Models.has_github_source(pkg)
+    local source = tostring(pkg and pkg.source or "")
+    return source:match("^https?://github%.com/[^/]+/[^/]+/?$") ~= nil
+end
+
+function Models.readme_text(value)
+    value = tostring(value or ""):gsub("\r\n", "\n")
+    value = value:gsub("<!%-%-.-%-%->", "")
+    value = value:gsub("!%[([^%]]*)%]%([^%)]+%)", "%1")
+    value = value:gsub("%[([^%]]+)%]%([^%)]+%)", "%1")
+    value = value:gsub("<[^>]+>", "")
+    value = value:gsub("\n[ \t]*#+[ \t]+", "\n")
+    value = value:gsub("^#+[ \t]+", "")
+    value = value:gsub("```[%w_-]*", "")
+    value = value:gsub("[%*_]([%w][^%*_]-)[%*_]", "%1")
+    value = value:gsub("\n[ \t]*\n[ \t]*\n+", "\n\n")
+    return Util.trim(value)
+end
+
 function Models.package_meta(pkg)
     local parts = {}
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then

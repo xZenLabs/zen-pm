@@ -38,6 +38,7 @@ function App:new(plugin)
             visible_categories = {},
             category_packages = {},
             repos = {},
+            readme_cache = {},
             current_package = nil,
             current_repo = nil,
             current_category = nil,
@@ -60,6 +61,9 @@ local function action_present(action)
     if action == "update" then
         return _("update")
     end
+    if action == "downgrade" then
+        return _("downgrade")
+    end
     if action == "uninstall" then
         return _("uninstall")
     end
@@ -73,6 +77,9 @@ local function action_progress(action)
     if action == "update" then
         return _("Updating")
     end
+    if action == "downgrade" then
+        return _("Downgrading")
+    end
     if action == "uninstall" then
         return _("Uninstalling")
     end
@@ -83,7 +90,7 @@ local function action_progress(action)
 end
 
 local function backend_action_for(action)
-    return (action == "reinstall" or action == "update") and "install" or action
+    return (action == "reinstall" or action == "update" or action == "downgrade") and "install" or action
 end
 
 local function action_done(action)
@@ -95,6 +102,9 @@ local function action_done(action)
     end
     if action == "reinstall" then
         return _("reinstalled")
+    end
+    if action == "downgrade" then
+        return _("downgraded")
     end
     return _("uninstalled")
 end
@@ -112,7 +122,7 @@ local function package_is_koreader_plugin(pkg)
 end
 
 local function action_installs_package(action)
-    return action == "install" or action == "reinstall" or action == "update"
+    return action == "install" or action == "reinstall" or action == "update" or action == "downgrade"
 end
 
 -- The KOReader plugin name is its .koplugin directory basename.
@@ -862,7 +872,20 @@ function App:show_package_details(package_id, from_tab, force_reload)
         return
     end
     self.state.packages = packages
+    local cache_key = tostring(pkg.id or pkg.name or "")
+    if Models.has_github_source(pkg) and cache_key ~= "" then
+        local cached = self.state.readme_cache[cache_key]
+        if cached == nil then
+            local readme_ok, data = self.client:get_package_readme(cache_key)
+            cached = readme_ok and type(data) == "table" and data.readme or false
+            self.state.readme_cache[cache_key] = cached
+        end
+        if type(cached) == "string" then
+            pkg.github_readme = cached
+        end
+    end
     self.state.current_package = pkg
+    self:reset_scroll("package:" .. cache_key)
     self:clear_status()
     self:refresh()
 end
@@ -1063,6 +1086,9 @@ function App:perform_package_action(pkg, on_done)
             reinstall = function()
                 self:confirm_package_action(pkg, "reinstall", on_done)
             end,
+            downgrade = Models.has_github_source(pkg) and function()
+                self:prompt_package_downgrade(pkg, on_done)
+            end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
@@ -1070,6 +1096,72 @@ function App:perform_package_action(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
+end
+
+function App:prompt_package_downgrade(pkg, on_done)
+    local current = pkg.installed_version or pkg.version or ""
+    Modals.status(_("Loading GitHub releases..."))
+    local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
+    Modals.close_status()
+    if not ok then
+        Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
+        return
+    end
+    local rows = {}
+    for _, release in ipairs(type(data) == "table" and data.releases or {}) do
+        if release.tag_name and version_gt(current, release.tag_name) then
+            local label = tostring(release.tag_name)
+            if release.prerelease then
+                label = label .. " (" .. _("prerelease") .. ")"
+            end
+            table.insert(rows, {
+                text = label,
+                callback = function()
+                    self:choose_downgrade_release(pkg, release, on_done)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then
+        Modals.info(_("No older GitHub releases with ZIP assets were found."))
+        return
+    end
+    Modals.actions(_("Downgrade ") .. package_title(pkg, pkg.id or pkg.name), rows)
+end
+
+function App:choose_downgrade_release(pkg, release, on_done)
+    local assets = type(release.assets) == "table" and release.assets or {}
+    if #assets == 1 then
+        self:confirm_package_downgrade(pkg, release.tag_name, assets[1].name, on_done)
+        return
+    end
+    local rows = {}
+    for _, asset in ipairs(assets) do
+        if asset.name and asset.name ~= "" then
+            table.insert(rows, {
+                text = asset.name,
+                callback = function()
+                    self:confirm_package_downgrade(pkg, release.tag_name, asset.name, on_done)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then
+        Modals.info(_("This release has no ZIP assets."))
+        return
+    end
+    Modals.actions(_("Choose a build for ") .. tostring(release.tag_name), rows)
+end
+
+function App:confirm_package_downgrade(pkg, release_tag, asset, on_done)
+    local name = package_title(pkg, pkg.id or pkg.name)
+    Modals.confirm(
+        _("Are you sure you want to downgrade ") .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?",
+        _("Downgrade"),
+        function()
+            self:run_package_action(pkg, "downgrade", asset, on_done, { release = release_tag })
+        end
+    )
 end
 
 function App:confirm_package_action(pkg, action, on_done)
@@ -1142,7 +1234,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     self.busy = true
     Modals.status(action_progress(action) .. " "
         .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
-    local ok, err = self.client:package_action(id, backend_action, asset)
+    local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
     if not ok then
         self.busy = false
         Modals.close_status()
@@ -1154,7 +1246,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         name = package_title(pkg, id),
         action = action,
         was_installed = pkg.installed and true or false,
-        target_version = pkg.latest_version,
+        target_version = opts and opts.release or pkg.latest_version,
         prompt_restart = action_installs_package(action) and package_is_koreader_plugin(pkg),
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
@@ -1201,6 +1293,10 @@ function App:package_action_succeeded(op, pkg)
             return not version_gt(op.target_version, pkg.installed_version or pkg.version)
         end
         return true
+    end
+    if op.action == "downgrade" then
+        return pkg and pkg.installed
+            and normalized_version(pkg.installed_version or "") == normalized_version(op.target_version or "")
     end
     if op.action == "reinstall" then
         return pkg and pkg.installed

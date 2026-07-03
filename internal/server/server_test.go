@@ -132,6 +132,35 @@ func TestHandlePackageActionReturnsPreflightInstallErrors(t *testing.T) {
 	}
 }
 
+func TestPackageGitHubSourceUsesCatalogMetadata(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "reader", Name: "Reader", Repo: "ZenLabs", Source: "https://github.com/owner/reader"},
+		{ID: "other", Name: "Other", Repo: "ZenLabs", Source: "https://example.com/other"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+
+	source, err := srv.packageGitHubSource("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != "https://github.com/owner/reader" {
+		t.Fatalf("source = %q", source)
+	}
+	if _, err := srv.packageGitHubSource("other"); err == nil {
+		t.Fatal("non-GitHub package returned no error")
+	}
+}
+
 func TestShouldLogAccessSkipsRoutineSuccessfulPolling(t *testing.T) {
 	tests := []struct {
 		method string

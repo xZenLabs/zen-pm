@@ -297,8 +297,7 @@ function AppView:draw_content(bb, x, y, w, h)
     elseif page == "source_details" then
         max_scroll = Pages.source_details(self, bb, x, y, w, h, scroll)
     elseif page == "package_details" then
-        Pages.package_details(self, bb, x, y, w, h)
-        max_scroll = 0
+        max_scroll = Pages.package_details(self, bb, x, y, w, h, scroll)
     elseif page == "debug" then
         max_scroll = Pages.debug(self, bb, x, y, w, h, scroll)
     end

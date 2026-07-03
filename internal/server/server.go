@@ -502,7 +502,7 @@ func rawJSON(value string) json.RawMessage {
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
-	// Expects: /packages/{id}/install  or  /packages/{id}/uninstall
+	// Expects: /packages/{id}/{install,uninstall,assets,readme,releases}
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 2 || parts[0] == "" {
@@ -512,6 +512,14 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	id, action := parts[0], parts[1]
 	if action == "assets" {
 		s.handlePackageAssets(w, r, id)
+		return
+	}
+	if action == "readme" {
+		s.handlePackageReadme(w, r, id)
+		return
+	}
+	if action == "releases" {
+		s.handlePackageReleases(w, r, id)
 		return
 	}
 	if action != "install" && action != "uninstall" {
@@ -524,6 +532,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	asset := r.URL.Query().Get("asset")
+	releaseTag := r.URL.Query().Get("release")
 
 	if action == "install" {
 		if err := s.pkgs.CheckInstall(id); err != nil {
@@ -538,7 +547,11 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		var err error
 		if action == "install" {
-			err = s.pkgs.InstallAsset(id, asset)
+			if releaseTag != "" {
+				err = s.pkgs.InstallRelease(id, releaseTag, asset)
+			} else {
+				err = s.pkgs.InstallAsset(id, asset)
+			}
 		} else {
 			err = s.pkgs.Uninstall(id)
 		}
@@ -550,6 +563,58 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) packageGitHubSource(id string) (string, error) {
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range catalog {
+		if entry.ID == id {
+			if _, ok := releases.GitHubRepository(entry.Source); !ok {
+				return "", fmt.Errorf("package %q has no GitHub source", id)
+			}
+			return entry.Source, nil
+		}
+	}
+	return "", fmt.Errorf("package %q not found", id)
+}
+
+func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	source, err := s.packageGitHubSource(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	readme, err := releases.FetchGitHubReadme(source)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"readme": readme})
+}
+
+func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	source, err := s.packageGitHubSource(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	items, err := releases.FetchGitHubReleases(source, 10)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"releases": items})
 }
 
 func (s *Server) handlePackageAssets(w http.ResponseWriter, r *http.Request, id string) {
