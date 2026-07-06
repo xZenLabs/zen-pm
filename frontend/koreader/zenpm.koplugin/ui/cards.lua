@@ -70,9 +70,22 @@ local function package_version_repo_text(pkg)
     return table.concat(parts, " • ")
 end
 
-local function action_pill(view, bb, text, x, y, w, h, callback)
+local function action_pill(view, bb, text, x, y, w, h, callback, icon)
     P.box(bb, x, y, w, h, { background = Theme.bg, border_size = 2, radius = math.floor(h / 2) })
-    P.center_text_box(bb, text, x, y, w, h, "small", { bold = true })
+    if icon then
+        local icon_size = Theme.scale(18)
+        local gap = Theme.scale(4)
+        local text_size = P.text_size(text, w - icon_size - gap, "small", { bold = true })
+        local content_w = icon_size + gap + text_size.w
+        local content_x = x + math.max(0, math.floor((w - content_w) / 2))
+        local icon_y = y + math.max(0, math.floor((h - icon_size) / 2))
+        if not P.image(bb, icon, content_x, icon_y, icon_size, icon_size, { is_icon = true }) then
+            P.center_text_box(bb, "↓", content_x, icon_y, icon_size, icon_size, "small", { bold = true })
+        end
+        P.text(bb, text, content_x + icon_size + gap, y + math.max(0, math.floor((h - text_size.h) / 2)), text_size.w, "small", { bold = true })
+    else
+        P.center_text_box(bb, text, x, y, w, h, "small", { bold = true })
+    end
     P.hit(view, x, y, w, h, callback, text)
 end
 
@@ -197,11 +210,12 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
+    local action_icon = pkg.installed and pkg.update_available and Images.asset("update.svg") or nil
     action_pill(view, bb, Models.package_action_label(pkg), action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
-    end)
+    end, action_icon)
     P.hit(view, x, y, action_x - x, h, function()
         view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab)
     end, "package:" .. tostring(pkg.id or pkg.name))

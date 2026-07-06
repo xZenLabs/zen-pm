@@ -127,6 +127,19 @@ function AppView:show_koreader_menu_from_gesture(ges, kind)
     return false
 end
 
+function AppView:_scroll_list(steps)
+    local key = self.app:scroll_key()
+    local old = self.app.state.scroll[key] or 0
+    local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
+    local new = math.max(0, math.min(old + steps * delta, self.max_scroll or 0))
+    if new == old then
+        return false
+    end
+    self.app.state.scroll[key] = new
+    self:refresh()
+    return true
+end
+
 function AppView:onSwipeZenPM(_, ges)
     -- A fast scrollbar drag can terminate as a swipe rather than pan_release.
     -- Finalize the in-progress drag with a clean GL16 repaint and consume the
@@ -149,16 +162,7 @@ function AppView:onSwipeZenPM(_, ges)
     if self.list_bounds and not P.contains(self.list_bounds, ges.pos.x, ges.pos.y) then
         return true
     end
-    local key = self.app:scroll_key()
-    local old = self.app.state.scroll[key] or 0
-    local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
-    if direction == "north" then
-        old = old + delta
-    else
-        old = old - delta
-    end
-    self.app.state.scroll[key] = math.max(0, math.min(old, self.max_scroll or 0))
-    self:refresh()
+    self:_scroll_list(direction == "north" and 1 or -1)
     return true
 end
 
@@ -179,6 +183,16 @@ function AppView:_render_scroll_list()
 end
 
 function AppView:onPanZenPM(_, ges)
+    if ges.mousewheel_direction then
+        self._mousewheel_handled = true
+        if ges.direction == "north" then
+            self:_scroll_list(1)
+        elseif ges.direction == "south" then
+            self:_scroll_list(-1)
+        end
+        return true
+    end
+
     -- Only begin a drag when the gesture starts inside the scrollbar touch
     -- zone; otherwise let the pan fall through (e.g. for menu gestures).
     if not self._scroll_dragging then
@@ -215,6 +229,19 @@ function AppView:onPanZenPM(_, ges)
 end
 
 function AppView:onPanReleaseZenPM(_, ges)
+    if ges and ges.from_mousewheel then
+        if self._mousewheel_handled then
+            self._mousewheel_handled = false
+            return true
+        end
+        local relative_y = ges.relative and ges.relative.y
+        if relative_y and relative_y < 0 then
+            self:_scroll_list(1)
+        elseif relative_y and relative_y > 0 then
+            self:_scroll_list(-1)
+        end
+        return true
+    end
     if not self._scroll_dragging then
         return false
     end

@@ -159,9 +159,16 @@ function Client:refresh_repos()
 end
 
 function Client:list_packages(platform, check_updates)
-    local path = "/packages?platform=" .. url_encode(platform)
+    local path = "/packages"
+    local query = {}
+    if platform and platform ~= "" then
+        table.insert(query, "platform=" .. url_encode(platform))
+    end
     if check_updates then
-        path = path .. "&check_updates=1"
+        table.insert(query, "check_updates=1")
+    end
+    if #query > 0 then
+        path = path .. "?" .. table.concat(query, "&")
     end
     return self:request("GET", path, nil)
 end

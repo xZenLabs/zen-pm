@@ -5,6 +5,7 @@
 local Images = require("ui/images")
 local Models = require("models")
 
+local Geom = require("ui/geometry")
 local I18n = require("i18n")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
@@ -30,7 +31,9 @@ function Header.draw_actions(view, bb, x, y)
     for i = 0, 2 do
         P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, { border = false, background = Theme.ink, radius = math.floor(dot / 2) })
     end
-    P.hit(view, x, y, s, s, function() view.app:show_actions() end, "actions")
+    P.hit(view, x, y, s, s, function()
+        view.app:show_actions(Geom:new{ x = x, y = y, w = s, h = s })
+    end, "actions")
     return s
 end
 

@@ -27,6 +27,7 @@ function App:new(plugin)
         state = {
             page = "home",
             active_tab = "home",
+            filter_installable = true,
             filters = { search = "", installed = "", categories = "", category = "" },
             sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
             scroll = {},
@@ -629,6 +630,15 @@ function App:load_packages(check_updates, force)
     if not force and not check_updates and self.state.packages and #self.state.packages > 0 then
         return true, self.state.packages
     end
+    if not self.state.filter_installable then
+        local ok, data = self.client:list_packages(nil, check_updates)
+        if not ok then
+            return false, {}, data
+        end
+        local packages = type(data) == "table" and data or {}
+        self.state.packages = packages
+        return true, packages
+    end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
     local ok, data = self.client:list_packages(filter, check_updates)
@@ -1075,14 +1085,13 @@ function App:perform_package_action(pkg, on_done)
         return
     end
     if pkg.installed then
-        if pkg.update_available then
-            self:confirm_package_action(pkg, "update", on_done)
-            return
-        end
         Modals.package_modify(pkg, {
-            info = function()
+            info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
-            end,
+            end or nil,
+            update = pkg.update_available and function()
+                self:confirm_package_action(pkg, "update", on_done)
+            end or nil,
             reinstall = function()
                 self:confirm_package_action(pkg, "reinstall", on_done)
             end,
@@ -1391,8 +1400,18 @@ function App:refresh_repos()
     end
 end
 
-function App:show_actions()
+function App:toggle_filter_installable()
+    self.state.filter_installable = not self.state.filter_installable
+    self.state.packages = {}
+    self:reload_current_page()
+end
+
+function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
+        {
+            text = _("About"),
+            callback = function() self:show_about() end,
+        },
         {
             text = _("Refresh"),
             callback = function()
@@ -1400,17 +1419,30 @@ function App:show_actions()
             end,
         },
         {
-            text = _("About"),
-            callback = function() self:show_about() end,
-        },
-        {
             text = _("Update"),
             callback = function() self:start_update() end,
+        },
+        {
+            text = _("Filter installable"),
+            checked_func = function()
+                return self.state.filter_installable
+            end,
+            callback = function()
+                self:toggle_filter_installable()
+            end,
         },
         {
             text = _("Quit"),
             callback = function() self:quit() end,
         },
+    }, {
+        align = "left",
+        anchor = anchor,
+        anchor_right = true,
+        compact = true,
+        compact_min_width = 220,
+        show_cancel = false,
+        title_icon = Images.asset("zenpm.svg"),
     })
 end
 

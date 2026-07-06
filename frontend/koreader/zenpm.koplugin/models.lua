@@ -241,10 +241,10 @@ function Models.select_featured(packages)
 end
 
 function Models.package_action_label(pkg)
-    if pkg and pkg.installed and pkg.update_available then
-        return _("Update")
+    if pkg and pkg.installed then
+        return _("Modify")
     end
-    return pkg and pkg.installed and _("Modify") or _("Get")
+    return _("Get")
 end
 
 function Models.has_github_source(pkg)
