@@ -66,6 +66,11 @@ local function normalize_category(value)
     if value == "utilities" then
         return "utility"
     end
+    if value == "patch" or value == "patches"
+            or value == "koreaderpatch" or value == "koreaderpatches"
+            or value == "koreaderplatformpatch" or value == "koreaderplatformpatches" then
+        return "koreaderpatches"
+    end
     return value
 end
 
@@ -245,6 +250,27 @@ function Models.package_action_label(pkg)
         return _("Modify")
     end
     return _("Get")
+end
+
+function Models.is_patch_package(pkg)
+    if not pkg then
+        return false
+    end
+    return normalize_category(pkg.category) == "koreaderpatches"
+end
+
+function Models.package_assets(pkg)
+    local assets = pkg and pkg.assets
+    if type(assets) ~= "table" then
+        return {}
+    end
+    local out = {}
+    for _, asset in ipairs(assets) do
+        if type(asset) == "table" and asset.asset and asset.asset ~= "" then
+            table.insert(out, asset)
+        end
+    end
+    return out
 end
 
 function Models.has_github_source(pkg)

@@ -1230,7 +1230,31 @@ function App:choose_package_asset(pkg, action, candidates, on_done, opts)
         self:run_package_action(pkg, action, nil, on_done, opts)
         return
     end
-    Modals.actions(_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name), rows)
+    local title = Models.is_patch_package(pkg)
+        and (_("Choose a patch for ") .. package_title(pkg, pkg.id or pkg.name))
+        or (_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name))
+    Modals.actions(title, rows)
+end
+
+function App:confirm_package_asset_action(pkg, asset, on_done)
+    if self.busy then
+        Modals.info(_("Another operation is in progress. Please wait."))
+        return
+    end
+    if not asset or not asset.asset or asset.asset == "" then
+        Modals.info(_("Patch has no file name."))
+        return
+    end
+    local action = pkg.installed and "reinstall" or "install"
+    local name = package_title(pkg, pkg.id or pkg.name)
+    local patch_name = tostring(asset.asset)
+    Modals.confirm(
+        _("Are you sure you want to install ") .. patch_name .. " " .. _("from") .. " " .. name .. "?",
+        _("Install"),
+        function()
+            self:run_package_action(pkg, action, patch_name, on_done, nil)
+        end
+    )
 end
 
 function App:run_package_action(pkg, action, asset, on_done, opts)

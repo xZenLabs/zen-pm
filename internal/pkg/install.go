@@ -193,7 +193,7 @@ func (m *Manager) Uninstall(id string) error {
 
 	if scriptPath != "" {
 		log.Infof("Package %s executing uninstall script: %s", id, scriptPath)
-		if err := platform.ExecuteScriptWithEnv(scriptPath, map[string]string{"ZENPM_PACKAGE_ID": id}); err != nil {
+		if err := platform.ExecuteScriptWithEnv(scriptPath, m.uninstallEnv(id)); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("uninstall script failed: %w", err)
 		}
@@ -259,6 +259,15 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 	}
 	for _, e := range catalog {
 		if e.ID == id {
+			if isPatchPackage(e) {
+				parsed := assets.Parse(e.Assets)
+				if len(parsed) > 1 {
+					return assets.Result{Candidates: parsed, NeedsChoice: true}, nil
+				}
+				if len(parsed) == 1 {
+					return assets.Result{Auto: parsed[0].Asset}, nil
+				}
+			}
 			return assets.Select(e.Assets, m.device()), nil
 		}
 	}
@@ -266,11 +275,12 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 }
 
 func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[string]string {
-	env := map[string]string{
-		"ZENPM_PACKAGE_ID": entry.ID,
-	}
+	env := m.baseScriptEnv(entry.ID)
 	if entry.Source != "" {
 		env["ZENPM_PACKAGE_SOURCE"] = entry.Source
+	}
+	if entry.SourceURL != "" {
+		env["ZENPM_PACKAGE_SOURCE_URL"] = entry.SourceURL
 	}
 
 	asset := strings.TrimSpace(override)
@@ -283,6 +293,7 @@ func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[stri
 	if asset != "" {
 		log.Infof("Package %s using release asset %q", entry.ID, asset)
 		env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+		addSelectedAssetEnv(env, entry.Assets, asset)
 	} else if entry.SourceAsset != "" {
 		log.Infof("Package %s using source asset pattern %q", entry.ID, entry.SourceAsset)
 		env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
@@ -293,6 +304,93 @@ func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[stri
 		log.Warnf("Package %s has source but no source_asset; install script may choose its default asset", entry.ID)
 	}
 	return env
+}
+
+func addSelectedAssetEnv(env map[string]string, rawAssets, selected string) {
+	for _, asset := range assets.Parse(rawAssets) {
+		if asset.Asset != selected {
+			continue
+		}
+		if asset.URL != "" {
+			env["ZENPM_PACKAGE_ASSET_URL"] = asset.URL
+		}
+		if asset.Size != "" {
+			env["ZENPM_PACKAGE_ASSET_SIZE"] = asset.Size
+		}
+		if asset.Arch != "" {
+			env["ZENPM_PACKAGE_ASSET_ARCH"] = asset.Arch
+		}
+		return
+	}
+}
+
+func (m *Manager) uninstallEnv(id string) map[string]string {
+	return m.baseScriptEnv(id)
+}
+
+func (m *Manager) baseScriptEnv(id string) map[string]string {
+	env := map[string]string{
+		"ZENPM_PACKAGE_ID": id,
+	}
+	addKOReaderEnv(env, m.plat)
+	return env
+}
+
+func addKOReaderEnv(env map[string]string, plat string) {
+	candidates := koreaderRootCandidates(plat)
+	if len(candidates) == 0 {
+		return
+	}
+	explicit := map[string]bool{}
+	for _, root := range []string{os.Getenv("ZENPM_KOREADER_DIR"), os.Getenv("KOREADER_DIR")} {
+		root = strings.TrimSpace(root)
+		if root != "" {
+			explicit[filepath.Clean(root)] = true
+		}
+	}
+	env["ZENPM_KOREADER_PATHS"] = strings.Join(candidates, ":")
+	for _, root := range candidates {
+		if root == "" {
+			continue
+		}
+		if explicit[root] || pathExists(root) {
+			env["ZENPM_KOREADER_DIR"] = root
+			env["ZENPM_KOREADER_PLUGIN_DIR"] = filepath.Join(root, "plugins")
+			return
+		}
+	}
+}
+
+func koreaderRootCandidates(plat string) []string {
+	var candidates []string
+	seen := map[string]bool{}
+	add := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		path = filepath.Clean(path)
+		if !seen[path] {
+			seen[path] = true
+			candidates = append(candidates, path)
+		}
+	}
+
+	add(os.Getenv("ZENPM_KOREADER_DIR"))
+	add(os.Getenv("KOREADER_DIR"))
+	switch plat {
+	case platform.Kindle:
+		add("/mnt/us/kmc/kpm/packages/koreader/koreader")
+		add("/mnt/us/koreader")
+	case platform.Kobo:
+		add("/mnt/onboard/.adds/koreader")
+	}
+	return candidates
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func displayVersion(version string) string {
@@ -316,6 +414,19 @@ func isGenericKOReaderPlugin(entry *repo.CatalogEntry) bool {
 		}
 	}
 	return false
+}
+
+func isPatchPackage(entry *repo.CatalogEntry) bool {
+	if entry == nil {
+		return false
+	}
+	category := strings.ToLower(strings.TrimSpace(entry.Category))
+	category = strings.ReplaceAll(category, "-", "")
+	category = strings.ReplaceAll(category, "_", "")
+	category = strings.ReplaceAll(category, " ", "")
+	return category == "patch" || category == "patches" ||
+		category == "koreaderpatch" || category == "koreaderpatches" ||
+		strings.HasSuffix(entry.InstallURL, "/install-patch.sh")
 }
 
 func (m *Manager) Update(id string) error {

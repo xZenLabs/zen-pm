@@ -65,6 +65,11 @@ local function normalize_category(value)
     if value == "tools" or value == "tool" or value == "utilities" then
         return "utility"
     end
+    if value == "patch" or value == "patches"
+            or value == "koreaderpatch" or value == "koreaderpatches"
+            or value == "koreaderplatformpatch" or value == "koreaderplatformpatches" then
+        return "koreaderpatches"
+    end
     return value
 end
 

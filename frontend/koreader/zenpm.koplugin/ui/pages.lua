@@ -18,6 +18,18 @@ local function package_card_height(list_h, gap)
     return math.max(1, math.floor((list_h - gap * (PACKAGE_ROWS_PER_SCREEN - 1)) / PACKAGE_ROWS_PER_SCREEN))
 end
 
+local function patch_asset_meta(asset)
+    local parts = {}
+    if asset.arch and asset.arch ~= "" then
+        table.insert(parts, tostring(asset.arch))
+    end
+    local size = tonumber(asset.size)
+    if size and size > 0 then
+        table.insert(parts, tostring(math.floor((size + 1023) / 1024)) .. " KB")
+    end
+    return table.concat(parts, " • ")
+end
+
 function Pages.featured(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
@@ -182,12 +194,38 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         content = I18n.dynamic_or(pkg.description, _("No description available."))
         heading = _("Description")
     end
+    local assets = Models.package_assets(pkg)
+    local show_patch_assets = Models.is_patch_package(pkg) and #assets > 0
+    if show_patch_assets then
+        heading = _("Patches")
+    end
     P.text(bb, heading, inner_x, iy, inner_w, "small", { bold = true })
     iy = iy + Theme.scale(34)
     local content_h = cy + panel_h - Theme.scale(14) - iy
     if content_h <= 0 then
         Scroll.set_list_bounds(view, panel_x, cy, panel_w, panel_h, panel_h)
         return 0
+    end
+    if show_patch_assets then
+        local row_h = Theme.scale(58)
+        local gap = Theme.scale(8)
+        local list_w = inner_w - Theme.scale(12)
+        local max_scroll = Scroll.scrolled_list(view, bb, assets, inner_x, iy, list_w, content_h, scroll, row_h, gap, function(asset, row_y)
+            P.box(bb, inner_x, row_y, list_w, row_h)
+            local text_x = inner_x + Theme.scale(10)
+            local text_w = list_w - Theme.scale(20)
+            P.text(bb, tostring(asset.asset or ""), text_x, row_y + Theme.scale(8), text_w, "small", { bold = true })
+            local meta = patch_asset_meta(asset)
+            if meta ~= "" then
+                P.text(bb, meta, text_x, row_y + Theme.scale(32), text_w, "tiny", { color = Theme.muted })
+            end
+            P.hit(view, inner_x, row_y, list_w, row_h, function()
+                view.app:confirm_package_asset_action(pkg, asset, function()
+                    view.app:reload_current_page()
+                end)
+            end, "patch:" .. tostring(asset.asset or ""))
+        end)
+        return max_scroll
     end
     local max_scroll, line_h = P.scrollable_paragraph(bb, content, inner_x, iy, inner_w - Theme.scale(12), content_h, "small", scroll)
     Scroll.set_list_bounds(view, inner_x, iy, inner_w, content_h, line_h)
