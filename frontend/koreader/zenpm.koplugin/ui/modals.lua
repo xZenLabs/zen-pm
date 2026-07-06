@@ -11,7 +11,7 @@ local LeftContainer = require("ui/widget/container/leftcontainer")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local Screen = require("device").screen
-local I18n = require("i18n")
+local Models = require("models")
 local _ = require("gettext")
 
 local Modals = {}
@@ -156,7 +156,7 @@ function Modals.package_modify(pkg, callbacks)
         },
     })
     dialog = ButtonDialog:new{
-        title = I18n.dynamic_or(pkg.name or pkg.id, _("Package")),
+        title = Models.package_display_name(pkg, _("Package")),
         buttons = buttons,
     }
     UIManager:show(dialog)

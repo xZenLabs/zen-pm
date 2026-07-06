@@ -31,13 +31,14 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	defer srv.Close()
 
 	if err := st.WriteCatalog([]state.CatalogEntry{{
-		ID:          "zen-mtp-koplugin",
-		Name:        "ZenMTP",
-		Version:     "1.7",
-		Repo:        "ZenLabs",
-		InstallURL:  srv.URL,
-		Source:      "https://github.com/xZenLabs/ZenMTP",
-		SourceAsset: "zen_mtp.koplugin.zip",
+		ID:           "zen-mtp-koplugin",
+		Name:         "ZenMTP",
+		Version:      "1.7",
+		Repo:         "ZenLabs",
+		InstallURL:   srv.URL,
+		UninstallURL: srv.URL,
+		Source:       "https://github.com/xZenLabs/ZenMTP",
+		SourceAsset:  "zen_mtp.koplugin.zip",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +56,78 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	want := "zen-mtp-koplugin|https://github.com/xZenLabs/ZenMTP|zen_mtp.koplugin.zip"
 	if got != want {
 		t.Fatalf("env output = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(st.CachedUninstallScriptPath("zen-mtp-koplugin")); err != nil {
+		t.Fatalf("cached plugin uninstall script missing: %v", err)
+	}
+}
+
+func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	out := filepath.Join(t.TempDir(), "asset.out")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_ENV_OUT", out)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "#!/bin/sh\n")
+		io.WriteString(w, "printf '%s\\n' \"$ZENPM_PACKAGE_SOURCE_ASSET\" >> \"$ZENPM_ENV_OUT\"\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:           "koreader-11",
+		Name:         "Koreader",
+		Version:      "0.0.0-source",
+		Repo:         "ZenLabs",
+		Category:     "patches",
+		Platforms:    []string{"koreader"},
+		InstallURL:   srv.URL,
+		UninstallURL: srv.URL,
+		Assets:       `[{"arch":"any","asset":"2-menu-size.lua"},{"arch":"any","asset":"2-ui-font.lua"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+
+	if err := manager.InstallAsset("koreader-11", "2-menu-size.lua"); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.InstallAsset("koreader-11", "2-ui-font.lua"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(st.CachedUninstallScriptPath("koreader-11")); err != nil {
+		t.Fatalf("cached patch uninstall script missing: %v", err)
+	}
+
+	// Patch files must NOT collapse into installed_packages.
+	if installed, _ := st.ReadInstalled(); len(installed) != 0 {
+		t.Fatalf("installed_packages = %#v, want empty", installed)
+	}
+	files, err := st.ReadInstalledPatchFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("patch files after install = %#v, want 2", files)
+	}
+
+	if err := manager.Uninstall("koreader-11", "2-menu-size.lua"); err != nil {
+		t.Fatal(err)
+	}
+	files, _ = st.ReadInstalledPatchFiles()
+	if len(files) != 1 || files[0].Asset != "2-ui-font.lua" {
+		t.Fatalf("patch files after uninstall = %#v, want only 2-ui-font.lua", files)
+	}
+
+	// Uninstalling a not-installed file must error.
+	if err := manager.Uninstall("koreader-11", "2-menu-size.lua"); err == nil {
+		t.Fatal("expected error uninstalling already-removed patch file")
 	}
 }
 
@@ -150,7 +223,7 @@ func TestUninstallRefreshesCatalogWhenUninstallURLMissing(t *testing.T) {
 	}
 
 	manager := New(st, repo.New(st), "host")
-	if err := manager.Uninstall("zen-koreader"); err != nil {
+	if err := manager.Uninstall("zen-koreader", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,6 +283,59 @@ func TestInstallEnvPassesSelectedAssetMetadata(t *testing.T) {
 		t.Fatalf("ZENPM_PACKAGE_ASSET_URL = %q", got)
 	}
 	if got := env["ZENPM_PACKAGE_ASSET_SIZE"]; got != "3473" {
+		t.Fatalf("ZENPM_PACKAGE_ASSET_SIZE = %q", got)
+	}
+	if got := env["ZENPM_PACKAGE_ASSET_ARCH"]; got != "any" {
+		t.Fatalf("ZENPM_PACKAGE_ASSET_ARCH = %q", got)
+	}
+}
+
+func TestInstallEnvUsesSourceArchiveForSourcePatchAsset(t *testing.T) {
+	m := &Manager{plat: "host"}
+	env := m.installEnv(&repo.CatalogEntry{
+		ID:         "koreader-11",
+		Source:     "https://github.com/sebdelsol/KOReader.patches",
+		SourceType: "source",
+		SourceURL:  "https://codeload.github.com/sebdelsol/KOReader.patches/zip/refs/heads/master",
+		Assets:     `[{"arch":"any","asset":"2--ui-font.lua","size":"3473"}]`,
+	}, "2--ui-font.lua")
+
+	if got := env["ZENPM_PACKAGE_SOURCE"]; got != "https://codeload.github.com/sebdelsol/KOReader.patches/zip/refs/heads/master" {
+		t.Fatalf("ZENPM_PACKAGE_SOURCE = %q", got)
+	}
+	if got := env["ZENPM_PACKAGE_SOURCE_ASSET"]; got != "2--ui-font.lua" {
+		t.Fatalf("ZENPM_PACKAGE_SOURCE_ASSET = %q", got)
+	}
+	if got := env["ZENPM_PACKAGE_ASSET_URL"]; got != "" {
+		t.Fatalf("ZENPM_PACKAGE_ASSET_URL = %q, want empty for source archive asset", got)
+	}
+	if got := env["ZENPM_PACKAGE_ASSET_SIZE"]; got != "3473" {
+		t.Fatalf("ZENPM_PACKAGE_ASSET_SIZE = %q", got)
+	}
+	if got := env["ZENPM_PACKAGE_ASSET_ARCH"]; got != "any" {
+		t.Fatalf("ZENPM_PACKAGE_ASSET_ARCH = %q", got)
+	}
+}
+
+func TestInstallEnvUsesDirectSourceAssetURLForSourcePatchAsset(t *testing.T) {
+	m := &Manager{plat: "host"}
+	env := m.installEnv(&repo.CatalogEntry{
+		ID:         "koreader-11",
+		Source:     "https://github.com/sebdelsol/KOReader.patches",
+		SourceType: "source",
+		Assets:     `[{"arch":"any","asset":"2--ui-font.lua","url":"https://raw.githubusercontent.com/sebdelsol/KOReader.patches/main/2--ui-font.lua","size":"4185"}]`,
+	}, "2--ui-font.lua")
+
+	if got := env["ZENPM_PACKAGE_SOURCE"]; got != "https://raw.githubusercontent.com/sebdelsol/KOReader.patches/main/2--ui-font.lua" {
+		t.Fatalf("ZENPM_PACKAGE_SOURCE = %q", got)
+	}
+	if got := env["ZENPM_PACKAGE_SOURCE_ASSET"]; got != "2--ui-font.lua" {
+		t.Fatalf("ZENPM_PACKAGE_SOURCE_ASSET = %q", got)
+	}
+	if got := env["ZENPM_PACKAGE_ASSET_URL"]; got != "" {
+		t.Fatalf("ZENPM_PACKAGE_ASSET_URL = %q, want empty for source asset", got)
+	}
+	if got := env["ZENPM_PACKAGE_ASSET_SIZE"]; got != "4185" {
 		t.Fatalf("ZENPM_PACKAGE_ASSET_SIZE = %q", got)
 	}
 	if got := env["ZENPM_PACKAGE_ASSET_ARCH"]; got != "any" {

@@ -44,6 +44,7 @@ function App:new(plugin)
             current_repo = nil,
             current_category = nil,
             details_from = "search",
+            details_tab = "readme",
             loading = nil,
             error = nil,
             log_lines = {},
@@ -55,7 +56,7 @@ function App:new(plugin)
 end
 
 local function package_title(pkg, fallback)
-    return I18n.dynamic_or(pkg and (pkg.name or pkg.id), fallback or _("Package"))
+    return Models.package_display_name(pkg, fallback)
 end
 
 local function action_present(action)
@@ -515,7 +516,7 @@ function App:scroll_key()
         return "category:" .. tostring(self.state.current_category.id)
     end
     if self.state.page == "package_details" and self.state.current_package then
-        return "package:" .. tostring(self.state.current_package.id or self.state.current_package.name)
+        return "package:" .. tostring(self.state.current_package.id or self.state.current_package.name) .. ":" .. tostring(self.state.details_tab or "readme")
     end
     return self.state.page
 end
@@ -544,7 +545,7 @@ end
 
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
-        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true)
+        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab)
     elseif self.state.page == "category_details" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
@@ -854,7 +855,7 @@ function App:show_source_details(name)
     self:refresh()
 end
 
-function App:show_package_details(package_id, from_tab, force_reload)
+function App:show_package_details(package_id, from_tab, force_reload, details_tab)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -895,8 +896,21 @@ function App:show_package_details(package_id, from_tab, force_reload)
         end
     end
     self.state.current_package = pkg
-    self:reset_scroll("package:" .. cache_key)
+    self.state.details_tab = Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 and details_tab == "patches" and "patches" or "readme"
+    self:reset_scroll("package:" .. cache_key .. ":" .. self.state.details_tab)
     self:clear_status()
+    self:refresh()
+end
+
+function App:set_package_details_tab(tab)
+    if tab ~= "patches" then
+        tab = "readme"
+    end
+    if self.state.details_tab == tab then
+        return
+    end
+    self.state.details_tab = tab
+    self:reset_scroll()
     self:refresh()
 end
 
@@ -1084,6 +1098,16 @@ function App:perform_package_action(pkg, on_done)
         Modals.info(_("Another operation is in progress. Please wait."))
         return
     end
+    if Models.is_installed_patch_item(pkg) then
+        self:show_patch_modify(pkg, on_done)
+        return
+    end
+    if Models.is_patch_package(pkg) then
+        -- Patch packages manage individual files; the details page lists each
+        -- patch with a per-file install/uninstall toggle.
+        self:show_package_details(pkg.id or pkg.name, self.state.active_tab, false, "patches")
+        return
+    end
     if pkg.installed then
         Modals.package_modify(pkg, {
             info = self.state.page ~= "package_details" and function()
@@ -1105,6 +1129,38 @@ function App:perform_package_action(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
+end
+
+function App:show_patch_modify(pkg, on_done)
+    local asset = pkg.patch_asset
+    Modals.package_modify(pkg, {
+        info = self.state.page ~= "package_details" and function()
+            self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
+        end or nil,
+        reinstall = function()
+            self:confirm_patch_item_action(pkg, "reinstall", asset, on_done)
+        end,
+        uninstall = function()
+            self:confirm_patch_item_action(pkg, "uninstall", asset, on_done)
+        end,
+    })
+end
+
+function App:confirm_patch_item_action(pkg, action, asset, on_done)
+    local name = tostring(asset or pkg.patch_asset or pkg.name or "")
+    if name == "" then
+        Modals.info(_("Patch has no file name."))
+        return
+    end
+    local question = _("Are you sure you want to reinstall ") .. name .. "?"
+    local label = _("Reinstall")
+    if action == "uninstall" then
+        question = _("Are you sure you want to uninstall ") .. name .. "?"
+        label = _("Uninstall")
+    end
+    Modals.confirm(question, label, function()
+        self:run_package_action(pkg, action, name, on_done, nil)
+    end)
 end
 
 function App:prompt_package_downgrade(pkg, on_done)
@@ -1245,14 +1301,23 @@ function App:confirm_package_asset_action(pkg, asset, on_done)
         Modals.info(_("Patch has no file name."))
         return
     end
-    local action = pkg.installed and "reinstall" or "install"
     local name = package_title(pkg, pkg.id or pkg.name)
     local patch_name = tostring(asset.asset)
+    if Models.patch_file_installed(pkg, patch_name) then
+        Modals.confirm(
+            _("Are you sure you want to uninstall ") .. patch_name .. "?",
+            _("Uninstall"),
+            function()
+                self:run_package_action(pkg, "uninstall", patch_name, on_done, nil)
+            end
+        )
+        return
+    end
     Modals.confirm(
         _("Are you sure you want to install ") .. patch_name .. " " .. _("from") .. " " .. name .. "?",
         _("Install"),
         function()
-            self:run_package_action(pkg, action, patch_name, on_done, nil)
+            self:run_package_action(pkg, "install", patch_name, on_done, nil)
         end
     )
 end
@@ -1264,9 +1329,13 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         id = id,
         action = action,
     })
+    local is_patch = Models.is_patch_package(pkg)
+    local display_name = is_patch and asset and asset ~= ""
+        and (_("patch") .. " " .. tostring(asset))
+        or package_title(pkg, id)
     self.busy = true
     Modals.status(action_progress(action) .. " "
-        .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
+        .. display_name .. "\n\n" .. _("Downloading... Please wait."))
     local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
     if not ok then
         self.busy = false
@@ -1276,11 +1345,15 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     end
     self:poll_package_action({
         id = id,
-        name = package_title(pkg, id),
+        name = display_name,
         action = action,
+        asset = asset,
+        is_patch = is_patch,
+        patch_was_installed = is_patch and Models.patch_file_installed(pkg, asset) or false,
         was_installed = pkg.installed and true or false,
         target_version = opts and opts.release or pkg.latest_version,
-        prompt_restart = action_installs_package(action) and package_is_koreader_plugin(pkg),
+        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
+            and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
         on_done = on_done,
@@ -1315,6 +1388,13 @@ function App:package_action_failure_detail(op)
 end
 
 function App:package_action_succeeded(op, pkg)
+    if op.is_patch and op.asset and op.asset ~= "" then
+        local now_installed = Models.patch_file_installed(pkg, op.asset)
+        if op.action == "uninstall" then
+            return op.patch_was_installed and not now_installed
+        end
+        return now_installed
+    end
     if op.action == "uninstall" then
         return op.was_installed and (not pkg or not pkg.installed)
     end
@@ -1371,7 +1451,10 @@ function App:poll_package_action(op, attempt)
             Modals.close_status()
             local finish = function()
                 if op.prompt_restart then
-                    Modals.restart_koreader(op.name .. " " .. done .. _(" successfully.\n\nRestart KOReader to load the plugin."), function()
+                    local tail = op.action == "uninstall"
+                        and _(" successfully.\n\nRestart KOReader to apply the change.")
+                        or _(" successfully.\n\nRestart KOReader to load the plugin.")
+                    Modals.restart_koreader(op.name .. " " .. done .. tail, function()
                         UIManager:restartKOReader()
                     end)
                 else
@@ -1472,7 +1555,8 @@ end
 
 function App:show_about()
     local version = tostring(self.version or "?"):gsub("^v", "")
-    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
+    local platform = tostring(self:package_platforms())
+    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
 end
 
 function App:start_update()

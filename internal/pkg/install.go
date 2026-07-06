@@ -69,7 +69,16 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			continue
 		}
 		entry := byID[pkgID]
-		log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(entry.Version), entry.Repo)
+		override := ""
+		if pkgID == id {
+			override = assetOverride
+		}
+		if patchAsset := ""; isPatchPackage(entry) {
+			patchAsset = m.resolvePatchAsset(entry, override)
+			log.Infof("Installing patch file %q from %s (repo %s)", patchAsset, entry.ID, entry.Repo)
+		} else {
+			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(entry.Version), entry.Repo)
+		}
 
 		j.Record("fetch-script", "ok", "pkg="+pkgID)
 		scriptPath, err := m.repos.FetchScript(entry.InstallURL)
@@ -78,10 +87,6 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			return fmt.Errorf("fetch install script for %s: %w", pkgID, err)
 		}
 
-		override := ""
-		if pkgID == id {
-			override = assetOverride
-		}
 		installEntry := entry
 		if pkgID == id && releaseTag != "" {
 			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
@@ -105,6 +110,22 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		}
 
 		installedVersion := installEntry.Version
+
+		if isPatchPackage(entry) {
+			asset := m.resolvePatchAsset(entry, override)
+			if asset == "" {
+				j.Abort("patch asset missing")
+				return fmt.Errorf("install %s: could not resolve patch file name", pkgID)
+			}
+			if err := m.st.AppendInstalledPatchFile(state.PatchFileEntry{
+				PackageID: pkgID, Asset: asset, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
+			}); err != nil {
+				j.Abort("record failed: " + err.Error())
+				return err
+			}
+			log.Infof("Installed patch file: %s / %s", pkgID, asset)
+			continue
+		}
 
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
@@ -145,12 +166,21 @@ func (m *Manager) installedDependencySet(installed []state.InstalledEntry) map[s
 	return installedSet
 }
 
-func (m *Manager) Uninstall(id string) error {
-	ok, _ := m.st.IsInstalled(id)
-	if !ok {
-		return fmt.Errorf("package %q is not installed", id)
+func (m *Manager) Uninstall(id, asset string) error {
+	asset = strings.TrimSpace(asset)
+	isPatch := asset != ""
+	if isPatch {
+		if !m.isPatchFileInstalled(id, asset) {
+			return fmt.Errorf("patch file %q of %q is not installed", asset, id)
+		}
+		log.Infof("Uninstalling patch file %s / %s", id, asset)
+	} else {
+		ok, _ := m.st.IsInstalled(id)
+		if !ok {
+			return fmt.Errorf("package %q is not installed", id)
+		}
+		log.Infof("Uninstalling %s", id)
 	}
-	log.Infof("Uninstalling %s", id)
 
 	entry := m.findCatalogEntry(id)
 	if entry == nil || entry.UninstallURL == "" {
@@ -193,13 +223,27 @@ func (m *Manager) Uninstall(id string) error {
 
 	if scriptPath != "" {
 		log.Infof("Package %s executing uninstall script: %s", id, scriptPath)
-		if err := platform.ExecuteScriptWithEnv(scriptPath, m.uninstallEnv(id)); err != nil {
+		env := m.uninstallEnv(id)
+		if isPatch {
+			env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+		}
+		if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
 			j.Abort("execute failed: " + err.Error())
 			return fmt.Errorf("uninstall script failed: %w", err)
 		}
 		log.Infof("Package %s uninstall script completed", id)
 	} else {
 		log.Warnf("Package %s has no uninstall script; removing installed record only", id)
+	}
+
+	if isPatch {
+		if err := m.st.RemoveInstalledPatchFile(id, asset); err != nil {
+			j.Abort("remove from db failed: " + err.Error())
+			return err
+		}
+		log.Infof("Uninstalled patch file: %s / %s", id, asset)
+		j.Commit()
+		return nil
 	}
 
 	if err := m.st.RemoveInstalled(id); err != nil {
@@ -276,12 +320,6 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 
 func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[string]string {
 	env := m.baseScriptEnv(entry.ID)
-	if entry.Source != "" {
-		env["ZENPM_PACKAGE_SOURCE"] = entry.Source
-	}
-	if entry.SourceURL != "" {
-		env["ZENPM_PACKAGE_SOURCE_URL"] = entry.SourceURL
-	}
 
 	asset := strings.TrimSpace(override)
 	if asset == "" {
@@ -289,11 +327,22 @@ func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[stri
 			asset = res.Auto
 		}
 	}
+	selectedAsset, hasSelectedAsset := selectedAsset(entry.Assets, asset)
+	if entry.SourceURL != "" {
+		env["ZENPM_PACKAGE_SOURCE_URL"] = entry.SourceURL
+	}
+	if source := packageSourceRef(entry, selectedAsset, hasSelectedAsset); source != "" {
+		env["ZENPM_PACKAGE_SOURCE"] = source
+	}
 
 	if asset != "" {
-		log.Infof("Package %s using release asset %q", entry.ID, asset)
+		if usesSourcePackage(entry) {
+			log.Infof("Package %s using source asset %q", entry.ID, asset)
+		} else {
+			log.Infof("Package %s using release asset %q", entry.ID, asset)
+		}
 		env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
-		addSelectedAssetEnv(env, entry.Assets, asset)
+		addSelectedAssetEnv(env, selectedAsset, hasSelectedAsset, !usesSourcePackage(entry))
 	} else if entry.SourceAsset != "" {
 		log.Infof("Package %s using source asset pattern %q", entry.ID, entry.SourceAsset)
 		env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
@@ -306,21 +355,45 @@ func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[stri
 	return env
 }
 
-func addSelectedAssetEnv(env map[string]string, rawAssets, selected string) {
+func sourceType(entry *repo.CatalogEntry) string {
+	return strings.ToLower(strings.TrimSpace(entry.SourceType))
+}
+
+func usesSourcePackage(entry *repo.CatalogEntry) bool {
+	return entry != nil && sourceType(entry) == "source"
+}
+
+func packageSourceRef(entry *repo.CatalogEntry, selected assets.Asset, hasSelected bool) string {
+	if usesSourcePackage(entry) && hasSelected && strings.TrimSpace(selected.URL) != "" {
+		return strings.TrimSpace(selected.URL)
+	}
+	if usesSourcePackage(entry) && strings.TrimSpace(entry.SourceURL) != "" {
+		return strings.TrimSpace(entry.SourceURL)
+	}
+	return strings.TrimSpace(entry.Source)
+}
+
+func selectedAsset(rawAssets, selected string) (assets.Asset, bool) {
 	for _, asset := range assets.Parse(rawAssets) {
-		if asset.Asset != selected {
-			continue
+		if asset.Asset == selected {
+			return asset, true
 		}
-		if asset.URL != "" {
-			env["ZENPM_PACKAGE_ASSET_URL"] = asset.URL
-		}
-		if asset.Size != "" {
-			env["ZENPM_PACKAGE_ASSET_SIZE"] = asset.Size
-		}
-		if asset.Arch != "" {
-			env["ZENPM_PACKAGE_ASSET_ARCH"] = asset.Arch
-		}
+	}
+	return assets.Asset{}, false
+}
+
+func addSelectedAssetEnv(env map[string]string, asset assets.Asset, ok bool, includeURL bool) {
+	if !ok {
 		return
+	}
+	if includeURL && asset.URL != "" {
+		env["ZENPM_PACKAGE_ASSET_URL"] = asset.URL
+	}
+	if asset.Size != "" {
+		env["ZENPM_PACKAGE_ASSET_SIZE"] = asset.Size
+	}
+	if asset.Arch != "" {
+		env["ZENPM_PACKAGE_ASSET_ARCH"] = asset.Arch
 	}
 }
 
@@ -427,6 +500,32 @@ func isPatchPackage(entry *repo.CatalogEntry) bool {
 	return category == "patch" || category == "patches" ||
 		category == "koreaderpatch" || category == "koreaderpatches" ||
 		strings.HasSuffix(entry.InstallURL, "/install-patch.sh")
+}
+
+func (m *Manager) isPatchFileInstalled(id, asset string) bool {
+	files, err := m.st.ReadInstalledPatchFiles()
+	if err != nil {
+		return false
+	}
+	for _, f := range files {
+		if f.PackageID == id && f.Asset == asset {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePatchAsset returns the patch file name for a patch install, using the
+// explicit override when given, else the sole asset when the package has one.
+func (m *Manager) resolvePatchAsset(entry *repo.CatalogEntry, override string) string {
+	if override = strings.TrimSpace(override); override != "" {
+		return override
+	}
+	parsed := assets.Parse(entry.Assets)
+	if len(parsed) == 1 {
+		return parsed[0].Asset
+	}
+	return ""
 }
 
 func (m *Manager) Update(id string) error {

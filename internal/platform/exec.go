@@ -18,6 +18,10 @@ func ExecuteScript(scriptPath string) error {
 }
 
 func ExecuteScriptWithEnv(scriptPath string, env map[string]string) error {
+	return ExecuteScriptWithEnvArgs(scriptPath, env, nil)
+}
+
+func ExecuteScriptWithEnvArgs(scriptPath string, env map[string]string, args []string) error {
 	if os.Getenv("ZENPM_DRY_RUN") == "1" {
 		fmt.Fprintf(os.Stderr, "[DRY RUN] would execute: %s\n", scriptPath)
 		return nil
@@ -25,7 +29,8 @@ func ExecuteScriptWithEnv(scriptPath string, env map[string]string) error {
 	if err := os.Chmod(scriptPath, 0755); err != nil {
 		return fmt.Errorf("chmod %s: %w", scriptPath, err)
 	}
-	cmd := exec.Command("/bin/sh", scriptPath)
+	cmdArgs := append([]string{scriptPath}, args...)
+	cmd := exec.Command("/bin/sh", cmdArgs...)
 	cmd.Env = os.Environ()
 	if home, ok := lookupEnv(cmd.Env, "HOME"); !ok || home == "" {
 		cmd.Env = append(cmd.Env, "HOME="+defaultHome())

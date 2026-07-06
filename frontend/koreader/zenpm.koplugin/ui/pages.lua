@@ -9,10 +9,20 @@ local Models = require("models")
 local P = require("ui/primitives")
 local Scroll = require("ui/scroll")
 local Theme = require("ui/theme")
+local Util = require("zenpm_util")
 local _ = require("gettext")
 
 local Pages = {}
 local PACKAGE_ROWS_PER_SCREEN = 4
+
+local function ellipsize(value, limit)
+    local text = tostring(value or "")
+    if text and #text > limit then
+        text = text:sub(1, limit)
+        text = Util.fixUtf8(text, "") .. "…"
+    end
+    return text
+end
 
 local function package_card_height(list_h, gap)
     return math.max(1, math.floor((list_h - gap * (PACKAGE_ROWS_PER_SCREEN - 1)) / PACKAGE_ROWS_PER_SCREEN))
@@ -195,31 +205,60 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         heading = _("Description")
     end
     local assets = Models.package_assets(pkg)
-    local show_patch_assets = Models.is_patch_package(pkg) and #assets > 0
-    if show_patch_assets then
-        heading = _("Patches")
+    local show_patch_tabs = Models.is_patch_package(pkg) and #assets > 0
+    local details_tab = show_patch_tabs and (view.app.state.details_tab or "readme") or "readme"
+    if details_tab ~= "patches" then
+        details_tab = "readme"
     end
-    P.text(bb, heading, inner_x, iy, inner_w, "small", { bold = true })
-    iy = iy + Theme.scale(34)
+    if show_patch_tabs then
+        local tab_h = Theme.scale(38)
+        local gap = Theme.scale(8)
+        local tab_w = math.floor((inner_w - gap) / 2)
+        local function draw_tab(id, label, tx, tw)
+            local selected = details_tab == id
+            P.box(bb, tx, iy, tw, tab_h, {
+                background = selected and Theme.panel or Theme.bg,
+                border_color = selected and Theme.border or Theme.soft,
+                radius = math.floor(tab_h / 2),
+            })
+            P.center_text_box(bb, label, tx, iy, tw, tab_h, "small", { bold = selected })
+            P.hit(view, tx, iy, tw, tab_h, function()
+                view.app:set_package_details_tab(id)
+            end, "details-tab:" .. id)
+        end
+        draw_tab("readme", _("GitHub README"), inner_x, tab_w)
+        draw_tab("patches", _("Patches"), inner_x + tab_w + gap, inner_w - tab_w - gap)
+        iy = iy + tab_h + Theme.scale(14)
+    else
+        P.text(bb, heading, inner_x, iy, inner_w, "small", { bold = true })
+        iy = iy + Theme.scale(34)
+    end
     local content_h = cy + panel_h - Theme.scale(14) - iy
     if content_h <= 0 then
         Scroll.set_list_bounds(view, panel_x, cy, panel_w, panel_h, panel_h)
         return 0
     end
-    if show_patch_assets then
+    if details_tab == "patches" then
         local row_h = Theme.scale(58)
         local gap = Theme.scale(8)
-        local list_w = inner_w - Theme.scale(12)
+        local list_w = inner_w
         local max_scroll = Scroll.scrolled_list(view, bb, assets, inner_x, iy, list_w, content_h, scroll, row_h, gap, function(asset, row_y)
-            P.box(bb, inner_x, row_y, list_w, row_h)
+            local gutter = Theme.scale(30)
+            local row_w = list_w - gutter
+            P.box(bb, inner_x, row_y, row_w, row_h)
             local text_x = inner_x + Theme.scale(10)
-            local text_w = list_w - Theme.scale(20)
-            P.text(bb, tostring(asset.asset or ""), text_x, row_y + Theme.scale(8), text_w, "small", { bold = true })
+            local text_w = row_w - Theme.scale(20)
+            local installed = Models.patch_file_installed(pkg, tostring(asset.asset or ""))
+            local label = ellipsize(asset.asset, 70)
+            if installed then
+                label = label .. "  " .. _("(installed)")
+            end
+            P.text(bb, label, text_x, row_y + Theme.scale(8), text_w, "small", { bold = true })
             local meta = patch_asset_meta(asset)
             if meta ~= "" then
                 P.text(bb, meta, text_x, row_y + Theme.scale(32), text_w, "tiny", { color = Theme.muted })
             end
-            P.hit(view, inner_x, row_y, list_w, row_h, function()
+            P.hit(view, inner_x, row_y, row_w, row_h, function()
                 view.app:confirm_package_asset_action(pkg, asset, function()
                     view.app:reload_current_page()
                 end)

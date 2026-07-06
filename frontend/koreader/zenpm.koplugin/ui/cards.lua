@@ -126,7 +126,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
-    local title = ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Unknown package")), 60)
+    local title = ellipsize(Models.package_display_name(pkg, _("Unknown package")), 60)
     local description = ellipsize(opts.second_line or I18n.dynamic_or(pkg.description, _("No description")), 56)
     -- When a caller overrides second_line (e.g. details "By <author>"), skip the separate author row.
     local author = opts.second_line and "" or ellipsize(package_author_text(pkg), 56)

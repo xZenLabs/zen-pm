@@ -31,34 +31,35 @@ type Server struct {
 }
 
 type pkgJSON struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Version       string          `json:"version"`
-	Description   string          `json:"description"`
-	Author        string          `json:"author"`
-	Tags          []string        `json:"tags"`
-	Category      string          `json:"category,omitempty"`
-	Platforms     []string        `json:"platforms"`
-	Repo          string          `json:"repo"`
-	RepoTrust     string          `json:"repo_trust,omitempty"`
-	RepoDefault   bool            `json:"repo_default,omitempty"`
-	Installed     bool            `json:"installed"`
-	InstalledVer  string          `json:"installed_version,omitempty"`
-	LatestVersion string          `json:"latest_version,omitempty"`
-	UpdateAvail   bool            `json:"update_available,omitempty"`
-	IconURL       string          `json:"icon_url,omitempty"`
-	RepoIconURL   string          `json:"repo_icon_url,omitempty"`
-	ImageURL      string          `json:"image_url,omitempty"`
-	Images        []string        `json:"images,omitempty"`
-	Featured      bool            `json:"featured,omitempty"`
-	FeaturedImage string          `json:"featured_image,omitempty"`
-	Source        string          `json:"source,omitempty"`
-	SourceType    string          `json:"source_type,omitempty"`
-	SourceURL     string          `json:"source_url,omitempty"`
-	Stars         string          `json:"stars,omitempty"`
-	PluginModule  string          `json:"plugin_module,omitempty"`
-	Assets        json.RawMessage `json:"assets,omitempty"`
-	Constraints   json.RawMessage `json:"constraints,omitempty"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Version         string          `json:"version"`
+	Description     string          `json:"description"`
+	Author          string          `json:"author"`
+	Tags            []string        `json:"tags"`
+	Category        string          `json:"category,omitempty"`
+	Platforms       []string        `json:"platforms"`
+	Repo            string          `json:"repo"`
+	RepoTrust       string          `json:"repo_trust,omitempty"`
+	RepoDefault     bool            `json:"repo_default,omitempty"`
+	Installed       bool            `json:"installed"`
+	InstalledVer    string          `json:"installed_version,omitempty"`
+	InstalledAssets []string        `json:"installed_assets,omitempty"`
+	LatestVersion   string          `json:"latest_version,omitempty"`
+	UpdateAvail     bool            `json:"update_available,omitempty"`
+	IconURL         string          `json:"icon_url,omitempty"`
+	RepoIconURL     string          `json:"repo_icon_url,omitempty"`
+	ImageURL        string          `json:"image_url,omitempty"`
+	Images          []string        `json:"images,omitempty"`
+	Featured        bool            `json:"featured,omitempty"`
+	FeaturedImage   string          `json:"featured_image,omitempty"`
+	Source          string          `json:"source,omitempty"`
+	SourceType      string          `json:"source_type,omitempty"`
+	SourceURL       string          `json:"source_url,omitempty"`
+	Stars           string          `json:"stars,omitempty"`
+	PluginModule    string          `json:"plugin_module,omitempty"`
+	Assets          json.RawMessage `json:"assets,omitempty"`
+	Constraints     json.RawMessage `json:"constraints,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -397,6 +398,12 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		installedVersion[e.ID] = e.Version
 	}
 
+	patchFiles, _ := s.st.ReadInstalledPatchFiles()
+	installedAssets := make(map[string][]string)
+	for _, f := range patchFiles {
+		installedAssets[f.PackageID] = append(installedAssets[f.PackageID], f.Asset)
+	}
+
 	filtered := repo.FilterByPlatform(catalog, plat)
 	platformList := platformValues(plat)
 	repoEntries, _ := s.repos.List()
@@ -415,7 +422,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Description: e.Description, Author: e.Author,
 			Tags:      e.Tags,
 			Category:  e.Category,
-			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID],
+			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID] || len(installedAssets[e.ID]) > 0,
 			IconURL:       e.IconURL,
 			RepoIconURL:   e.RepoIconURL,
 			ImageURL:      firstString(e.Images),
@@ -429,6 +436,9 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			PluginModule:  e.PluginModule,
 			Assets:        rawJSON(e.Assets),
 			Constraints:   rawJSON(e.Constraints),
+		}
+		if files := installedAssets[e.ID]; len(files) > 0 {
+			item.InstalledAssets = files
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
@@ -553,7 +563,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 				err = s.pkgs.InstallAsset(id, asset)
 			}
 		} else {
-			err = s.pkgs.Uninstall(id)
+			err = s.pkgs.Uninstall(id, asset)
 		}
 		if err != nil {
 			log.Errorf("Package %s %s failed: %v", id, action, err)

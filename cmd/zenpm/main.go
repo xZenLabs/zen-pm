@@ -171,9 +171,13 @@ func runPackage(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, plat st
 		fmt.Printf("Installed: %s\n", args[1])
 	case "uninstall":
 		if len(args) < 2 {
-			die("Usage: zenpm package uninstall <id>")
+			die("Usage: zenpm package uninstall <id> [patch-file]")
 		}
-		dieOnErr(pkgs.Uninstall(args[1]))
+		asset := ""
+		if len(args) > 2 {
+			asset = args[2]
+		}
+		dieOnErr(pkgs.Uninstall(args[1], asset))
 		fmt.Printf("Uninstalled: %s\n", args[1])
 	case "update":
 		target := ""

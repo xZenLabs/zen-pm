@@ -59,6 +59,15 @@ func (s *sqliteStore) migrate() error {
 			repo TEXT NOT NULL,
 			installed_at TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS installed_patch_files (
+			package_id TEXT NOT NULL,
+			asset TEXT NOT NULL,
+			name TEXT NOT NULL,
+			version TEXT NOT NULL,
+			repo TEXT NOT NULL,
+			installed_at TEXT NOT NULL,
+			PRIMARY KEY(package_id, asset)
+		)`,
 		`CREATE TABLE IF NOT EXISTS catalog_packages (
 			id TEXT PRIMARY KEY,
 			position INTEGER NOT NULL,
@@ -310,6 +319,39 @@ func (s *sqliteStore) IsInstalled(id string) (bool, string) {
 		return false, ""
 	}
 	return true, version
+}
+
+func (s *sqliteStore) ReadInstalledPatchFiles() ([]PatchFileEntry, error) {
+	rows, err := s.db.Query(`SELECT package_id, asset, name, version, repo, installed_at FROM installed_patch_files ORDER BY package_id, asset`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var entries []PatchFileEntry
+	for rows.Next() {
+		var e PatchFileEntry
+		if err := rows.Scan(&e.PackageID, &e.Asset, &e.Name, &e.Version, &e.Repo, &e.InstalledAt); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func (s *sqliteStore) AppendInstalledPatchFile(e PatchFileEntry) error {
+	if e.InstalledAt == "" {
+		e.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	}
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO installed_patch_files(package_id, asset, name, version, repo, installed_at) VALUES(?, ?, ?, ?, ?, ?)`,
+		e.PackageID, e.Asset, e.Name, e.Version, e.Repo, e.InstalledAt,
+	)
+	return err
+}
+
+func (s *sqliteStore) RemoveInstalledPatchFile(packageID, asset string) error {
+	_, err := s.db.Exec(`DELETE FROM installed_patch_files WHERE package_id = ? AND asset = ?`, packageID, asset)
+	return err
 }
 
 func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {

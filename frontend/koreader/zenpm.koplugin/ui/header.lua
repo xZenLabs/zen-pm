@@ -154,7 +154,7 @@ function Header.draw(view, bb, x, y, w)
         Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(8))
         Header.draw_back(view, bb, x + pad, y + Theme.scale(8), function() view.app:go_back_from_details() end)
         local pkg = view.app.state.current_package or {}
-        P.vcenter_text(bb, ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
+        P.vcenter_text(bb, ellipsize(Models.package_display_name(pkg, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
         return y + h
     elseif page == "debug" then
         local h = Theme.scale(54)
