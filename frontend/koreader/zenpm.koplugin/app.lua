@@ -344,6 +344,85 @@ local function resolve_plugin_settings_deleter(pkg)
     return nil
 end
 
+-- The key KOReader stores in its plugins_disabled table is the .koplugin dir
+-- basename. Prefer the on-disk directory (honours disabled/unloaded plugins),
+-- fall back to the daemon-derived module name, then the package id/name.
+local function plugin_disabled_key(pkg)
+    local key = koplugin_dir_basename(find_koplugin_dir(pkg))
+    if type(key) == "string" and key ~= "" then return key end
+    key = pkg and (pkg.plugin_module or pkg.id or pkg.name)
+    if type(key) == "string" and key ~= "" then return key end
+    return nil
+end
+
+local function is_plugin_disabled(pkg)
+    local key = plugin_disabled_key(pkg)
+    if not key or not (G_reader_settings and G_reader_settings.readSetting) then
+        return false
+    end
+    local disabled = G_reader_settings:readSetting("plugins_disabled")
+    return type(disabled) == "table" and disabled[key] == true
+end
+
+-- Toggle a plugin the same way KOReader's PluginLoader does: flip the key in the
+-- plugins_disabled table and flush. Takes effect on restart.
+local function set_plugin_disabled(pkg, disabled)
+    local key = plugin_disabled_key(pkg)
+    if not key then return false, _("Could not resolve plugin name.") end
+    if not (G_reader_settings and G_reader_settings.saveSetting) then
+        return false, _("KOReader settings are unavailable.")
+    end
+    local t = G_reader_settings:readSetting("plugins_disabled")
+    if type(t) ~= "table" then t = {} end
+    if disabled then t[key] = true else t[key] = nil end
+    G_reader_settings:saveSetting("plugins_disabled", t)
+    G_reader_settings:flush()
+    return true
+end
+
+local function patches_dir()
+    local ok_ds, DataStorage = pcall(require, "datastorage")
+    if ok_ds and DataStorage and DataStorage.getDataDir then
+        return DataStorage:getDataDir() .. "/patches"
+    end
+    return nil
+end
+
+local function file_exists(path)
+    if type(path) ~= "string" or path == "" then return false end
+    local f = io.open(path, "r")
+    if f then f:close() return true end
+    return false
+end
+
+-- A userpatch is disabled the native way by appending .disabled to its filename.
+local function is_patch_disabled(pkg)
+    local asset = pkg and pkg.patch_asset
+    local dir = patches_dir()
+    if type(asset) ~= "string" or asset == "" or not dir then return false end
+    local base = dir .. "/" .. asset
+    return (not file_exists(base)) and file_exists(base .. ".disabled")
+end
+
+local function set_patch_disabled(asset, disabled)
+    local dir = patches_dir()
+    if type(asset) ~= "string" or asset == "" or not dir then
+        return false, _("Could not resolve patch file.")
+    end
+    local base = dir .. "/" .. asset
+    local off = base .. ".disabled"
+    local from, to = base, off
+    if not disabled then from, to = off, base end
+    if not file_exists(from) then
+        -- Already in target state (or missing); treat as success if target exists.
+        if file_exists(to) then return true end
+        return false, _("Patch file not found.")
+    end
+    local ok, err = os.rename(from, to)
+    if not ok then return false, tostring(err or _("rename failed")) end
+    return true
+end
+
 function App:show()
     if not self.view then
         self.view = AppView:new{ app = self }
@@ -601,7 +680,7 @@ end
 
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
-        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab)
+        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset)
     elseif self.state.page == "category_details" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
@@ -911,7 +990,7 @@ function App:show_source_details(name)
     self:refresh()
 end
 
-function App:show_package_details(package_id, from_tab, force_reload, details_tab)
+function App:show_package_details(package_id, from_tab, force_reload, details_tab, patch_asset)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -937,6 +1016,11 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
     if not pkg then
         self:set_error(_("Package not found."))
         return
+    end
+    -- For an installed patch item, show the patch itself (not its parent package):
+    -- rebuild the single-asset item so the title, card and modify menu act on the patch.
+    if type(patch_asset) == "string" and patch_asset ~= "" and Models.is_patch_package(pkg) then
+        pkg = Models.installed_patch_item(pkg, patch_asset)
     end
     self.state.packages = packages
     local cache_key = tostring(pkg.id or pkg.name or "")
@@ -1165,12 +1249,17 @@ function App:perform_package_action(pkg, on_done)
         return
     end
     if pkg.installed then
+        local is_koplugin = package_is_koreader_plugin(pkg)
         Modals.package_modify(pkg, {
             info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
             end or nil,
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)
+            end or nil,
+            disabled = is_koplugin and is_plugin_disabled(pkg) or nil,
+            enable_disable = is_koplugin and function()
+                self:confirm_toggle_enable(pkg, "plugin", on_done)
             end or nil,
             reinstall_downgrade = Models.has_github_source(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
@@ -1195,6 +1284,10 @@ function App:show_patch_modify(pkg, on_done)
         info = self.state.page ~= "package_details" and function()
             self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
         end or nil,
+        disabled = is_patch_disabled(pkg),
+        enable_disable = function()
+            self:confirm_toggle_enable(pkg, "patch", on_done)
+        end,
         reinstall = function()
             self:confirm_patch_item_action(pkg, "reinstall", asset, on_done)
         end,
@@ -1202,6 +1295,55 @@ function App:show_patch_modify(pkg, on_done)
             self:confirm_patch_item_action(pkg, "uninstall", asset, on_done)
         end,
     })
+end
+
+-- Report whether a package is currently disabled the native KOReader way.
+-- Dispatches to the plugin (plugins_disabled) or patch (.disabled file) check.
+-- Returns false for anything that can't be toggled.
+function App:package_disabled(pkg)
+    if Models.is_installed_patch_item(pkg) then
+        return is_patch_disabled(pkg)
+    end
+    if package_is_koreader_plugin(pkg) then
+        return is_plugin_disabled(pkg)
+    end
+    return false
+end
+
+-- Toggle enable/disable natively (settings flag for plugins, file rename for
+-- patches). No backend call — the change is local — so on success we prompt a
+-- restart, which is when KOReader actually applies plugin/patch state.
+function App:confirm_toggle_enable(pkg, kind, on_done)
+    if self.busy then
+        Modals.info(_("Another operation is in progress. Please wait."))
+        return
+    end
+    local disabled = self:package_disabled(pkg)
+    local name = Models.package_display_name(pkg, _("Package"))
+    local verb = disabled and _("enable") or _("disable")
+    local label = disabled and _("Enable") or _("Disable")
+    Modals.confirm(
+        _("Are you sure you want to ") .. verb .. " " .. name .. "?",
+        label,
+        function()
+            local ok, err
+            if kind == "patch" then
+                ok, err = set_patch_disabled(pkg.patch_asset, not disabled)
+            else
+                ok, err = set_plugin_disabled(pkg, not disabled)
+            end
+            if not ok then
+                Modals.info_for(_("Could not ") .. verb .. " " .. name .. ": " .. tostring(err),
+                    Constants.PACKAGE_NOTICE_SECONDS)
+                return
+            end
+            local done = disabled and _("enabled") or _("disabled")
+            Modals.restart_koreader(
+                name .. " " .. done .. _(" successfully.\n\nRestart KOReader to apply the change."),
+                function() UIManager:restartKOReader() end)
+            if on_done then on_done() end
+        end
+    )
 end
 
 function App:confirm_patch_item_action(pkg, action, asset, on_done)

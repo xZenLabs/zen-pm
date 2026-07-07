@@ -214,21 +214,31 @@ function Models.sort_packages(packages, sort_key)
     return out
 end
 
+-- Build the single-file view of an installed patch: a shallow clone of the parent
+-- patch package narrowed to one asset, so its name/title and modify actions target
+-- that patch file rather than the parent package.
+function Models.installed_patch_item(pkg, asset)
+    local item = {}
+    for key, value in pairs(pkg) do
+        item[key] = value
+    end
+    item.name = asset
+    item.patch_asset = asset
+    item.installed_assets = { asset }
+    item.installed = true
+    -- Drop the multi-asset list so the details view shows the patch itself, not the
+    -- parent's per-file "Patches" tab.
+    item.assets = nil
+    return item
+end
+
 function Models.installed_packages(packages)
     local out = {}
     for _, pkg in ipairs(packages or {}) do
         if Models.is_patch_package(pkg) then
             for _, asset in ipairs(pkg.installed_assets or {}) do
                 if type(asset) == "string" and asset ~= "" then
-                    local item = {}
-                    for key, value in pairs(pkg) do
-                        item[key] = value
-                    end
-                    item.name = asset
-                    item.patch_asset = asset
-                    item.installed_assets = { asset }
-                    item.installed = true
-                    table.insert(out, item)
+                    table.insert(out, Models.installed_patch_item(pkg, asset))
                 end
             end
         elseif pkg.installed then
@@ -365,7 +375,8 @@ end
 function Models.package_meta(pkg)
     local parts = {}
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
-        table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
+        local v = tostring(pkg.version):gsub("^[vV]", "")
+        table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
     table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " - ")

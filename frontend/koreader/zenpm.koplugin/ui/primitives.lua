@@ -291,6 +291,15 @@ function P.image_zoomed_masked(bb, file, x, y, w, h, zoom, opts)
     return P.image_zoomed(bb, file, x, y, w, h, zoom, opts)
 end
 
+function P.dim(bb, x, y, w, h, by)
+    if w <= 0 or h <= 0 or not bb.lightenRect then
+        return
+    end
+    pcall(function()
+        bb:lightenRect(x, y, w, h, by or 0.5)
+    end)
+end
+
 function P.hit(app, x, y, w, h, callback, label)
     table.insert(app.hitboxes, {
         x = x, y = y, w = w, h = h,

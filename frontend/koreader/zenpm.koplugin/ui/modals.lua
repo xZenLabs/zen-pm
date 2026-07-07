@@ -120,6 +120,17 @@ function Modals.package_modify(pkg, callbacks)
             },
         })
     end
+    if callbacks.enable_disable then
+        table.insert(buttons, {
+            {
+                text = callbacks.disabled and _("Enable") or _("Disable"),
+                callback = function()
+                    UIManager:close(dialog)
+                    callbacks.enable_disable()
+                end,
+            },
+        })
+    end
     if callbacks.reinstall_downgrade then
         table.insert(buttons, {
             {
