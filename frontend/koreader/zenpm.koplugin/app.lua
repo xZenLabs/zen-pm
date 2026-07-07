@@ -1224,9 +1224,10 @@ end
 -- Show installable GitHub releases for a package. Each version maps to an
 -- update/reinstall/downgrade action based on its relation to the installed
 -- version. Prereleases are hidden unless the user enabled Zen UI's beta channel.
--- Releases are fetched one server page at a time (5 per request) so large
--- changelog bodies never blow the response size limit; "Show more" fetches the
--- next page and appends it to the accumulated list.
+-- All releases are fetched in one request (keeps GitHub API calls low under the
+-- anonymous rate limit); the list is paged VERSIONS_PER_PAGE at a time in the UI.
+local VERSIONS_PER_PAGE = 5
+
 local function version_action(current, tag)
     if current == nil or current == "" then return "install" end
     if version_gt(tag, current) then return "update" end
@@ -1235,53 +1236,35 @@ local function version_action(current, tag)
 end
 
 function App:prompt_package_versions(pkg, on_done)
-    local state = {
-        pkg = pkg,
-        on_done = on_done,
-        current = pkg.installed and (pkg.installed_version or pkg.version or "") or "",
-        allow_prerelease = zenui_beta_enabled(),
-        releases = {},
-        net_page = 0,
-        has_more = true,
-    }
-    if not self:load_more_versions(state) then return end
-    self:show_versions_page(state)
-end
-
--- Fetch the next server page into state.releases. Returns false and shows an
--- error if the first page fails; later-page failures leave the list intact.
-function App:load_more_versions(state)
+    local current = pkg.installed and (pkg.installed_version or pkg.version or "") or ""
     Modals.status(_("Loading GitHub releases..."))
-    local ok, data = self.client:get_package_releases(state.pkg.id or state.pkg.name, state.net_page + 1)
+    local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
     Modals.close_status()
     if not ok then
-        if state.net_page == 0 then
-            Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
-            return false
-        end
-        state.has_more = false
-        Modals.info(_("Could not load more releases: ") .. tostring(data))
-        return true
+        Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
+        return
     end
-    state.net_page = state.net_page + 1
-    state.has_more = type(data) == "table" and data.has_more == true
+    local allow_prerelease = zenui_beta_enabled()
+    local releases = {}
     for _, release in ipairs(type(data) == "table" and data.releases or {}) do
-        if release.tag_name and (state.allow_prerelease or not release.prerelease) then
-            table.insert(state.releases, release)
+        if release.tag_name and (allow_prerelease or not release.prerelease) then
+            table.insert(releases, release)
         end
     end
-    return true
-end
-
-function App:show_versions_page(state)
-    local pkg = state.pkg
-    if #state.releases == 0 and not state.has_more then
+    if #releases == 0 then
         Modals.info(_("No GitHub releases with ZIP assets were found."))
         return
     end
+    self:show_versions_page(pkg, releases, current, 1, on_done)
+end
+
+function App:show_versions_page(pkg, releases, current, page, on_done)
     local rows = {}
-    for i, release in ipairs(state.releases) do
-        local action = version_action(state.current, release.tag_name)
+    local start_index = (page - 1) * VERSIONS_PER_PAGE + 1
+    local last_index = math.min(start_index + VERSIONS_PER_PAGE - 1, #releases)
+    for i = start_index, last_index do
+        local release = releases[i]
+        local action = version_action(current, release.tag_name)
         local label = tostring(release.tag_name)
         if not pkg.installed and i == 1 then
             label = label .. " (" .. _("Latest") .. ")"
@@ -1294,17 +1277,15 @@ function App:show_versions_page(state)
         rows[#rows + 1] = {
             text = label,
             callback = function()
-                self:choose_version_release(pkg, release, action, state.on_done)
+                self:choose_version_release(pkg, release, action, on_done)
             end,
         }
     end
-    if state.has_more then
+    if last_index < #releases then
         rows[#rows + 1] = {
-            text = _("Show more"),
+            text = _("Show more") .. " (" .. tostring(#releases - last_index) .. ")",
             callback = function()
-                if self:load_more_versions(state) then
-                    self:show_versions_page(state)
-                end
+                self:show_versions_page(pkg, releases, current, page + 1, on_done)
             end,
         }
     end

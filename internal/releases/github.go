@@ -12,7 +12,7 @@ import (
 	"unicode"
 )
 
-const githubResponseLimit = 512 * 1024
+const githubResponseLimit = 4 * 1024 * 1024
 
 var githubAPIBaseURL = "https://api.github.com"
 
@@ -68,28 +68,24 @@ func FetchGitHubReadme(source string) (string, error) {
 	return string(data), nil
 }
 
-// FetchGitHubReleases returns one page of releases (perPage items) starting at
-// the given 1-based page. hasMore is true when GitHub returned a full page,
-// meaning further pages likely exist. Paginating keeps each response small so
-// large changelog bodies don't blow the response size limit.
-func FetchGitHubReleases(source string, page, perPage int) ([]Release, bool, error) {
+// FetchGitHubReleases returns up to limit releases in one request. The frontend
+// paginates the result for display; fetching them all at once keeps GitHub API
+// calls low, which matters under the anonymous rate limit (60 req/hr per IP).
+func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 	repository, ok := GitHubRepository(source)
 	if !ok {
-		return nil, false, fmt.Errorf("source is not a GitHub repository")
+		return nil, fmt.Errorf("source is not a GitHub repository")
 	}
-	if page < 1 {
-		page = 1
+	if limit < 1 {
+		limit = 10
 	}
-	if perPage < 1 {
-		perPage = 5
+	if limit > 30 {
+		limit = 30
 	}
-	if perPage > 30 {
-		perPage = 30
-	}
-	path := fmt.Sprintf("/repos/%s/releases?per_page=%d&page=%d", repository, perPage, page)
+	path := fmt.Sprintf("/repos/%s/releases?per_page=%d", repository, limit)
 	data, err := githubRequest(path, "application/vnd.github+json")
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	var response []struct {
 		TagName    string `json:"tag_name"`
@@ -102,9 +98,8 @@ func FetchGitHubReleases(source string, page, perPage int) ([]Release, bool, err
 		} `json:"assets"`
 	}
 	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, false, fmt.Errorf("decode GitHub releases: %w", err)
+		return nil, fmt.Errorf("decode GitHub releases: %w", err)
 	}
-	hasMore := len(response) == perPage
 	out := make([]Release, 0, len(response))
 	for _, item := range response {
 		if item.Draft || strings.TrimSpace(item.TagName) == "" {
@@ -125,7 +120,7 @@ func FetchGitHubReleases(source string, page, perPage int) ([]Release, bool, err
 			out = append(out, release)
 		}
 	}
-	return out, hasMore, nil
+	return out, nil
 }
 
 func githubRequest(path, accept string) ([]byte, error) {

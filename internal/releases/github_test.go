@@ -31,7 +31,7 @@ func TestFetchGitHubMetadata(t *testing.T) {
 				t.Fatalf("README Accept = %q", got)
 			}
 			fmt.Fprint(w, "# Reader\n\nHello.")
-		case "/repos/owner/repo/releases?per_page=2&page=1":
+		case "/repos/owner/repo/releases?per_page=2":
 			fmt.Fprint(w, `[
 				{"tag_name":"v2.0","name":"Two","draft":false,"assets":[
 					{"name":"plugin.zip","browser_download_url":"https://example.test/plugin.zip"},
@@ -59,15 +59,12 @@ func TestFetchGitHubMetadata(t *testing.T) {
 		t.Fatalf("README = %q", readme)
 	}
 
-	got, hasMore, err := FetchGitHubReleases("https://github.com/owner/repo", 1, 2)
+	got, err := FetchGitHubReleases("https://github.com/owner/repo", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 1 || got[0].TagName != "v2.0" || len(got[0].Assets) != 1 || got[0].Assets[0].Name != "plugin.zip" {
 		t.Fatalf("releases = %#v", got)
-	}
-	if !hasMore {
-		t.Fatalf("hasMore = false, want true (2 items returned for per_page=2)")
 	}
 }
 
