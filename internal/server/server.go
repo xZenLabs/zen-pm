@@ -619,12 +619,16 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	items, err := releases.FetchGitHubReleases(source, 10)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	items, hasMore, err := releases.FetchGitHubReleases(source, page, 5)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"releases": items})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"releases": items, "has_more": hasMore, "page": page})
 }
 
 func (s *Server) handlePackageAssets(w http.ResponseWriter, r *http.Request, id string) {

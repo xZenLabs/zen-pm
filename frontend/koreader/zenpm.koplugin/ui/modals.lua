@@ -120,22 +120,23 @@ function Modals.package_modify(pkg, callbacks)
             },
         })
     end
-    table.insert(buttons, {
-        {
-            text = _("Reinstall"),
-            callback = function()
-                UIManager:close(dialog)
-                callbacks.reinstall()
-            end,
-        },
-    })
-    if callbacks.downgrade then
+    if callbacks.reinstall_downgrade then
         table.insert(buttons, {
             {
-                text = _("Downgrade"),
+                text = _("Reinstall / Downgrade"),
                 callback = function()
                     UIManager:close(dialog)
-                    callbacks.downgrade()
+                    callbacks.reinstall_downgrade()
+                end,
+            },
+        })
+    else
+        table.insert(buttons, {
+            {
+                text = _("Reinstall"),
+                callback = function()
+                    UIManager:close(dialog)
+                    callbacks.reinstall()
                 end,
             },
         })

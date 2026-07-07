@@ -196,8 +196,12 @@ function Client:get_package_readme(id)
     return self:request("GET", "/packages/" .. url_encode(id) .. "/readme", nil)
 end
 
-function Client:get_package_releases(id)
-    return self:request("GET", "/packages/" .. url_encode(id) .. "/releases", nil)
+function Client:get_package_releases(id, page)
+    local path = "/packages/" .. url_encode(id) .. "/releases"
+    if page and page > 1 then
+        path = path .. "?page=" .. tostring(page)
+    end
+    return self:request("GET", path, nil)
 end
 
 function Client:get_log(tail)

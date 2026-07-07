@@ -14,6 +14,39 @@ local Util = require("zenpm_util")
 
 local App = {}
 
+-- Persist UI preferences (filter, advanced mode) in our own config file inside
+-- the ZenPM state dir, kept separate from KOReader's global settings.
+local config_settings = nil
+
+local function open_config()
+    if config_settings then return config_settings end
+    local ok_ls, LuaSettings = pcall(require, "luasettings")
+    if not (ok_ls and LuaSettings) then return nil end
+    local ok_home, home = pcall(function() return Daemon:state_home() end)
+    if not (ok_home and type(home) == "string" and home ~= "") then return nil end
+    local ok_open, settings = pcall(function()
+        return LuaSettings:open(home .. "/config.lua")
+    end)
+    if not ok_open or not settings then return nil end
+    config_settings = settings
+    return config_settings
+end
+
+function App.load_setting(key, default)
+    local settings = open_config()
+    if not settings then return default end
+    local value = settings:readSetting(key)
+    if value == nil then return default end
+    return value
+end
+
+function App.save_setting(key, value)
+    local settings = open_config()
+    if not settings then return end
+    settings:saveSetting(key, value)
+    settings:flush()
+end
+
 function App:new(plugin)
     local o = {
         plugin = plugin,
@@ -27,7 +60,8 @@ function App:new(plugin)
         state = {
             page = "home",
             active_tab = "home",
-            filter_installable = true,
+            filter_installable = App.load_setting("filter_installable", true),
+            advanced = App.load_setting("advanced", false),
             filters = { search = "", installed = "", categories = "", category = "" },
             sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
             scroll = {},
@@ -73,6 +107,13 @@ local function action_present(action)
         return _("reinstall")
     end
     return _("install")
+end
+
+local function action_label(action)
+    if action == "update" then return _("Update") end
+    if action == "downgrade" then return _("Downgrade") end
+    if action == "reinstall" then return _("Reinstall") end
+    return _("Get")
 end
 
 local function action_progress(action)
@@ -220,6 +261,21 @@ local function load_plugin_from_disk(dir_path)
     package.cpath = package_cpath
     if not ok or type(mod) ~= "table" then return nil end
     return mod
+end
+
+-- Zen UI stores its updater channel in a LuaSettings-style config table at
+-- {settings_dir}/Zen UI/config.lua. Beta channel means the user opts into
+-- prerelease builds, so ZenPM should surface prerelease versions too.
+local function zenui_beta_enabled()
+    local ok_ds, DataStorage = pcall(require, "datastorage")
+    if not (ok_ds and DataStorage and DataStorage.getSettingsDir) then return false end
+    local config_file = DataStorage:getSettingsDir() .. "/Zen UI/config.lua"
+    local ok_chunk, chunk = pcall(loadfile, config_file)
+    if not ok_chunk or type(chunk) ~= "function" then return false end
+    local ok_data, data = pcall(chunk)
+    if not ok_data or type(data) ~= "table" then return false end
+    local updater = data.updater
+    return type(updater) == "table" and updater.update_channel == "beta"
 end
 
 local function delete_default_plugin_settings(plugin_name)
@@ -1116,16 +1172,18 @@ function App:perform_package_action(pkg, on_done)
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)
             end or nil,
+            reinstall_downgrade = Models.has_github_source(pkg) and function()
+                self:prompt_package_versions(pkg, on_done)
+            end or nil,
             reinstall = function()
                 self:confirm_package_action(pkg, "reinstall", on_done)
             end,
-            downgrade = Models.has_github_source(pkg) and function()
-                self:prompt_package_downgrade(pkg, on_done)
-            end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
+    elseif self.state.advanced and Models.has_github_source(pkg) then
+        self:prompt_package_versions(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
@@ -1163,41 +1221,100 @@ function App:confirm_patch_item_action(pkg, action, asset, on_done)
     end)
 end
 
-function App:prompt_package_downgrade(pkg, on_done)
-    local current = pkg.installed_version or pkg.version or ""
+-- Show installable GitHub releases for a package. Each version maps to an
+-- update/reinstall/downgrade action based on its relation to the installed
+-- version. Prereleases are hidden unless the user enabled Zen UI's beta channel.
+-- Releases are fetched one server page at a time (5 per request) so large
+-- changelog bodies never blow the response size limit; "Show more" fetches the
+-- next page and appends it to the accumulated list.
+local function version_action(current, tag)
+    if current == nil or current == "" then return "install" end
+    if version_gt(tag, current) then return "update" end
+    if version_gt(current, tag) then return "downgrade" end
+    return "reinstall"
+end
+
+function App:prompt_package_versions(pkg, on_done)
+    local state = {
+        pkg = pkg,
+        on_done = on_done,
+        current = pkg.installed and (pkg.installed_version or pkg.version or "") or "",
+        allow_prerelease = zenui_beta_enabled(),
+        releases = {},
+        net_page = 0,
+        has_more = true,
+    }
+    if not self:load_more_versions(state) then return end
+    self:show_versions_page(state)
+end
+
+-- Fetch the next server page into state.releases. Returns false and shows an
+-- error if the first page fails; later-page failures leave the list intact.
+function App:load_more_versions(state)
     Modals.status(_("Loading GitHub releases..."))
-    local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
+    local ok, data = self.client:get_package_releases(state.pkg.id or state.pkg.name, state.net_page + 1)
     Modals.close_status()
     if not ok then
-        Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
+        if state.net_page == 0 then
+            Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
+            return false
+        end
+        state.has_more = false
+        Modals.info(_("Could not load more releases: ") .. tostring(data))
+        return true
+    end
+    state.net_page = state.net_page + 1
+    state.has_more = type(data) == "table" and data.has_more == true
+    for _, release in ipairs(type(data) == "table" and data.releases or {}) do
+        if release.tag_name and (state.allow_prerelease or not release.prerelease) then
+            table.insert(state.releases, release)
+        end
+    end
+    return true
+end
+
+function App:show_versions_page(state)
+    local pkg = state.pkg
+    if #state.releases == 0 and not state.has_more then
+        Modals.info(_("No GitHub releases with ZIP assets were found."))
         return
     end
     local rows = {}
-    for _, release in ipairs(type(data) == "table" and data.releases or {}) do
-        if release.tag_name and version_gt(current, release.tag_name) then
-            local label = tostring(release.tag_name)
-            if release.prerelease then
-                label = label .. " (" .. _("prerelease") .. ")"
-            end
-            table.insert(rows, {
-                text = label,
-                callback = function()
-                    self:choose_downgrade_release(pkg, release, on_done)
-                end,
-            })
+    for i, release in ipairs(state.releases) do
+        local action = version_action(state.current, release.tag_name)
+        local label = tostring(release.tag_name)
+        if not pkg.installed and i == 1 then
+            label = label .. " (" .. _("Latest") .. ")"
+        elseif action == "reinstall" then
+            label = label .. " (" .. _("installed") .. ")"
         end
+        if release.prerelease then
+            label = label .. " (" .. _("prerelease") .. ")"
+        end
+        rows[#rows + 1] = {
+            text = label,
+            callback = function()
+                self:choose_version_release(pkg, release, action, state.on_done)
+            end,
+        }
     end
-    if #rows == 0 then
-        Modals.info(_("No older GitHub releases with ZIP assets were found."))
-        return
+    if state.has_more then
+        rows[#rows + 1] = {
+            text = _("Show more"),
+            callback = function()
+                if self:load_more_versions(state) then
+                    self:show_versions_page(state)
+                end
+            end,
+        }
     end
-    Modals.actions(_("Downgrade ") .. package_title(pkg, pkg.id or pkg.name), rows)
+    Modals.actions(_("Select version for ") .. package_title(pkg, pkg.id or pkg.name), rows)
 end
 
-function App:choose_downgrade_release(pkg, release, on_done)
+function App:choose_version_release(pkg, release, action, on_done)
     local assets = type(release.assets) == "table" and release.assets or {}
     if #assets == 1 then
-        self:confirm_package_downgrade(pkg, release.tag_name, assets[1].name, on_done)
+        self:confirm_package_version(pkg, release.tag_name, action, assets[1].name, on_done)
         return
     end
     local rows = {}
@@ -1206,7 +1323,7 @@ function App:choose_downgrade_release(pkg, release, on_done)
             table.insert(rows, {
                 text = asset.name,
                 callback = function()
-                    self:confirm_package_downgrade(pkg, release.tag_name, asset.name, on_done)
+                    self:confirm_package_version(pkg, release.tag_name, action, asset.name, on_done)
                 end,
             })
         end
@@ -1218,13 +1335,14 @@ function App:choose_downgrade_release(pkg, release, on_done)
     Modals.actions(_("Choose a build for ") .. tostring(release.tag_name), rows)
 end
 
-function App:confirm_package_downgrade(pkg, release_tag, asset, on_done)
+function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
     local name = package_title(pkg, pkg.id or pkg.name)
+    local verb = action_present(action)
     Modals.confirm(
-        _("Are you sure you want to downgrade ") .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?",
-        _("Downgrade"),
+        _("Are you sure you want to ") .. verb .. " " .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?",
+        action_label(action),
         function()
-            self:run_package_action(pkg, "downgrade", asset, on_done, { release = release_tag })
+            self:run_package_action(pkg, action, asset, on_done, { release = release_tag })
         end
     )
 end
@@ -1509,8 +1627,14 @@ end
 
 function App:toggle_filter_installable()
     self.state.filter_installable = not self.state.filter_installable
+    App.save_setting("filter_installable", self.state.filter_installable)
     self.state.packages = {}
     self:reload_current_page()
+end
+
+function App:toggle_advanced()
+    self.state.advanced = not self.state.advanced
+    App.save_setting("advanced", self.state.advanced)
 end
 
 function App:show_actions(anchor)
@@ -1536,6 +1660,15 @@ function App:show_actions(anchor)
             end,
             callback = function()
                 self:toggle_filter_installable()
+            end,
+        },
+        {
+            text = _("Advanced"),
+            checked_func = function()
+                return self.state.advanced
+            end,
+            callback = function()
+                self:toggle_advanced()
             end,
         },
         {

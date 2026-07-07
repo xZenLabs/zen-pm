@@ -68,20 +68,28 @@ func FetchGitHubReadme(source string) (string, error) {
 	return string(data), nil
 }
 
-func FetchGitHubReleases(source string, limit int) ([]Release, error) {
+// FetchGitHubReleases returns one page of releases (perPage items) starting at
+// the given 1-based page. hasMore is true when GitHub returned a full page,
+// meaning further pages likely exist. Paginating keeps each response small so
+// large changelog bodies don't blow the response size limit.
+func FetchGitHubReleases(source string, page, perPage int) ([]Release, bool, error) {
 	repository, ok := GitHubRepository(source)
 	if !ok {
-		return nil, fmt.Errorf("source is not a GitHub repository")
+		return nil, false, fmt.Errorf("source is not a GitHub repository")
 	}
-	if limit < 1 {
-		limit = 10
+	if page < 1 {
+		page = 1
 	}
-	if limit > 30 {
-		limit = 30
+	if perPage < 1 {
+		perPage = 5
 	}
-	data, err := githubRequest("/repos/"+repository+"/releases?per_page="+strconv.Itoa(limit), "application/vnd.github+json")
+	if perPage > 30 {
+		perPage = 30
+	}
+	path := fmt.Sprintf("/repos/%s/releases?per_page=%d&page=%d", repository, perPage, page)
+	data, err := githubRequest(path, "application/vnd.github+json")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var response []struct {
 		TagName    string `json:"tag_name"`
@@ -94,8 +102,9 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 		} `json:"assets"`
 	}
 	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("decode GitHub releases: %w", err)
+		return nil, false, fmt.Errorf("decode GitHub releases: %w", err)
 	}
+	hasMore := len(response) == perPage
 	out := make([]Release, 0, len(response))
 	for _, item := range response {
 		if item.Draft || strings.TrimSpace(item.TagName) == "" {
@@ -116,7 +125,7 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 			out = append(out, release)
 		}
 	}
-	return out, nil
+	return out, hasMore, nil
 }
 
 func githubRequest(path, accept string) ([]byte, error) {
