@@ -58,3 +58,62 @@ jobs:
           echo build.sh >> /tmp/zenpm-shell-files.txt
           while IFS= read -r file; do sh -n "$file"; done < /tmp/zenpm-shell-files.txt
 
+  release:
+    name: Build & Release
+    needs: [go, shellcheck, shell-syntax]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Read and verify release version
+        id: version
+        run: |
+          set -eu
+          VERSION=$(sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p;}' VERSION)
+          META_VERSION=$(sed -n 's/^[[:space:]]*version = "\([^"]*\)".*/\1/p' frontend/koreader/zenpm.koplugin/_meta.lua)
+          test -n "$VERSION"
+          if [ "$VERSION" != "$META_VERSION" ]; then
+            echo "VERSION ($VERSION) must match the KOReader plugin metadata version ($META_VERSION)." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check if version is new
+        id: version_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ steps.version.outputs.tag }}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release ${{ steps.version.outputs.tag }} already exists — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release assets
+        if: steps.version_check.outputs.skip == 'false'
+        run: sh build.sh
+
+      - name: Build release notes
+        if: steps.version_check.outputs.skip == 'false'
+        run: python3 .github/scripts/build_release_notes.py "${{ steps.version.outputs.version }}" > release_notes.md
+
+      - name: Create release and upload assets
+        if: steps.version_check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.sha }}" \
+            --title "ZenPM ${{ steps.version.outputs.tag }}" \
+            --notes-file release_notes.md
