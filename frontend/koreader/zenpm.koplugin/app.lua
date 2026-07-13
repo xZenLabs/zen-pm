@@ -166,6 +166,18 @@ local function package_is_koreader_plugin(pkg)
     return false
 end
 
+local function package_targets_kindle(pkg)
+    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    for _, platform in ipairs(pkg.platforms) do
+        if Util.trim(tostring(platform or "")):lower() == "kindle" then
+            return true
+        end
+    end
+    return false
+end
+
 local function action_installs_package(action)
     return action == "install" or action == "reinstall" or action == "update" or action == "downgrade"
 end
@@ -1448,8 +1460,10 @@ end
 function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
     local name = package_title(pkg, pkg.id or pkg.name)
     local verb = action_present(action)
+    local notice = package_targets_kindle(pkg)
+        and ("\n\n" .. _("This package installs to the Kindle UI, not KOReader.")) or ""
     Modals.confirm(
-        _("Are you sure you want to ") .. verb .. " " .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?",
+        _("Are you sure you want to ") .. verb .. " " .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?" .. notice,
         action_label(action),
         function()
             self:run_package_action(pkg, action, asset, on_done, { release = release_tag })
@@ -1471,6 +1485,9 @@ function App:confirm_package_action(pkg, action, on_done)
     elseif action == "uninstall" then
         question = _("Are you sure you want to uninstall ") .. name .. "?"
         label = _("Uninstall")
+    end
+    if action_installs_package(action) and package_targets_kindle(pkg) then
+        question = question .. "\n\n" .. _("This package installs to the Kindle UI, not KOReader.")
     end
     local opts = nil
     if action == "uninstall" then
