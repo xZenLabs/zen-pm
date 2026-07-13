@@ -159,23 +159,45 @@ function Client:refresh_repos()
 end
 
 function Client:list_packages(platform, check_updates)
-    local path = "/packages?platform=" .. url_encode(platform)
+    local path = "/packages"
+    local query = {}
+    if platform and platform ~= "" then
+        table.insert(query, "platform=" .. url_encode(platform))
+    end
     if check_updates then
-        path = path .. "&check_updates=1"
+        table.insert(query, "check_updates=1")
+    end
+    if #query > 0 then
+        path = path .. "?" .. table.concat(query, "&")
     end
     return self:request("GET", path, nil)
 end
 
-function Client:package_action(id, action, asset)
+function Client:package_action(id, action, asset, release)
     local path = "/packages/" .. url_encode(id) .. "/" .. action
+    local query = {}
     if asset and asset ~= "" then
-        path = path .. "?asset=" .. url_encode(asset)
+        table.insert(query, "asset=" .. url_encode(asset))
+    end
+    if release and release ~= "" then
+        table.insert(query, "release=" .. url_encode(release))
+    end
+    if #query > 0 then
+        path = path .. "?" .. table.concat(query, "&")
     end
     return self:request("POST", path, nil)
 end
 
 function Client:get_package_assets(id)
     return self:request("GET", "/packages/" .. url_encode(id) .. "/assets", nil)
+end
+
+function Client:get_package_readme(id)
+    return self:request("GET", "/packages/" .. url_encode(id) .. "/readme", nil)
+end
+
+function Client:get_package_releases(id)
+    return self:request("GET", "/packages/" .. url_encode(id) .. "/releases", nil)
 end
 
 function Client:get_log(tail)

@@ -6,7 +6,7 @@ APP_ID="com.zenlabs.zenpm"
 TMPDIR="/mnt/us/ZPM-Update-Temp"
 PAYLOAD_DIR="/mnt/us/ZenPM"
 VERSION_FILE="$PAYLOAD_DIR/VERSION"
-REPO="AnthonyGress/ZenPackageManager"
+REPO="xZenLabs/zen-pm"
 API_URL="https://api.github.com/repos/$REPO/releases/latest"
 
 alert() {

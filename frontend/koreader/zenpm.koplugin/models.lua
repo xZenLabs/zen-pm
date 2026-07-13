@@ -43,6 +43,7 @@ function Models.filter_packages(packages, query)
             tostring(pkg.name or ""),
             tostring(I18n.dynamic(pkg.name) or ""),
             tostring(pkg.id or ""),
+            tostring(pkg.patch_asset or ""),
             tostring(pkg.description or ""),
             tostring(I18n.dynamic(pkg.description) or ""),
             tostring(pkg.category or ""),
@@ -65,6 +66,10 @@ local function normalize_category(value)
     end
     if value == "utilities" then
         return "utility"
+    end
+    if value == "patch" or value == "patches"
+            or value == "koreaderpatch" or value == "koreaderpatches" then
+        return "koreaderpatches"
     end
     return value
 end
@@ -208,10 +213,34 @@ function Models.sort_packages(packages, sort_key)
     return out
 end
 
+-- Build the single-file view of an installed patch: a shallow clone of the parent
+-- patch package narrowed to one asset, so its name/title and modify actions target
+-- that patch file rather than the parent package.
+function Models.installed_patch_item(pkg, asset)
+    local item = {}
+    for key, value in pairs(pkg) do
+        item[key] = value
+    end
+    item.name = asset
+    item.patch_asset = asset
+    item.installed_assets = { asset }
+    item.installed = true
+    -- Drop the multi-asset list so the details view shows the patch itself, not the
+    -- parent's per-file "Patches" tab.
+    item.assets = nil
+    return item
+end
+
 function Models.installed_packages(packages)
     local out = {}
     for _, pkg in ipairs(packages or {}) do
-        if pkg.installed then
+        if Models.is_patch_package(pkg) then
+            for _, asset in ipairs(pkg.installed_assets or {}) do
+                if type(asset) == "string" and asset ~= "" then
+                    table.insert(out, Models.installed_patch_item(pkg, asset))
+                end
+            end
+        elseif pkg.installed then
             table.insert(out, pkg)
         end
     end
@@ -241,16 +270,112 @@ function Models.select_featured(packages)
 end
 
 function Models.package_action_label(pkg)
-    if pkg and pkg.installed and pkg.update_available then
-        return _("Update")
+    if Models.is_patch_package(pkg) and not Models.is_installed_patch_item(pkg) then
+        if type(pkg.installed_assets) == "table" and #pkg.installed_assets > 0 then
+            return _("Modify")
+        end
+        return _("Get")
     end
-    return pkg and pkg.installed and _("Modify") or _("Get")
+    if pkg and pkg.installed then
+        return _("Modify")
+    end
+    return _("Get")
+end
+
+function Models.is_patch_package(pkg)
+    if not pkg then
+        return false
+    end
+    return normalize_category(pkg.category) == "koreaderpatches"
+end
+
+function Models.is_installed_patch_item(pkg)
+    return Models.is_patch_package(pkg) and type(pkg.patch_asset) == "string" and pkg.patch_asset ~= ""
+end
+
+local function github_repo_name(source)
+    local repo = tostring(source or ""):match("^https?://github%.com/[^/]+/([^/%?#]+)")
+    if repo then
+        return repo:gsub("%.git$", "")
+    end
+    return nil
+end
+
+function Models.package_display_name(pkg, fallback)
+    if Models.is_installed_patch_item(pkg) then
+        return pkg.patch_asset
+    end
+    if Models.is_patch_package(pkg) then
+        local source_repo = github_repo_name(pkg.source)
+        if source_repo and source_repo ~= "" then
+            return source_repo
+        end
+        local repo = I18n.dynamic_or(pkg.repo, "")
+        if repo ~= "" and repo ~= Constants.REPO_ZENLABS_NAME and repo ~= Constants.REPO_KINDLEFORGE_NAME then
+            return repo
+        end
+    end
+    return I18n.dynamic_or(pkg and (pkg.name or pkg.id), fallback or _("Package"))
+end
+
+function Models.installed_asset_set(pkg)
+    local set = {}
+    local list = pkg and pkg.installed_assets
+    if type(list) == "table" then
+        for _, name in ipairs(list) do
+            if type(name) == "string" and name ~= "" then
+                set[name] = true
+            end
+        end
+    end
+    return set
+end
+
+function Models.patch_file_installed(pkg, asset)
+    if not asset or asset == "" then
+        return false
+    end
+    return Models.installed_asset_set(pkg)[asset] == true
+end
+
+function Models.package_assets(pkg)
+    local assets = pkg and pkg.assets
+    if type(assets) ~= "table" then
+        return {}
+    end
+    local out = {}
+    for _, asset in ipairs(assets) do
+        if type(asset) == "table" and asset.asset and asset.asset ~= "" then
+            table.insert(out, asset)
+        end
+    end
+    return out
+end
+
+function Models.has_github_source(pkg)
+    local source = tostring(pkg and pkg.source or "")
+    return source:match("^https?://github%.com/[^/]+/[^/]+/?$") ~= nil
+end
+
+function Models.readme_text(value)
+    value = tostring(value or ""):gsub("\r\n", "\n")
+    value = value:gsub("<!%-%-.-%-%->", "")
+    value = value:gsub("!%[([^%]]*)%]%([^%)]+%)", "%1")
+    value = value:gsub("%[([^%]]+)%]%([^%)]+%)", "%1")
+    value = value:gsub("<[^>]+>", "")
+    value = value:gsub("\n[ \t]*#+[ \t]+", "\n")
+    value = value:gsub("^#+[ \t]+", "")
+    value = value:gsub("```[%w_-]*", "")
+    value = value:gsub("[%*_]([%w][^%*_]-)[%*_]", "%1")
+    value = value:gsub("\n[ \t]*\n[ \t]*\n+", "\n\n")
+    return Util.trim(value)
 end
 
 function Models.package_meta(pkg)
     local parts = {}
     if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
-        table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
+        local v = tostring(pkg.version):gsub("^[vV]", "")
+        table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
     table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " - ")

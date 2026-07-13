@@ -249,14 +249,79 @@ paths:
       summary: Start package installation
       description: |
         Starts installation asynchronously and returns immediately. Clients can
-        poll `/log` to observe progress and failures.
+        poll `/log` to observe progress and failures. Passing `release` installs
+        that GitHub release and records its tag as the installed version.
       operationId: installPackage
+      parameters:
+        - name: asset
+          in: query
+          required: false
+          description: Exact release ZIP asset name selected by the client.
+          schema:
+            type: string
+        - name: release
+          in: query
+          required: false
+          description: GitHub release tag to install instead of the catalog release.
+          schema:
+            type: string
       responses:
         "202":
           $ref: "#/components/responses/Started"
         "400":
           $ref: "#/components/responses/TextError"
         "405":
+          $ref: "#/components/responses/TextError"
+  /packages/{id}/readme:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    get:
+      tags:
+        - Packages
+      summary: Read the package GitHub README
+      operationId: getPackageReadme
+      responses:
+        "200":
+          description: Raw README Markdown from the GitHub source in package metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - readme
+                properties:
+                  readme:
+                    type: string
+        "404":
+          $ref: "#/components/responses/TextError"
+        "502":
+          $ref: "#/components/responses/TextError"
+  /packages/{id}/releases:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    get:
+      tags:
+        - Packages
+      summary: List recent installable GitHub releases
+      description: Returns up to 10 non-draft releases that contain ZIP assets.
+      operationId: listPackageReleases
+      responses:
+        "200":
+          description: Recent releases and their ZIP assets.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - releases
+                properties:
+                  releases:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GitHubRelease"
+        "404":
+          $ref: "#/components/responses/TextError"
+        "502":
           $ref: "#/components/responses/TextError"
   /packages/{id}/uninstall:
     parameters:
@@ -639,6 +704,31 @@ components:
           type: string
           format: uri
           description: Upstream source URL, used for GitHub release update checks when available.
+    GitHubRelease:
+      type: object
+      required:
+        - tag_name
+        - assets
+      properties:
+        tag_name:
+          type: string
+        name:
+          type: string
+        prerelease:
+          type: boolean
+        assets:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - url
+            properties:
+              name:
+                type: string
+              url:
+                type: string
+                format: uri
     OkResponse:
       type: object
       required:

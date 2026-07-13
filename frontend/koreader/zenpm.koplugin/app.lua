@@ -10,9 +10,43 @@ local I18n = require("i18n")
 local Images = require("ui/images")
 local Modals = require("ui/modals")
 local Models = require("models")
+local Updater = require("updater")
 local Util = require("zenpm_util")
 
 local App = {}
+
+-- Persist UI preferences (filter, advanced mode, beta updates) in our own config file inside
+-- the ZenPM state dir, kept separate from KOReader's global settings.
+local config_settings = nil
+
+local function open_config()
+    if config_settings then return config_settings end
+    local ok_ls, LuaSettings = pcall(require, "luasettings")
+    if not (ok_ls and LuaSettings) then return nil end
+    local ok_home, home = pcall(function() return Daemon:state_home() end)
+    if not (ok_home and type(home) == "string" and home ~= "") then return nil end
+    local ok_open, settings = pcall(function()
+        return LuaSettings:open(home .. "/config.lua")
+    end)
+    if not ok_open or not settings then return nil end
+    config_settings = settings
+    return config_settings
+end
+
+function App.load_setting(key, default)
+    local settings = open_config()
+    if not settings then return default end
+    local value = settings:readSetting(key)
+    if value == nil then return default end
+    return value
+end
+
+function App.save_setting(key, value)
+    local settings = open_config()
+    if not settings then return end
+    settings:saveSetting(key, value)
+    settings:flush()
+end
 
 function App:new(plugin)
     local o = {
@@ -27,6 +61,9 @@ function App:new(plugin)
         state = {
             page = "home",
             active_tab = "home",
+            filter_installable = App.load_setting("filter_installable", true),
+            advanced = App.load_setting("advanced", false),
+            beta_updates = App.load_setting("beta_updates", false),
             filters = { search = "", installed = "", categories = "", category = "" },
             sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
             scroll = {},
@@ -38,10 +75,12 @@ function App:new(plugin)
             visible_categories = {},
             category_packages = {},
             repos = {},
+            readme_cache = {},
             current_package = nil,
             current_repo = nil,
             current_category = nil,
             details_from = "search",
+            details_tab = "readme",
             loading = nil,
             error = nil,
             log_lines = {},
@@ -53,12 +92,15 @@ function App:new(plugin)
 end
 
 local function package_title(pkg, fallback)
-    return I18n.dynamic_or(pkg and (pkg.name or pkg.id), fallback or _("Package"))
+    return Models.package_display_name(pkg, fallback)
 end
 
 local function action_present(action)
     if action == "update" then
         return _("update")
+    end
+    if action == "downgrade" then
+        return _("downgrade")
     end
     if action == "uninstall" then
         return _("uninstall")
@@ -69,9 +111,19 @@ local function action_present(action)
     return _("install")
 end
 
+local function action_label(action)
+    if action == "update" then return _("Update") end
+    if action == "downgrade" then return _("Downgrade") end
+    if action == "reinstall" then return _("Reinstall") end
+    return _("Get")
+end
+
 local function action_progress(action)
     if action == "update" then
         return _("Updating")
+    end
+    if action == "downgrade" then
+        return _("Downgrading")
     end
     if action == "uninstall" then
         return _("Uninstalling")
@@ -83,7 +135,7 @@ local function action_progress(action)
 end
 
 local function backend_action_for(action)
-    return (action == "reinstall" or action == "update") and "install" or action
+    return (action == "reinstall" or action == "update" or action == "downgrade") and "install" or action
 end
 
 local function action_done(action)
@@ -95,6 +147,9 @@ local function action_done(action)
     end
     if action == "reinstall" then
         return _("reinstalled")
+    end
+    if action == "downgrade" then
+        return _("downgraded")
     end
     return _("uninstalled")
 end
@@ -111,8 +166,20 @@ local function package_is_koreader_plugin(pkg)
     return false
 end
 
+local function package_targets_kindle(pkg)
+    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    for _, platform in ipairs(pkg.platforms) do
+        if Util.trim(tostring(platform or "")):lower() == "kindle" then
+            return true
+        end
+    end
+    return false
+end
+
 local function action_installs_package(action)
-    return action == "install" or action == "reinstall" or action == "update"
+    return action == "install" or action == "reinstall" or action == "update" or action == "downgrade"
 end
 
 -- The KOReader plugin name is its .koplugin directory basename.
@@ -274,6 +341,85 @@ local function resolve_plugin_settings_deleter(pkg)
         return function() delete_plugin_settings(nil, plugin_name) end
     end
     return nil
+end
+
+-- The key KOReader stores in its plugins_disabled table is the .koplugin dir
+-- basename. Prefer the on-disk directory (honours disabled/unloaded plugins),
+-- fall back to the daemon-derived module name, then the package id/name.
+local function plugin_disabled_key(pkg)
+    local key = koplugin_dir_basename(find_koplugin_dir(pkg))
+    if type(key) == "string" and key ~= "" then return key end
+    key = pkg and (pkg.plugin_module or pkg.id or pkg.name)
+    if type(key) == "string" and key ~= "" then return key end
+    return nil
+end
+
+local function is_plugin_disabled(pkg)
+    local key = plugin_disabled_key(pkg)
+    if not key or not (G_reader_settings and G_reader_settings.readSetting) then
+        return false
+    end
+    local disabled = G_reader_settings:readSetting("plugins_disabled")
+    return type(disabled) == "table" and disabled[key] == true
+end
+
+-- Toggle a plugin the same way KOReader's PluginLoader does: flip the key in the
+-- plugins_disabled table and flush. Takes effect on restart.
+local function set_plugin_disabled(pkg, disabled)
+    local key = plugin_disabled_key(pkg)
+    if not key then return false, _("Could not resolve plugin name.") end
+    if not (G_reader_settings and G_reader_settings.saveSetting) then
+        return false, _("KOReader settings are unavailable.")
+    end
+    local t = G_reader_settings:readSetting("plugins_disabled")
+    if type(t) ~= "table" then t = {} end
+    if disabled then t[key] = true else t[key] = nil end
+    G_reader_settings:saveSetting("plugins_disabled", t)
+    G_reader_settings:flush()
+    return true
+end
+
+local function patches_dir()
+    local ok_ds, DataStorage = pcall(require, "datastorage")
+    if ok_ds and DataStorage and DataStorage.getDataDir then
+        return DataStorage:getDataDir() .. "/patches"
+    end
+    return nil
+end
+
+local function file_exists(path)
+    if type(path) ~= "string" or path == "" then return false end
+    local f = io.open(path, "r")
+    if f then f:close() return true end
+    return false
+end
+
+-- A userpatch is disabled the native way by appending .disabled to its filename.
+local function is_patch_disabled(pkg)
+    local asset = pkg and pkg.patch_asset
+    local dir = patches_dir()
+    if type(asset) ~= "string" or asset == "" or not dir then return false end
+    local base = dir .. "/" .. asset
+    return (not file_exists(base)) and file_exists(base .. ".disabled")
+end
+
+local function set_patch_disabled(asset, disabled)
+    local dir = patches_dir()
+    if type(asset) ~= "string" or asset == "" or not dir then
+        return false, _("Could not resolve patch file.")
+    end
+    local base = dir .. "/" .. asset
+    local off = base .. ".disabled"
+    local from, to = base, off
+    if not disabled then from, to = off, base end
+    if not file_exists(from) then
+        -- Already in target state (or missing); treat as success if target exists.
+        if file_exists(to) then return true end
+        return false, _("Patch file not found.")
+    end
+    local ok, err = os.rename(from, to)
+    if not ok then return false, tostring(err or _("rename failed")) end
+    return true
 end
 
 function App:show()
@@ -504,7 +650,7 @@ function App:scroll_key()
         return "category:" .. tostring(self.state.current_category.id)
     end
     if self.state.page == "package_details" and self.state.current_package then
-        return "package:" .. tostring(self.state.current_package.id or self.state.current_package.name)
+        return "package:" .. tostring(self.state.current_package.id or self.state.current_package.name) .. ":" .. tostring(self.state.details_tab or "readme")
     end
     return self.state.page
 end
@@ -533,7 +679,7 @@ end
 
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
-        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true)
+        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset)
     elseif self.state.page == "category_details" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
@@ -618,6 +764,15 @@ end
 function App:load_packages(check_updates, force)
     if not force and not check_updates and self.state.packages and #self.state.packages > 0 then
         return true, self.state.packages
+    end
+    if not self.state.filter_installable then
+        local ok, data = self.client:list_packages(nil, check_updates)
+        if not ok then
+            return false, {}, data
+        end
+        local packages = type(data) == "table" and data or {}
+        self.state.packages = packages
+        return true, packages
     end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
@@ -834,7 +989,7 @@ function App:show_source_details(name)
     self:refresh()
 end
 
-function App:show_package_details(package_id, from_tab, force_reload)
+function App:show_package_details(package_id, from_tab, force_reload, details_tab, patch_asset)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -861,9 +1016,40 @@ function App:show_package_details(package_id, from_tab, force_reload)
         self:set_error(_("Package not found."))
         return
     end
+    -- For an installed patch item, show the patch itself (not its parent package):
+    -- rebuild the single-asset item so the title, card and modify menu act on the patch.
+    if type(patch_asset) == "string" and patch_asset ~= "" and Models.is_patch_package(pkg) then
+        pkg = Models.installed_patch_item(pkg, patch_asset)
+    end
     self.state.packages = packages
+    local cache_key = tostring(pkg.id or pkg.name or "")
+    if Models.has_github_source(pkg) and cache_key ~= "" then
+        local cached = self.state.readme_cache[cache_key]
+        if cached == nil then
+            local readme_ok, data = self.client:get_package_readme(cache_key)
+            cached = readme_ok and type(data) == "table" and data.readme or false
+            self.state.readme_cache[cache_key] = cached
+        end
+        if type(cached) == "string" then
+            pkg.github_readme = cached
+        end
+    end
     self.state.current_package = pkg
+    self.state.details_tab = Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 and details_tab == "patches" and "patches" or "readme"
+    self:reset_scroll("package:" .. cache_key .. ":" .. self.state.details_tab)
     self:clear_status()
+    self:refresh()
+end
+
+function App:set_package_details_tab(tab)
+    if tab ~= "patches" then
+        tab = "readme"
+    end
+    if self.state.details_tab == tab then
+        return
+    end
+    self.state.details_tab = tab
+    self:reset_scroll()
     self:refresh()
 end
 
@@ -1051,15 +1237,32 @@ function App:perform_package_action(pkg, on_done)
         Modals.info(_("Another operation is in progress. Please wait."))
         return
     end
+    if Models.is_installed_patch_item(pkg) then
+        self:show_patch_modify(pkg, on_done)
+        return
+    end
+    if Models.is_patch_package(pkg) then
+        -- Patch packages manage individual files; the details page lists each
+        -- patch with a per-file install/uninstall toggle.
+        self:show_package_details(pkg.id or pkg.name, self.state.active_tab, false, "patches")
+        return
+    end
     if pkg.installed then
-        if pkg.update_available then
-            self:confirm_package_action(pkg, "update", on_done)
-            return
-        end
+        local is_koplugin = package_is_koreader_plugin(pkg)
         Modals.package_modify(pkg, {
-            info = function()
+            info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
-            end,
+            end or nil,
+            update = pkg.update_available and function()
+                self:confirm_package_action(pkg, "update", on_done)
+            end or nil,
+            disabled = is_koplugin and is_plugin_disabled(pkg) or nil,
+            enable_disable = is_koplugin and function()
+                self:confirm_toggle_enable(pkg, "plugin", on_done)
+            end or nil,
+            reinstall_downgrade = Models.has_github_source(pkg) and function()
+                self:prompt_package_versions(pkg, on_done)
+            end or nil,
             reinstall = function()
                 self:confirm_package_action(pkg, "reinstall", on_done)
             end,
@@ -1067,9 +1270,205 @@ function App:perform_package_action(pkg, on_done)
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
+    elseif self.state.advanced and Models.has_github_source(pkg) then
+        self:prompt_package_versions(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
+end
+
+function App:show_patch_modify(pkg, on_done)
+    local asset = pkg.patch_asset
+    Modals.package_modify(pkg, {
+        info = self.state.page ~= "package_details" and function()
+            self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
+        end or nil,
+        disabled = is_patch_disabled(pkg),
+        enable_disable = function()
+            self:confirm_toggle_enable(pkg, "patch", on_done)
+        end,
+        reinstall = function()
+            self:confirm_patch_item_action(pkg, "reinstall", asset, on_done)
+        end,
+        uninstall = function()
+            self:confirm_patch_item_action(pkg, "uninstall", asset, on_done)
+        end,
+    })
+end
+
+-- Report whether a package is currently disabled the native KOReader way.
+-- Dispatches to the plugin (plugins_disabled) or patch (.disabled file) check.
+-- Returns false for anything that can't be toggled.
+function App:package_disabled(pkg)
+    if Models.is_installed_patch_item(pkg) then
+        return is_patch_disabled(pkg)
+    end
+    if package_is_koreader_plugin(pkg) then
+        return is_plugin_disabled(pkg)
+    end
+    return false
+end
+
+-- Toggle enable/disable natively (settings flag for plugins, file rename for
+-- patches). No backend call — the change is local — so on success we prompt a
+-- restart, which is when KOReader actually applies plugin/patch state.
+function App:confirm_toggle_enable(pkg, kind, on_done)
+    if self.busy then
+        Modals.info(_("Another operation is in progress. Please wait."))
+        return
+    end
+    local disabled = self:package_disabled(pkg)
+    local name = Models.package_display_name(pkg, _("Package"))
+    local verb = disabled and _("enable") or _("disable")
+    local label = disabled and _("Enable") or _("Disable")
+    Modals.confirm(
+        _("Are you sure you want to ") .. verb .. " " .. name .. "?",
+        label,
+        function()
+            local ok, err
+            if kind == "patch" then
+                ok, err = set_patch_disabled(pkg.patch_asset, not disabled)
+            else
+                ok, err = set_plugin_disabled(pkg, not disabled)
+            end
+            if not ok then
+                Modals.info_for(_("Could not ") .. verb .. " " .. name .. ": " .. tostring(err),
+                    Constants.PACKAGE_NOTICE_SECONDS)
+                return
+            end
+            local done = disabled and _("enabled") or _("disabled")
+            Modals.restart_koreader(
+                name .. " " .. done .. _(" successfully.\n\nRestart KOReader to apply the change."),
+                function() UIManager:restartKOReader() end)
+            if on_done then on_done() end
+        end
+    )
+end
+
+function App:confirm_patch_item_action(pkg, action, asset, on_done)
+    local name = tostring(asset or pkg.patch_asset or pkg.name or "")
+    if name == "" then
+        Modals.info(_("Patch has no file name."))
+        return
+    end
+    local question = _("Are you sure you want to reinstall ") .. name .. "?"
+    local label = _("Reinstall")
+    if action == "uninstall" then
+        question = _("Are you sure you want to uninstall ") .. name .. "?"
+        label = _("Uninstall")
+    end
+    Modals.confirm(question, label, function()
+        self:run_package_action(pkg, action, name, on_done, nil)
+    end)
+end
+
+-- Show installable GitHub releases for a package. Each version maps to an
+-- update/reinstall/downgrade action based on its relation to the installed
+-- version. Prereleases are hidden unless the user enabled ZenPM beta updates.
+-- All releases are fetched in one request (keeps GitHub API calls low under the
+-- anonymous rate limit); the list is paged VERSIONS_PER_PAGE at a time in the UI.
+local VERSIONS_PER_PAGE = 5
+
+local function version_action(current, tag)
+    if current == nil or current == "" then return "install" end
+    if version_gt(tag, current) then return "update" end
+    if version_gt(current, tag) then return "downgrade" end
+    return "reinstall"
+end
+
+function App:prompt_package_versions(pkg, on_done)
+    local current = pkg.installed and (pkg.installed_version or pkg.version or "") or ""
+    Modals.status(_("Loading GitHub releases..."))
+    local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
+    Modals.close_status()
+    if not ok then
+        Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
+        return
+    end
+    local allow_prerelease = self.state.beta_updates
+    local releases = {}
+    for _, release in ipairs(type(data) == "table" and data.releases or {}) do
+        if release.tag_name and (allow_prerelease or not release.prerelease) then
+            table.insert(releases, release)
+        end
+    end
+    if #releases == 0 then
+        Modals.info(_("No GitHub releases with ZIP assets were found."))
+        return
+    end
+    self:show_versions_page(pkg, releases, current, 1, on_done)
+end
+
+function App:show_versions_page(pkg, releases, current, page, on_done)
+    local rows = {}
+    local start_index = (page - 1) * VERSIONS_PER_PAGE + 1
+    local last_index = math.min(start_index + VERSIONS_PER_PAGE - 1, #releases)
+    for i = start_index, last_index do
+        local release = releases[i]
+        local action = version_action(current, release.tag_name)
+        local label = tostring(release.tag_name)
+        if not pkg.installed and i == 1 then
+            label = label .. " (" .. _("Latest") .. ")"
+        elseif action == "reinstall" then
+            label = label .. " (" .. _("installed") .. ")"
+        end
+        if release.prerelease then
+            label = label .. " (" .. _("prerelease") .. ")"
+        end
+        rows[#rows + 1] = {
+            text = label,
+            callback = function()
+                self:choose_version_release(pkg, release, action, on_done)
+            end,
+        }
+    end
+    if last_index < #releases then
+        rows[#rows + 1] = {
+            text = _("Show more") .. " (" .. tostring(#releases - last_index) .. ")",
+            callback = function()
+                self:show_versions_page(pkg, releases, current, page + 1, on_done)
+            end,
+        }
+    end
+    Modals.actions(_("Select version for ") .. package_title(pkg, pkg.id or pkg.name), rows)
+end
+
+function App:choose_version_release(pkg, release, action, on_done)
+    local assets = type(release.assets) == "table" and release.assets or {}
+    if #assets == 1 then
+        self:confirm_package_version(pkg, release.tag_name, action, assets[1].name, on_done)
+        return
+    end
+    local rows = {}
+    for _, asset in ipairs(assets) do
+        if asset.name and asset.name ~= "" then
+            table.insert(rows, {
+                text = asset.name,
+                callback = function()
+                    self:confirm_package_version(pkg, release.tag_name, action, asset.name, on_done)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then
+        Modals.info(_("This release has no ZIP assets."))
+        return
+    end
+    Modals.actions(_("Choose a build for ") .. tostring(release.tag_name), rows)
+end
+
+function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
+    local name = package_title(pkg, pkg.id or pkg.name)
+    local verb = action_present(action)
+    local notice = package_targets_kindle(pkg)
+        and ("\n\n" .. _("This package installs to the Kindle UI, not KOReader.")) or ""
+    Modals.confirm(
+        _("Are you sure you want to ") .. verb .. " " .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?" .. notice,
+        action_label(action),
+        function()
+            self:run_package_action(pkg, action, asset, on_done, { release = release_tag })
+        end
+    )
 end
 
 function App:confirm_package_action(pkg, action, on_done)
@@ -1086,6 +1485,9 @@ function App:confirm_package_action(pkg, action, on_done)
     elseif action == "uninstall" then
         question = _("Are you sure you want to uninstall ") .. name .. "?"
         label = _("Uninstall")
+    end
+    if action_installs_package(action) and package_targets_kindle(pkg) then
+        question = question .. "\n\n" .. _("This package installs to the Kindle UI, not KOReader.")
     end
     local opts = nil
     if action == "uninstall" then
@@ -1129,7 +1531,40 @@ function App:choose_package_asset(pkg, action, candidates, on_done, opts)
         self:run_package_action(pkg, action, nil, on_done, opts)
         return
     end
-    Modals.actions(_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name), rows)
+    local title = Models.is_patch_package(pkg)
+        and (_("Choose a patch for ") .. package_title(pkg, pkg.id or pkg.name))
+        or (_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name))
+    Modals.actions(title, rows)
+end
+
+function App:confirm_package_asset_action(pkg, asset, on_done)
+    if self.busy then
+        Modals.info(_("Another operation is in progress. Please wait."))
+        return
+    end
+    if not asset or not asset.asset or asset.asset == "" then
+        Modals.info(_("Patch has no file name."))
+        return
+    end
+    local name = package_title(pkg, pkg.id or pkg.name)
+    local patch_name = tostring(asset.asset)
+    if Models.patch_file_installed(pkg, patch_name) then
+        Modals.confirm(
+            _("Are you sure you want to uninstall ") .. patch_name .. "?",
+            _("Uninstall"),
+            function()
+                self:run_package_action(pkg, "uninstall", patch_name, on_done, nil)
+            end
+        )
+        return
+    end
+    Modals.confirm(
+        _("Are you sure you want to install ") .. patch_name .. " " .. _("from") .. " " .. name .. "?",
+        _("Install"),
+        function()
+            self:run_package_action(pkg, "install", patch_name, on_done, nil)
+        end
+    )
 end
 
 function App:run_package_action(pkg, action, asset, on_done, opts)
@@ -1139,10 +1574,14 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         id = id,
         action = action,
     })
+    local is_patch = Models.is_patch_package(pkg)
+    local display_name = is_patch and asset and asset ~= ""
+        and (_("patch") .. " " .. tostring(asset))
+        or package_title(pkg, id)
     self.busy = true
     Modals.status(action_progress(action) .. " "
-        .. package_title(pkg, id) .. "\n\n" .. _("Downloading... Please wait."))
-    local ok, err = self.client:package_action(id, backend_action, asset)
+        .. display_name .. "\n\n" .. _("Downloading... Please wait."))
+    local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
     if not ok then
         self.busy = false
         Modals.close_status()
@@ -1151,11 +1590,15 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     end
     self:poll_package_action({
         id = id,
-        name = package_title(pkg, id),
+        name = display_name,
         action = action,
+        asset = asset,
+        is_patch = is_patch,
+        patch_was_installed = is_patch and Models.patch_file_installed(pkg, asset) or false,
         was_installed = pkg.installed and true or false,
-        target_version = pkg.latest_version,
-        prompt_restart = action_installs_package(action) and package_is_koreader_plugin(pkg),
+        target_version = opts and opts.release or pkg.latest_version,
+        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
+            and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
         on_done = on_done,
@@ -1190,6 +1633,13 @@ function App:package_action_failure_detail(op)
 end
 
 function App:package_action_succeeded(op, pkg)
+    if op.is_patch and op.asset and op.asset ~= "" then
+        local now_installed = Models.patch_file_installed(pkg, op.asset)
+        if op.action == "uninstall" then
+            return op.patch_was_installed and not now_installed
+        end
+        return now_installed
+    end
     if op.action == "uninstall" then
         return op.was_installed and (not pkg or not pkg.installed)
     end
@@ -1202,10 +1652,30 @@ function App:package_action_succeeded(op, pkg)
         end
         return true
     end
+    if op.action == "downgrade" then
+        return pkg and pkg.installed
+            and normalized_version(pkg.installed_version or "") == normalized_version(op.target_version or "")
+    end
     if op.action == "reinstall" then
         return pkg and pkg.installed
     end
     return pkg and pkg.installed
+end
+
+function App:patch_action_succeeded_from_db(op)
+    if not (op.is_patch and op.asset and op.asset ~= "") then
+        return false
+    end
+    local ok, data = self.client:list_packages(nil, false)
+    if not ok or type(data) ~= "table" then
+        return false
+    end
+    local pkg = Models.find_package(data, op.id)
+    local now_installed = Models.patch_file_installed(pkg, op.asset)
+    if op.action == "uninstall" then
+        return op.patch_was_installed and not now_installed
+    end
+    return now_installed
 end
 
 function App:poll_package_action(op, attempt)
@@ -1235,6 +1705,9 @@ function App:poll_package_action(op, attempt)
 
         local pkg = Models.find_package(packages, op.id)
         local succeeded = self:package_action_succeeded(op, pkg)
+        if not succeeded then
+            succeeded = self:patch_action_succeeded_from_db(op)
+        end
 
         if succeeded then
             self.busy = false
@@ -1242,7 +1715,11 @@ function App:poll_package_action(op, attempt)
             Modals.close_status()
             local finish = function()
                 if op.prompt_restart then
-                    Modals.restart_koreader(op.name .. " " .. done .. _(" successfully.\n\nRestart KOReader to load the plugin."), function()
+                    local tail = _(" successfully.\n\nRestart KOReader to load the plugin.")
+                    if op.is_patch or op.action == "uninstall" then
+                        tail = _(" successfully.\n\nRestart KOReader to apply the change.")
+                    end
+                    Modals.restart_koreader(op.name .. " " .. done .. tail, function()
                         UIManager:restartKOReader()
                     end)
                 else
@@ -1295,8 +1772,29 @@ function App:refresh_repos()
     end
 end
 
-function App:show_actions()
+function App:toggle_filter_installable()
+    self.state.filter_installable = not self.state.filter_installable
+    App.save_setting("filter_installable", self.state.filter_installable)
+    self.state.packages = {}
+    self:reload_current_page()
+end
+
+function App:toggle_advanced()
+    self.state.advanced = not self.state.advanced
+    App.save_setting("advanced", self.state.advanced)
+end
+
+function App:toggle_beta_updates()
+    self.state.beta_updates = not self.state.beta_updates
+    App.save_setting("beta_updates", self.state.beta_updates)
+end
+
+function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
+        {
+            text = _("About"),
+            callback = function() self:show_about() end,
+        },
         {
             text = _("Refresh"),
             callback = function()
@@ -1304,35 +1802,85 @@ function App:show_actions()
             end,
         },
         {
-            text = _("About"),
-            callback = function() self:show_about() end,
-        },
-        {
             text = _("Update"),
             callback = function() self:start_update() end,
+        },
+        {
+            text = _("Filter installable"),
+            checked_func = function()
+                return self.state.filter_installable
+            end,
+            callback = function()
+                self:toggle_filter_installable()
+            end,
+        },
+        {
+            text = _("Advanced"),
+            checked_func = function()
+                return self.state.advanced
+            end,
+            callback = function()
+                self:toggle_advanced()
+            end,
+        },
+        {
+            text = _("Beta updates"),
+            checked_func = function()
+                return self.state.beta_updates
+            end,
+            callback = function()
+                self:toggle_beta_updates()
+            end,
         },
         {
             text = _("Quit"),
             callback = function() self:quit() end,
         },
+    }, {
+        align = "left",
+        anchor = anchor,
+        anchor_right = true,
+        compact = true,
+        compact_min_width = 220,
+        show_cancel = false,
+        title_icon = Images.asset("zenpm.svg"),
     })
 end
 
 function App:show_about()
     local version = tostring(self.version or "?"):gsub("^v", "")
-    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
+    local platform = tostring(self:package_platforms())
+    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
 end
 
 function App:start_update()
     Modals.confirm(_("Check for and start a ZenPM update?"), _("Update"), function()
-        local ok, data = self.client:start_update()
-        if ok then
-            -- Daemon may restart under us; force ensure_backend to re-verify health.
-            self.backend_ready = false
-            Modals.info(_("Update accepted. The daemon may restart."))
-        else
-            Modals.info(_("Update failed: ") .. tostring(data))
+        self.busy = true
+        Modals.status(_("Checking for ZenPM updates..."))
+        UIManager:forceRePaint()
+        local completed, ok, result = pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
+        self.busy = false
+        Modals.close_status()
+        if not completed then
+            Modals.info(_("Update failed: ") .. tostring(ok))
+            return
         end
+        if not ok then
+            Modals.info(_("Update failed: ") .. tostring(result))
+            return
+        end
+        if result == "up_to_date" then
+            Modals.info(_("ZenPM is up to date."))
+            return
+        end
+
+        -- The next startup copies the new bundled backend; stop the old one
+        -- now so it cannot be reused after KOReader restarts.
+        self.daemon:stop_standalone_backend()
+        self.backend_ready = false
+        Modals.restart_koreader(
+            _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
+            function() UIManager:restartKOReader() end)
     end)
 end
 

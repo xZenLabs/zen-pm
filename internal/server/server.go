@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"ZPM/internal/log"
@@ -31,34 +33,35 @@ type Server struct {
 }
 
 type pkgJSON struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Version       string          `json:"version"`
-	Description   string          `json:"description"`
-	Author        string          `json:"author"`
-	Tags          []string        `json:"tags"`
-	Category      string          `json:"category,omitempty"`
-	Platforms     []string        `json:"platforms"`
-	Repo          string          `json:"repo"`
-	RepoTrust     string          `json:"repo_trust,omitempty"`
-	RepoDefault   bool            `json:"repo_default,omitempty"`
-	Installed     bool            `json:"installed"`
-	InstalledVer  string          `json:"installed_version,omitempty"`
-	LatestVersion string          `json:"latest_version,omitempty"`
-	UpdateAvail   bool            `json:"update_available,omitempty"`
-	IconURL       string          `json:"icon_url,omitempty"`
-	RepoIconURL   string          `json:"repo_icon_url,omitempty"`
-	ImageURL      string          `json:"image_url,omitempty"`
-	Images        []string        `json:"images,omitempty"`
-	Featured      bool            `json:"featured,omitempty"`
-	FeaturedImage string          `json:"featured_image,omitempty"`
-	Source        string          `json:"source,omitempty"`
-	SourceType    string          `json:"source_type,omitempty"`
-	SourceURL     string          `json:"source_url,omitempty"`
-	Stars         string          `json:"stars,omitempty"`
-	PluginModule  string          `json:"plugin_module,omitempty"`
-	Assets        json.RawMessage `json:"assets,omitempty"`
-	Constraints   json.RawMessage `json:"constraints,omitempty"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Version         string          `json:"version"`
+	Description     string          `json:"description"`
+	Author          string          `json:"author"`
+	Tags            []string        `json:"tags"`
+	Category        string          `json:"category,omitempty"`
+	Platforms       []string        `json:"platforms"`
+	Repo            string          `json:"repo"`
+	RepoTrust       string          `json:"repo_trust,omitempty"`
+	RepoDefault     bool            `json:"repo_default,omitempty"`
+	Installed       bool            `json:"installed"`
+	InstalledVer    string          `json:"installed_version,omitempty"`
+	InstalledAssets []string        `json:"installed_assets,omitempty"`
+	LatestVersion   string          `json:"latest_version,omitempty"`
+	UpdateAvail     bool            `json:"update_available,omitempty"`
+	IconURL         string          `json:"icon_url,omitempty"`
+	RepoIconURL     string          `json:"repo_icon_url,omitempty"`
+	ImageURL        string          `json:"image_url,omitempty"`
+	Images          []string        `json:"images,omitempty"`
+	Featured        bool            `json:"featured,omitempty"`
+	FeaturedImage   string          `json:"featured_image,omitempty"`
+	Source          string          `json:"source,omitempty"`
+	SourceType      string          `json:"source_type,omitempty"`
+	SourceURL       string          `json:"source_url,omitempty"`
+	Stars           string          `json:"stars,omitempty"`
+	PluginModule    string          `json:"plugin_module,omitempty"`
+	Assets          json.RawMessage `json:"assets,omitempty"`
+	Constraints     json.RawMessage `json:"constraints,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -98,9 +101,9 @@ func (s *Server) ListenAndServe() error {
 	go s.periodicRefresh()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
-	ln, err := net.Listen("tcp", addr)
+	ln, err := s.listen(addr)
 	if err != nil {
-		return fmt.Errorf("listen %s: %w", addr, err)
+		return err
 	}
 	if !s.StartedAt.IsZero() {
 		log.Infof("Timing: server listening on %s, %dms after process start", addr, time.Since(s.StartedAt).Milliseconds())
@@ -108,6 +111,46 @@ func (s *Server) ListenAndServe() error {
 		log.Infof("ZenPM server listening on %s", addr)
 	}
 	return http.Serve(ln, mux)
+}
+
+// listen binds addr, resolving the two racy port-conflict cases that arise when
+// the native installer daemon and the KOReader plugin both target port 8080:
+//   - a healthy ZenPM already owns the port → duplicate launch, exit clean(0) so
+//     the frontend keeps using the live daemon instead of seeing a crash.
+//   - the port is held by a predecessor still shutting down (plugin pkill'd it a
+//     moment ago) → retry the bind for a few seconds while the socket drains.
+func (s *Server) listen(addr string) (net.Listener, error) {
+	const attempts = 10
+	for i := 0; ; i++ {
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			return ln, nil
+		}
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			return nil, fmt.Errorf("listen %s: %w", addr, err)
+		}
+		if s.daemonAlreadyRunning(addr) {
+			log.Infof("ZenPM already running on %s — this instance exiting", addr)
+			os.Exit(0)
+		}
+		if i >= attempts {
+			return nil, fmt.Errorf("listen %s: %w", addr, err)
+		}
+		log.Infof("Port %s busy but no healthy daemon — retrying bind (%d/%d)", addr, i+1, attempts)
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// daemonAlreadyRunning probes /health to confirm a live ZenPM daemon owns addr,
+// distinguishing a duplicate launch from a foreign process squatting the port.
+func (s *Server) daemonAlreadyRunning(addr string) bool {
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://" + addr + "/health")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // catalogMaxAge is how stale the catalog may get before a refresh is forced.
@@ -397,6 +440,12 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		installedVersion[e.ID] = e.Version
 	}
 
+	patchFiles, _ := s.st.ReadInstalledPatchFiles()
+	installedAssets := make(map[string][]string)
+	for _, f := range patchFiles {
+		installedAssets[f.PackageID] = append(installedAssets[f.PackageID], f.Asset)
+	}
+
 	filtered := repo.FilterByPlatform(catalog, plat)
 	platformList := platformValues(plat)
 	repoEntries, _ := s.repos.List()
@@ -415,7 +464,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Description: e.Description, Author: e.Author,
 			Tags:      e.Tags,
 			Category:  e.Category,
-			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID],
+			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID] || len(installedAssets[e.ID]) > 0,
 			IconURL:       e.IconURL,
 			RepoIconURL:   e.RepoIconURL,
 			ImageURL:      firstString(e.Images),
@@ -429,6 +478,9 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			PluginModule:  e.PluginModule,
 			Assets:        rawJSON(e.Assets),
 			Constraints:   rawJSON(e.Constraints),
+		}
+		if files := installedAssets[e.ID]; len(files) > 0 {
+			item.InstalledAssets = files
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
@@ -502,7 +554,7 @@ func rawJSON(value string) json.RawMessage {
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
-	// Expects: /packages/{id}/install  or  /packages/{id}/uninstall
+	// Expects: /packages/{id}/{install,uninstall,assets,readme,releases}
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 2 || parts[0] == "" {
@@ -512,6 +564,14 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	id, action := parts[0], parts[1]
 	if action == "assets" {
 		s.handlePackageAssets(w, r, id)
+		return
+	}
+	if action == "readme" {
+		s.handlePackageReadme(w, r, id)
+		return
+	}
+	if action == "releases" {
+		s.handlePackageReleases(w, r, id)
 		return
 	}
 	if action != "install" && action != "uninstall" {
@@ -524,6 +584,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	asset := r.URL.Query().Get("asset")
+	releaseTag := r.URL.Query().Get("release")
 
 	if action == "install" {
 		if err := s.pkgs.CheckInstall(id); err != nil {
@@ -538,9 +599,13 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		var err error
 		if action == "install" {
-			err = s.pkgs.InstallAsset(id, asset)
+			if releaseTag != "" {
+				err = s.pkgs.InstallRelease(id, releaseTag, asset)
+			} else {
+				err = s.pkgs.InstallAsset(id, asset)
+			}
 		} else {
-			err = s.pkgs.Uninstall(id)
+			err = s.pkgs.Uninstall(id, asset)
 		}
 		if err != nil {
 			log.Errorf("Package %s %s failed: %v", id, action, err)
@@ -550,6 +615,58 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) packageGitHubSource(id string) (string, error) {
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range catalog {
+		if entry.ID == id {
+			if _, ok := releases.GitHubRepository(entry.Source); !ok {
+				return "", fmt.Errorf("package %q has no GitHub source", id)
+			}
+			return entry.Source, nil
+		}
+	}
+	return "", fmt.Errorf("package %q not found", id)
+}
+
+func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	source, err := s.packageGitHubSource(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	readme, err := releases.FetchGitHubReadme(source)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"readme": readme})
+}
+
+func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	source, err := s.packageGitHubSource(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	items, err := releases.FetchGitHubReleases(source, 15)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"releases": items})
 }
 
 func (s *Server) handlePackageAssets(w http.ResponseWriter, r *http.Request, id string) {

@@ -5,6 +5,7 @@
 local Images = require("ui/images")
 local Models = require("models")
 
+local Geom = require("ui/geometry")
 local I18n = require("i18n")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
@@ -30,7 +31,9 @@ function Header.draw_actions(view, bb, x, y)
     for i = 0, 2 do
         P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, { border = false, background = Theme.ink, radius = math.floor(dot / 2) })
     end
-    P.hit(view, x, y, s, s, function() view.app:show_actions() end, "actions")
+    P.hit(view, x, y, s, s, function()
+        view.app:show_actions(Geom:new{ x = x, y = y, w = s, h = s })
+    end, "actions")
     return s
 end
 
@@ -151,7 +154,7 @@ function Header.draw(view, bb, x, y, w)
         Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(8))
         Header.draw_back(view, bb, x + pad, y + Theme.scale(8), function() view.app:go_back_from_details() end)
         local pkg = view.app.state.current_package or {}
-        P.vcenter_text(bb, ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
+        P.vcenter_text(bb, ellipsize(Models.package_display_name(pkg, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
         return y + h
     elseif page == "debug" then
         local h = Theme.scale(54)

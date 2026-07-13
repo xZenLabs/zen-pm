@@ -59,16 +59,35 @@ end
 
 local function package_version_repo_text(pkg)
     local parts = {}
-    if pkg and pkg.version and pkg.version ~= "" and pkg.version ~= "0.0.0" then
-        table.insert(parts, "v" .. tostring(pkg.version):gsub("^[vV]", ""))
+    local version = pkg and pkg.version
+    if pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
+        version = pkg.installed_version
+    end
+    if version and version ~= "" and version ~= "0.0.0" then
+        local v = tostring(version):gsub("^[vV]", "")
+        table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
     table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " • ")
 end
 
-local function action_pill(view, bb, text, x, y, w, h, callback)
-    P.box(bb, x, y, w, h, { background = Theme.bg, border_size = 2, radius = math.floor(h / 2) })
-    P.center_text_box(bb, text, x, y, w, h, "small", { bold = true })
+local function action_pill(view, bb, text, x, y, w, h, callback, icon, color)
+    local ink = color or Theme.ink
+    P.box(bb, x, y, w, h, { background = Theme.bg, border_size = 2, border_color = ink, radius = math.floor(h / 2) })
+    if icon then
+        local icon_size = Theme.scale(18)
+        local gap = Theme.scale(4)
+        local text_size = P.text_size(text, w - icon_size - gap, "small", { bold = true })
+        local content_w = icon_size + gap + text_size.w
+        local content_x = x + math.max(0, math.floor((w - content_w) / 2))
+        local icon_y = y + math.max(0, math.floor((h - icon_size) / 2))
+        if not P.image(bb, icon, content_x, icon_y, icon_size, icon_size, { is_icon = true }) then
+            P.center_text_box(bb, "↓", content_x, icon_y, icon_size, icon_size, "small", { bold = true, color = ink })
+        end
+        P.text(bb, text, content_x + icon_size + gap, y + math.max(0, math.floor((h - text_size.h) / 2)), text_size.w, "small", { bold = true, color = ink })
+    else
+        P.center_text_box(bb, text, x, y, w, h, "small", { bold = true, color = ink })
+    end
     P.hit(view, x, y, w, h, callback, text)
 end
 
@@ -96,6 +115,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local action_x = x + w - action_w - pad
     local action_y = y + math.floor((h - action_h) / 2)
     local text_w = action_x - text_x - Theme.scale(8)
+    local disabled = pkg.installed and view.app:package_disabled(pkg)
+    local ink = disabled and Theme.muted or nil
 
     if icon_w > 0 then
         local ix = x + pad
@@ -105,11 +126,14 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = true })
             or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = true })
         if not painted then
-            P.center_text_box(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy, icon_w, icon_w, "small", { bold = true })
+            P.center_text_box(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy, icon_w, icon_w, "small", { bold = true, color = ink })
+        end
+        if disabled then
+            P.dim(bb, ix, iy, icon_w, icon_w)
         end
     end
 
-    local title = ellipsize(I18n.dynamic_or(pkg.name or pkg.id, _("Unknown package")), 60)
+    local title = ellipsize(Models.package_display_name(pkg, _("Unknown package")), 60)
     local description = ellipsize(opts.second_line or I18n.dynamic_or(pkg.description, _("No description")), 56)
     -- When a caller overrides second_line (e.g. details "By <author>"), skip the separate author row.
     local author = opts.second_line and "" or ellipsize(package_author_text(pkg), 56)
@@ -167,18 +191,26 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     end
 
     for _, row in ipairs(rows) do
-        P.text(bb, row.text, text_x, row.y, row.w, row.role, { bold = row.bold })
+        P.text(bb, row.text, text_x, row.y, row.w, row.role, { bold = row.bold, color = ink })
     end
     local meta_row = rows[#rows]
     local verify_size = Theme.scale(16)
-    draw_verification_icon(bb, Models.package_verified(pkg), text_x + math.min(meta_row.size.w + Theme.scale(5), text_w - verify_size), meta_row.y + math.floor((meta_row.size.h - verify_size) / 2), verify_size)
+    local verify_x = text_x + math.min(meta_row.size.w + Theme.scale(5), text_w - verify_size)
+    local verify_y = meta_row.y + math.floor((meta_row.size.h - verify_size) / 2)
+    draw_verification_icon(bb, Models.package_verified(pkg), verify_x, verify_y, verify_size)
+    if disabled then
+        P.dim(bb, verify_x, verify_y, verify_size, verify_size)
+    end
 
     if pkg.installed then
         local check = Theme.scale(28)
         local cx = x + w - Theme.scale(34)
         local cy = y + Theme.scale(5)
         if not P.image(bb, Images.asset("checkmark.svg"), cx, cy, check, check, { is_icon = true }) then
-            P.center_text(bb, "v", cx, cy + Theme.scale(2), check, "small", { bold = true })
+            P.center_text(bb, "v", cx, cy + Theme.scale(2), check, "small", { bold = true, color = ink })
+        end
+        if disabled then
+            P.dim(bb, cx, cy, check, check)
         end
     elseif should_show_stars(view, pkg) then
         local star = Theme.scale(28)
@@ -193,14 +225,15 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
+    local action_icon = pkg.installed and pkg.update_available and Images.asset("update.svg") or nil
     action_pill(view, bb, Models.package_action_label(pkg), action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
-    end)
+    end, action_icon)
     P.hit(view, x, y, action_x - x, h, function()
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab)
-    end, "package:" .. tostring(pkg.id or pkg.name))
+        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
+    end, "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))
     return h
 end
 

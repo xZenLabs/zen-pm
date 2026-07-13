@@ -10,7 +10,7 @@ local P = {}
 local function exact_size_svg_icon(file, opts)
     return opts
         and opts.is_icon
-        and tostring(file):match("/zen[^/]*%.svg$") ~= nil
+        and tostring(file):lower():match("%.svg$") ~= nil
 end
 
 function P.rect(bb, x, y, w, h, color)
@@ -111,6 +111,30 @@ function P.paragraph(bb, text, x, y, width, height, role, opts)
     local size = widget:getSize()
     widget:free()
     return size
+end
+
+function P.scrollable_paragraph(bb, text, x, y, width, height, role, scroll, opts)
+    opts = opts or {}
+    local face = opts.face or Theme.face(role)
+    local line_height = math.floor((1 + (opts.line_height or 0.3)) * face.size + 0.5)
+    local top_line = math.floor((scroll or 0) / math.max(1, line_height)) + 1
+    local widget = TextBoxWidget:new{
+        text = tostring(text or ""),
+        face = face,
+        bold = opts.bold,
+        fgcolor = opts.color or Theme.ink,
+        width = width,
+        height = height,
+        height_adjust = true,
+        line_height = opts.line_height,
+        virtual_line_num = top_line,
+    }
+    widget:paintTo(bb, x, y)
+    local total_lines = #(widget.vertical_string_list or {})
+    local visible_lines = widget.lines_per_page or total_lines
+    line_height = widget.line_height_px or line_height
+    widget:free()
+    return math.max(0, total_lines - visible_lines) * line_height, line_height
 end
 
 function P.text_size(text, width, role, opts)
@@ -265,6 +289,15 @@ end
 
 function P.image_zoomed_masked(bb, file, x, y, w, h, zoom, opts)
     return P.image_zoomed(bb, file, x, y, w, h, zoom, opts)
+end
+
+function P.dim(bb, x, y, w, h, by)
+    if w <= 0 or h <= 0 or not bb.lightenRect then
+        return
+    end
+    pcall(function()
+        bb:lightenRect(x, y, w, h, by or 0.5)
+    end)
 end
 
 function P.hit(app, x, y, w, h, callback, label)

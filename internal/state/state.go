@@ -39,6 +39,9 @@ type Store interface {
 	AppendInstalled(InstalledEntry) error
 	RemoveInstalled(string) error
 	IsInstalled(string) (bool, string)
+	ReadInstalledPatchFiles() ([]PatchFileEntry, error)
+	AppendInstalledPatchFile(PatchFileEntry) error
+	RemoveInstalledPatchFile(packageID, asset string) error
 	ReadCatalog() ([]CatalogEntry, error)
 	WriteCatalog([]CatalogEntry) error
 }
@@ -278,6 +281,16 @@ type InstalledEntry struct {
 	InstalledAt string
 }
 
+// PatchFileEntry represents one installed patch file within a patch package.
+type PatchFileEntry struct {
+	PackageID   string
+	Asset       string // patch file name, e.g. "2-menu-size.lua"
+	Name        string // package display name
+	Version     string
+	Repo        string
+	InstalledAt string
+}
+
 func (s *State) ReadInstalled() ([]InstalledEntry, error) {
 	return s.store.ReadInstalled()
 }
@@ -292,6 +305,18 @@ func (s *State) RemoveInstalled(id string) error {
 
 func (s *State) IsInstalled(id string) (bool, string) {
 	return s.store.IsInstalled(id)
+}
+
+func (s *State) ReadInstalledPatchFiles() ([]PatchFileEntry, error) {
+	return s.store.ReadInstalledPatchFiles()
+}
+
+func (s *State) AppendInstalledPatchFile(e PatchFileEntry) error {
+	return s.store.AppendInstalledPatchFile(e)
+}
+
+func (s *State) RemoveInstalledPatchFile(packageID, asset string) error {
+	return s.store.RemoveInstalledPatchFile(packageID, asset)
 }
 
 func (s *State) ReadCatalog() ([]CatalogEntry, error) {
