@@ -54,7 +54,10 @@ fi
 
 KINDLE_HF_STAGE="$BUILD_DIR/kindle-hf"
 KINDLE_SF_STAGE="$BUILD_DIR/kindle-sf"
+# Kobo packages are not available yet; keep their paths ready for when they are enabled.
+# shellcheck disable=SC2034
 KOBO_HF_STAGE="$BUILD_DIR/kobo-hf"
+# shellcheck disable=SC2034
 KOBO_SF_STAGE="$BUILD_DIR/kobo-sf"
 KOREADER_PLUGIN_BASE_STAGE="$BUILD_DIR/koreader-plugin-base"
 KOREADER_EREADER_HF_STAGE="$BUILD_DIR/koreader-ereader-hf"
@@ -215,7 +218,9 @@ ensure_exec "$KOREADER_LINUX_STAGE/zenpm.koplugin"
 
 KINDLE_HF_ZIP="$DIST_DIR/ZenPM-kindle-hf-$VERSION.zip"
 KINDLE_SF_ZIP="$DIST_DIR/ZenPM-kindle-sf-$VERSION.zip"
+# shellcheck disable=SC2034
 KOBO_HF_ZIP="$DIST_DIR/ZenPM-kobo-hf-$VERSION.zip"
+# shellcheck disable=SC2034
 KOBO_SF_ZIP="$DIST_DIR/ZenPM-kobo-sf-$VERSION.zip"
 KOREADER_EREADER_HF_ZIP="$DIST_DIR/ZenPM-koreader-ereader-hf-$VERSION.zip"
 KOREADER_EREADER_SF_ZIP="$DIST_DIR/ZenPM-koreader-ereader-sf-$VERSION.zip"
