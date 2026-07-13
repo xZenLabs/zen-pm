@@ -10,7 +10,7 @@ local P = {}
 local function exact_size_svg_icon(file, opts)
     return opts
         and opts.is_icon
-        and tostring(file):match("/zen[^/]*%.svg$") ~= nil
+        and tostring(file):lower():match("%.svg$") ~= nil
 end
 
 function P.rect(bb, x, y, w, h, color)

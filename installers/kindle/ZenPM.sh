@@ -52,7 +52,17 @@ sync
 # An old daemon started without log redirect would leave no log file.
 ZENPM_LOG="$PAYLOAD_DIR/ZenPM.log"
 pkill -f 'zenpm serve' 2>/dev/null || true
-sleep 1
+# Wait for the daemon to exit and free port 8080; SIGKILL if it won't die.
+i=0
+while pgrep -f 'zenpm serve' >/dev/null 2>&1; do
+    i=$((i + 1))
+    if [ "$i" -ge 5 ]; then
+        pkill -9 -f 'zenpm serve' 2>/dev/null || true
+        sleep 1
+        break
+    fi
+    sleep 1
+done
 nohup "$PAYLOAD_DIR/backend/zenpm" serve --port 8080 >>"$ZENPM_LOG" 2>&1 &
 
 echo "ZenPM installed. Launching..."

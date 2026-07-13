@@ -73,7 +73,10 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		if pkgID == id {
 			override = assetOverride
 		}
-		if patchAsset := ""; isPatchPackage(entry) {
+		patchReason := patchPackageReason(entry)
+		log.Infof("Package %s patch classification: patch=%t reason=%s category=%q install_url=%q source=%q source_type=%q assets=%d selected_asset=%q",
+			pkgID, patchReason != "", patchReason, entry.Category, shortLogValue(entry.InstallURL), shortLogValue(entry.Source), entry.SourceType, len(assets.Parse(entry.Assets)), override)
+		if patchAsset := ""; patchReason != "" {
 			patchAsset = m.resolvePatchAsset(entry, override)
 			log.Infof("Installing patch file %q from %s (repo %s)", patchAsset, entry.ID, entry.Repo)
 		} else {
@@ -111,12 +114,13 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 
 		installedVersion := installEntry.Version
 
-		if isPatchPackage(entry) {
+		if patchReason != "" {
 			asset := m.resolvePatchAsset(entry, override)
 			if asset == "" {
 				j.Abort("patch asset missing")
 				return fmt.Errorf("install %s: could not resolve patch file name", pkgID)
 			}
+			_ = m.st.RemoveInstalled(pkgID)
 			if err := m.st.AppendInstalledPatchFile(state.PatchFileEntry{
 				PackageID: pkgID, Asset: asset, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
 			}); err != nil {
@@ -490,16 +494,73 @@ func isGenericKOReaderPlugin(entry *repo.CatalogEntry) bool {
 }
 
 func isPatchPackage(entry *repo.CatalogEntry) bool {
+	return patchPackageReason(entry) != ""
+}
+
+func patchPackageReason(entry *repo.CatalogEntry) string {
 	if entry == nil {
-		return false
+		return ""
 	}
 	category := strings.ToLower(strings.TrimSpace(entry.Category))
 	category = strings.ReplaceAll(category, "-", "")
 	category = strings.ReplaceAll(category, "_", "")
 	category = strings.ReplaceAll(category, " ", "")
-	return category == "patch" || category == "patches" ||
-		category == "koreaderpatch" || category == "koreaderpatches" ||
-		strings.HasSuffix(entry.InstallURL, "/install-patch.sh")
+	if category == "patch" || category == "patches" ||
+		category == "koreaderpatch" || category == "koreaderpatches" {
+		return "category"
+	}
+
+	installURL := strings.TrimSpace(entry.InstallURL)
+	if i := strings.IndexAny(installURL, "?#"); i >= 0 {
+		installURL = installURL[:i]
+	}
+	if filepath.Base(installURL) == "install-patch.sh" {
+		return "install_url"
+	}
+
+	source := strings.ToLower(strings.Join([]string{entry.Source, entry.SourceURL, entry.SourceAsset}, " "))
+	if strings.Contains(source, "koreader.patches") || strings.Contains(source, "koreader-patches") {
+		return "source"
+	}
+
+	parsed := assets.Parse(entry.Assets)
+	if len(parsed) > 0 && packageHasPlatform(entry, "koreader") {
+		allLua := true
+		for _, asset := range parsed {
+			name := strings.ToLower(strings.TrimSpace(asset.Asset))
+			url := strings.ToLower(strings.TrimSpace(asset.URL))
+			if !strings.HasSuffix(name, ".lua") && !strings.Contains(url, ".lua") {
+				allLua = false
+				break
+			}
+		}
+		if allLua {
+			return "lua_assets"
+		}
+	}
+
+	return ""
+}
+
+func packageHasPlatform(entry *repo.CatalogEntry, platform string) bool {
+	if entry == nil {
+		return false
+	}
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	for _, value := range entry.Platforms {
+		if strings.ToLower(strings.TrimSpace(value)) == platform {
+			return true
+		}
+	}
+	return false
+}
+
+func shortLogValue(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= 120 {
+		return value
+	}
+	return value[:117] + "..."
 }
 
 func (m *Manager) isPatchFileInstalled(id, asset string) bool {

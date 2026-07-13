@@ -41,8 +41,8 @@ Outputs:
 
 - `dist/ZenPM-kindle-hf-<version>.zip`
 - `dist/ZenPM-kindle-sf-<version>.zip`
-- `dist/ZenPM-kobo-hf-<version>.zip`
-- `dist/ZenPM-kobo-sf-<version>.zip`
+<!-- - `dist/ZenPM-kobo-hf-<version>.zip` -->
+<!-- - `dist/ZenPM-kobo-sf-<version>.zip` -->
 - `dist/ZenPM-koreader-ereader-hf-<version>.zip`
 - `dist/ZenPM-koreader-ereader-sf-<version>.zip`
 - `dist/ZenPM-koreader-macos-<version>.zip`
@@ -55,18 +55,31 @@ package on older soft-float devices. To check on the device:
 if [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
 ```
 
+### Choose an e-reader package
+
+The loader check above is authoritative. Kindle ABI can change with firmware,
+so use it if the device is not listed or its firmware is unusual.
+
+| Common device / firmware | Expected ABI | ZenPM standalone app | ZenPM KOReader plugin |
+|---|---|---|---|
+| Kindle running firmware 5.16.3 or newer (for example, current Paperwhite, Oasis, and Scribe devices) | `hf` | `ZenPM-kindle-hf-<version>.zip` | `ZenPM-koreader-ereader-hf-<version>.zip` |
+| Kindle running firmware 5.16.2 or older (including legacy Kindle, Touch, and early Paperwhite installs) | `sf` | `ZenPM-kindle-sf-<version>.zip` | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| Kobo Touch and newer (Glo, Aura, Clara, Libra, Sage, Elipsa) | usually `hf` | <!-- `ZenPM-kobo-hf-<version>.zip` --> | `ZenPM-koreader-ereader-hf-<version>.zip` |
+| Any device that reports `sf` from the loader check | `sf` | Choose the matching `*-sf-<version>.zip` package | `ZenPM-koreader-ereader-sf-<version>.zip` |
+
 Package guide:
 
 | Device/runtime | Use this package |
 |---|---|
 | Kindle standalone app, ABI check prints `hf` | `ZenPM-kindle-hf-<version>.zip` |
 | Kindle standalone app, ABI check prints `sf` | `ZenPM-kindle-sf-<version>.zip` |
-| Kobo standalone install, ABI check prints `hf` | `ZenPM-kobo-hf-<version>.zip` |
-| Kobo standalone install, ABI check prints `sf` | `ZenPM-kobo-sf-<version>.zip` |
 | KOReader on Kindle/Kobo, ABI check prints `hf` | `ZenPM-koreader-ereader-hf-<version>.zip` |
 | KOReader on Kindle/Kobo, ABI check prints `sf` | `ZenPM-koreader-ereader-sf-<version>.zip` |
 | KOReader on macOS | `ZenPM-koreader-macos-<version>.zip` |
 | KOReader on Linux desktop ARM64/AMD64 | `ZenPM-koreader-linux-<version>.zip` |
+
+<!-- | Kobo standalone install, ABI check prints `hf` | `ZenPM-kobo-hf-<version>.zip` | -->
+<!-- | Kobo standalone install, ABI check prints `sf` | `ZenPM-kobo-sf-<version>.zip` | -->
 
 ## Local development
 
@@ -110,6 +123,7 @@ Prerequisites: jailbroken Kindle with root, `sqlite3` on device.
 lipc-set-prop com.lab126.appmgrd start app://com.zenpm.waf
 ```
 
+<!--
 ## Install on Kobo
 
 Prerequisites: Kobo with SSH/telnet access.
@@ -124,6 +138,7 @@ sh /mnt/onboard/.adds/ZenPM/installers/kobo/ZenPM.sh
 
 4. If NickelMenu is absent, the installer stages it and prompts for reboot. Re-run after reboot.
 5. ZenPM entries appear in the NickelMenu main menu.
+-->
 
 ## Install KOReader plugin
 

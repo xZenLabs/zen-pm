@@ -177,8 +177,9 @@ stage_kobo() {
 
 stage_kindle hf "$KINDLE_HF_STAGE"
 stage_kindle sf "$KINDLE_SF_STAGE"
-stage_kobo hf "$KOBO_HF_STAGE"
-stage_kobo sf "$KOBO_SF_STAGE"
+# Kobo packages are not available yet.
+# stage_kobo hf "$KOBO_HF_STAGE"
+# stage_kobo sf "$KOBO_SF_STAGE"
 
 copy_tree "$ROOT_DIR/frontend/koreader/zenpm.koplugin" "$KOREADER_PLUGIN_BASE_STAGE"
 cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/VERSION"
@@ -231,15 +232,15 @@ KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
     zip -qr "$KINDLE_SF_ZIP" documents ZenPM
 )
 
-(
-    cd "$KOBO_HF_STAGE"
-    zip -qr "$KOBO_HF_ZIP" .adds
-)
+# (
+#     cd "$KOBO_HF_STAGE"
+#     zip -qr "$KOBO_HF_ZIP" .adds
+# )
 
-(
-    cd "$KOBO_SF_STAGE"
-    zip -qr "$KOBO_SF_ZIP" .adds
-)
+# (
+#     cd "$KOBO_SF_STAGE"
+#     zip -qr "$KOBO_SF_ZIP" .adds
+# )
 
 (
     cd "$KOREADER_EREADER_HF_STAGE"
@@ -265,8 +266,8 @@ echo "Build complete"
 echo "Version:          $VERSION"
 echo "Kindle ARMhf package:       $KINDLE_HF_ZIP"
 echo "Kindle ARMsf package:       $KINDLE_SF_ZIP"
-echo "Kobo ARMhf package:         $KOBO_HF_ZIP"
-echo "Kobo ARMsf package:         $KOBO_SF_ZIP"
+# echo "Kobo ARMhf package:         $KOBO_HF_ZIP"
+# echo "Kobo ARMsf package:         $KOBO_SF_ZIP"
 echo "KOReader e-reader ARMhf:    $KOREADER_EREADER_HF_ZIP"
 echo "KOReader e-reader ARMsf:    $KOREADER_EREADER_SF_ZIP"
 echo "KOReader macOS plugin:      $KOREADER_MACOS_ZIP"

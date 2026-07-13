@@ -14,6 +14,7 @@ local _ = require("gettext")
 
 local Pages = {}
 local PACKAGE_ROWS_PER_SCREEN = 4
+local PATCH_ROWS_PER_SCREEN = 5
 
 local function ellipsize(value, limit)
     local text = tostring(value or "")
@@ -28,10 +29,15 @@ local function package_card_height(list_h, gap)
     return math.max(1, math.floor((list_h - gap * (PACKAGE_ROWS_PER_SCREEN - 1)) / PACKAGE_ROWS_PER_SCREEN))
 end
 
+local function patch_row_height(list_h, gap)
+    return math.max(Theme.metrics().touch_min, math.floor((list_h - gap * (PATCH_ROWS_PER_SCREEN - 1)) / PATCH_ROWS_PER_SCREEN))
+end
+
 local function patch_asset_meta(asset)
     local parts = {}
-    if asset.arch and asset.arch ~= "" then
-        table.insert(parts, tostring(asset.arch))
+    local arch = Util.trim(tostring(asset.arch or ""))
+    if arch ~= "" and arch:lower() ~= "any" then
+        table.insert(parts, arch)
     end
     local size = tonumber(asset.size)
     if size and size > 0 then
@@ -239,8 +245,8 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         return 0
     end
     if details_tab == "patches" then
-        local row_h = Theme.scale(58)
         local gap = Theme.scale(8)
+        local row_h = patch_row_height(content_h, gap)
         local list_w = inner_w
         local max_scroll = Scroll.scrolled_list(view, bb, assets, inner_x, iy, list_w, content_h, scroll, row_h, gap, function(asset, row_y)
             local gutter = Theme.scale(30)

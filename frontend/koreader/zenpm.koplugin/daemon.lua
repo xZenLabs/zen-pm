@@ -373,10 +373,6 @@ end
 
 function Daemon:ensure_backend_files()
     local native = self:native_install_backend()
-    if native then
-        self.backend_path = native
-        return false, nil
-    end
 
     local dirs_missing, dirs_err = self:ensure_runtime_dirs()
     if dirs_err then
@@ -390,7 +386,7 @@ function Daemon:ensure_backend_files()
     if not Util.ensure_dir(backend_dir) then
         return false, _("Could not create ZenPM settings directory: ") .. backend_dir
     end
-    local backend = self:standalone_backend()
+    local backend = native or self:standalone_backend()
     local marker = self:desired_marker(source)
     local changed = dirs_missing or read_all(self:standalone_marker()) ~= marker or not path_exists(backend)
     for _, companion in ipairs(self:bundled_backend_companions(source)) do

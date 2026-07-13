@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"ZPM/internal/log"
@@ -99,9 +101,9 @@ func (s *Server) ListenAndServe() error {
 	go s.periodicRefresh()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
-	ln, err := net.Listen("tcp", addr)
+	ln, err := s.listen(addr)
 	if err != nil {
-		return fmt.Errorf("listen %s: %w", addr, err)
+		return err
 	}
 	if !s.StartedAt.IsZero() {
 		log.Infof("Timing: server listening on %s, %dms after process start", addr, time.Since(s.StartedAt).Milliseconds())
@@ -109,6 +111,46 @@ func (s *Server) ListenAndServe() error {
 		log.Infof("ZenPM server listening on %s", addr)
 	}
 	return http.Serve(ln, mux)
+}
+
+// listen binds addr, resolving the two racy port-conflict cases that arise when
+// the native installer daemon and the KOReader plugin both target port 8080:
+//   - a healthy ZenPM already owns the port → duplicate launch, exit clean(0) so
+//     the frontend keeps using the live daemon instead of seeing a crash.
+//   - the port is held by a predecessor still shutting down (plugin pkill'd it a
+//     moment ago) → retry the bind for a few seconds while the socket drains.
+func (s *Server) listen(addr string) (net.Listener, error) {
+	const attempts = 10
+	for i := 0; ; i++ {
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			return ln, nil
+		}
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			return nil, fmt.Errorf("listen %s: %w", addr, err)
+		}
+		if s.daemonAlreadyRunning(addr) {
+			log.Infof("ZenPM already running on %s — this instance exiting", addr)
+			os.Exit(0)
+		}
+		if i >= attempts {
+			return nil, fmt.Errorf("listen %s: %w", addr, err)
+		}
+		log.Infof("Port %s busy but no healthy daemon — retrying bind (%d/%d)", addr, i+1, attempts)
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// daemonAlreadyRunning probes /health to confirm a live ZenPM daemon owns addr,
+// distinguishing a duplicate launch from a foreign process squatting the port.
+func (s *Server) daemonAlreadyRunning(addr string) bool {
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://" + addr + "/health")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // catalogMaxAge is how stale the catalog may get before a refresh is forced.

@@ -10,11 +10,12 @@ local I18n = require("i18n")
 local Images = require("ui/images")
 local Modals = require("ui/modals")
 local Models = require("models")
+local Updater = require("updater")
 local Util = require("zenpm_util")
 
 local App = {}
 
--- Persist UI preferences (filter, advanced mode) in our own config file inside
+-- Persist UI preferences (filter, advanced mode, beta updates) in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
 local config_settings = nil
 
@@ -62,6 +63,7 @@ function App:new(plugin)
             active_tab = "home",
             filter_installable = App.load_setting("filter_installable", true),
             advanced = App.load_setting("advanced", false),
+            beta_updates = App.load_setting("beta_updates", false),
             filters = { search = "", installed = "", categories = "", category = "" },
             sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
             scroll = {},
@@ -261,21 +263,6 @@ local function load_plugin_from_disk(dir_path)
     package.cpath = package_cpath
     if not ok or type(mod) ~= "table" then return nil end
     return mod
-end
-
--- Zen UI stores its updater channel in a LuaSettings-style config table at
--- {settings_dir}/Zen UI/config.lua. Beta channel means the user opts into
--- prerelease builds, so ZenPM should surface prerelease versions too.
-local function zenui_beta_enabled()
-    local ok_ds, DataStorage = pcall(require, "datastorage")
-    if not (ok_ds and DataStorage and DataStorage.getSettingsDir) then return false end
-    local config_file = DataStorage:getSettingsDir() .. "/Zen UI/config.lua"
-    local ok_chunk, chunk = pcall(loadfile, config_file)
-    if not ok_chunk or type(chunk) ~= "function" then return false end
-    local ok_data, data = pcall(chunk)
-    if not ok_data or type(data) ~= "table" then return false end
-    local updater = data.updater
-    return type(updater) == "table" and updater.update_channel == "beta"
 end
 
 local function delete_default_plugin_settings(plugin_name)
@@ -1365,7 +1352,7 @@ end
 
 -- Show installable GitHub releases for a package. Each version maps to an
 -- update/reinstall/downgrade action based on its relation to the installed
--- version. Prereleases are hidden unless the user enabled Zen UI's beta channel.
+-- version. Prereleases are hidden unless the user enabled ZenPM beta updates.
 -- All releases are fetched in one request (keeps GitHub API calls low under the
 -- anonymous rate limit); the list is paged VERSIONS_PER_PAGE at a time in the UI.
 local VERSIONS_PER_PAGE = 5
@@ -1386,7 +1373,7 @@ function App:prompt_package_versions(pkg, on_done)
         Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
         return
     end
-    local allow_prerelease = zenui_beta_enabled()
+    local allow_prerelease = self.state.beta_updates
     local releases = {}
     for _, release in ipairs(type(data) == "table" and data.releases or {}) do
         if release.tag_name and (allow_prerelease or not release.prerelease) then
@@ -1658,6 +1645,22 @@ function App:package_action_succeeded(op, pkg)
     return pkg and pkg.installed
 end
 
+function App:patch_action_succeeded_from_db(op)
+    if not (op.is_patch and op.asset and op.asset ~= "") then
+        return false
+    end
+    local ok, data = self.client:list_packages(nil, false)
+    if not ok or type(data) ~= "table" then
+        return false
+    end
+    local pkg = Models.find_package(data, op.id)
+    local now_installed = Models.patch_file_installed(pkg, op.asset)
+    if op.action == "uninstall" then
+        return op.patch_was_installed and not now_installed
+    end
+    return now_installed
+end
+
 function App:poll_package_action(op, attempt)
     UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
         local detail = self:package_action_failure_detail(op)
@@ -1685,6 +1688,9 @@ function App:poll_package_action(op, attempt)
 
         local pkg = Models.find_package(packages, op.id)
         local succeeded = self:package_action_succeeded(op, pkg)
+        if not succeeded then
+            succeeded = self:patch_action_succeeded_from_db(op)
+        end
 
         if succeeded then
             self.busy = false
@@ -1692,9 +1698,10 @@ function App:poll_package_action(op, attempt)
             Modals.close_status()
             local finish = function()
                 if op.prompt_restart then
-                    local tail = op.action == "uninstall"
-                        and _(" successfully.\n\nRestart KOReader to apply the change.")
-                        or _(" successfully.\n\nRestart KOReader to load the plugin.")
+                    local tail = _(" successfully.\n\nRestart KOReader to load the plugin.")
+                    if op.is_patch or op.action == "uninstall" then
+                        tail = _(" successfully.\n\nRestart KOReader to apply the change.")
+                    end
                     Modals.restart_koreader(op.name .. " " .. done .. tail, function()
                         UIManager:restartKOReader()
                     end)
@@ -1760,6 +1767,11 @@ function App:toggle_advanced()
     App.save_setting("advanced", self.state.advanced)
 end
 
+function App:toggle_beta_updates()
+    self.state.beta_updates = not self.state.beta_updates
+    App.save_setting("beta_updates", self.state.beta_updates)
+end
+
 function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
         {
@@ -1795,6 +1807,15 @@ function App:show_actions(anchor)
             end,
         },
         {
+            text = _("Beta updates"),
+            checked_func = function()
+                return self.state.beta_updates
+            end,
+            callback = function()
+                self:toggle_beta_updates()
+            end,
+        },
+        {
             text = _("Quit"),
             callback = function() self:quit() end,
         },
@@ -1817,14 +1838,32 @@ end
 
 function App:start_update()
     Modals.confirm(_("Check for and start a ZenPM update?"), _("Update"), function()
-        local ok, data = self.client:start_update()
-        if ok then
-            -- Daemon may restart under us; force ensure_backend to re-verify health.
-            self.backend_ready = false
-            Modals.info(_("Update accepted. The daemon may restart."))
-        else
-            Modals.info(_("Update failed: ") .. tostring(data))
+        self.busy = true
+        Modals.status(_("Checking for ZenPM updates..."))
+        UIManager:forceRePaint()
+        local completed, ok, result = pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
+        self.busy = false
+        Modals.close_status()
+        if not completed then
+            Modals.info(_("Update failed: ") .. tostring(ok))
+            return
         end
+        if not ok then
+            Modals.info(_("Update failed: ") .. tostring(result))
+            return
+        end
+        if result == "up_to_date" then
+            Modals.info(_("ZenPM is up to date."))
+            return
+        end
+
+        -- The next startup copies the new bundled backend; stop the old one
+        -- now so it cannot be reused after KOReader restarts.
+        self.daemon:stop_standalone_backend()
+        self.backend_ready = false
+        Modals.restart_koreader(
+            _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
+            function() UIManager:restartKOReader() end)
     end)
 end
 

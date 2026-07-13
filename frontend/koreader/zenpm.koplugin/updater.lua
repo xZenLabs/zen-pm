@@ -1,0 +1,346 @@
+local Archiver = require("ffi/archiver")
+local JSON = require("json")
+local _ = require("gettext")
+
+local Constants = require("constants")
+local Util = require("zenpm_util")
+
+local Updater = {}
+
+local REPOSITORY = "xZenLabs/zen-pm"
+local RELEASES_URL = "https://api.github.com/repos/" .. REPOSITORY .. "/releases?per_page=100"
+local RELEASE_ROOT = "zenpm.koplugin"
+
+local trusted_download_hosts = {
+    ["github.com"] = true,
+    ["objects.githubusercontent.com"] = true,
+    ["release-assets.githubusercontent.com"] = true,
+    ["github-releases.githubusercontent.com"] = true,
+}
+
+local function path_exists(path)
+    return Util.path_exists(path)
+end
+
+local function is_dir(path)
+    local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
+    local attrs = ok_lfs and lfs.attributes(path)
+    return attrs and attrs.mode == "directory"
+end
+
+local function remove_tree(path)
+    os.execute("rm -rf " .. Util.sh_quote(path))
+end
+
+local function semver_parts(version)
+    local value = (tostring(version or ""):match("^v?(.+)$") or "")
+    local base = value:match("^([%d%.]+)") or ""
+    local prerelease = value:match("^[%d%.]+[-+](.+)$") or ""
+    local major, minor, patch = base:match("^(%d+)%.(%d+)%.?(%d*)$")
+    return tonumber(major) or 0, tonumber(minor) or 0, tonumber(patch) or 0,
+        prerelease ~= "", tonumber(prerelease:match("(%d+)$")) or 0
+end
+
+local function version_gt(left, right)
+    local left_major, left_minor, left_patch, left_prerelease, left_prerelease_number = semver_parts(left)
+    local right_major, right_minor, right_patch, right_prerelease, right_prerelease_number = semver_parts(right)
+    if left_major ~= right_major then return left_major > right_major end
+    if left_minor ~= right_minor then return left_minor > right_minor end
+    if left_patch ~= right_patch then return left_patch > right_patch end
+    if left_prerelease ~= right_prerelease then return not left_prerelease end
+    return left_prerelease and left_prerelease_number > right_prerelease_number
+end
+
+local function semver_base(version)
+    local major, minor, patch = semver_parts(version)
+    return string.format("%d.%d.%d", major, minor, patch)
+end
+
+local function release_asset_name(daemon, version)
+    local platform = daemon:detect_platform()
+    if platform == "kindle" or platform == "kobo" then
+        return "ZenPM-koreader-ereader-" .. daemon:detect_abi() .. "-" .. version .. ".zip"
+    end
+
+    local host_platform = daemon:host_backend_platform()
+    if host_platform == "darwin" then
+        return "ZenPM-koreader-macos-" .. version .. ".zip"
+    elseif host_platform == "linux" then
+        return "ZenPM-koreader-linux-" .. version .. ".zip"
+    end
+end
+
+local function valid_download_url(url)
+    local scheme, host, path = tostring(url or ""):match("^(https?)://([^/%?#]+)([^#]*)$")
+    if scheme ~= "https" or not trusted_download_hosts[host and host:lower()] then return false end
+    if host:lower() ~= "github.com" then return true end
+    return path:match("^/" .. REPOSITORY .. "/releases/download/") ~= nil
+end
+
+local function valid_digest(digest)
+    local value = type(digest) == "string" and digest:match("^sha256:([0-9a-fA-F]+)$")
+    return value ~= nil and #value == 64
+end
+
+local function sha256(path)
+    local ok_sha, sha2 = pcall(require, "ffi/sha2")
+    if not ok_sha or not sha2 or not sha2.sha256 then return nil end
+
+    local file = io.open(path, "rb")
+    if not file then return nil end
+    local append = sha2.sha256()
+    while true do
+        local chunk = file:read(64 * 1024)
+        if not chunk then break end
+        append(chunk)
+    end
+    file:close()
+    local ok, digest = pcall(append)
+    return ok and type(digest) == "string" and digest:lower() or nil
+end
+
+local function request(url, sink, method)
+    local ok_https, https = pcall(require, "ssl.https")
+    local ok_ltn12, ltn12 = pcall(require, "ltn12")
+    if not ok_https or not ok_ltn12 then
+        return nil, "HTTPS support is unavailable in this KOReader build."
+    end
+    local response = {}
+    local _, code, headers, status = https.request{
+        url = url,
+        method = method,
+        headers = { ["User-Agent"] = "zenpm.koplugin" },
+        sink = sink or ltn12.sink.table(response),
+    }
+    return {
+        code = tonumber(code),
+        headers = headers,
+        body = table.concat(response),
+        status = status,
+    }
+end
+
+local function resolve_redirect(base_url, location)
+    if type(location) ~= "string" or location == "" then return nil end
+    if location:match("^https?://") then return location end
+    local scheme, host, path = base_url:match("^(https?)://([^/%?#]+)([^#]*)$")
+    if not scheme or not host then return nil end
+    if location:sub(1, 1) == "/" then
+        return scheme .. "://" .. host .. location
+    end
+    local dir = (path or "/"):match("^(.*)/") or "/"
+    return scheme .. "://" .. host .. dir .. "/" .. location
+end
+
+local function resolved_download_url(url)
+    local resolved = url
+    for _ = 1, 5 do
+        if not valid_download_url(resolved) then return nil end
+        local response = request(resolved, nil, "HEAD")
+        if not response then return nil end
+        if response.code ~= 301 and response.code ~= 302 and response.code ~= 307 and response.code ~= 308 then
+            return response.code == 200 and resolved or nil
+        end
+        resolved = resolve_redirect(resolved, response.headers and response.headers.location)
+        if not resolved then return nil end
+    end
+end
+
+local function find_asset(release, daemon)
+    local version = tostring(release.tag_name or ""):gsub("^v", "")
+    local asset_name = release_asset_name(daemon, version)
+    if version == "" or not asset_name then return nil end
+    for _, asset in ipairs(release.assets or {}) do
+        if asset.name == asset_name
+            and valid_download_url(asset.browser_download_url)
+            and valid_digest(asset.digest) then
+            return {
+                version = version,
+                tag = release.tag_name,
+                prerelease = release.prerelease == true,
+                published_at = release.published_at or release.created_at or "",
+                asset = asset,
+            }
+        end
+    end
+end
+
+local function select_release(releases, daemon, allow_prerelease)
+    local entries = {}
+    for index, release in ipairs(releases) do
+        local entry = find_asset(release, daemon)
+        if entry then
+            entry.index = index
+            table.insert(entries, entry)
+        end
+    end
+    table.sort(entries, function(left, right)
+        if left.published_at ~= right.published_at then return left.published_at > right.published_at end
+        return left.index < right.index
+    end)
+    if not allow_prerelease then
+        for _, entry in ipairs(entries) do
+            if not entry.prerelease then return entry end
+        end
+        return nil
+    end
+
+    local selected_by_base = {}
+    local selected = {}
+    for _, entry in ipairs(entries) do
+        local base = semver_base(entry.tag)
+        local index = selected_by_base[base]
+        if not index then
+            selected_by_base[base] = #selected + 1
+            table.insert(selected, entry)
+        elseif selected[index].prerelease and not entry.prerelease then
+            selected[index] = entry
+        end
+    end
+    return selected[1]
+end
+
+local function fetch_releases()
+    local response, err = request(RELEASES_URL)
+    if not response then return nil, err end
+    if response.code ~= 200 then
+        return nil, "GitHub returned HTTP " .. tostring(response.code or response.status or "?")
+    end
+    local ok, releases = pcall(JSON.decode, response.body)
+    if not ok or type(releases) ~= "table" or #releases == 0 then
+        return nil, "Could not read GitHub release information."
+    end
+    return releases
+end
+
+local function download(url, path, digest)
+    local resolved = resolved_download_url(url)
+    if not resolved then
+        return false, "GitHub supplied an untrusted download URL."
+    end
+    local ok_ltn12, ltn12 = pcall(require, "ltn12")
+    if not ok_ltn12 then
+        return false, "Download support is unavailable in this KOReader build."
+    end
+    local file, err = io.open(path, "wb")
+    if not file then return false, tostring(err) end
+    local response, request_err = request(resolved, ltn12.sink.file(file))
+    pcall(file.close, file)
+    if not response or response.code ~= 200 then
+        os.remove(path)
+        return false, request_err or "Download failed with HTTP " .. tostring(response and response.code or "?")
+    end
+    if valid_digest(digest) then
+        local actual = sha256(path)
+        local expected = digest:sub(#"sha256:" + 1):lower()
+        if not actual then
+            os.remove(path)
+            return false, "Could not verify the update download."
+        end
+        if actual ~= expected then
+            os.remove(path)
+            return false, "Downloaded update checksum did not match."
+        end
+    end
+    return true
+end
+
+local function unsafe_entry(path)
+    if path == "" or path:sub(1, 1) == "/" or path:sub(1, 1) == "\\" then return true end
+    for part in path:gmatch("[^/\\]+") do
+        if part == ".." then return true end
+    end
+    return false
+end
+
+local function extract(zip_path, stage_dir)
+    local archive = Archiver.Reader:new()
+    if not archive:open(zip_path) then
+        return false, archive.err or "Could not open update archive."
+    end
+
+    local entries = 0
+    for entry in archive:iterate() do
+        if unsafe_entry(entry.path)
+            or (entry.mode ~= "file" and entry.mode ~= "directory")
+            or (entry.path ~= RELEASE_ROOT and entry.path:sub(1, #RELEASE_ROOT + 1) ~= RELEASE_ROOT .. "/") then
+            archive:close()
+            return false, "Update archive has an invalid layout."
+        end
+        if not archive:extractToPath(entry.path, stage_dir .. "/" .. entry.path) then
+            local err = archive.err or "Could not unpack update archive."
+            archive:close()
+            return false, err
+        end
+        entries = entries + 1
+    end
+    local err = archive.err
+    archive:close()
+    if err or entries == 0 then return false, err or "Update archive is empty." end
+    if not is_dir(stage_dir .. "/" .. RELEASE_ROOT)
+        or not path_exists(stage_dir .. "/" .. RELEASE_ROOT .. "/_meta.lua")
+        or not path_exists(stage_dir .. "/" .. RELEASE_ROOT .. "/main.lua") then
+        return false, "Update archive does not contain a ZenPM plugin."
+    end
+    return true
+end
+
+function Updater:update(daemon, allow_prerelease)
+    local releases, err = fetch_releases()
+    if not releases then return false, err end
+    local release = select_release(releases, daemon, allow_prerelease)
+    if not release then
+        return false, "No compatible ZenPM release is available for this platform."
+    end
+    if not version_gt(release.tag, daemon:plugin_version()) then
+        return true, "up_to_date"
+    end
+
+    local plugin_dir = Constants.PLUGIN_DIR
+    local plugins_dir = plugin_dir:match("^(.*)/[^/]+$")
+    local plugin_name = plugin_dir:match("([^/]+)$")
+    if not plugins_dir or not plugin_name or not is_dir(plugin_dir) then
+        return false, "Could not find the installed ZenPM plugin directory."
+    end
+    local probe = plugins_dir .. "/.zenpm-update-write-probe"
+    local probe_file = io.open(probe, "wb")
+    if not probe_file then return false, "KOReader's plugins directory is not writable." end
+    probe_file:close()
+    os.remove(probe)
+
+    local zip_path = plugins_dir .. "/.zenpm-update.zip"
+    local stage_dir = plugins_dir .. "/.zenpm-update-stage"
+    local staged_plugin = stage_dir .. "/" .. RELEASE_ROOT
+    local backup_dir = plugins_dir .. "/." .. plugin_name .. ".backup"
+    remove_tree(stage_dir)
+    remove_tree(backup_dir)
+    os.remove(zip_path)
+
+    local downloaded, download_err = download(release.asset.browser_download_url, zip_path, release.asset.digest)
+    if not downloaded then return false, download_err end
+    if not Util.ensure_dir(stage_dir) then
+        os.remove(zip_path)
+        return false, "Could not prepare the update directory."
+    end
+    local unpacked, unpack_err = extract(zip_path, stage_dir)
+    os.remove(zip_path)
+    if not unpacked then
+        remove_tree(stage_dir)
+        return false, unpack_err
+    end
+
+    if not os.rename(plugin_dir, backup_dir) then
+        remove_tree(stage_dir)
+        return false, "Could not move the old ZenPM plugin."
+    end
+    if not os.rename(staged_plugin, plugin_dir) then
+        os.rename(backup_dir, plugin_dir)
+        remove_tree(stage_dir)
+        return false, "Could not install the updated ZenPM plugin."
+    end
+    remove_tree(stage_dir)
+    remove_tree(backup_dir)
+    return true, release.version
+end
+
+return Updater

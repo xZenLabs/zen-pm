@@ -131,6 +131,98 @@ func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	}
 }
 
+func TestPatchInstallScriptURLWithQueryTracksPerFileState(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "#!/bin/sh\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:           "koreader-5",
+		Name:         "Koreader",
+		Version:      "0.0.0-source",
+		Repo:         "ZenLabs",
+		Platforms:    []string{"koreader"},
+		InstallURL:   srv.URL + "/install-patch.sh?ref=main",
+		UninstallURL: srv.URL + "/install-patch.sh?ref=main",
+		Assets:       `[{"arch":"any","asset":"2---stretched-covers.lua"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "koreader-5", Name: "Koreader", Version: "0.0.0-source", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	if err := manager.InstallAsset("koreader-5", "2---stretched-covers.lua"); err != nil {
+		t.Fatal(err)
+	}
+
+	if installed, _ := st.ReadInstalled(); len(installed) != 0 {
+		t.Fatalf("installed_packages = %#v, want empty", installed)
+	}
+	files, err := st.ReadInstalledPatchFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].PackageID != "koreader-5" || files[0].Asset != "2---stretched-covers.lua" {
+		t.Fatalf("installed patch files = %#v, want koreader-5 / 2---stretched-covers.lua", files)
+	}
+}
+
+func TestSourcePatchRepoTracksPerFileStateWithoutPatchCategory(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "#!/bin/sh\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:           "koreader-5",
+		Name:         "Koreader",
+		Version:      "0.0.0-source",
+		Repo:         "ZenLabs",
+		Platforms:    []string{"koreader"},
+		InstallURL:   srv.URL + "/install.sh",
+		UninstallURL: srv.URL + "/uninstall.sh",
+		Source:       "https://github.com/SeriousHornet/KOReader.patches",
+		Assets:       `[{"arch":"any","asset":"2---stretched-covers.lua","url":"https://raw.githubusercontent.com/SeriousHornet/KOReader.patches/HEAD/2---stretched-covers.lua"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	if err := manager.InstallAsset("koreader-5", "2---stretched-covers.lua"); err != nil {
+		t.Fatal(err)
+	}
+
+	if installed, _ := st.ReadInstalled(); len(installed) != 0 {
+		t.Fatalf("installed_packages = %#v, want empty", installed)
+	}
+	files, err := st.ReadInstalledPatchFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].PackageID != "koreader-5" || files[0].Asset != "2---stretched-covers.lua" {
+		t.Fatalf("installed patch files = %#v, want koreader-5 / 2---stretched-covers.lua", files)
+	}
+}
+
 func TestInstallReleasePassesSpecificGitHubReleaseAndRecordsVersion(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	out := filepath.Join(t.TempDir(), "env.out")
