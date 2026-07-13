@@ -236,6 +236,7 @@ paths:
                   images:
                     - https://example.com/packages/koreader/screenshot.png
                   featured: true
+                  featured_order: 10
                   featured_image: https://example.com/packages/koreader/featured.png
                   source: https://github.com/koreader/koreader
         "405":
@@ -697,6 +698,9 @@ components:
             format: uri
         featured:
           type: boolean
+        featured_order:
+          type: integer
+          description: Ascending position on the Featured page. Packages without a value follow ordered packages.
         featured_image:
           type: string
           format: uri

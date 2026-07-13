@@ -3,6 +3,7 @@ local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
 local AppView = require("ui/app_view")
+local BugReporter = require("bugreporter")
 local Client = require("client")
 local Constants = require("constants")
 local Daemon = require("daemon")
@@ -1794,6 +1795,10 @@ function App:show_actions(anchor)
         {
             text = _("About"),
             callback = function() self:show_about() end,
+        },
+        {
+            text = _("Report a Bug"),
+            callback = function() BugReporter:show(self) end,
         },
         {
             text = _("Refresh"),

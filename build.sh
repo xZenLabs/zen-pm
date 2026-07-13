@@ -7,6 +7,7 @@ ROOT_DIR="$SCRIPT_DIR"
 DIST_DIR="$ROOT_DIR/dist"
 BUILD_DIR="$DIST_DIR/.build"
 VERSION_FILE="$ROOT_DIR/VERSION"
+KOREADER_META_FILE="$ROOT_DIR/frontend/koreader/zenpm.koplugin/_meta.lua"
 
 usage() {
     echo "Usage: $0"
@@ -77,6 +78,12 @@ ensure_exec() {
     if [ -d "$target" ]; then
         find "$target" -type f \( -name '*.sh' -o -name 'zenpm' -o -name 'zenpm-hf' -o -name 'zenpm-sf' -o -name 'zenpm-linux' -o -name 'zenpm-linux-arm64' -o -name 'zenpm-linux-amd64' -o -name 'zenpm-darwin' -o -name 'zenpm-darwin-arm64' -o -name 'zenpm-darwin-amd64' \) -exec chmod +x {} +
     fi
+}
+
+set_koreader_meta_version() {
+    meta_file="$1"
+    version="$2"
+    sed -E "s/version = \"[^\"]*\"/version = \"$version\"/" "$meta_file" > "$meta_file.tmp" && mv "$meta_file.tmp" "$meta_file"
 }
 
 cleanup_stage() {
@@ -186,7 +193,7 @@ stage_kindle sf "$KINDLE_SF_STAGE"
 
 copy_tree "$ROOT_DIR/frontend/koreader/zenpm.koplugin" "$KOREADER_PLUGIN_BASE_STAGE"
 cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/VERSION"
-sed -E "s/version = \"[^\"]*\"/version = \"$VERSION\"/" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua" > "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua.tmp" && mv "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua.tmp" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua"
+set_koreader_meta_version "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua" "$VERSION"
 
 stage_koreader_plugin() {
     stage="$1"
@@ -284,4 +291,5 @@ _minor=$(printf '%s' "$VERSION" | cut -d. -f2)
 _patch=$(printf '%s' "$VERSION" | cut -d. -f3)
 NEXT_VERSION="$_major.$_minor.$((_patch + 1))"
 printf '%s\n' "$NEXT_VERSION" > "$VERSION_FILE"
+set_koreader_meta_version "$KOREADER_META_FILE" "$NEXT_VERSION"
 echo "Next version:     $NEXT_VERSION (VERSION bumped)"

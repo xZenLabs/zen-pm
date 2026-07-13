@@ -102,20 +102,22 @@ func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
 }
 
 func TestCatalogSourceAssetRoundTrip(t *testing.T) {
+	featuredOrder := 10
 	entry := &CatalogEntry{
-		Repo:        "ZenLabs",
-		Priority:    10,
-		ID:          "sudoku-koplugin",
-		Name:        "Sudoku",
-		Version:     "1.2.1",
-		InstallURL:  "install.sh",
-		Source:      "omer-faruq/sudoku.koplugin",
-		SourceAsset: "sudoku.koplugin.zip",
-		SourceType:  "release",
-		SourceURL:   "https://example.invalid/source.zip",
-		Stars:       "42",
-		Assets:      `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`,
-		Constraints: `{"abi":["hf","sf"]}`,
+		Repo:          "ZenLabs",
+		Priority:      10,
+		ID:            "sudoku-koplugin",
+		Name:          "Sudoku",
+		Version:       "1.2.1",
+		InstallURL:    "install.sh",
+		Source:        "omer-faruq/sudoku.koplugin",
+		SourceAsset:   "sudoku.koplugin.zip",
+		SourceType:    "release",
+		SourceURL:     "https://example.invalid/source.zip",
+		Stars:         "42",
+		Assets:        `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`,
+		Constraints:   `{"abi":["hf","sf"]}`,
+		FeaturedOrder: &featuredOrder,
 	}
 
 	got, err := parseCatalogLine(entry.serialize())
@@ -127,6 +129,9 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	}
 	if got.Stars != entry.Stars {
 		t.Fatalf("Stars = %q, want %q", got.Stars, entry.Stars)
+	}
+	if got.FeaturedOrder == nil || *got.FeaturedOrder != featuredOrder {
+		t.Fatalf("FeaturedOrder = %v, want %d", got.FeaturedOrder, featuredOrder)
 	}
 	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
@@ -147,6 +152,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"source": "https://github.com/karpushchenko/koreader-rsvp-plugin",
 				"source_type": "source",
 				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
+				"featured_order": 10,
 				"stars": "31",
 				"assets": [{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}],
 				"constraints": {"abi":["hf","sf"]},
@@ -186,6 +192,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].Constraints != `{"abi":["hf","sf"]}` {
 		t.Fatalf("Constraints = %q", entries[0].Constraints)
+	}
+	if entries[0].FeaturedOrder == nil || *entries[0].FeaturedOrder != 10 {
+		t.Fatalf("FeaturedOrder = %v, want 10", entries[0].FeaturedOrder)
 	}
 	if entries[1].Stars != "" {
 		t.Fatalf("null Stars = %q, want empty", entries[1].Stars)

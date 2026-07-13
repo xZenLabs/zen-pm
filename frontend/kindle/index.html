@@ -81,6 +81,7 @@
                 if (repoPkg.icon_url) pkg.icon_url = resolveRepoURL(repoURL, repoPkg.icon_url);
                 if (repoPkg.featured_image) pkg.featured_image = resolveRepoURL(repoURL, repoPkg.featured_image);
                 if (repoPkg.featured) pkg.featured = true;
+                if (typeof repoPkg.featured_order === "number") pkg.featured_order = repoPkg.featured_order;
                 ZenUtils.postLog("[home] merge featured id=" + (pkg.id || "") + " featured_image=" + (pkg.featured_image || "") + " icon_url=" + (pkg.icon_url || ""));
                 return pkg;
             }
@@ -108,11 +109,10 @@
                             var pkg = findPackage(all, repoPackages[i].id);
                             if (pkg && ZenUtils.isZenLabsRepoName(pkg.repo)) {
                                 featured.push(mergeFeaturedMetadata(pkg, repoPackages[i], repoURL));
-                                if (featured.length >= 4) return featured;
                             }
                         }
                     }
-                    return featured;
+                    return sortFeatured(featured).slice(0, 4);
                 }).catch(function (err) {
                     ZenUtils.postLog("[home] ZenLabs featured source fallback: " + String(err));
                     return selectZenLabsFeatured(all);
@@ -124,10 +124,22 @@
                 for (var i = 0; i < all.length; i++) {
                     if (ZenUtils.isZenLabsRepoName(all[i].repo) && all[i].featured) {
                         featured.push(all[i]);
-                        if (featured.length >= 4) return featured;
                     }
                 }
-                return featured;
+                return sortFeatured(featured).slice(0, 4);
+            }
+
+            function sortFeatured(packages) {
+                return packages.map(function (pkg, index) {
+                    return { pkg: pkg, index: index, order: typeof pkg.featured_order === "number" ? pkg.featured_order : null };
+                }).sort(function (a, b) {
+                    if (a.order !== null && b.order !== null && a.order !== b.order) return a.order - b.order;
+                    if (a.order !== null) return -1;
+                    if (b.order !== null) return 1;
+                    return a.index - b.index;
+                }).map(function (item) {
+                    return item.pkg;
+                });
             }
 
             function repoIcon(pkg) {

@@ -190,7 +190,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 			Platforms: e.Platforms, Deps: e.Deps, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
-			Featured: e.Featured, FeaturedImage: e.FeaturedImage, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
+			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule,
 		})
@@ -206,7 +206,7 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			Platforms: e.Platforms, Deps: e.Deps, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
-			Featured: e.Featured, FeaturedImage: e.FeaturedImage, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
+			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule,
 		})

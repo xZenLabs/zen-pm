@@ -33,6 +33,7 @@ Example:
       "category": "utility",
       "platforms": ["kindle", "koreader"],
       "featured": true,
+      "featured_order": 10,
       "featured_image": "packages/koreader-kindle/featured.png",
       "source": "https://github.com/koreader/koreader",
       "dependencies": ["kual"],

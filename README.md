@@ -304,6 +304,7 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
       "description": "What this package does.",
       "author": "Your Name",
       "featured": true,
+      "featured_order": 10,
       "featured_image": "packages/my-package/featured.png",
       "platforms": ["kindle"],
       "dependencies": [],
@@ -336,6 +337,7 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].description` | no | Short description shown on the package card |
 | `packages[].author` | no | Author/ maintainer name |
 | `packages[].featured` | no | Mark this package for the Featured page |
+| `packages[].featured_order` | no | Numeric ascending order on the Featured page; unordered packages follow ordered ones |
 | `packages[].featured_image` | no | Large Featured-page banner image; relative paths resolve against `repo.url` |
 | `packages[].platforms` | yes | Array of `"kindle"` and/or `"kobo"` |
 | `packages[].dependencies` | no | Array of package `id` strings required before install |

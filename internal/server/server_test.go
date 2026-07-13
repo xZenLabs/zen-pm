@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -60,6 +61,36 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].ID != "pkg" {
 		t.Fatalf("catalog = %#v", catalog)
+	}
+}
+
+func TestPackageListIncludesFeaturedOrder(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	featuredOrder := 10
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
+		Platforms: []string{"host"}, Featured: true, FeaturedOrder: &featuredOrder,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	req := httptest.NewRequest(http.MethodGet, "/packages?platform=host", nil)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, req)
+
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 1 || packages[0].FeaturedOrder == nil || *packages[0].FeaturedOrder != featuredOrder {
+		t.Fatalf("packages = %#v", packages)
 	}
 }
 

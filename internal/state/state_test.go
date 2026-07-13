@@ -55,11 +55,12 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if !ok || version != "1.1.0" {
 		t.Fatalf("updated IsInstalled = %v, %q", ok, version)
 	}
+	featuredOrder := 10
 	catalog := []CatalogEntry{{
 		ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "repo", Priority: 10,
 		Platforms: []string{"host", "koreader"}, Deps: []string{"dep"}, Tags: []string{"tag"},
 		InstallURL: "https://example.invalid/install.sh", UninstallURL: "https://example.invalid/uninstall.sh",
-		Featured: true, FeaturedImage: "featured", Category: "utility", Source: "source", SourceAsset: "pkg.zip",
+		Featured: true, FeaturedImage: "featured", FeaturedOrder: &featuredOrder, Category: "utility", Source: "source", SourceAsset: "pkg.zip",
 		SourceType: "release", SourceURL: "https://example.invalid/source.zip", Stars: "42",
 		Assets: `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`, Constraints: `{"abi":["hf","sf"]}`,
 	}}
@@ -70,7 +71,7 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
+	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
 		t.Fatalf("catalog = %#v", gotCatalog)
 	}
 }

@@ -19,6 +19,7 @@ type CatalogEntry struct {
 	Images        []string
 	Featured      bool
 	FeaturedImage string
+	FeaturedOrder *int
 	Category      string
 	Source        string
 	SourceAsset   string

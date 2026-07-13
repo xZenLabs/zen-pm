@@ -249,13 +249,27 @@ end
 
 function Models.select_featured(packages)
     local featured = {}
-    for _, pkg in ipairs(packages or {}) do
+    for index, pkg in ipairs(packages or {}) do
         if pkg.featured then
-            table.insert(featured, pkg)
-            if #featured >= 4 then
-                return featured
-            end
+            table.insert(featured, { pkg = pkg, index = index })
         end
+    end
+    table.sort(featured, function(a, b)
+        local a_order = tonumber(a.pkg.featured_order)
+        local b_order = tonumber(b.pkg.featured_order)
+        if a_order ~= nil and b_order ~= nil then
+            if a_order ~= b_order then return a_order < b_order end
+            return a.index < b.index
+        end
+        if a_order ~= nil then return true end
+        if b_order ~= nil then return false end
+        return a.index < b.index
+    end)
+    for index, item in ipairs(featured) do
+        featured[index] = item.pkg
+    end
+    if #featured >= 4 then
+        return { featured[1], featured[2], featured[3], featured[4] }
     end
     for _, id in ipairs(Constants.FEATURED_IDS) do
         local pkg = Models.find_package(packages, id)

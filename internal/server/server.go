@@ -55,6 +55,7 @@ type pkgJSON struct {
 	Images          []string        `json:"images,omitempty"`
 	Featured        bool            `json:"featured,omitempty"`
 	FeaturedImage   string          `json:"featured_image,omitempty"`
+	FeaturedOrder   *int            `json:"featured_order,omitempty"`
 	Source          string          `json:"source,omitempty"`
 	SourceType      string          `json:"source_type,omitempty"`
 	SourceURL       string          `json:"source_url,omitempty"`
@@ -471,6 +472,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Images:        e.Images,
 			Featured:      e.Featured,
 			FeaturedImage: e.FeaturedImage,
+			FeaturedOrder: e.FeaturedOrder,
 			Source:        e.Source,
 			SourceType:    e.SourceType,
 			SourceURL:     e.SourceURL,

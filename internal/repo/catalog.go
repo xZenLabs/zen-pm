@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|plugin_module
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|plugin_module|featured_order
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -43,6 +44,7 @@ type CatalogEntry struct {
 	Images        []string
 	Featured      bool
 	FeaturedImage string
+	FeaturedOrder *int
 	Category      string
 	Source        string
 	SourceAsset   string
@@ -94,6 +96,7 @@ func (e *CatalogEntry) serialize() string {
 		e.Assets,
 		e.Constraints,
 		e.PluginModule,
+		optionalIntField(e.FeaturedOrder),
 	}, "|")
 }
 
@@ -176,6 +179,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	if len(parts) >= 27 {
 		e.PluginModule = parts[26]
 	}
+	if len(parts) >= 28 {
+		e.FeaturedOrder = parseOptionalInt(parts[27])
+	}
 	e.ensurePluginModule()
 	return e, nil
 }
@@ -247,6 +253,24 @@ func boolField(value bool) string {
 	return ""
 }
 
+func optionalIntField(value *int) string {
+	if value == nil {
+		return ""
+	}
+	return strconv.Itoa(*value)
+}
+
+func parseOptionalInt(value string) *int {
+	if value == "" {
+		return nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
 func isFaviconURL(value string) bool {
 	value = strings.ToLower(value)
 	return strings.Contains(value, "favicon") || strings.HasSuffix(value, ".ico")
@@ -283,6 +307,7 @@ type manifestJSON struct {
 		Constraints   json.RawMessage `json:"constraints,omitempty"`
 		Featured      bool            `json:"featured,omitempty"`
 		FeaturedImage string          `json:"featured_image,omitempty"`
+		FeaturedOrder *int            `json:"featured_order,omitempty"`
 		Category      string          `json:"category,omitempty"`
 		Images        []string        `json:"images,omitempty"`
 		Screenshots   []string        `json:"screenshots,omitempty"`
@@ -381,6 +406,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Images:        images,
 			Featured:      p.Featured,
 			FeaturedImage: featuredImage,
+			FeaturedOrder: p.FeaturedOrder,
 			Category:      p.Category,
 			Source:        source,
 			SourceAsset:   p.SourceAsset,
