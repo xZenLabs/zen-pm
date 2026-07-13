@@ -7,6 +7,20 @@ local Util = require("zenpm_util")
 
 local Updater = {}
 
+local ok_logger, logger = pcall(require, "logger")
+
+local function log_info(...)
+    if ok_logger and logger and logger.info then
+        logger.info("ZenPM updater:", ...)
+    end
+end
+
+local function log_warn(...)
+    if ok_logger and logger and logger.warn then
+        logger.warn("ZenPM updater:", ...)
+    end
+end
+
 local REPOSITORY = "xZenLabs/zen-pm"
 local RELEASES_URL = "https://api.github.com/repos/" .. REPOSITORY .. "/releases?per_page=100"
 local RELEASE_ROOT = "zenpm.koplugin"
@@ -74,7 +88,8 @@ local function valid_download_url(url)
     local scheme, host, path = tostring(url or ""):match("^(https?)://([^/%?#]+)([^#]*)$")
     if scheme ~= "https" or not trusted_download_hosts[host and host:lower()] then return false end
     if host:lower() ~= "github.com" then return true end
-    return path:match("^/" .. REPOSITORY .. "/releases/download/") ~= nil
+    local release_prefix = "/" .. REPOSITORY .. "/releases/download/"
+    return path:sub(1, #release_prefix) == release_prefix
 end
 
 local function valid_digest(digest)
@@ -135,21 +150,38 @@ end
 local function resolved_download_url(url)
     local resolved = url
     for _ = 1, 5 do
-        if not valid_download_url(resolved) then return nil end
+        if not valid_download_url(resolved) then
+            log_warn("download URL failed trust validation")
+            return nil
+        end
         local response = request(resolved, nil, "HEAD")
-        if not response then return nil end
+        if not response then
+            log_warn("download URL probe failed")
+            return nil
+        end
         if response.code ~= 301 and response.code ~= 302 and response.code ~= 307 and response.code ~= 308 then
-            return response.code == 200 and resolved or nil
+            if response.code ~= 200 then
+                log_warn("download URL probe returned HTTP", response.code or response.status or "?")
+                return nil
+            end
+            return resolved
         end
         resolved = resolve_redirect(resolved, response.headers and response.headers.location)
-        if not resolved then return nil end
+        if not resolved then
+            log_warn("download URL redirect was invalid")
+            return nil
+        end
     end
+    log_warn("download URL exceeded redirect limit")
 end
 
 local function find_asset(release, daemon)
     local version = tostring(release.tag_name or ""):gsub("^v", "")
     local asset_name = release_asset_name(daemon, version)
-    if version == "" or not asset_name then return nil end
+    if version == "" or not asset_name then
+        log_warn("cannot determine release asset", "tag=", release.tag_name, "platform=", daemon:detect_platform())
+        return nil
+    end
     for _, asset in ipairs(release.assets or {}) do
         if asset.name == asset_name
             and valid_download_url(asset.browser_download_url)
@@ -163,6 +195,7 @@ local function find_asset(release, daemon)
             }
         end
     end
+    log_warn("release asset not found", "tag=", release.tag_name, "expected=", asset_name)
 end
 
 local function select_release(releases, daemon, allow_prerelease)
@@ -182,7 +215,7 @@ local function select_release(releases, daemon, allow_prerelease)
         for _, entry in ipairs(entries) do
             if not entry.prerelease then return entry end
         end
-        return nil
+        return nil, release_asset_name(daemon, tostring(releases[1] and releases[1].tag_name or ""):gsub("^v", ""))
     end
 
     local selected_by_base = {}
@@ -197,19 +230,25 @@ local function select_release(releases, daemon, allow_prerelease)
             selected[index] = entry
         end
     end
-    return selected[1]
+    return selected[1], release_asset_name(daemon, tostring(releases[1] and releases[1].tag_name or ""):gsub("^v", ""))
 end
 
 local function fetch_releases()
     local response, err = request(RELEASES_URL)
-    if not response then return nil, err end
+    if not response then
+        log_warn("release request failed", err)
+        return nil, err
+    end
     if response.code ~= 200 then
+        log_warn("release request returned HTTP", response.code or response.status or "?")
         return nil, "GitHub returned HTTP " .. tostring(response.code or response.status or "?")
     end
     local ok, releases = pcall(JSON.decode, response.body)
     if not ok or type(releases) ~= "table" or #releases == 0 then
+        log_warn("release response could not be decoded")
         return nil, "Could not read GitHub release information."
     end
+    log_info("fetched releases", #releases)
     return releases
 end
 
@@ -220,14 +259,20 @@ local function download(url, path, digest)
     end
     local ok_ltn12, ltn12 = pcall(require, "ltn12")
     if not ok_ltn12 then
+        log_warn("download support is unavailable")
         return false, "Download support is unavailable in this KOReader build."
     end
     local file, err = io.open(path, "wb")
-    if not file then return false, tostring(err) end
+    if not file then
+        log_warn("could not create update archive", err)
+        return false, tostring(err)
+    end
+    log_info("downloading update archive")
     local response, request_err = request(resolved, ltn12.sink.file(file))
     pcall(file.close, file)
     if not response or response.code ~= 200 then
         os.remove(path)
+        log_warn("update download failed", request_err or (response and response.code) or "?")
         return false, request_err or "Download failed with HTTP " .. tostring(response and response.code or "?")
     end
     if valid_digest(digest) then
@@ -235,13 +280,16 @@ local function download(url, path, digest)
         local expected = digest:sub(#"sha256:" + 1):lower()
         if not actual then
             os.remove(path)
+            log_warn("update checksum could not be calculated")
             return false, "Could not verify the update download."
         end
         if actual ~= expected then
             os.remove(path)
+            log_warn("update checksum did not match")
             return false, "Downloaded update checksum did not match."
         end
     end
+    log_info("update archive downloaded and verified")
     return true
 end
 
@@ -286,13 +334,20 @@ local function extract(zip_path, stage_dir)
 end
 
 function Updater:update(daemon, allow_prerelease)
+    log_info("checking for updates", "platform=", daemon:detect_platform(), "prereleases=", allow_prerelease == true)
     local releases, err = fetch_releases()
     if not releases then return false, err end
-    local release = select_release(releases, daemon, allow_prerelease)
+    local release, expected_asset = select_release(releases, daemon, allow_prerelease)
     if not release then
+        log_warn("no compatible release", "platform=", daemon:detect_platform(), "expected=", expected_asset)
+        if expected_asset then
+            return false, "No compatible ZenPM release is available for this platform (expected " .. expected_asset .. ")."
+        end
         return false, "No compatible ZenPM release is available for this platform."
     end
+    log_info("selected release", release.tag, "asset=", release.asset.name)
     if not version_gt(release.tag, daemon:plugin_version()) then
+        log_info("already up to date", daemon:plugin_version())
         return true, "up_to_date"
     end
 
@@ -300,11 +355,15 @@ function Updater:update(daemon, allow_prerelease)
     local plugins_dir = plugin_dir:match("^(.*)/[^/]+$")
     local plugin_name = plugin_dir:match("([^/]+)$")
     if not plugins_dir or not plugin_name or not is_dir(plugin_dir) then
+        log_warn("installed plugin directory could not be found")
         return false, "Could not find the installed ZenPM plugin directory."
     end
     local probe = plugins_dir .. "/.zenpm-update-write-probe"
     local probe_file = io.open(probe, "wb")
-    if not probe_file then return false, "KOReader's plugins directory is not writable." end
+    if not probe_file then
+        log_warn("plugins directory is not writable")
+        return false, "KOReader's plugins directory is not writable."
+    end
     probe_file:close()
     os.remove(probe)
 
@@ -320,26 +379,31 @@ function Updater:update(daemon, allow_prerelease)
     if not downloaded then return false, download_err end
     if not Util.ensure_dir(stage_dir) then
         os.remove(zip_path)
+        log_warn("could not create update staging directory")
         return false, "Could not prepare the update directory."
     end
     local unpacked, unpack_err = extract(zip_path, stage_dir)
     os.remove(zip_path)
     if not unpacked then
         remove_tree(stage_dir)
+        log_warn("could not extract update archive", unpack_err)
         return false, unpack_err
     end
 
     if not os.rename(plugin_dir, backup_dir) then
         remove_tree(stage_dir)
+        log_warn("could not back up installed plugin")
         return false, "Could not move the old ZenPM plugin."
     end
     if not os.rename(staged_plugin, plugin_dir) then
         os.rename(backup_dir, plugin_dir)
         remove_tree(stage_dir)
+        log_warn("could not install staged plugin; restored previous version")
         return false, "Could not install the updated ZenPM plugin."
     end
     remove_tree(stage_dir)
     remove_tree(backup_dir)
+    log_info("update installed", release.version)
     return true, release.version
 end
 
