@@ -7,6 +7,7 @@ local Util = require("zenpm_util")
 local ok_datastorage, DataStorage = pcall(require, "datastorage")
 local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 local ok_meta, Meta = pcall(dofile, Constants.PLUGIN_DIR .. "/_meta.lua")
+local ok_android, Android = pcall(require, "android")
 
 local Daemon = {}
 
@@ -185,6 +186,12 @@ function Daemon:state_home()
 end
 
 function Daemon:standalone_backend_dir()
+    -- Android shared storage is mounted noexec. KOReader exposes its private
+    -- app-data directory via android.dir; keep only the executable there and
+    -- leave ZenPM state in the normal, user-visible settings directory.
+    if ok_android and type(Android.dir) == "string" and Android.dir ~= "" then
+        return Android.dir .. "/ZenPM/backend"
+    end
     return self:standalone_home() .. "/backend"
 end
 
