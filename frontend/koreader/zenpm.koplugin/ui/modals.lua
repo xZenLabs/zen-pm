@@ -199,8 +199,10 @@ function Modals.actions(title, rows, options)
                 align = row.align or options.align,
                 checked_func = row.checked_func,
                 callback = function()
-                    UIManager:close(dialog)
-                    row.callback()
+                    UIManager:nextTick(function()
+                        UIManager:close(dialog)
+                        row.callback()
+                    end)
                 end,
             },
         })
