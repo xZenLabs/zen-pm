@@ -613,12 +613,24 @@ function Daemon:request_android_update()
     if not self:is_android() or type(android.openLink) ~= "function" then
         return false, _("ZenPM Android companion is not available.")
     end
+    local status_path = self:state_home() .. "/android-companion-update.status"
+    os.remove(status_path)
     local companion_log = self:state_home() .. "/android-companion.log"
     append_text(companion_log, log_timestamp() .. "  KOReader requesting ZenPM companion update.\n")
     local called, opened = pcall(android.openLink, "zenpm://update?home=" .. uri_escape(self:state_home()))
     append_text(companion_log, log_timestamp() .. "  ZenPM companion update link result: called="
         .. tostring(called) .. " opened=" .. tostring(opened) .. "\n")
     if called and opened then
+        for _ = 1, 10 do
+            local state, detail = read_all(status_path):match("^([^\n]*)\n?([^\n]*)")
+            if state == "failed" then
+                return false, detail ~= "" and detail or _("ZenPM companion update failed.")
+            end
+            if state ~= "" then
+                break
+            end
+            socket.sleep(0.1)
+        end
         return true
     end
     return false, _("ZenPM Android companion could not start its updater.")

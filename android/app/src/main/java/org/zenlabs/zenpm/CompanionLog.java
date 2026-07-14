@@ -20,6 +20,13 @@ final class CompanionLog {
         if (fallback != null) write(new File(fallback, "android-companion.log"), line);
     }
 
+    static synchronized void writeUpdateStatus(Context context, String home, String state, String detail) {
+        String value = state + "\n" + (detail == null ? "" : detail.replace('\n', ' ')) + "\n";
+        if (home != null && !home.isEmpty() && write(new File(home, "android-companion-update.status"), value)) return;
+        File fallback = context.getExternalFilesDir(null);
+        if (fallback != null) write(new File(fallback, "android-companion-update.status"), value);
+    }
+
     private static String timestamp() {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
         format.setTimeZone(TimeZone.getTimeZone("UTC"));

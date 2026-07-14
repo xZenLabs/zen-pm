@@ -28,21 +28,25 @@ final class ZenPMUpdater {
     private ZenPMUpdater() {}
 
     static void start(final Context context, final String logHome) {
+        CompanionLog.writeUpdateStatus(context, logHome, "checking", null);
         new Thread(new Runnable() {
             @Override public void run() {
                 try {
                     Release release = latestRelease();
                     if (compareVersions(release.version, installedVersion(context)) <= 0) {
                         CompanionLog.write(context, logHome, "ZenPM companion is up to date.");
+                        CompanionLog.writeUpdateStatus(context, logHome, "up_to_date", null);
                         return;
                     }
                     File apk = new File(context.getCacheDir(), "zenpm-update.apk");
                     CompanionLog.write(context, logHome, "Downloading ZenPM companion " + release.version + ".");
+                    CompanionLog.writeUpdateStatus(context, logHome, "downloading", null);
                     download(release, apk);
                     validateApk(context, apk);
                     requestInstall(context, logHome, apk);
                 } catch (Exception error) {
                     CompanionLog.write(context, logHome, "Companion update failed: " + error.getMessage());
+                    CompanionLog.writeUpdateStatus(context, logHome, "failed", error.getMessage());
                 }
             }
         }, "ZenPMUpdater").start();
@@ -127,7 +131,9 @@ final class ZenPMUpdater {
 
     private static void requestInstall(Context context, String logHome, File apk) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.getPackageManager().canRequestPackageInstalls()) {
-            CompanionLog.write(context, logHome, "Allow ZenPM Companion to install unknown apps, then request the update again.");
+            String message = "Allow ZenPM Backend to install unknown apps, then request the update again.";
+            CompanionLog.write(context, logHome, message);
+            CompanionLog.writeUpdateStatus(context, logHome, "failed", message);
             Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:" + context.getPackageName()));
             settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -140,6 +146,7 @@ final class ZenPMUpdater {
         install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
         CompanionLog.write(context, logHome, "Opening Android package installer for ZenPM companion update.");
         context.startActivity(install);
+        CompanionLog.writeUpdateStatus(context, logHome, "installer_opened", null);
     }
 
     private static String installedVersion(Context context) throws PackageManager.NameNotFoundException {

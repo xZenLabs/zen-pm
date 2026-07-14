@@ -15,6 +15,17 @@ public final class ZenPMActivity extends Activity {
         Intent service = new Intent(this, ZenPMService.class);
         if (data != null && "update".equals(data.getHost())) {
             String logHome = data.getQueryParameter("home");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !getPackageManager().canRequestPackageInstalls()) {
+                String message = "Allow ZenPM Backend to install unknown apps, then request the update again.";
+                CompanionLog.write(this, logHome, message);
+                CompanionLog.writeUpdateStatus(this, logHome, "failed", message);
+                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + getPackageName()));
+                startActivity(settings);
+                finish();
+                return;
+            }
             CompanionLog.write(this, logHome, "Received companion update request.");
             ZenPMUpdater.start(this, logHome);
         } else if (data != null && "start".equals(data.getHost())) {
