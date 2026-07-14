@@ -45,6 +45,8 @@ Outputs:
 <!-- - `dist/ZenPM-kobo-sf-<version>.zip` -->
 - `dist/ZenPM-koreader-ereader-hf-<version>.zip`
 - `dist/ZenPM-koreader-ereader-sf-<version>.zip`
+- `dist/ZenPM-koreader-android-<version>.zip`
+- `dist/ZenPM-android-<version>.apk`
 - `dist/ZenPM-koreader-macos-<version>.zip`
 - `dist/ZenPM-koreader-linux-<version>.zip`
 
@@ -66,6 +68,7 @@ so use it if the device is not listed or its firmware is unusual.
 | Kindle running firmware 5.16.2 or older (including legacy Kindle, Touch, and early Paperwhite installs) | `sf` | `ZenPM-kindle-sf-<version>.zip` | `ZenPM-koreader-ereader-sf-<version>.zip` |
 | Kobo Touch and newer (Glo, Aura, Clara, Libra, Sage, Elipsa) | usually `hf` | <!-- `ZenPM-kobo-hf-<version>.zip` --> | `ZenPM-koreader-ereader-hf-<version>.zip` |
 | Any device that reports `sf` from the loader check | `sf` | Choose the matching `*-sf-<version>.zip` package | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| KOReader on Android | Android ABI | — | `ZenPM-koreader-android-<version>.zip` plus `ZenPM-android-<version>.apk` |
 
 Package guide:
 
@@ -75,6 +78,7 @@ Package guide:
 | Kindle standalone app, ABI check prints `sf` | `ZenPM-kindle-sf-<version>.zip` |
 | KOReader on Kindle/Kobo, ABI check prints `hf` | `ZenPM-koreader-ereader-hf-<version>.zip` |
 | KOReader on Kindle/Kobo, ABI check prints `sf` | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| KOReader on Android | `ZenPM-koreader-android-<version>.zip` plus `ZenPM-android-<version>.apk` |
 | KOReader on macOS | `ZenPM-koreader-macos-<version>.zip` |
 | KOReader on Linux desktop ARM64/AMD64 | `ZenPM-koreader-linux-<version>.zip` |
 
@@ -143,7 +147,7 @@ sh /mnt/onboard/.adds/ZenPM/installers/kobo/ZenPM.sh
 ## Install KOReader plugin
 
 **Non-rooted Android devices:** install `ZenPM-android-<version>.apk` alongside
-the KOReader plugin. The APK is the companion backend; it is required because
+`ZenPM-koreader-android-<version>.zip`. The APK is the companion backend; it is required because
 Android does not permit the plugin to execute its bundled backend directly.
 Install it with Android's package installer (or `adb install -r <apk>`), then
 install the plugin normally. See [`android/README.md`](android/README.md) for
@@ -152,6 +156,7 @@ local APK builds.
 1. Extract the KOReader plugin zip for your platform:
    - `dist/ZenPM-koreader-ereader-hf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `hf`
    - `dist/ZenPM-koreader-ereader-sf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `sf`
+   - `dist/ZenPM-koreader-android-<version>.zip` for Android, alongside `ZenPM-android-<version>.apk`
    - `dist/ZenPM-koreader-macos-<version>.zip` for macOS
    - `dist/ZenPM-koreader-linux-<version>.zip` for Linux desktop
 2. Copy `zenpm.koplugin/` into KOReader's `plugins/` directory.

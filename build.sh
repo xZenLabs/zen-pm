@@ -63,6 +63,7 @@ KOBO_SF_STAGE="$BUILD_DIR/kobo-sf"
 KOREADER_PLUGIN_BASE_STAGE="$BUILD_DIR/koreader-plugin-base"
 KOREADER_EREADER_HF_STAGE="$BUILD_DIR/koreader-ereader-hf"
 KOREADER_EREADER_SF_STAGE="$BUILD_DIR/koreader-ereader-sf"
+KOREADER_ANDROID_STAGE="$BUILD_DIR/koreader-android"
 KOREADER_MACOS_STAGE="$BUILD_DIR/koreader-macos"
 KOREADER_LINUX_STAGE="$BUILD_DIR/koreader-linux"
 
@@ -216,6 +217,9 @@ stage_koreader_plugin "$KOREADER_EREADER_SF_STAGE"
 cp "$BUILD_DIR/zenpm-sf" "$KOREADER_EREADER_SF_STAGE/zenpm.koplugin/backend/zenpm-sf"
 ensure_exec "$KOREADER_EREADER_SF_STAGE/zenpm.koplugin"
 
+stage_koreader_plugin "$KOREADER_ANDROID_STAGE"
+ensure_exec "$KOREADER_ANDROID_STAGE/zenpm.koplugin"
+
 stage_koreader_plugin "$KOREADER_MACOS_STAGE"
 cp "$BUILD_DIR/zenpm-darwin" "$KOREADER_MACOS_STAGE/zenpm.koplugin/backend/zenpm-darwin"
 ensure_exec "$KOREADER_MACOS_STAGE/zenpm.koplugin"
@@ -234,6 +238,7 @@ KOBO_HF_ZIP="$DIST_DIR/ZenPM-kobo-hf-$VERSION.zip"
 KOBO_SF_ZIP="$DIST_DIR/ZenPM-kobo-sf-$VERSION.zip"
 KOREADER_EREADER_HF_ZIP="$DIST_DIR/ZenPM-koreader-ereader-hf-$VERSION.zip"
 KOREADER_EREADER_SF_ZIP="$DIST_DIR/ZenPM-koreader-ereader-sf-$VERSION.zip"
+KOREADER_ANDROID_ZIP="$DIST_DIR/ZenPM-koreader-android-$VERSION.zip"
 KOREADER_MACOS_ZIP="$DIST_DIR/ZenPM-koreader-macos-$VERSION.zip"
 KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 
@@ -268,6 +273,11 @@ KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 )
 
 (
+    cd "$KOREADER_ANDROID_STAGE"
+    zip -qr "$KOREADER_ANDROID_ZIP" zenpm.koplugin
+)
+
+(
     cd "$KOREADER_MACOS_STAGE"
     zip -qr "$KOREADER_MACOS_ZIP" zenpm.koplugin
 )
@@ -285,6 +295,7 @@ echo "Kindle ARMsf package:       $KINDLE_SF_ZIP"
 # echo "Kobo ARMsf package:         $KOBO_SF_ZIP"
 echo "KOReader e-reader ARMhf:    $KOREADER_EREADER_HF_ZIP"
 echo "KOReader e-reader ARMsf:    $KOREADER_EREADER_SF_ZIP"
+echo "KOReader Android plugin:     $KOREADER_ANDROID_ZIP"
 echo "KOReader macOS plugin:      $KOREADER_MACOS_ZIP"
 echo "KOReader Linux plugin:      $KOREADER_LINUX_ZIP"
 

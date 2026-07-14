@@ -10,11 +10,13 @@ public final class ZenPMActivity extends Activity {
         super.onCreate(state);
         Uri data = getIntent().getData();
         Intent service = new Intent(this, ZenPMService.class);
-        if (data != null) {
-            service.putExtra("zenpm_home", data.getQueryParameter("home"));
+        if (data != null && "start".equals(data.getHost())) {
+            String home = data.getQueryParameter("home");
+            service.putExtra("zenpm_home", home);
             service.putExtra("koreader_root", data.getQueryParameter("root"));
+            CompanionLog.write(home, "Received KOReader start request.");
+            startService(service);
         }
-        startService(service);
         finish();
     }
 }
