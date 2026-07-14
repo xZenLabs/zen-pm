@@ -37,10 +37,4 @@ public final class ZenPMService extends Service {
     }
 
     @Override public IBinder onBind(Intent intent) { return null; }
-
-    @Override public void onDestroy() {
-        super.onDestroy();
-        CompanionLog.write(this, null, "Stopping native backend process.");
-        android.os.Process.killProcess(android.os.Process.myPid());
-    }
 }
