@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/xZenLabs/zen-pm/internal/cabundle"
 )
 
 const githubResponseLimit = 4 * 1024 * 1024
@@ -167,7 +169,7 @@ func githubRequest(path, accept string) ([]byte, error) {
 	req.Header.Set("Accept", accept)
 	req.Header.Set("User-Agent", "ZenPackageManager")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := cabundle.Client(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("GitHub request: %w", err)

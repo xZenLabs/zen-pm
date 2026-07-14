@@ -441,6 +441,10 @@ func (m *Manager) baseScriptEnv(id string) map[string]string {
 	env := map[string]string{
 		"ZENPM_PACKAGE_ID": id,
 	}
+	if m.st != nil && m.st.CABundle != "" {
+		env["CURL_CA_BUNDLE"] = m.st.CABundle
+		env["SSL_CERT_FILE"] = m.st.CABundle
+	}
 	addKOReaderEnv(env, m.plat)
 	return env
 }

@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xZenLabs/zen-pm/internal/cabundle"
 	"github.com/xZenLabs/zen-pm/internal/log"
 )
 
@@ -638,7 +638,7 @@ func fetchBytes(url string) ([]byte, error) {
 	if strings.HasPrefix(url, "file://") {
 		return os.ReadFile(strings.TrimPrefix(url, "file://"))
 	}
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := cabundle.Client(30 * time.Second)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err

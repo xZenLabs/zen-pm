@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/xZenLabs/zen-pm/internal/cabundle"
 )
 
 const (
@@ -27,6 +29,7 @@ type State struct {
 	TmpDir        string
 	LockDir       string
 	JournalDir    string
+	CABundle      string
 	LogFile       string
 	SeededRepoURL string // non-empty only when the database was just created
 	store         Store
@@ -80,6 +83,7 @@ func Init(platform string) (*State, error) {
 		TmpDir:     filepath.Join(home, "tmp"),
 		LockDir:    filepath.Join(home, "locks"),
 		JournalDir: filepath.Join(home, "journal"),
+		CABundle:   filepath.Join(home, "cacert.pem"),
 		LogFile:    filepath.Join(home, "ZenPM.log"),
 	}
 
@@ -90,6 +94,9 @@ func Init(platform string) (*State, error) {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 		}
+	}
+	if err := cabundle.WriteFile(s.CABundle); err != nil {
+		return nil, fmt.Errorf("write CA bundle: %w", err)
 	}
 	StartupTrace("State initialization: directories ready.")
 
