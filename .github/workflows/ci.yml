@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.20.14'
+          go-version: '1.22.x'
 
       - name: Build
         run: go build ./...
@@ -26,12 +26,13 @@ jobs:
         run: go test ./...
 
       - name: Cross-compile ARMhf
-        run: GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/zenpm
+        run: GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOTOOLCHAIN=go1.20.14 go build -o /dev/null ./cmd/zenpm
 
       - name: Cross-compile ARMsf
         run: GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOTOOLCHAIN=go1.20.14 go build -o /dev/null ./cmd/zenpm
 
   android:
+    needs: go
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
