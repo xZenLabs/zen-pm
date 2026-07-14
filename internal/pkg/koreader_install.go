@@ -223,6 +223,26 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 	})
 }
 
+// removeKOReaderPatchVariants removes the normal patch name and the native
+// KOReader disabled variant, which appends ".disabled" to the filename.
+func (m *Manager) removeKOReaderPatchVariants(asset string) error {
+	asset = filepath.Base(strings.TrimSpace(asset))
+	if !strings.HasSuffix(strings.ToLower(asset), ".lua") {
+		return fmt.Errorf("invalid KOReader patch name %q", asset)
+	}
+	root, err := m.koreaderRoot()
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{asset, asset + ".disabled"} {
+		path := filepath.Join(root, "patches", name)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove patch %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
 func pluginTrackingName(entry *repo.CatalogEntry, assetName string) string {
 	name := strings.TrimSuffix(filepath.Base(assetName), ".zip")
 	if !strings.HasSuffix(name, ".koplugin") {

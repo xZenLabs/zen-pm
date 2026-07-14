@@ -280,6 +280,48 @@ func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	}
 }
 
+func TestUninstallGenericPatchRemovesDisabledFile(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	root := filepath.Join(t.TempDir(), "koreader")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_DIR", root)
+	if err := os.MkdirAll(filepath.Join(root, "patches"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	disabled := filepath.Join(root, "patches", "patch.lua.disabled")
+	if err := os.WriteFile(disabled, []byte("return {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "#!/bin/sh\n")
+	}))
+	defer srv.Close()
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "patch", Name: "Patch", Repo: "ZenLabs", Category: "patches", Platforms: []string{"koreader"},
+		InstallURL: srv.URL + "/install-patch.sh", UninstallURL: srv.URL + "/uninstall-patch.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalledPatchFile(state.PatchFileEntry{PackageID: "patch", Asset: "patch.lua", Name: "Patch", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Uninstall("patch", "patch.lua"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(disabled); !os.IsNotExist(err) {
+		t.Fatalf("disabled patch remains after uninstall: %v", err)
+	}
+}
+
 func TestPatchInstallScriptURLWithQueryTracksPerFileState(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

@@ -251,6 +251,12 @@ func (m *Manager) Uninstall(id, asset string) error {
 	} else {
 		log.Warnf("Package %s has no uninstall script; removing installed record only", id)
 	}
+	if isPatch && genericKOReaderInstaller(entry) == genericPatchInstaller {
+		if err := m.removeKOReaderPatchVariants(asset); err != nil {
+			j.Abort("remove patch file failed: " + err.Error())
+			return err
+		}
+	}
 
 	if isPatch {
 		if err := m.st.RemoveInstalledPatchFile(id, asset); err != nil {
