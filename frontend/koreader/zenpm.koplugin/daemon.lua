@@ -515,15 +515,18 @@ function Daemon:start()
         log_path = "/tmp/ZenPM.log"
     end
 
-    local cmd = "ZENPM_PLATFORM=" .. Util.sh_quote(platform)
+    local env = "ZENPM_PLATFORM=" .. Util.sh_quote(platform)
         .. " ZENPM_KOREADER_PLUGIN_DIR=" .. Util.sh_quote(dirname(Constants.PLUGIN_DIR))
     if set_home then
-        cmd = cmd .. " ZENPM_HOME=" .. Util.sh_quote(set_home)
+        env = env .. " ZENPM_HOME=" .. Util.sh_quote(set_home)
     end
-    cmd = cmd
-        .. " nohup " .. Util.sh_quote(backend)
+    -- Some Android e-reader shells do not provide nohup. Ignore SIGHUP with
+    -- POSIX shell built-ins instead, while keeping the daemon detached from
+    -- KOReader's stdout/stderr.
+    local cmd = "( trap '' HUP; " .. env
+        .. " exec " .. Util.sh_quote(backend)
         .. " serve --port 8080 >>" .. Util.sh_quote(log_path)
-        .. " 2>&1 &"
+        .. " 2>&1 ) &"
     if write_pid then
         cmd = cmd .. " echo $! >" .. Util.sh_quote(self:standalone_pid_file())
     end
