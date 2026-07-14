@@ -75,6 +75,7 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/repos", s.wrap(s.handleRepos))
 	mux.HandleFunc("/repos/", s.wrap(s.handleRepoByName))
 	mux.HandleFunc("/repo/refresh", s.wrap(s.handleRepoRefresh))
+	mux.HandleFunc("/koreader/plugins/scan", s.wrap(s.handleKOReaderPluginScan))
 	mux.HandleFunc("/packages", s.wrap(s.handlePackageList))
 	mux.HandleFunc("/packages/", s.wrap(s.handlePackageAction))
 	mux.HandleFunc("/log", s.wrap(s.handleLog))
@@ -89,9 +90,12 @@ func (s *Server) ListenAndServe() error {
 		go func() {
 			if err := s.repos.Refresh(); err != nil {
 				log.Warnf("Initial refresh failed: %v", err)
+				return
 			}
+			s.autoScanKOReaderPlugins()
 		}()
 	} else {
+		s.autoScanKOReaderPlugins()
 		go func() {
 			s.repos.CacheInstalledUninstallScripts(catalog)
 		}()
@@ -184,6 +188,17 @@ func (s *Server) periodicRefresh() {
 		if err := s.repos.Refresh(); err != nil {
 			log.Warnf("Periodic refresh failed: %v", err)
 		}
+	}
+}
+
+func (s *Server) autoScanKOReaderPlugins() {
+	result, err := s.pkgs.ScanKOReaderPlugins(false)
+	if err != nil {
+		log.Infof("KOReader plugin auto-scan not completed: %v", err)
+		return
+	}
+	if !result.Skipped {
+		log.Infof("KOReader plugin scan: scanned=%d matched=%d added=%d updated=%d", result.Scanned, result.Matched, result.Added, result.Updated)
 	}
 }
 
@@ -413,6 +428,22 @@ func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "log": logTail})
+}
+
+func (s *Server) handleKOReaderPluginScan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	result, err := s.pkgs.ScanKOReaderPlugins(true)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok": true, "scanned": result.Scanned, "matched": result.Matched,
+		"added": result.Added, "updated": result.Updated,
+	})
 }
 
 func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {

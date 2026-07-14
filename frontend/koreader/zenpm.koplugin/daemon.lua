@@ -515,6 +515,7 @@ function Daemon:start()
     end
 
     local cmd = "ZENPM_PLATFORM=" .. Util.sh_quote(platform)
+        .. " ZENPM_KOREADER_PLUGIN_DIR=" .. Util.sh_quote(dirname(Constants.PLUGIN_DIR))
     if set_home then
         cmd = cmd .. " ZENPM_HOME=" .. Util.sh_quote(set_home)
     end

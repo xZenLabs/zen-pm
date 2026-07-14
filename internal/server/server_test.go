@@ -94,6 +94,50 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 }
 
+func TestKOReaderPluginScanEndpoint(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	if err := os.MkdirAll(filepath.Join(plugins, "reader.koplugin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugins, "reader.koplugin", "_meta.lua"), []byte(`return { version = "1.2.3" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Version: "9.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	req := httptest.NewRequest(http.MethodPost, "/koreader/plugins/scan", nil)
+	rec := httptest.NewRecorder()
+	srv.handleKOReaderPluginScan(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		OK      bool `json:"ok"`
+		Scanned int  `json:"scanned"`
+		Matched int  `json:"matched"`
+		Added   int  `json:"added"`
+		Updated int  `json:"updated"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.OK || response.Scanned != 1 || response.Matched != 1 || response.Added != 1 || response.Updated != 0 {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
 func TestInitialCatalogStateRefreshesStaleCatalog(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

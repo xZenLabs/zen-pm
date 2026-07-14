@@ -182,6 +182,33 @@ paths:
                 ok: false
                 error: no repositories configured
                 log: ""
+  /koreader/plugins/scan:
+    post:
+      tags:
+        - Maintenance
+      summary: Scan installed external KOReader plugins
+      description: |
+        Forces a scan of external `.koplugin` directories, excluding KOReader
+        built-ins and patch packages. Matching catalog packages are recorded as
+        installed using their `_meta.lua` version.
+      operationId: scanKOReaderPlugins
+      responses:
+        "200":
+          description: Plugin scan completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KOReaderPluginScanResponse"
+              example:
+                ok: true
+                scanned: 3
+                matched: 2
+                added: 1
+                updated: 1
+        "405":
+          $ref: "#/components/responses/TextError"
+        "500":
+          $ref: "#/components/responses/JsonError"
   /packages:
     get:
       tags:
@@ -623,6 +650,29 @@ components:
         log:
           type: string
           description: Tail of the daemon log captured after refresh.
+    KOReaderPluginScanResponse:
+      type: object
+      required:
+        - ok
+        - scanned
+        - matched
+        - added
+        - updated
+      properties:
+        ok:
+          type: boolean
+        scanned:
+          type: integer
+          description: External `.koplugin` directories examined.
+        matched:
+          type: integer
+          description: Scanned plugins matched to a non-patch catalog package.
+        added:
+          type: integer
+          description: Newly recorded installed packages.
+        updated:
+          type: integer
+          description: Existing package records whose plugin metadata changed.
     Package:
       type: object
       required:

@@ -158,6 +158,10 @@ function Client:refresh_repos()
     return self:request("POST", "/repo/refresh", nil)
 end
 
+function Client:scan_installed_plugins()
+    return self:request("POST", "/koreader/plugins/scan", nil)
+end
+
 function Client:list_packages(platform, check_updates)
     local path = "/packages"
     local query = {}

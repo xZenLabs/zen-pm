@@ -1773,6 +1773,21 @@ function App:refresh_repos()
     end
 end
 
+function App:scan_installed_plugins()
+    Modals.status(_("Scanning installed plugins..."))
+    local ok, data = self.client:scan_installed_plugins()
+    Modals.close_status()
+    if not ok then
+        Modals.info(_("Plugin scan failed: ") .. tostring(data))
+        return
+    end
+
+    self.state.packages = {}
+    self:load_packages(false, true)
+    self:reload_current_page()
+    Modals.info_for(string.format(_("Found %d installed plugins"), tonumber(data.matched) or 0), Constants.PACKAGE_NOTICE_SECONDS)
+end
+
 function App:toggle_filter_installable()
     self.state.filter_installable = not self.state.filter_installable
     App.save_setting("filter_installable", self.state.filter_installable)
@@ -1804,6 +1819,12 @@ function App:show_actions(anchor)
             text = _("Refresh"),
             callback = function()
                 self:refresh_repos()
+            end,
+        },
+        {
+            text = _("Scan installed plugins"),
+            callback = function()
+                self:scan_installed_plugins()
             end,
         },
         {

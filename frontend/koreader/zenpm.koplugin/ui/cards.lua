@@ -110,7 +110,11 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local pad = opts.pad or Theme.scale(10)
     local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(72), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(10) or 0)
+    local action_icon = pkg.installed and pkg.update_available and Images.asset("update.svg") or nil
     local action_w = opts.action_w or m.action_w
+    if action_icon then
+        action_w = action_w + Theme.scale(22)
+    end
     local action_h = opts.action_h or m.action_h
     local action_x = x + w - action_w - pad
     local action_y = y + math.floor((h - action_h) / 2)
@@ -225,7 +229,6 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
-    local action_icon = pkg.installed and pkg.update_available and Images.asset("update.svg") or nil
     action_pill(view, bb, Models.package_action_label(pkg), action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()

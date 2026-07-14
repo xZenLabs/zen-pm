@@ -358,6 +358,23 @@ func (s *sqliteStore) RemoveInstalledPatchFile(packageID, asset string) error {
 	return err
 }
 
+func (s *sqliteStore) ReadValue(key string) (string, error) {
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM kv WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+func (s *sqliteStore) WriteValue(key, value string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO kv(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		key, value,
+	)
+	return err
+}
+
 func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
 	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module FROM catalog_packages ORDER BY position`)
 	if err != nil {

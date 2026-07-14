@@ -42,6 +42,8 @@ type Store interface {
 	ReadInstalledPatchFiles() ([]PatchFileEntry, error)
 	AppendInstalledPatchFile(PatchFileEntry) error
 	RemoveInstalledPatchFile(packageID, asset string) error
+	ReadValue(string) (string, error)
+	WriteValue(string, string) error
 	ReadCatalog() ([]CatalogEntry, error)
 	WriteCatalog([]CatalogEntry) error
 }
@@ -317,6 +319,17 @@ func (s *State) AppendInstalledPatchFile(e PatchFileEntry) error {
 
 func (s *State) RemoveInstalledPatchFile(packageID, asset string) error {
 	return s.store.RemoveInstalledPatchFile(packageID, asset)
+}
+
+// ReadValue returns a small piece of persistent state by key. Missing keys
+// return an empty value.
+func (s *State) ReadValue(key string) (string, error) {
+	return s.store.ReadValue(key)
+}
+
+// WriteValue persists a small piece of state by key.
+func (s *State) WriteValue(key, value string) error {
+	return s.store.WriteValue(key, value)
 }
 
 func (s *State) ReadCatalog() ([]CatalogEntry, error) {

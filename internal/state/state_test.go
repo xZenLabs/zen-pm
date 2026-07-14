@@ -76,6 +76,28 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreValueRoundTrip(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.ReadValue("missing"); err != nil || got != "" {
+		t.Fatalf("missing value = %q, %v", got, err)
+	}
+	if err := st.WriteValue("key", "first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteValue("key", "second"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.ReadValue("key"); err != nil || got != "second" {
+		t.Fatalf("stored value = %q, %v", got, err)
+	}
+}
+
 func TestSQLiteStoreAddsSourceAssetColumnToExistingCatalogTable(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	stateDir := filepath.Join(home, "state")
