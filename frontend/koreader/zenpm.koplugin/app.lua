@@ -1641,7 +1641,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     if not ok then
         self.busy = false
         Modals.close_status()
-        Modals.info_for(_("Failed to start package action: ") .. tostring(err), Constants.PACKAGE_NOTICE_SECONDS)
+        Modals.info_for(_("Failed to start package action: ") .. tostring(err), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
         return
     end
     self:poll_package_action({
@@ -1740,7 +1740,7 @@ function App:poll_package_action(op, attempt)
         if detail then
             self.busy = false
             Modals.close_status()
-            Modals.info_for(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail, Constants.PACKAGE_NOTICE_SECONDS)
+            Modals.info_for(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
             return
         end
 
@@ -1752,7 +1752,7 @@ function App:poll_package_action(op, attempt)
             if attempt >= Constants.MAX_POLL_RETRIES then
                 self.busy = false
                 Modals.close_status()
-                Modals.info_for(_("Package operation status could not be checked. See Debug log."), Constants.PACKAGE_NOTICE_SECONDS)
+                Modals.info_for(_("Package operation status could not be checked. See Debug log."), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
                 return
             end
             self:poll_package_action(op, attempt + 1)
@@ -1803,7 +1803,7 @@ function App:poll_package_action(op, attempt)
                 message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
             end
             Modals.close_status()
-            Modals.info_for(message, Constants.PACKAGE_NOTICE_SECONDS)
+            Modals.info_for(message, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
         else
             self:poll_package_action(op, attempt + 1)
         end
@@ -1941,6 +1941,15 @@ end
 
 function App:start_update()
     Modals.confirm(_("Check for and start a ZenPM update?"), _("Update"), function()
+        local companion_update_started = false
+        if self.daemon:is_android() then
+            local started, err = self.daemon:request_android_update()
+            if not started then
+                Modals.info(_("Companion update failed to start: ") .. tostring(err))
+                return
+            end
+            companion_update_started = true
+        end
         self.busy = true
         Modals.status(_("Checking for ZenPM updates..."))
         UIManager:forceRePaint()
@@ -1956,7 +1965,11 @@ function App:start_update()
             return
         end
         if result == "up_to_date" then
-            Modals.info(_("ZenPM is up to date."))
+            if companion_update_started then
+                Modals.info(_("ZenPM Companion is checking for an update."))
+            else
+                Modals.info(_("ZenPM is up to date."))
+            end
             return
         end
 

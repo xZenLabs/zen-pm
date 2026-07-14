@@ -33,6 +33,7 @@ func Start(home, logHome, koreaderRoot string, port int) {
 		_ = os.Setenv("ZENPM_HOME", home)
 		_ = os.Setenv("ZENPM_KOREADER_ROOT", strings.TrimSpace(koreaderRoot))
 		_ = os.Setenv("ZENPM_STARTUP_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
+		_ = os.Setenv("ZENPM_COMPANION_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
 		go serve(home, logHome, port)
 	})
 }

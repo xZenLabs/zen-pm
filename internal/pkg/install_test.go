@@ -695,6 +695,22 @@ func TestKOReaderRootUsesPluginDirectoryEnvironment(t *testing.T) {
 	}
 }
 
+func TestKOReaderRootUsesExplicitAndroidPluginDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "koreader")
+	if err := os.MkdirAll(filepath.Join(root, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_ROOT", root)
+
+	got, err := (&Manager{plat: "host"}).koreaderRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != root {
+		t.Fatalf("koreaderRoot() = %q, want %q", got, root)
+	}
+}
+
 func TestDisplayVersionDoesNotDoublePrefix(t *testing.T) {
 	tests := map[string]string{
 		"1.7":  "v1.7",

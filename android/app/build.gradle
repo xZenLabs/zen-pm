@@ -1,5 +1,14 @@
 plugins { id 'com.android.application' }
 
+def zenpmVersion = file('../../VERSION').text.trim()
+def zenpmVersionParts = zenpmVersion.replaceFirst('^v', '').tokenize('-')[0].tokenize('.')
+if (zenpmVersionParts.size() != 3) {
+    throw new GradleException("VERSION must be major.minor.patch, got: ${zenpmVersion}")
+}
+def zenpmVersionCode = zenpmVersionParts[0].toInteger() * 1000000 +
+    zenpmVersionParts[1].toInteger() * 10000 + zenpmVersionParts[2].toInteger()
+def releaseKeystore = System.getenv('ANDROID_KEYSTORE_PATH')
+
 android {
     namespace 'org.zenlabs.zenpm'
     compileSdk 34
@@ -7,13 +16,23 @@ android {
         applicationId 'org.zenlabs.zenpm'
         minSdk 19
         targetSdk 34
-        versionCode 1
-        versionName file('../../VERSION').text.trim()
+        versionCode zenpmVersionCode
+        versionName zenpmVersion
         ndk { abiFilters 'armeabi-v7a' }
+    }
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig releaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
     }
 }

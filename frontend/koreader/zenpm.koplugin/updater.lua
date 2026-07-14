@@ -71,6 +71,9 @@ local function semver_base(version)
 end
 
 local function release_asset_name(daemon, version)
+    if daemon:is_android() then
+        return "ZenPM-koreader-android-" .. version .. ".zip"
+    end
     local platform = daemon:detect_platform()
     if platform == "kindle" or platform == "kobo" then
         return "ZenPM-koreader-ereader-" .. daemon:detect_abi() .. "-" .. version .. ".zip"

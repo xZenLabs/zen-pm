@@ -8,14 +8,16 @@ import (
 )
 
 var (
-	mu      sync.Mutex
-	logPath string
+	mu            sync.Mutex
+	logPath       string
+	mirrorLogPath string
 )
 
 // Init sets the log file path. Must be called before any logging.
 func Init(path string) {
 	mu.Lock()
 	logPath = path
+	mirrorLogPath = os.Getenv("ZENPM_COMPANION_LOG")
 	mu.Unlock()
 }
 
@@ -28,6 +30,12 @@ func write(level, msg string) {
 		if f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			f.WriteString(line)
 			f.Close()
+		}
+		if mirrorLogPath != "" && mirrorLogPath != logPath {
+			if f, err := os.OpenFile(mirrorLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				f.WriteString(line)
+				f.Close()
+			}
 		}
 		return // file is canonical output; suppress stderr to avoid duplicates
 	}

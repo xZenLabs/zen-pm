@@ -154,6 +154,10 @@ function Daemon:detect_platform()
     return self.platform
 end
 
+function Daemon:is_android()
+    return ok_android and android ~= nil
+end
+
 function Daemon:platform_filter()
     local platform = self:detect_platform()
     if platform == "host" then
@@ -209,6 +213,17 @@ end
 -- native install; other KOReader ports stay under KOReader's settings home.
 function Daemon:state_home()
     return self:native_home() or self:device_home()
+end
+
+function Daemon:koreader_root()
+    local root = tostring(Constants.PLUGIN_DIR or ""):match("^(.*)/plugins/[^/]+$")
+    if root and root ~= "" then
+        return root
+    end
+    if ok_datastorage and DataStorage and DataStorage.getFullDataDir then
+        return DataStorage:getFullDataDir() or ""
+    end
+    return ""
 end
 
 function Daemon:standalone_backend_dir()
@@ -517,10 +532,7 @@ function Daemon:start()
         return false, err
     end
     if ok_android then
-        local root = ""
-        if ok_datastorage and DataStorage and DataStorage.getFullDataDir then
-            root = DataStorage:getFullDataDir() or ""
-        end
+        local root = self:koreader_root()
         local companion_log = self:state_home() .. "/android-companion.log"
         if android and type(android.openLink) == "function" then
             local uri = "zenpm://start?home=" .. uri_escape(self:state_home())
@@ -595,6 +607,21 @@ function Daemon:start()
 
     os.execute(cmd)
     return true
+end
+
+function Daemon:request_android_update()
+    if not self:is_android() or type(android.openLink) ~= "function" then
+        return false, _("ZenPM Android companion is not available.")
+    end
+    local companion_log = self:state_home() .. "/android-companion.log"
+    append_text(companion_log, log_timestamp() .. "  KOReader requesting ZenPM companion update.\n")
+    local called, opened = pcall(android.openLink, "zenpm://update?home=" .. uri_escape(self:state_home()))
+    append_text(companion_log, log_timestamp() .. "  ZenPM companion update link result: called="
+        .. tostring(called) .. " opened=" .. tostring(opened) .. "\n")
+    if called and opened then
+        return true
+    end
+    return false, _("ZenPM Android companion could not start its updater.")
 end
 
 function Daemon:ensure(client, force_start)

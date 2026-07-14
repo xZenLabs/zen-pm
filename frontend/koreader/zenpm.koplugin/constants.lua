@@ -14,6 +14,7 @@ return {
 
     FEATURED_IDS = { "zen-reader", "kindle-browser", "zen-mtp" },
     PACKAGE_NOTICE_SECONDS = 3,
+    PACKAGE_ERROR_NOTICE_SECONDS = 10,
     POLL_DELAY_SECONDS = 3.5,
     MAX_POLL_RETRIES = 20,
     CONNECT_RETRIES = 40,

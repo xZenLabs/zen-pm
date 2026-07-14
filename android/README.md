@@ -25,5 +25,15 @@ Install `android/app/build/outputs/apk/release/app-release.apk`. On Android 11
 and newer, the first ZenPM launch opens Android settings for **All files
 access**; grant it, then open ZenPM again. Android 4.4 uses the normal storage
 permission declared by the APK. The KOReader plugin starts the companion
-automatically. The release APK is debug-signed for sideloading; configure a
-dedicated release keystore before publishing through an app store.
+automatically.
+
+Published APKs are signed in CI with the persistent release keystore held in
+GitHub Actions secrets. The companion’s **Update** action checks the matching
+GitHub release, verifies the APK SHA-256 digest, and opens Android’s package
+installer. Android always requires the user to approve that install. Android
+8+ may first require allowing installs from ZenPM Companion; Android 4.4 uses
+the global **Unknown sources** setting.
+
+An APK installed from an earlier debug-signed build cannot be upgraded to the
+first release-signed build. Uninstall that old companion once, then install the
+release-signed APK; later releases update normally.

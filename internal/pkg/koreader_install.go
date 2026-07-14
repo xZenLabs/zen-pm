@@ -133,8 +133,12 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 }
 
 func (m *Manager) koreaderRoot() (string, error) {
+	explicitRoot := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_ROOT"))
+	if explicitRoot != "" {
+		explicitRoot = filepath.Clean(explicitRoot)
+	}
 	for _, root := range koreaderRootCandidates(m.plat) {
-		if isKOReaderRoot(root) {
+		if isKOReaderRoot(root) || (root == explicitRoot && isKOReaderPluginRoot(root)) {
 			return root, nil
 		}
 	}
@@ -150,6 +154,14 @@ func isKOReaderRoot(root string) bool {
 	}
 	_, err := os.Stat(filepath.Join(root, "reader.lua"))
 	return err == nil
+}
+
+// Android keeps KOReader's runnable files inside its APK, while the external
+// KOReader data directory only contains user files such as plugins. The
+// companion supplies that directory explicitly.
+func isKOReaderPluginRoot(root string) bool {
+	info, err := os.Stat(filepath.Join(root, "plugins"))
+	return err == nil && info.IsDir()
 }
 
 func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName, assetURL string, data []byte) error {
