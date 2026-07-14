@@ -114,6 +114,12 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins", "plugin.koplugin")); err != nil {
 		t.Fatalf("plugin tracking file was not written: %v", err)
 	}
+	if err := manager.Uninstall("plugin", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("native plugin was not removed: %v", err)
+	}
 }
 
 func TestInstallGenericPatchNatively(t *testing.T) {
@@ -167,7 +173,7 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 	}
 }
 
-func TestNativeKOReaderInstallerRequiresResolvableSource(t *testing.T) {
+func TestNativeKOReaderInstallerClaimsGenericScripts(t *testing.T) {
 	manager := &Manager{plat: "host"}
 	patch := &repo.CatalogEntry{
 		Platforms:  []string{"koreader"},
@@ -181,14 +187,11 @@ func TestNativeKOReaderInstallerRequiresResolvableSource(t *testing.T) {
 	}
 
 	plugin := &repo.CatalogEntry{
-		Platforms:   []string{"koreader"},
-		InstallURL:  "https://example.invalid/install-plugin.sh",
-		Source:      "https://github.com/owner/plugin",
-		SourceType:  "source",
-		SourceAsset: "plugin.koplugin.zip",
+		Platforms:  []string{"koreader"},
+		InstallURL: "https://example.invalid/install-plugin.sh",
 	}
-	if got := manager.nativeKOReaderInstaller(plugin, ""); got != "" {
-		t.Fatalf("native plugin installer = %q, want shell fallback without a source archive URL", got)
+	if got := manager.nativeKOReaderInstaller(plugin, ""); got != genericPluginInstaller {
+		t.Fatalf("native plugin installer = %q, want %q", got, genericPluginInstaller)
 	}
 }
 
@@ -325,6 +328,14 @@ func TestUninstallGenericPatchRemovesDisabledFile(t *testing.T) {
 func TestPatchInstallScriptURLWithQueryTracksPerFileState(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	if err := os.MkdirAll(koRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
 
 	st, err := state.Init("host")
 	if err != nil {
@@ -332,7 +343,11 @@ func TestPatchInstallScriptURLWithQueryTracksPerFileState(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "#!/bin/sh\n")
+		if r.URL.Path != "/2---stretched-covers.lua" {
+			http.NotFound(w, r)
+			return
+		}
+		io.WriteString(w, "return {}\n")
 	}))
 	defer srv.Close()
 
@@ -344,7 +359,7 @@ func TestPatchInstallScriptURLWithQueryTracksPerFileState(t *testing.T) {
 		Platforms:    []string{"koreader"},
 		InstallURL:   srv.URL + "/install-patch.sh?ref=main",
 		UninstallURL: srv.URL + "/install-patch.sh?ref=main",
-		Assets:       `[{"arch":"any","asset":"2---stretched-covers.lua"}]`,
+		Assets:       `[{"arch":"any","asset":"2---stretched-covers.lua","url":"` + srv.URL + `/2---stretched-covers.lua"}]`,
 	}}); err != nil {
 		t.Fatal(err)
 	}

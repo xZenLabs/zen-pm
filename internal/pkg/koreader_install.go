@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ZPM/internal/log"
-	"ZPM/internal/platform"
 	"ZPM/internal/releases"
 	"ZPM/internal/repo"
 )
@@ -40,33 +38,14 @@ func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
 	}
 }
 
-// nativeKOReaderInstaller only claims generic scripts when ZenPM has enough
-// metadata to resolve the asset itself. Older or custom scripts keep their
-// existing shell execution path.
+// nativeKOReaderInstaller claims ZenPM's generic KOReader scripts. Go handles
+// their asset download, filesystem changes, and tracking without a shell.
 func (m *Manager) nativeKOReaderInstaller(entry *repo.CatalogEntry, override string) string {
 	kind := genericKOReaderInstaller(entry)
 	if kind == "" || !packageHasPlatform(entry, "koreader") {
 		return ""
 	}
-	assetName := m.installAssetName(entry, override)
-	if selected, ok := selectedAsset(entry.Assets, assetName); ok && strings.TrimSpace(selected.URL) != "" {
-		return kind
-	}
-	if usesSourcePackage(entry) {
-		if strings.TrimSpace(entry.SourceURL) != "" {
-			return kind
-		}
-		if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
-			if _, ok := releases.GitHubRepository(entry.Source); ok {
-				return kind
-			}
-		}
-		return ""
-	}
-	if _, ok := releases.GitHubRepository(entry.Source); ok {
-		return kind
-	}
-	return ""
+	return kind
 }
 
 // installGenericKOReader performs the work of the repository's generic shell
@@ -184,7 +163,6 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 		return err
 	}
 	_ = os.RemoveAll(filepath.Join(destination, "__MACOSX"))
-	m.runKOReaderInstallHook(destination, entry.ID)
 	return writeTrackingFile(filepath.Join(root, ".zenpm-plugins", name), []string{
 		"name=" + name,
 		"plugin_dir=" + destination,
@@ -225,7 +203,6 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 		return err
 	}
 	_ = os.RemoveAll(filepath.Join(destination, "__MACOSX"))
-	m.runKOReaderInstallHook(destination, entry.ID)
 	return writeTrackingFile(filepath.Join(trackingDir, entry.ID), []string{
 		"name=" + entry.ID,
 		"patch_dir=" + destination,
@@ -235,24 +212,100 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 	})
 }
 
-// removeKOReaderPatchVariants removes the normal patch name and the native
-// KOReader disabled variant, which appends ".disabled" to the filename.
-func (m *Manager) removeKOReaderPatchVariants(asset string) error {
-	asset = filepath.Base(strings.TrimSpace(asset))
-	if !strings.HasSuffix(strings.ToLower(asset), ".lua") {
-		return fmt.Errorf("invalid KOReader patch name %q", asset)
-	}
+func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind string) error {
 	root, err := m.koreaderRoot()
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{asset, asset + ".disabled"} {
-		path := filepath.Join(root, "patches", name)
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove patch %s: %w", path, err)
+	switch kind {
+	case genericPluginInstaller:
+		return removeKOReaderPlugin(root, pluginTrackingName(entry, asset))
+	case genericPatchInstaller:
+		return removeKOReaderPatch(root, entry.ID, asset)
+	default:
+		return fmt.Errorf("unknown generic KOReader installer %q", kind)
+	}
+}
+
+func removeKOReaderPlugin(root, name string) error {
+	tracking := filepath.Join(root, ".zenpm-plugins", name)
+	destination := filepath.Join(root, "plugins", name)
+	if value, err := trackingValue(tracking, "plugin_dir"); err == nil && value != "" {
+		destination = value
+	}
+	if !pathWithinRoot(root, destination) {
+		return fmt.Errorf("invalid tracked KOReader plugin path %q", destination)
+	}
+	if err := os.RemoveAll(destination); err != nil {
+		return fmt.Errorf("remove KOReader plugin %s: %w", destination, err)
+	}
+	if err := os.Remove(tracking); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return removeEmptyDir(filepath.Dir(tracking))
+}
+
+func removeKOReaderPatch(root, id, asset string) error {
+	asset = filepath.Base(strings.TrimSpace(asset))
+	if asset == "" {
+		return fmt.Errorf("KOReader patch asset is required")
+	}
+	trackingDir := filepath.Join(root, ".zenpm-patches")
+	trackingNames := []string{asset}
+	if id != "" && id != asset {
+		trackingNames = append(trackingNames, id)
+	}
+	removedDir := false
+	for _, name := range trackingNames {
+		tracking := filepath.Join(trackingDir, name)
+		if patchDir, err := trackingValue(tracking, "patch_dir"); err == nil && patchDir != "" {
+			if !pathWithinRoot(root, patchDir) {
+				return fmt.Errorf("invalid tracked KOReader patch path %q", patchDir)
+			}
+			if err := os.RemoveAll(patchDir); err != nil {
+				return fmt.Errorf("remove KOReader patch %s: %w", patchDir, err)
+			}
+			removedDir = true
+		}
+		if err := os.Remove(tracking); err != nil && !os.IsNotExist(err) {
+			return err
 		}
 	}
+	if !removedDir {
+		for _, name := range []string{asset, asset + ".disabled"} {
+			path := filepath.Join(root, "patches", name)
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove KOReader patch %s: %w", path, err)
+			}
+		}
+	}
+	return removeEmptyDir(trackingDir)
+}
+
+func trackingValue(path, key string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	prefix := key + "="
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix)), nil
+		}
+	}
+	return "", nil
+}
+
+func removeEmptyDir(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) && !os.IsExist(err) {
+		return err
+	}
 	return nil
+}
+
+func pathWithinRoot(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func pluginTrackingName(entry *repo.CatalogEntry, assetName string) string {
@@ -373,15 +426,4 @@ func writeTrackingFile(path string, lines []string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0644)
-}
-
-func (m *Manager) runKOReaderInstallHook(dir, packageID string) {
-	hook := filepath.Join(dir, "install.sh")
-	info, err := os.Stat(hook)
-	if err != nil || info.Mode()&0111 == 0 {
-		return
-	}
-	if err := platform.ExecuteScriptWithEnvAtDir(hook, m.baseScriptEnv(packageID), dir); err != nil {
-		log.Warnf("KOReader install hook %s failed: %v", hook, err)
-	}
 }

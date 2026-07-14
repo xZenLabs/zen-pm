@@ -96,7 +96,8 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			installEntry = &entryCopy
 		}
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
-		if genericInstaller := m.nativeKOReaderInstaller(entry, override); genericInstaller != "" {
+		genericInstaller := m.nativeKOReaderInstaller(entry, override)
+		if genericInstaller != "" {
 			if err := m.installGenericKOReader(entry, override, releaseTag, genericInstaller); err != nil {
 				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("install %s: %w", pkgID, err)
@@ -114,8 +115,10 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			}
 		}
 
-		if err := m.cacheUninstallScript(entry); err != nil {
-			log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
+		if genericInstaller == "" {
+			if err := m.cacheUninstallScript(entry); err != nil {
+				log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
+			}
 		}
 
 		installedVersion := installEntry.Version
@@ -193,7 +196,7 @@ func (m *Manager) Uninstall(id, asset string) error {
 	}
 
 	entry := m.findCatalogEntry(id)
-	if entry == nil || entry.UninstallURL == "" {
+	if entry == nil || (entry.UninstallURL == "" && m.nativeKOReaderInstaller(entry, asset) == "") {
 		log.Warnf("Package %s uninstall script missing from catalog; refreshing catalog", id)
 		if err := m.repos.Refresh(); err != nil {
 			log.Warnf("Package %s catalog refresh before uninstall failed: %v", id, err)
@@ -207,8 +210,15 @@ func (m *Manager) Uninstall(id, asset string) error {
 		return err
 	}
 
-	scriptPath := ""
-	if entry != nil && entry.UninstallURL != "" {
+	genericInstaller := m.nativeKOReaderInstaller(entry, asset)
+	if genericInstaller != "" {
+		if err := m.uninstallGenericKOReader(entry, asset, genericInstaller); err != nil {
+			j.Abort("native removal failed: " + err.Error())
+			return err
+		}
+		log.Infof("Package %s removed with native KOReader installer", id)
+	} else if entry != nil && entry.UninstallURL != "" {
+		scriptPath := ""
 		log.Infof("Package %s uninstall metadata: repo=%s version=%s uninstall_url=%s", id, entry.Repo, displayVersion(entry.Version), entry.UninstallURL)
 		scriptPath, err = m.repos.FetchScript(entry.UninstallURL)
 		if err != nil {
@@ -222,39 +232,40 @@ func (m *Manager) Uninstall(id, asset string) error {
 		} else {
 			log.Infof("Package %s fetched uninstall script to %s", id, scriptPath)
 		}
-	} else {
-		scriptPath = m.st.CachedUninstallScriptPath(id)
-		if _, err := os.Stat(scriptPath); err != nil {
-			scriptPath = ""
-		} else {
-			log.Infof("Package %s using cached uninstall script: %s", id, scriptPath)
-		}
-	}
-
-	if scriptPath != "" {
-		log.Infof("Package %s executing uninstall script: %s", id, scriptPath)
-		env := m.uninstallEnv(id)
-		if isPatch {
-			env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
-		} else if entry != nil && isGenericKOReaderPlugin(entry) {
-			if asset := m.installAssetName(entry, ""); asset != "" {
+		if scriptPath != "" {
+			log.Infof("Package %s executing uninstall script: %s", id, scriptPath)
+			env := m.uninstallEnv(id)
+			if isPatch {
 				env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
-			} else if entry.SourceAsset != "" {
-				env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
+			} else if entry != nil && isGenericKOReaderPlugin(entry) {
+				if asset := m.installAssetName(entry, ""); asset != "" {
+					env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+				} else if entry.SourceAsset != "" {
+					env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
+				}
 			}
+			if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
+				j.Abort("execute failed: " + err.Error())
+				return fmt.Errorf("uninstall script failed: %w", err)
+			}
+			log.Infof("Package %s uninstall script completed", id)
 		}
-		if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
-			j.Abort("execute failed: " + err.Error())
-			return fmt.Errorf("uninstall script failed: %w", err)
-		}
-		log.Infof("Package %s uninstall script completed", id)
 	} else {
-		log.Warnf("Package %s has no uninstall script; removing installed record only", id)
-	}
-	if isPatch && genericKOReaderInstaller(entry) == genericPatchInstaller {
-		if err := m.removeKOReaderPatchVariants(asset); err != nil {
-			j.Abort("remove patch file failed: " + err.Error())
-			return err
+		scriptPath := m.st.CachedUninstallScriptPath(id)
+		if _, err := os.Stat(scriptPath); err == nil {
+			log.Infof("Package %s using cached uninstall script: %s", id, scriptPath)
+			log.Infof("Package %s executing uninstall script: %s", id, scriptPath)
+			env := m.uninstallEnv(id)
+			if isPatch {
+				env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+			}
+			if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
+				j.Abort("execute failed: " + err.Error())
+				return fmt.Errorf("uninstall script failed: %w", err)
+			}
+			log.Infof("Package %s uninstall script completed", id)
+		} else {
+			log.Warnf("Package %s has no uninstall script; removing installed record only", id)
 		}
 	}
 

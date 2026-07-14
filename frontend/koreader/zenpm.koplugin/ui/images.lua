@@ -1,5 +1,6 @@
 local Constants = require("constants")
 local Util = require("zenpm_util")
+local ok_datastorage, DataStorage = pcall(require, "datastorage")
 
 local Images = {
     cached = {},
@@ -11,6 +12,9 @@ local function platform_cache_dir(platform)
         return "/mnt/onboard/.adds/ZenPM/cache/koreader-images"
     elseif platform == "kindle" then
         return "/mnt/us/ZenPM/cache/koreader-images"
+    end
+    if ok_datastorage and DataStorage and DataStorage.getSettingsDir then
+        return DataStorage:getSettingsDir() .. "/ZenPM/cache/koreader-images"
     end
     return "/tmp/zenpm-koreader-images"
 end
