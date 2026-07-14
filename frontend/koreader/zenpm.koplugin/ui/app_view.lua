@@ -308,6 +308,12 @@ function AppView:draw_content(bb, x, y, w, h)
         return
     end
 
+    if state.error then
+        Pages.error(self, bb, x, y, w, h, state.error)
+        self.max_scroll = 0
+        return
+    end
+
     if page == "home" then
         max_scroll = Pages.featured(self, bb, x, y, w, h, scroll)
     elseif page == "search" then
@@ -327,10 +333,6 @@ function AppView:draw_content(bb, x, y, w, h)
         max_scroll = Pages.package_details(self, bb, x, y, w, h, scroll)
     elseif page == "debug" then
         max_scroll = Pages.debug(self, bb, x, y, w, h, scroll)
-    end
-
-    if state.error then
-        P.text(bb, state.error, x + Theme.scale(16), y + Theme.scale(10), w - Theme.scale(32), "default", { color = Theme.muted })
     end
 
     Scroll.draw_scrollbar(self, bb, max_scroll, scroll)

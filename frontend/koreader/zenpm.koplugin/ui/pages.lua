@@ -46,6 +46,32 @@ local function patch_asset_meta(asset)
     return table.concat(parts, " • ")
 end
 
+function Pages.error(view, bb, x, y, w, h, message)
+    local m = Theme.metrics()
+    local pad = m.pad
+    local button_h = Theme.scale(46)
+    local gap = Theme.scale(10)
+    local button_w = math.floor((w - pad * 2 - gap) / 2)
+    local button_y = y + h - button_h - Theme.scale(18)
+    local abi = tostring(view.app.daemon:detect_abi())
+
+    P.text(bb, message, x + pad, y + Theme.scale(16), w - pad * 2, "default", { color = Theme.muted })
+    P.text(bb, _("Detected ABI: ") .. abi, x + pad, button_y - Theme.scale(34), w - pad * 2, "small", { color = Theme.muted })
+    P.box(bb, x + pad, button_y, button_w, button_h, { radius = math.floor(button_h / 2) })
+    P.center_text_box(bb, _("Retry"), x + pad, button_y, button_w, button_h, "small", { bold = true })
+    P.hit(view, x + pad, button_y, button_w, button_h, function()
+        view.app:start_backend_then_reload()
+    end, "retry-backend")
+
+    local quit_x = x + pad + button_w + gap
+    P.box(bb, quit_x, button_y, button_w, button_h, { radius = math.floor(button_h / 2) })
+    P.center_text_box(bb, _("Quit"), quit_x, button_y, button_w, button_h, "small", { bold = true })
+    P.hit(view, quit_x, button_y, button_w, button_h, function()
+        view.app:quit()
+    end, "quit")
+    Scroll.set_list_bounds(view, x, y, w, h, h)
+end
+
 function Pages.featured(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad

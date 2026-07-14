@@ -449,6 +449,10 @@ function App:close()
     end
 end
 
+function App:quit()
+    self:close()
+end
+
 function App:refresh()
     if self.view then
         self.view:refresh(self._full_refresh)
@@ -1876,7 +1880,8 @@ end
 function App:show_about()
     local version = tostring(self.version or "?"):gsub("^v", "")
     local platform = tostring(self:package_platforms())
-    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
+    local abi = tostring(self.daemon:detect_abi())
+    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. "\n" .. _("ABI: ") .. abi .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
 end
 
 function App:start_update()
