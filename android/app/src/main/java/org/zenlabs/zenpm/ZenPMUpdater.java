@@ -140,6 +140,8 @@ final class ZenPMUpdater {
         install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
         CompanionLog.write(context, logHome, "Opening Android package installer for ZenPM companion update.");
         context.startActivity(install);
+        CompanionLog.write(context, logHome, "Stopping the running companion before installation.");
+        context.stopService(new Intent(context, ZenPMService.class));
     }
 
     private static String installedVersion(Context context) throws PackageManager.NameNotFoundException {
