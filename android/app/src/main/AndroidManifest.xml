@@ -2,6 +2,19 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <application android:allowBackup="false" android:label="ZenPM Backend" android:usesCleartextTraffic="true">
+        <activity
+            android:name=".ZenPMActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="zenpm" />
+            </intent-filter>
+        </activity>
         <service android:name=".ZenPMService" android:exported="true" />
     </application>
 </manifest>

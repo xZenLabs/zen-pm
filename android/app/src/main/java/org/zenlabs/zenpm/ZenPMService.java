@@ -11,14 +11,14 @@ public final class ZenPMService extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         synchronized (ZenPMService.class) {
-            if (!started) {
-                String home = intent.getStringExtra("zenpm_home");
+            String home = intent == null ? null : intent.getStringExtra("zenpm_home");
+            if (!started && home != null && !home.isEmpty()) {
                 String root = intent.getStringExtra("koreader_root");
-                nativeStart(home == null ? "" : home, root == null ? "" : root, 8080);
+                nativeStart(home, root == null ? "" : root, 8080);
                 started = true;
             }
         }
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     @Override public IBinder onBind(Intent intent) { return null; }

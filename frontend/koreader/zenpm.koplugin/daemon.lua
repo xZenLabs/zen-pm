@@ -7,7 +7,7 @@ local Util = require("zenpm_util")
 local ok_datastorage, DataStorage = pcall(require, "datastorage")
 local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 local ok_meta, Meta = pcall(dofile, Constants.PLUGIN_DIR .. "/_meta.lua")
-local ok_android = pcall(require, "android")
+local ok_android, android = pcall(require, "android")
 
 local Daemon = {}
 
@@ -118,6 +118,12 @@ end
 
 local function basename(path)
     return tostring(path or ""):match("([^/]+)$") or tostring(path or "")
+end
+
+local function uri_escape(value)
+    return (tostring(value or ""):gsub("([^%w%-_%.~])", function(char)
+        return string.format("%%%02X", string.byte(char))
+    end))
 end
 
 function Daemon:detect_platform()
@@ -490,11 +496,21 @@ function Daemon:start()
         if ok_datastorage and DataStorage and DataStorage.getFullDataDir then
             root = DataStorage:getFullDataDir() or ""
         end
+        if android and type(android.openLink) == "function" then
+            local uri = "zenpm://start?home=" .. uri_escape(self:state_home())
+                .. "&root=" .. uri_escape(root)
+            local called, opened = pcall(android.openLink, uri)
+            if called and opened then
+                return true
+            end
+        end
+        local companion_log = self:state_home() .. "/android-companion.log"
         local cmd = "/system/bin/am startservice -n org.zenlabs.zenpm/.ZenPMService"
             .. " --es zenpm_home " .. Util.sh_quote(self:state_home())
             .. " --es koreader_root " .. Util.sh_quote(root)
+            .. " </dev/null >>" .. Util.sh_quote(companion_log) .. " 2>&1"
         if os.execute(cmd) ~= 0 then
-            return false, _("ZenPM Android companion is not installed or could not start.")
+            return false, _("ZenPM Android companion is not installed or could not start. See ") .. companion_log
         end
         return true
     end
