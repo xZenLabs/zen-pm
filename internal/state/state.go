@@ -51,6 +51,7 @@ type Store interface {
 // Init resolves ZENPM_HOME (or a platform default), creates all directories,
 // and seeds empty databases if missing.
 func Init(platform string) (*State, error) {
+	StartupTrace("State initialization: resolving directories.")
 	home := os.Getenv("ZENPM_HOME")
 	explicitHome := home != ""
 	if home == "" {
@@ -90,12 +91,14 @@ func Init(platform string) (*State, error) {
 			return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 		}
 	}
+	StartupTrace("State initialization: directories ready.")
 
 	store, err := newSQLiteStore(s)
 	if err != nil {
 		return nil, err
 	}
 	s.store = store
+	StartupTrace("State initialization: SQLite ready.")
 
 	if err := seedReposDB(s); err != nil {
 		return nil, err
@@ -103,6 +106,7 @@ func Init(platform string) (*State, error) {
 	if err := reconcileDefaultRepos(s); err != nil {
 		return nil, err
 	}
+	StartupTrace("State initialization: repositories ready.")
 
 	// Clean up stale temp dirs and locks from interrupted operations.
 	cleanupStaleDirs(platform, s.LockDir)

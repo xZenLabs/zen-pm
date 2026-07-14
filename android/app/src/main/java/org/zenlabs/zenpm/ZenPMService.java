@@ -16,20 +16,21 @@ public final class ZenPMService extends Service {
         }
     }
     private static boolean started;
-    private static native void nativeStart(String home, String koreaderRoot, int port);
+    private static native void nativeStart(String home, String logHome, String koreaderRoot, int port);
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         synchronized (ZenPMService.class) {
-            String home = intent == null ? null : intent.getStringExtra("zenpm_home");
+            String logHome = intent == null ? null : intent.getStringExtra("zenpm_log_home");
             if (!nativeLoaded) {
-                CompanionLog.write(home, "Could not load libzenpm.so: " + nativeLoadError);
-            } else if (!started && home != null && !home.isEmpty()) {
+                CompanionLog.write(this, logHome, "Could not load libzenpm.so: " + nativeLoadError);
+            } else if (!started) {
                 String root = intent.getStringExtra("koreader_root");
-                CompanionLog.write(home, "Starting native backend.");
-                nativeStart(home, root == null ? "" : root, 8080);
+                String home = getFilesDir().getAbsolutePath();
+                CompanionLog.write(this, logHome, "Starting native backend.");
+                nativeStart(home, logHome, root == null ? "" : root, 8080);
                 started = true;
-            } else if (home != null && !home.isEmpty()) {
-                CompanionLog.write(home, "Native backend is already running.");
+            } else {
+                CompanionLog.write(this, logHome, "Native backend is already running.");
             }
         }
         return START_NOT_STICKY;

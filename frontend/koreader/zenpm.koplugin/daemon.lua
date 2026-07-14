@@ -81,6 +81,20 @@ local function write_text(path, value)
     return true
 end
 
+local function append_text(path, value)
+    local f = io.open(path, "a")
+    if not f then
+        return false
+    end
+    f:write(value or "")
+    f:close()
+    return true
+end
+
+local function log_timestamp()
+    return os.date("!%Y-%m-%dT%H:%M:%SZ")
+end
+
 local function copy_file(source, target)
     local input = io.open(source, "rb")
     if not input then
@@ -174,6 +188,12 @@ function Daemon:native_home()
 end
 
 function Daemon:device_home()
+    if ok_android and android and type(android.getExternalStoragePath) == "function" then
+        local ok, storage = pcall(android.getExternalStoragePath)
+        if ok and type(storage) == "string" and storage ~= "" then
+            return storage .. "/ZenPM"
+        end
+    end
     if ok_datastorage and DataStorage and DataStorage.getSettingsDir then
         return DataStorage:getSettingsDir() .. "/ZenPM"
     end
@@ -376,6 +396,11 @@ function Daemon:health_matches(data)
     if type(data) ~= "table" then
         return false
     end
+    -- The Android companion keeps its state in private app storage, which is
+    -- intentionally different from KOReader's shared ZenPM directory.
+    if ok_android then
+        return data.ok == true
+    end
     return tostring(data.home or "") == self:state_home()
 end
 
@@ -496,15 +521,18 @@ function Daemon:start()
         if ok_datastorage and DataStorage and DataStorage.getFullDataDir then
             root = DataStorage:getFullDataDir() or ""
         end
+        local companion_log = self:state_home() .. "/android-companion.log"
         if android and type(android.openLink) == "function" then
             local uri = "zenpm://start?home=" .. uri_escape(self:state_home())
                 .. "&root=" .. uri_escape(root)
+            append_text(companion_log, log_timestamp() .. "  KOReader opening ZenPM companion.\n")
             local called, opened = pcall(android.openLink, uri)
+            append_text(companion_log, log_timestamp() .. "  ZenPM companion link result: called="
+                .. tostring(called) .. " opened=" .. tostring(opened) .. "\n")
             if called and opened then
                 return true
             end
         end
-        local companion_log = self:state_home() .. "/android-companion.log"
         local cmd = "/system/bin/am startservice -n org.zenlabs.zenpm/.ZenPMService"
             .. " --es zenpm_home " .. Util.sh_quote(self:state_home())
             .. " --es koreader_root " .. Util.sh_quote(root)

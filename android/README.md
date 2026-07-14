@@ -21,7 +21,9 @@ gradle -p android assembleRelease
 NDK 23 supplies an Intel macOS compiler on some Apple Silicon installations;
 install Rosetta if macOS cannot run it: `softwareupdate --install-rosetta --agree-to-license`.
 
-Install `android/app/build/outputs/apk/release/app-release.apk`. The KOReader
-plugin starts `org.zenlabs.zenpm/.ZenPMService` automatically. The release APK
-is debug-signed for sideloading; configure a dedicated release keystore before
-publishing through an app store.
+Install `android/app/build/outputs/apk/release/app-release.apk`. On Android 11
+and newer, the first ZenPM launch opens Android settings for **All files
+access**; grant it, then open ZenPM again. Android 4.4 uses the normal storage
+permission declared by the APK. The KOReader plugin starts the companion
+automatically. The release APK is debug-signed for sideloading; configure a
+dedicated release keystore before publishing through an app store.

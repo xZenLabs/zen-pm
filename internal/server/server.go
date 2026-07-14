@@ -71,6 +71,7 @@ func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Ser
 }
 
 func (s *Server) ListenAndServe() error {
+	state.StartupTrace("HTTP server: configuring routes.")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.wrap(s.handleHealth))
 	mux.HandleFunc("/repos", s.wrap(s.handleRepos))
@@ -86,7 +87,9 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
 
 	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
+	state.StartupTrace("HTTP server: reading catalog state.")
 	catalog, needsRefresh := s.initialCatalogState()
+	state.StartupTrace("HTTP server: catalog state ready.")
 	if needsRefresh {
 		go func() {
 			if err := s.repos.Refresh(); err != nil {
@@ -107,10 +110,12 @@ func (s *Server) ListenAndServe() error {
 	go s.periodicRefresh()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
+	state.StartupTrace("HTTP server: binding " + addr + ".")
 	ln, err := s.listen(addr)
 	if err != nil {
 		return err
 	}
+	state.StartupTrace("HTTP server: listening on " + addr + ".")
 	if !s.StartedAt.IsZero() {
 		log.Infof("Timing: server listening on %s, %dms after process start", addr, time.Since(s.StartedAt).Milliseconds())
 	} else {

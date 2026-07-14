@@ -1,5 +1,7 @@
 package org.zenlabs.zenpm;
 
+import android.content.Context;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -11,17 +13,29 @@ import java.util.TimeZone;
 final class CompanionLog {
     private CompanionLog() {}
 
-    static synchronized void write(String home, String message) {
-        if (home == null || home.isEmpty()) return;
-        File dir = new File(home);
-        if (!dir.exists() && !dir.mkdirs()) return;
+    static synchronized void write(Context context, String home, String message) {
+        String line = timestamp() + "  " + message + "\n";
+        if (home != null && !home.isEmpty() && write(new File(home, "android-companion.log"), line)) return;
+        File fallback = context.getExternalFilesDir(null);
+        if (fallback != null) write(new File(fallback, "android-companion.log"), line);
+    }
+
+    private static String timestamp() {
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return format.format(new Date());
+    }
+
+    private static boolean write(File file, String line) {
+        File dir = file.getParentFile();
+        if (dir == null || (!dir.exists() && !dir.mkdirs())) return false;
         try {
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
-            format.setTimeZone(TimeZone.getTimeZone("UTC"));
-            FileWriter writer = new FileWriter(new File(dir, "android-companion.log"), true);
-            writer.write(format.format(new Date()) + "  " + message + "\n");
+            FileWriter writer = new FileWriter(file, true);
+            writer.write(line);
             writer.close();
+            return true;
         } catch (IOException ignored) {
+            return false;
         }
     }
 }

@@ -2,10 +2,10 @@ package state
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
 )
 
 type sqliteStore struct {
@@ -14,24 +14,30 @@ type sqliteStore struct {
 }
 
 func newSQLiteStore(s *State) (*sqliteStore, error) {
-	db, err := sql.Open("sqlite", s.SQLiteDB)
+	StartupTrace("SQLite initialization: opening database.")
+	db, err := sql.Open(sqliteDriver, s.SQLiteDB)
 	if err != nil {
 		return nil, err
 	}
+	StartupTrace("SQLite initialization: database opened.")
 	db.SetMaxOpenConns(1)
 	store := &sqliteStore{s: s, db: db}
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		db.Close()
 		return nil, err
 	}
+	StartupTrace("SQLite initialization: foreign keys enabled.")
 	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
 		db.Close()
 		return nil, err
 	}
+	StartupTrace("SQLite initialization: busy timeout set.")
+	StartupTrace("SQLite initialization: migration starting.")
 	if err := store.migrate(); err != nil {
 		db.Close()
 		return nil, err
 	}
+	StartupTrace("SQLite initialization: migration complete.")
 	return store, nil
 }
 
@@ -100,7 +106,8 @@ func (s *sqliteStore) migrate() error {
 		)`,
 		`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`,
 	}
-	for _, stmt := range stmts {
+	for i, stmt := range stmts {
+		StartupTrace(fmt.Sprintf("SQLite migration: statement %d.", i+1))
 		if _, err := s.db.Exec(stmt); err != nil {
 			return err
 		}
