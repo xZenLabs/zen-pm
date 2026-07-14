@@ -423,6 +423,23 @@ local function set_patch_disabled(asset, disabled)
     return true
 end
 
+local function remove_patch_file(asset)
+    local dir = patches_dir()
+    if type(asset) ~= "string" or asset == "" or not dir then
+        return false, _("Could not resolve patch file.")
+    end
+    local base = dir .. "/" .. asset
+    if file_exists(base) then
+        local ok, err = os.remove(base)
+        return ok ~= nil, err
+    end
+    if file_exists(base .. ".disabled") then
+        local ok, err = os.remove(base .. ".disabled")
+        return ok ~= nil, err
+    end
+    return false, _("Patch file not found.")
+end
+
 function App:show()
     if not self.view then
         self.view = AppView:new{ app = self }
@@ -1242,6 +1259,10 @@ function App:perform_package_action(pkg, on_done)
         Modals.info(_("Another operation is in progress. Please wait."))
         return
     end
+    if Models.is_unmanaged_patch(pkg) then
+        self:show_unmanaged_patch_modify(pkg, on_done)
+        return
+    end
     if Models.is_installed_patch_item(pkg) then
         self:show_patch_modify(pkg, on_done)
         return
@@ -1280,6 +1301,20 @@ function App:perform_package_action(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
+end
+
+function App:show_unmanaged_patch_modify(pkg, on_done)
+    local asset = pkg.patch_asset
+    Modals.package_modify(pkg, {
+        manage_only = true,
+        disabled = is_patch_disabled(pkg),
+        enable_disable = function()
+            self:confirm_toggle_enable(pkg, "patch", on_done)
+        end,
+        uninstall = function()
+            self:confirm_remove_unmanaged_patch(asset, on_done)
+        end,
+    })
 end
 
 function App:show_patch_modify(pkg, on_done)
@@ -1365,6 +1400,22 @@ function App:confirm_patch_item_action(pkg, action, asset, on_done)
     Modals.confirm(question, label, function()
         self:run_package_action(pkg, action, name, on_done, nil)
     end)
+end
+
+function App:confirm_remove_unmanaged_patch(asset, on_done)
+    Modals.confirm(
+        _("Are you sure you want to remove ") .. tostring(asset) .. "?",
+        _("Remove"),
+        function()
+            local ok, err = remove_patch_file(asset)
+            if not ok then
+                Modals.info_for(_("Could not remove patch: ") .. tostring(err), Constants.PACKAGE_NOTICE_SECONDS)
+                return
+            end
+            if on_done then on_done() end
+            self:show_installed()
+        end
+    )
 end
 
 -- Show installable GitHub releases for a package. Each version maps to an

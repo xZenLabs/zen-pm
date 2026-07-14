@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.22.x'
 
       - name: Build
         run: go build ./...
@@ -29,7 +29,7 @@ jobs:
         run: GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/zenpm
 
       - name: Cross-compile ARMsf
-        run: GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 go build -o /dev/null ./cmd/zenpm
+        run: GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOTOOLCHAIN=go1.20.14 go build -o /dev/null ./cmd/zenpm
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -70,7 +70,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.22.x'
 
       - name: Read and verify release version
         id: version

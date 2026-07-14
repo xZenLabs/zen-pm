@@ -123,6 +123,45 @@ func TestScanKOReaderPluginsDoesNotMarkUnavailableOrEmptyCatalog(t *testing.T) {
 	}
 }
 
+func TestUnmanagedKOReaderPatchesListsOnlyUntrackedPatchFiles(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	root := filepath.Join(t.TempDir(), "koreader")
+	patches := filepath.Join(root, "patches")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_DIR", root)
+	if err := os.MkdirAll(patches, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	for name := range map[string]bool{
+		"managed.lua":           false,
+		"unmanaged.lua":         false,
+		"disabled.lua.disabled": false,
+		"not-a-patch.txt":       false,
+	} {
+		if err := os.WriteFile(filepath.Join(patches, name), nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalledPatchFile(state.PatchFileEntry{PackageID: "managed", Asset: "managed.lua"}); err != nil {
+		t.Fatal(err)
+	}
+	patchesFound, err := New(st, repo.New(st), "host").UnmanagedKOReaderPatches()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(patchesFound) != 2 || patchesFound[0].Asset != "disabled.lua" || !patchesFound[0].Disabled || patchesFound[1].Asset != "unmanaged.lua" || patchesFound[1].Disabled {
+		t.Fatalf("unmanaged patches = %#v", patchesFound)
+	}
+}
+
 func newKOReaderScanner(t *testing.T, catalog []state.CatalogEntry) (*Manager, *state.State, string) {
 	t.Helper()
 	home := filepath.Join(t.TempDir(), "ZenPM")

@@ -77,3 +77,29 @@ func TestGitHubReleaseURL(t *testing.T) {
 		t.Fatalf("release URL = %q", got)
 	}
 }
+
+func TestResolveGitHubReleaseAsset(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/repos/owner/repo/releases?per_page=30" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `[
+			{"tag_name":"v3.0","prerelease":true,"assets":[{"name":"preview.koplugin.zip","browser_download_url":"https://example.test/preview.zip"}]},
+			{"tag_name":"v2.0","assets":[{"name":"reader.koplugin.zip","browser_download_url":"https://example.test/reader.zip"}]}
+		]`)
+	}))
+	defer srv.Close()
+
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	release, asset, err := ResolveGitHubReleaseAsset("https://github.com/owner/repo", "", ".koplugin.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release.TagName != "v2.0" || asset.URL != "https://example.test/reader.zip" {
+		t.Fatalf("resolved = %#v / %#v, want v2.0 reader asset", release, asset)
+	}
+}

@@ -1,6 +1,8 @@
 package pkg
 
 import (
+	"archive/zip"
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -60,6 +62,153 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	if _, err := os.Stat(st.CachedUninstallScriptPath("zen-mtp-koplugin")); err != nil {
 		t.Fatalf("cached plugin uninstall script missing: %v", err)
 	}
+}
+
+func TestInstallGenericPluginNatively(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/plugin.koplugin.zip":
+			w.Write(zipContents(t, map[string]string{"plugin.koplugin/_meta.lua": "return {}\n"}))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:         "plugin",
+		Name:       "Plugin",
+		Version:    "1.0.0",
+		Repo:       "ZenLabs",
+		Platforms:  []string{"koreader"},
+		InstallURL: srv.URL + "/install-plugin.sh",
+		Source:     "https://github.com/owner/plugin",
+		Assets:     `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	if err := manager.Install("plugin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin", "_meta.lua")); err != nil {
+		t.Fatalf("native plugin was not installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins", "plugin.koplugin")); err != nil {
+		t.Fatalf("plugin tracking file was not written: %v", err)
+	}
+}
+
+func TestInstallGenericPatchNatively(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	if err := os.MkdirAll(koRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/patch.lua" {
+			http.NotFound(w, r)
+			return
+		}
+		io.WriteString(w, "return {}\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID:         "patch",
+		Name:       "Patch",
+		Version:    "1.0.0",
+		Repo:       "ZenLabs",
+		Category:   "patches",
+		Platforms:  []string{"koreader"},
+		InstallURL: srv.URL + "/install-patch.sh",
+		Source:     "https://github.com/owner/patches",
+		SourceType: "source",
+		Assets:     `[{"arch":"any","asset":"patch.lua","url":"` + srv.URL + `/patch.lua"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Install("patch"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, "patches", "patch.lua")); err != nil {
+		t.Fatalf("native patch was not installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-patches", "patch.lua")); err != nil {
+		t.Fatalf("patch tracking file was not written: %v", err)
+	}
+}
+
+func TestNativeKOReaderInstallerRequiresResolvableSource(t *testing.T) {
+	manager := &Manager{plat: "host"}
+	patch := &repo.CatalogEntry{
+		Platforms:  []string{"koreader"},
+		InstallURL: "https://example.invalid/install-patch.sh",
+		Source:     "https://github.com/owner/patches",
+		SourceType: "source",
+		Assets:     `[{"asset":"patch.lua"}]`,
+	}
+	if got := manager.nativeKOReaderInstaller(patch, "patch.lua"); got != genericPatchInstaller {
+		t.Fatalf("native patch installer = %q, want %q", got, genericPatchInstaller)
+	}
+
+	plugin := &repo.CatalogEntry{
+		Platforms:   []string{"koreader"},
+		InstallURL:  "https://example.invalid/install-plugin.sh",
+		Source:      "https://github.com/owner/plugin",
+		SourceType:  "source",
+		SourceAsset: "plugin.koplugin.zip",
+	}
+	if got := manager.nativeKOReaderInstaller(plugin, ""); got != "" {
+		t.Fatalf("native plugin installer = %q, want shell fallback without a source archive URL", got)
+	}
+}
+
+func zipContents(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	archive := zip.NewWriter(&out)
+	for name, contents := range files {
+		entry, err := archive.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(entry, contents); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
 }
 
 func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
@@ -481,6 +630,26 @@ func TestInstallAndUninstallEnvResolveKOReaderOverride(t *testing.T) {
 		if got := env["ZENPM_KOREADER_PLUGIN_DIR"]; got != filepath.Join(root, "plugins") {
 			t.Fatalf("%s ZENPM_KOREADER_PLUGIN_DIR = %q, want %q", name, got, filepath.Join(root, "plugins"))
 		}
+	}
+}
+
+func TestKOReaderRootUsesPluginDirectoryEnvironment(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "koreader")
+	plugins := filepath.Join(root, "plugins")
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+
+	got, err := (&Manager{plat: "host"}).koreaderRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != root {
+		t.Fatalf("koreaderRoot() = %q, want %q", got, root)
 	}
 }
 

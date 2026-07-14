@@ -307,6 +307,10 @@ function Models.is_installed_patch_item(pkg)
     return Models.is_patch_package(pkg) and type(pkg.patch_asset) == "string" and pkg.patch_asset ~= ""
 end
 
+function Models.is_unmanaged_patch(pkg)
+    return Models.is_installed_patch_item(pkg) and pkg.unmanaged_patch == true
+end
+
 local function github_repo_name(source)
     local repo = tostring(source or ""):match("^https?://github%.com/[^/]+/([^/%?#]+)")
     if repo then

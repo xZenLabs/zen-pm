@@ -123,6 +123,42 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 	return out, nil
 }
 
+// ResolveGitHubReleaseAsset returns the requested asset from a GitHub release.
+// An empty tag selects the newest non-prerelease release. asset may be an exact
+// filename or a suffix beginning with a dot (for example, ".koplugin.zip").
+func ResolveGitHubReleaseAsset(source, tag, asset string) (Release, ReleaseAsset, error) {
+	tag = strings.TrimSpace(tag)
+	asset = strings.TrimSpace(asset)
+	if asset == "" {
+		return Release{}, ReleaseAsset{}, fmt.Errorf("release asset name is required")
+	}
+
+	releases, err := FetchGitHubReleases(source, 30)
+	if err != nil {
+		return Release{}, ReleaseAsset{}, err
+	}
+	for _, release := range releases {
+		if tag != "" && release.TagName != tag {
+			continue
+		}
+		if tag == "" && release.Prerelease {
+			continue
+		}
+		for _, candidate := range release.Assets {
+			if candidate.Name == asset || (strings.HasPrefix(asset, ".") && strings.HasSuffix(candidate.Name, asset)) {
+				return release, candidate, nil
+			}
+		}
+		if tag != "" {
+			return Release{}, ReleaseAsset{}, fmt.Errorf("release %q has no asset matching %q", tag, asset)
+		}
+	}
+	if tag != "" {
+		return Release{}, ReleaseAsset{}, fmt.Errorf("GitHub release %q not found", tag)
+	}
+	return Release{}, ReleaseAsset{}, fmt.Errorf("no GitHub release asset matching %q", asset)
+}
+
 func githubRequest(path, accept string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(githubAPIBaseURL, "/")+path, nil)
 	if err != nil {

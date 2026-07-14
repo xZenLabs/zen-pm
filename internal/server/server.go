@@ -47,6 +47,7 @@ type pkgJSON struct {
 	Installed       bool            `json:"installed"`
 	InstalledVer    string          `json:"installed_version,omitempty"`
 	InstalledAssets []string        `json:"installed_assets,omitempty"`
+	UnmanagedPatch  bool            `json:"unmanaged_patch,omitempty"`
 	LatestVersion   string          `json:"latest_version,omitempty"`
 	UpdateAvail     bool            `json:"update_available,omitempty"`
 	IconURL         string          `json:"icon_url,omitempty"`
@@ -538,6 +539,19 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 				Platforms:    platformList,
 			}
 			result = append(result, item)
+		}
+	}
+	if patches, err := s.pkgs.UnmanagedKOReaderPatches(); err == nil {
+		for _, patch := range patches {
+			result = append(result, pkgJSON{
+				ID:              "local-patch:" + patch.Asset,
+				Name:            patch.Asset,
+				Category:        "patches",
+				Platforms:       []string{"koreader"},
+				Installed:       true,
+				InstalledAssets: []string{patch.Asset},
+				UnmanagedPatch:  true,
+			})
 		}
 	}
 

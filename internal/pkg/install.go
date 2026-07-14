@@ -83,13 +83,6 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(entry.Version), entry.Repo)
 		}
 
-		j.Record("fetch-script", "ok", "pkg="+pkgID)
-		scriptPath, err := m.repos.FetchScript(entry.InstallURL)
-		if err != nil {
-			j.Abort("fetch failed: " + err.Error())
-			return fmt.Errorf("fetch install script for %s: %w", pkgID, err)
-		}
-
 		installEntry := entry
 		if pkgID == id && releaseTag != "" {
 			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
@@ -103,9 +96,22 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			installEntry = &entryCopy
 		}
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
-		if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(installEntry, override)); err != nil {
-			j.Abort("execute failed: " + err.Error())
-			return fmt.Errorf("install script failed for %s: %w", pkgID, err)
+		if genericInstaller := m.nativeKOReaderInstaller(entry, override); genericInstaller != "" {
+			if err := m.installGenericKOReader(entry, override, releaseTag, genericInstaller); err != nil {
+				j.Abort("execute failed: " + err.Error())
+				return fmt.Errorf("install %s: %w", pkgID, err)
+			}
+		} else {
+			j.Record("fetch-script", "ok", "pkg="+pkgID)
+			scriptPath, err := m.repos.FetchScript(entry.InstallURL)
+			if err != nil {
+				j.Abort("fetch failed: " + err.Error())
+				return fmt.Errorf("fetch install script for %s: %w", pkgID, err)
+			}
+			if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(installEntry, override)); err != nil {
+				j.Abort("execute failed: " + err.Error())
+				return fmt.Errorf("install script failed for %s: %w", pkgID, err)
+			}
 		}
 
 		if err := m.cacheUninstallScript(entry); err != nil {
@@ -230,6 +236,12 @@ func (m *Manager) Uninstall(id, asset string) error {
 		env := m.uninstallEnv(id)
 		if isPatch {
 			env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+		} else if entry != nil && isGenericKOReaderPlugin(entry) {
+			if asset := m.installAssetName(entry, ""); asset != "" {
+				env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
+			} else if entry.SourceAsset != "" {
+				env["ZENPM_PACKAGE_SOURCE_ASSET"] = entry.SourceAsset
+			}
 		}
 		if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
 			j.Abort("execute failed: " + err.Error())
@@ -325,12 +337,7 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[string]string {
 	env := m.baseScriptEnv(entry.ID)
 
-	asset := strings.TrimSpace(override)
-	if asset == "" {
-		if res := assets.Select(entry.Assets, m.device()); res.Auto != "" {
-			asset = res.Auto
-		}
-	}
+	asset := m.installAssetName(entry, override)
 	selectedAsset, hasSelectedAsset := selectedAsset(entry.Assets, asset)
 	if entry.SourceURL != "" {
 		env["ZENPM_PACKAGE_SOURCE_URL"] = entry.SourceURL
@@ -357,6 +364,14 @@ func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[stri
 		log.Warnf("Package %s has source but no source_asset; install script may choose its default asset", entry.ID)
 	}
 	return env
+}
+
+func (m *Manager) installAssetName(entry *repo.CatalogEntry, override string) string {
+	asset := strings.TrimSpace(override)
+	if asset == "" {
+		asset = assets.Select(entry.Assets, m.device()).Auto
+	}
+	return asset
 }
 
 func sourceType(entry *repo.CatalogEntry) string {
@@ -454,7 +469,14 @@ func koreaderRootCandidates(plat string) []string {
 	}
 
 	add(os.Getenv("ZENPM_KOREADER_DIR"))
+	add(os.Getenv("ZENPM_KOREADER_ROOT"))
 	add(os.Getenv("KOREADER_DIR"))
+	if pluginsDir := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PLUGIN_DIR")); pluginsDir != "" {
+		pluginsDir = filepath.Clean(pluginsDir)
+		if filepath.Base(pluginsDir) == "plugins" {
+			add(filepath.Dir(pluginsDir))
+		}
+	}
 	switch plat {
 	case platform.Kindle:
 		add("/mnt/us/kmc/kpm/packages/koreader/koreader")

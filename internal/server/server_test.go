@@ -94,6 +94,51 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 }
 
+func TestPackageListIncludesUnmanagedKOReaderPatch(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	root := filepath.Join(t.TempDir(), "koreader")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_DIR", root)
+	if err := os.MkdirAll(filepath.Join(root, "patches"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "patches", "legacy.lua.disabled"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	req := httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, req)
+
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range packages {
+		if item.UnmanagedPatch {
+			if item.ID != "local-patch:legacy.lua" || item.Name != "legacy.lua" || len(item.InstalledAssets) != 1 || item.InstalledAssets[0] != "legacy.lua" {
+				t.Fatalf("unmanaged patch item = %#v", item)
+			}
+			return
+		}
+	}
+	t.Fatalf("unmanaged patch missing from %#v", packages)
+}
+
 func TestKOReaderPluginScanEndpoint(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	plugins := filepath.Join(t.TempDir(), "plugins")

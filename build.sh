@@ -103,11 +103,11 @@ build_go() {
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm
     GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-amd64" ./cmd/zenpm
     if command -v upx >/dev/null 2>&1; then
-        # Keep ARMsf uncompressed: Kindle PW1-class devices need the most
-        # conservative binary possible at startup.
-        echo "Packing Linux and ARMhf Go binaries with UPX..."
+        # ARMsf is compressed too so Kindle release packages stay compact.
+        echo "Packing Linux and ARM Go binaries with UPX..."
         upx --best --lzma \
             "$BUILD_DIR/zenpm-hf" \
+            "$BUILD_DIR/zenpm-sf" \
             "$BUILD_DIR/zenpm-linux-arm64" \
             "$BUILD_DIR/zenpm-linux-amd64"
     else

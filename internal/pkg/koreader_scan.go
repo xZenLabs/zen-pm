@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"ZPM/internal/log"
@@ -14,6 +15,13 @@ import (
 )
 
 const koreaderPluginsScannedKey = "koreader_plugins_scanned"
+
+// UnmanagedKOReaderPatch is a user patch found on disk without a ZenPM package
+// record. It deliberately has no catalog package ID.
+type UnmanagedKOReaderPatch struct {
+	Asset    string
+	Disabled bool
+}
 
 // KOReaderPluginScanResult describes one scan of KOReader's external plugins.
 type KOReaderPluginScanResult struct {
@@ -169,6 +177,47 @@ func (m *Manager) koreaderPluginDirs() ([]string, error) {
 		return nil, fmt.Errorf("KOReader plugins directory not found")
 	}
 	return existing, nil
+}
+
+// UnmanagedKOReaderPatches lists user patches that predate ZenPM or were
+// installed outside it. The result is derived from the filesystem each time so
+// it never assigns an unverifiable catalog package identity.
+func (m *Manager) UnmanagedKOReaderPatches() ([]UnmanagedKOReaderPatch, error) {
+	root, err := m.koreaderRoot()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "patches"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	managedEntries, err := m.st.ReadInstalledPatchFiles()
+	if err != nil {
+		return nil, err
+	}
+	managed := make(map[string]bool, len(managedEntries))
+	for _, entry := range managedEntries {
+		managed[entry.Asset] = true
+	}
+
+	var patches []UnmanagedKOReaderPatch
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		disabled := strings.HasSuffix(name, ".disabled")
+		asset := strings.TrimSuffix(name, ".disabled")
+		if !strings.HasSuffix(strings.ToLower(asset), ".lua") || managed[asset] {
+			continue
+		}
+		patches = append(patches, UnmanagedKOReaderPatch{Asset: asset, Disabled: disabled})
+	}
+	sort.Slice(patches, func(i, j int) bool { return patches[i].Asset < patches[j].Asset })
+	return patches, nil
 }
 
 func koreaderPluginCatalog(catalog []*repo.CatalogEntry) (map[string]*repo.CatalogEntry, map[string]*repo.CatalogEntry) {
