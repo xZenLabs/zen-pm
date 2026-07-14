@@ -53,10 +53,16 @@ function Pages.error(view, bb, x, y, w, h, message)
     local gap = Theme.scale(10)
     local button_w = math.floor((w - pad * 2 - gap) / 2)
     local button_y = y + h - button_h - Theme.scale(18)
-    local abi = tostring(view.app.daemon:detect_abi())
+    local platform = view.app.daemon:detect_platform()
+    local abi = nil
+    if platform == "kindle" or platform == "kobo" then
+        abi = tostring(view.app.daemon:detect_abi())
+    end
 
     P.text(bb, message, x + pad, y + Theme.scale(16), w - pad * 2, "default", { color = Theme.muted })
-    P.text(bb, _("Detected ABI: ") .. abi, x + pad, button_y - Theme.scale(34), w - pad * 2, "small", { color = Theme.muted })
+    if abi then
+        P.text(bb, _("Detected ABI: ") .. abi, x + pad, button_y - Theme.scale(34), w - pad * 2, "small", { color = Theme.muted })
+    end
     P.box(bb, x + pad, button_y, button_w, button_h, { radius = math.floor(button_h / 2) })
     P.center_text_box(bb, _("Retry"), x + pad, button_y, button_w, button_h, "small", { bold = true })
     P.hit(view, x + pad, button_y, button_w, button_h, function()

@@ -1,6 +1,6 @@
 module ZPM
 
-go 1.22
+go 1.20
 
 require modernc.org/sqlite v1.29.10
 

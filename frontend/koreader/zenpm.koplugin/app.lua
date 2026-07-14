@@ -1880,8 +1880,12 @@ end
 function App:show_about()
     local version = tostring(self.version or "?"):gsub("^v", "")
     local platform = tostring(self:package_platforms())
-    local abi = tostring(self.daemon:detect_abi())
-    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. "\n" .. _("ABI: ") .. abi .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
+    local device_platform = self.daemon:detect_platform()
+    local abi = nil
+    if device_platform == "kindle" or device_platform == "kobo" then
+        abi = _("\nABI: ") .. tostring(self.daemon:detect_abi())
+    end
+    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. (abi or "") .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
 end
 
 function App:start_update()
