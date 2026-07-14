@@ -94,9 +94,9 @@ build_go() {
     echo "Building Go backend..."
     GOFLAGS="-trimpath -buildvcs=false"
     LDFLAGS="-s -w -buildid= -X main.version=$VERSION"
-    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
-    # The Kindle PW1 runs a Linux 3.0-era kernel. Go 1.20 supports that kernel;
-    # newer runtimes do not. Keep the ARMsf backend on the legacy toolchain.
+    # Older e-readers run Linux 3.0-era kernels. Go 1.20 supports those kernels;
+    # newer runtimes do not. Keep both 32-bit ARM backends on the legacy toolchain.
+    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" GOTOOLCHAIN=go1.20.14 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
     GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" GOTOOLCHAIN=go1.20.14 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-sf" ./cmd/zenpm
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-arm64" ./cmd/zenpm
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-amd64" ./cmd/zenpm

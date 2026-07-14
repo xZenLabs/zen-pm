@@ -275,6 +275,7 @@ function Daemon:bundled_backend_candidates()
         table.insert(candidates, dir .. "/zenpm-" .. suffix)
     end
     table.insert(candidates, dir .. "/zenpm-ereader")
+    table.insert(candidates, dir .. "/zenpm-hf")
     table.insert(candidates, dir .. "/zenpm-" .. abi)
     table.insert(candidates, dir .. "/zenpm")
     return candidates
