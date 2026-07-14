@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"ZPM/internal/pkg"
-	"ZPM/internal/repo"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/pkg"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 func TestInitialCatalogStateRefreshesEmptySQLiteCatalog(t *testing.T) {

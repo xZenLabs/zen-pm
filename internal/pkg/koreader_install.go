@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ZPM/internal/releases"
-	"ZPM/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/releases"
+	"github.com/xZenLabs/zen-pm/internal/repo"
 )
 
 const (

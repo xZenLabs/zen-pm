@@ -3,7 +3,7 @@ package pkg
 import (
 	"fmt"
 
-	"ZPM/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/repo"
 )
 
 var externalDependencies = map[string]bool{

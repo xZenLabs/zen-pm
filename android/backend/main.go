@@ -14,7 +14,7 @@ static void zenpm_release(JNIEnv* env, jstring value, char* text) {
 import "C"
 
 import (
-	"ZPM/internal/androidbackend"
+	"github.com/xZenLabs/zen-pm/internal/androidbackend"
 )
 
 func javaString(env *C.JNIEnv, value C.jstring) string {

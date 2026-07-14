@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"ZPM/internal/log"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 // Manager wraps all repository operations.

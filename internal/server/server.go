@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"ZPM/internal/log"
-	"ZPM/internal/pkg"
-	"ZPM/internal/releases"
-	"ZPM/internal/repo"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/pkg"
+	"github.com/xZenLabs/zen-pm/internal/releases"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 // Version is injected at build time via ldflags or set by cmd/zenpm.

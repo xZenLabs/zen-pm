@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"ZPM/internal/log"
-	"ZPM/internal/pkg"
-	"ZPM/internal/platform"
-	"ZPM/internal/repo"
-	"ZPM/internal/server"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/pkg"
+	"github.com/xZenLabs/zen-pm/internal/platform"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/server"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 // version is injected via -ldflags "-X main.version=X.Y.Z" at build time.

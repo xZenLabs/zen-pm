@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 // Journal records a transaction as a TSV file in the journal directory.

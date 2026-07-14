@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"ZPM/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/repo"
 )
 
 func TestResolvePlanWithInstalledAllowsInstalledKUAL(t *testing.T) {

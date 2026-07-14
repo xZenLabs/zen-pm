@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ZPM/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/log"
 )
 
 func TestExecuteScriptWithEnvSetsFallbackHome(t *testing.T) {

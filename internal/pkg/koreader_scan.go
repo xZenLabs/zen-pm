@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"ZPM/internal/log"
-	"ZPM/internal/repo"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 const koreaderPluginsScannedKey = "koreader_plugins_scanned"

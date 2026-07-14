@@ -205,14 +205,13 @@ function Daemon:device_home()
 end
 
 function Daemon:standalone_home()
-    return self:native_home() or self:device_home()
+    return self:device_home()
 end
 
--- state_home is the ZENPM_HOME the backend resolves to. On kindle/kobo this is
--- the platform default so state (sqlite DB + script cache) can be shared with a
--- native install; other KOReader ports stay under KOReader's settings home.
+-- state_home is the ZENPM_HOME the backend resolves to. Keep all KOReader
+-- plugin state under KOReader's settings directory.
 function Daemon:state_home()
-    return self:native_home() or self:device_home()
+    return self:device_home()
 end
 
 function Daemon:koreader_root()
@@ -424,8 +423,6 @@ function Daemon:ensure_backend_files()
         local dirs_missing, dirs_err = self:ensure_runtime_dirs()
         return dirs_missing, dirs_err
     end
-    local native = self:native_install_backend()
-
     local dirs_missing, dirs_err = self:ensure_runtime_dirs()
     if dirs_err then
         return false, dirs_err
@@ -438,7 +435,7 @@ function Daemon:ensure_backend_files()
     if not Util.ensure_dir(backend_dir) then
         return false, _("Could not create ZenPM settings directory: ") .. backend_dir
     end
-    local backend = native or self:standalone_backend()
+    local backend = self:standalone_backend()
     local marker = self:desired_marker(source)
     local changed = dirs_missing or read_all(self:standalone_marker()) ~= marker or not path_exists(backend)
     for _, companion in ipairs(self:bundled_backend_companions(source)) do
@@ -475,25 +472,6 @@ function Daemon:ensure_backend_files()
     return true, nil
 end
 
-function Daemon:native_install_backend()
-    local home = self:native_home()
-    if not home then
-        return nil
-    end
-    local backend = home .. "/backend/zenpm"
-    if not path_exists(backend) then
-        return nil
-    end
-    local platform = self:detect_platform()
-    if platform == "kindle" and path_exists(home .. "/frontend/kindle") then
-        return backend
-    end
-    if platform == "kobo" and (path_exists(home .. "/bin/ZenPM-menu.sh") or path_exists("/mnt/onboard/.adds/nm/ZenPM-main")) then
-        return backend
-    end
-    return nil
-end
-
 function Daemon:candidate_backends()
     local platform = self:detect_platform()
     local candidates = { self:standalone_backend() }
@@ -517,7 +495,11 @@ function Daemon:find_backend()
     if self.backend_path and path_exists(self.backend_path) then
         return self.backend_path
     end
-    for _, candidate in ipairs(self:candidate_backends()) do
+    local candidates = { self:standalone_backend() }
+    for _, candidate in ipairs(self:bundled_backend_candidates()) do
+        table.insert(candidates, candidate)
+    end
+    for _, candidate in ipairs(candidates) do
         if path_exists(candidate) then
             self.backend_path = candidate
             return candidate
@@ -563,8 +545,7 @@ function Daemon:start()
     end
 
     local platform = self:detect_platform()
-    -- set_home is the ZENPM_HOME to export; nil on native Kindle/Kobo paths lets
-    -- the backend resolve its platform default and share native persistent state.
+    -- The managed backend always keeps its state under KOReader's settings.
     local set_home = nil
     local write_pid = false
     local log_path = nil
@@ -577,9 +558,7 @@ function Daemon:start()
             backend = self:standalone_backend()
         end
         write_pid = true
-        if not self:native_home() then
-            set_home = self:state_home()
-        end
+        set_home = self:state_home()
         log_path = self:state_home() .. "/ZenPM.log"
     elseif platform == "kobo" then
         log_path = "/mnt/onboard/.adds/ZenPM/ZenPM.log"

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ZPM/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/log"
 )
 
 // ExecuteScript runs a shell script at the given path.

@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ZPM/internal/assets"
-	"ZPM/internal/log"
-	"ZPM/internal/platform"
-	"ZPM/internal/releases"
-	"ZPM/internal/repo"
-	"ZPM/internal/state"
-	"ZPM/internal/tx"
+	"github.com/xZenLabs/zen-pm/internal/assets"
+	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/platform"
+	"github.com/xZenLabs/zen-pm/internal/releases"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/tx"
 )
 
 // Manager drives package install/uninstall/update operations.

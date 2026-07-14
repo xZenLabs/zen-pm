@@ -1,4 +1,4 @@
-module ZPM
+module github.com/xZenLabs/zen-pm
 
 go 1.20
 

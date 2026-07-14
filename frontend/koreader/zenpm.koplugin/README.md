@@ -33,14 +33,10 @@ The settings copy is refreshed whenever either of these changes:
 The managed backend binary lives in the settings `ZenPM/backend/` directory so
 it survives plugin updates.
 
-SQLite is the backend's only state store. On Kindle and Kobo the plugin uses an
-existing native ZenPM backend when the native install is present; otherwise it
-can install the bundled backend under the platform default path and let the
-backend share native persistent state. On other KOReader devices and host
-development, the plugin exports `ZENPM_HOME` under KOReader's settings
-`ZenPM/` directory so Android, PocketBook, Boox, and similar ports do not depend
-on a hardcoded device root. Logs, journals, locks, downloaded scripts, and raw
-repo manifests remain regular files.
+SQLite is the backend's only state store. The plugin always exports
+`ZENPM_HOME` under KOReader's settings `ZenPM/` directory, keeping its backend,
+database, logs, journals, locks, downloaded scripts, and raw repo manifests
+separate from a native ZenPM install.
 
 ## Parity Targets
 

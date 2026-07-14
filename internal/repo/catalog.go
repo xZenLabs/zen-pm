@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"ZPM/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/log"
 )
 
 // CatalogEntry is the internal merged-catalog representation.

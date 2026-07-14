@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"ZPM/internal/repo"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 func TestInstallPassesPackageSourceEnv(t *testing.T) {

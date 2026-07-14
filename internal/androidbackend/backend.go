@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"ZPM/internal/log"
-	"ZPM/internal/pkg"
-	"ZPM/internal/platform"
-	"ZPM/internal/repo"
-	"ZPM/internal/server"
-	"ZPM/internal/state"
+	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/pkg"
+	"github.com/xZenLabs/zen-pm/internal/platform"
+	"github.com/xZenLabs/zen-pm/internal/repo"
+	"github.com/xZenLabs/zen-pm/internal/server"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 // Version is injected when the Android shared library is built.
