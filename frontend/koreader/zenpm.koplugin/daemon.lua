@@ -7,7 +7,7 @@ local Util = require("zenpm_util")
 local ok_datastorage, DataStorage = pcall(require, "datastorage")
 local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 local ok_meta, Meta = pcall(dofile, Constants.PLUGIN_DIR .. "/_meta.lua")
-local ok_android, Android = pcall(require, "android")
+local ok_android = pcall(require, "android")
 
 local Daemon = {}
 
@@ -186,12 +186,6 @@ function Daemon:state_home()
 end
 
 function Daemon:standalone_backend_dir()
-    -- Android shared storage is mounted noexec. KOReader exposes its private
-    -- app-data directory via android.dir; keep only the executable there and
-    -- leave ZenPM state in the normal, user-visible settings directory.
-    if ok_android and type(Android.dir) == "string" and Android.dir ~= "" then
-        return Android.dir .. "/ZenPM/backend"
-    end
     return self:standalone_home() .. "/backend"
 end
 
@@ -380,6 +374,10 @@ function Daemon:health_matches(data)
 end
 
 function Daemon:ensure_backend_files()
+    if ok_android then
+        local dirs_missing, dirs_err = self:ensure_runtime_dirs()
+        return dirs_missing, dirs_err
+    end
     local native = self:native_install_backend()
 
     local dirs_missing, dirs_err = self:ensure_runtime_dirs()
@@ -486,6 +484,19 @@ function Daemon:start()
     local changed, err = self:ensure_backend_files()
     if err then
         return false, err
+    end
+    if ok_android then
+        local root = ""
+        if ok_datastorage and DataStorage and DataStorage.getFullDataDir then
+            root = DataStorage:getFullDataDir() or ""
+        end
+        local cmd = "/system/bin/am startservice -n org.zenlabs.zenpm/.ZenPMService"
+            .. " --es zenpm_home " .. Util.sh_quote(self:state_home())
+            .. " --es koreader_root " .. Util.sh_quote(root)
+        if os.execute(cmd) ~= 0 then
+            return false, _("ZenPM Android companion is not installed or could not start.")
+        end
+        return true
     end
     if changed then
         self.backend_path = self:standalone_backend()

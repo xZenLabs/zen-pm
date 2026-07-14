@@ -1,0 +1,28 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'org.zenlabs.zenpm'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'org.zenlabs.zenpm'
+        minSdk 19
+        targetSdk 34
+        versionCode 1
+        versionName file('../../VERSION').text.trim()
+        ndk { abiFilters 'armeabi-v7a' }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+tasks.register('buildZenPMNative', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'sh', 'build-native.sh'
+    inputs.dir(rootProject.file('../internal'))
+    inputs.dir(rootProject.file('backend'))
+    outputs.file(rootProject.file('app/src/main/jniLibs/armeabi-v7a/libzenpm.so'))
+}
+preBuild.dependsOn tasks.named('buildZenPMNative')
