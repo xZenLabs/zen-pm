@@ -505,6 +505,13 @@ function App:quit()
     self:close()
 end
 
+function App:restart_koreader()
+    self:close()
+    UIManager:nextTick(function()
+        UIManager:broadcastEvent(Event:new("Restart"))
+    end)
+end
+
 function App:refresh()
     if self.view then
         self.view:refresh(self._full_refresh)
@@ -1414,7 +1421,7 @@ function App:confirm_toggle_enable(pkg, kind, on_done)
             local done = disabled and _("enabled") or _("disabled")
             Modals.restart_koreader(
                 name .. " " .. done .. _(" successfully.\n\nRestart KOReader to apply the change."),
-                function() UIManager:broadcastEvent(Event:new("Restart")) end)
+                function() self:restart_koreader() end)
             if on_done then on_done() end
         end
     )
@@ -1811,7 +1818,7 @@ function App:poll_package_action(op, attempt)
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
                     Modals.restart_koreader(op.name .. " " .. done .. tail, function()
-                        UIManager:broadcastEvent(Event:new("Restart"))
+                        self:restart_koreader()
                     end)
                 else
                     Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
@@ -2056,7 +2063,7 @@ function App:start_update()
         self.backend_ready = false
         Modals.restart_koreader(
             _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
-            function() UIManager:broadcastEvent(Event:new("Restart")) end)
+            function() self:restart_koreader() end)
     end)
 end
 
