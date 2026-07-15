@@ -117,6 +117,9 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			}
 
 			previous, exists := installedByID[pkg.ID]
+			if exists && version == "0.0.0" && previous.Version != "" && previous.Version != "0.0.0" {
+				continue
+			}
 			current := state.InstalledEntry{
 				ID: pkg.ID, Name: pkg.Name, Version: version, Repo: pkg.Repo,
 			}

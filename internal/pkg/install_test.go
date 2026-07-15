@@ -81,10 +81,11 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	metadata := `return { version = "1.2.3" }`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/plugin.koplugin.zip":
-			w.Write(zipContents(t, map[string]string{"plugin.koplugin/_meta.lua": "return {}\n"}))
+			w.Write(zipContents(t, map[string]string{"plugin.koplugin/_meta.lua": metadata}))
 		default:
 			http.NotFound(w, r)
 		}
@@ -105,7 +106,7 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 
 	manager := New(st, repo.New(st), "host")
-	if err := manager.Install("plugin"); err != nil {
+	if err := manager.InstallRelease("plugin", "v2.0.0", "plugin.koplugin.zip"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin", "_meta.lua")); err != nil {
@@ -114,11 +115,22 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins", "plugin.koplugin")); err != nil {
 		t.Fatalf("plugin tracking file was not written: %v", err)
 	}
+	if _, version := st.IsInstalled("plugin"); version != "1.2.3" {
+		t.Fatalf("installed version = %q, want 1.2.3", version)
+	}
 	if err := manager.Uninstall("plugin", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin")); !os.IsNotExist(err) {
 		t.Fatalf("native plugin was not removed: %v", err)
+	}
+
+	metadata = "return {}"
+	if err := manager.Install("plugin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("plugin"); version != "" {
+		t.Fatalf("installed version = %q, want empty", version)
 	}
 }
 

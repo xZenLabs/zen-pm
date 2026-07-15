@@ -50,23 +50,23 @@ func (m *Manager) nativeKOReaderInstaller(entry *repo.CatalogEntry, override str
 
 // installGenericKOReader performs the work of the repository's generic shell
 // installers in-process, so it does not depend on curl, wget, or BusyBox.
-func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, releaseTag, kind string) error {
+func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, releaseTag, kind string) (string, error) {
 	assetName, assetURL, data, err := m.downloadInstallAsset(entry, override, releaseTag)
 	if err != nil {
-		return err
+		return "", err
 	}
 	root, err := m.koreaderRoot()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	switch kind {
 	case genericPluginInstaller:
 		return m.installKOReaderPlugin(entry, root, assetName, assetURL, data)
 	case genericPatchInstaller:
-		return m.installKOReaderPatch(entry, root, assetName, assetURL, data)
+		return "", m.installKOReaderPatch(entry, root, assetName, assetURL, data)
 	default:
-		return fmt.Errorf("unknown generic KOReader installer %q", kind)
+		return "", fmt.Errorf("unknown generic KOReader installer %q", kind)
 	}
 }
 
@@ -143,14 +143,14 @@ func isKOReaderPluginRoot(root string) bool {
 	return err == nil && info.IsDir()
 }
 
-func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName, assetURL string, data []byte) error {
+func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName, assetURL string, data []byte) (string, error) {
 	pluginsDir := filepath.Join(root, "plugins")
 	if info, err := os.Stat(pluginsDir); err != nil || !info.IsDir() {
-		return fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
+		return "", fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
 	}
 	stage, sourceDir, err := m.extractArchive(data)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer os.RemoveAll(stage)
 
@@ -160,16 +160,20 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 	}
 	destination := filepath.Join(pluginsDir, name)
 	if err := replaceTree(sourceDir, destination); err != nil {
-		return err
+		return "", err
 	}
 	_ = os.RemoveAll(filepath.Join(destination, "__MACOSX"))
-	return writeTrackingFile(filepath.Join(root, ".zenpm-plugins", name), []string{
+	if err := writeTrackingFile(filepath.Join(root, ".zenpm-plugins", name), []string{
 		"name=" + name,
 		"plugin_dir=" + destination,
 		"asset_url=" + assetURL,
 		"asset_filename=" + assetName,
 		"repo_ref=" + entry.Source,
-	})
+	}); err != nil {
+		return "", err
+	}
+	version, _ := koreaderPluginVersion(destination)
+	return version, nil
 }
 
 func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName, assetURL string, data []byte) error {

@@ -76,6 +76,27 @@ func TestScanKOReaderPluginsReadsVersionFallbackFiles(t *testing.T) {
 	}
 }
 
+func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}})
+	writeKOReaderPlugin(t, plugins, "reader", `return { fullname = "Reader" }`)
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "reader", Name: "Reader", Version: "1.2.3", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.ScanKOReaderPlugins(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Updated != 0 {
+		t.Fatalf("scan result = %+v, want no update", result)
+	}
+	if _, version := st.IsInstalled("reader"); version != "1.2.3" {
+		t.Fatalf("installed version = %q, want 1.2.3", version)
+	}
+}
+
 func TestScanKOReaderPluginsAutomaticOnceManualRescans(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
 		ID: "reader", Name: "Reader", Version: "9.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",

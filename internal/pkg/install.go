@@ -97,8 +97,11 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		}
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
 		genericInstaller := m.nativeKOReaderInstaller(entry, override)
+		installedPluginVersion := ""
 		if genericInstaller != "" {
-			if err := m.installGenericKOReader(entry, override, releaseTag, genericInstaller); err != nil {
+			var err error
+			installedPluginVersion, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller)
+			if err != nil {
 				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("install %s: %w", pkgID, err)
 			}
@@ -122,6 +125,12 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		}
 
 		installedVersion := installEntry.Version
+		if genericInstaller == genericPluginInstaller {
+			installedVersion = releaseTag
+			if installedPluginVersion != "" && installedPluginVersion != "0.0.0" {
+				installedVersion = installedPluginVersion
+			}
+		}
 
 		if patchReason != "" {
 			asset := m.resolvePatchAsset(entry, override)
