@@ -26,7 +26,7 @@ local Screen = Device.screen
 
 local AppView = InputContainer:extend{
     modal = false,
-    stop_events_propagation = true,
+    stop_events_propagation = false,
 }
 
 function AppView:init()
@@ -78,7 +78,7 @@ function AppView:onTapZenPM(_, ges)
             return true
         end
     end
-    return true
+    return false
 end
 
 function AppView:gesture_in_menu_zone(ges)

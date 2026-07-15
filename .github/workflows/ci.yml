@@ -116,6 +116,10 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle -p android assembleRelease
 
+      - name: Install UPX
+        if: steps.version_check.outputs.skip == 'false'
+        run: brew install upx
+
       - name: Build release assets
         if: steps.version_check.outputs.skip == 'false'
         run: sh build.sh
