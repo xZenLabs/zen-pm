@@ -266,7 +266,9 @@ function Daemon:wait_for_loopback()
     if self:detect_platform() ~= "kobo" then
         return true
     end
-    for _ = 1, 20 do
+    -- Kobo can launch KOReader before loopback has been configured.
+    os.execute("ifconfig lo 127.0.0.1 >/dev/null 2>&1")
+    for attempt = 1, 20 do
         local probe = socket.tcp()
         if probe then
             local ready = probe:bind("127.0.0.1", 0)
