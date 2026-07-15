@@ -45,6 +45,8 @@ func main() {
 	switch os.Args[1] {
 	case "repo":
 		runRepo(repos, os.Args[2:])
+	case "list", "info", "install", "uninstall", "update":
+		runPackage(st, repos, pkgs, plat, os.Args[1:])
 	case "package":
 		runPackage(st, repos, pkgs, plat, os.Args[2:])
 	case "doctor":
@@ -64,7 +66,11 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "Usage: zenpm <command> [args]")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  repo    list|add|remove|refresh")
-	fmt.Fprintln(os.Stderr, "  package list [platform]|info <id>|install <id>|uninstall <id>|update [id]")
+	fmt.Fprintln(os.Stderr, "  list    [platform]")
+	fmt.Fprintln(os.Stderr, "  info    <id>")
+	fmt.Fprintln(os.Stderr, "  install <id>")
+	fmt.Fprintln(os.Stderr, "  uninstall <id> [patch-file]")
+	fmt.Fprintln(os.Stderr, "  update  [id]")
 	fmt.Fprintln(os.Stderr, "  doctor")
 	fmt.Fprintln(os.Stderr, "  logs    [--tail N]")
 	fmt.Fprintln(os.Stderr, "  serve   [--port PORT]")
@@ -120,7 +126,7 @@ func runRepo(repos *repo.Manager, args []string) {
 
 func runPackage(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, plat string, args []string) {
 	if len(args) == 0 {
-		die("Usage: zenpm package <list|info|install|uninstall|update>")
+		die("Usage: zenpm <list|info|install|uninstall|update>")
 	}
 	switch args[0] {
 	case "list":
@@ -147,7 +153,7 @@ func runPackage(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, plat st
 		}
 	case "info":
 		if len(args) < 2 {
-			die("Usage: zenpm package info <id>")
+			die("Usage: zenpm info <id>")
 		}
 		catalog, err := repos.ReadCatalog()
 		dieOnErr(err)
@@ -165,13 +171,13 @@ func runPackage(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, plat st
 		die("Package not found: " + args[1])
 	case "install":
 		if len(args) < 2 {
-			die("Usage: zenpm package install <id>")
+			die("Usage: zenpm install <id>")
 		}
 		dieOnErr(pkgs.Install(args[1]))
 		fmt.Printf("Installed: %s\n", args[1])
 	case "uninstall":
 		if len(args) < 2 {
-			die("Usage: zenpm package uninstall <id> [patch-file]")
+			die("Usage: zenpm uninstall <id> [patch-file]")
 		}
 		asset := ""
 		if len(args) > 2 {

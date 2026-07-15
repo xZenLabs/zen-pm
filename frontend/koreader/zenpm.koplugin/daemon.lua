@@ -262,6 +262,36 @@ function Daemon:ereader_backend_suffix()
     return self:detect_abi()
 end
 
+function Daemon:expected_plugin_asset()
+    local version = self:plugin_version()
+    if version == "" then
+        return nil
+    end
+    local platform = self:detect_platform()
+    if platform == "kindle" or platform == "kobo" then
+        return "ZenPM-koreader-ereader-" .. self:ereader_backend_suffix() .. "-" .. version .. ".zip"
+    end
+    if self:is_android() then
+        return "ZenPM-koreader-android-" .. version .. ".zip"
+    end
+    local host_platform = self:host_backend_platform()
+    if host_platform == "darwin" then
+        return "ZenPM-koreader-macos-" .. version .. ".zip"
+    elseif host_platform == "linux" then
+        return "ZenPM-koreader-linux-" .. version .. ".zip"
+    end
+    return nil
+end
+
+function Daemon:backend_not_started_error()
+    local message = _("ZenPM backend did not start. Ensure you used the correct ZenPM version for this device.")
+    local asset = self:expected_plugin_asset()
+    if asset then
+        message = message .. " " .. _("Download this asset: ") .. asset
+    end
+    return message
+end
+
 function Daemon:wait_for_loopback()
     if self:detect_platform() ~= "kobo" then
         return true
@@ -459,7 +489,7 @@ function Daemon:ensure_backend_files()
     end
     local source = self:bundled_backend()
     if not source then
-        return false, _("Bundled ZenPM backend not found. Expected ") .. table.concat(self:bundled_backend_candidates(), " " .. _("or") .. " ") .. "."
+        return false, self:backend_not_started_error()
     end
     local backend_dir = self:standalone_backend_dir()
     if not Util.ensure_dir(backend_dir) then
@@ -487,7 +517,7 @@ function Daemon:ensure_backend_files()
     os.execute("chmod +x " .. Util.sh_quote(backend))
     for _, companion in ipairs(self:bundled_backend_companions(source)) do
         if not path_exists(companion) then
-            return false, _("Bundled ZenPM backend not found. Expected ") .. companion .. "."
+            return false, self:backend_not_started_error()
         end
         local target = backend_dir .. "/" .. basename(companion)
         if not copy_file(companion, target) then
@@ -575,7 +605,7 @@ function Daemon:start()
     end
     local backend = self:find_backend()
     if not backend then
-        return false, _("ZenPM backend not found. Expected ") .. table.concat(self:candidate_backends(), " " .. _("or") .. " ") .. "."
+        return false, self:backend_not_started_error()
     end
 
     local platform = self:detect_platform()

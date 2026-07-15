@@ -93,19 +93,79 @@ Package guide:
 ## Local development
 
 ```sh
-# Build for host
+# Build the host CLI.
 go build -o zenpm ./cmd/zenpm
 
-# Run daemon
-ZENPM_HOME=/tmp/.zenpm ZENPM_PLATFORM=host ./zenpm serve --port 8080
+# Keep development state separate from the device or emulator state.
+export ZENPM_HOME="$PWD/.zenpm-dev"
+export ZENPM_PLATFORM=host
 
-# CLI commands
+# Run the local daemon when developing the HTTP frontend.
+./zenpm serve --port 8080
+```
+
+## CLI package manager
+
+`zenpm` can be used directly from SSH, an on-device terminal, or the terminal
+that launches the KOReader emulator. Package actions are top-level commands;
+repository actions use `zenpm repo ...`.
+
+```sh
+# Diagnostics and logs.
+zenpm doctor
+zenpm logs --tail 200
+
+# Repository management. Refresh after adding or removing a repository.
+zenpm repo list
+zenpm repo add my-repo https://example.com/my-repo/
+zenpm repo refresh
+zenpm repo remove my-repo
+
+# Browse the refreshed catalog. Use koreader to see KOReader-compatible entries.
+zenpm list
+zenpm list koreader
+zenpm info <package-id>
+
+# Change packages. The optional patch-file identifies one patch asset to remove.
+zenpm install <package-id>
+zenpm uninstall <package-id> [patch-file]
+zenpm update                 # update every installed package
+zenpm update <package-id>    # update one installed package
+```
+
+### Test the CLI with the KOReader emulator
+
+Build and run the host CLI from the terminal, but give it isolated state so it
+does not affect any normal ZenPM installation:
+
+```sh
+go build -o zenpm ./cmd/zenpm
+export ZENPM_HOME="$PWD/.zenpm-emulator"
+export ZENPM_PLATFORM=host
+
 ./zenpm doctor
 ./zenpm repo list
 ./zenpm repo refresh
-./zenpm package list kindle
-ZENPM_DRY_RUN=1 ./zenpm package install koreader-kindle
+./zenpm list koreader
+./zenpm info <package-id>
+ZENPM_DRY_RUN=1 ./zenpm install <script-backed-package-id>
 ```
+
+To exercise a native KOReader plugin install, point the CLI at the emulator's
+KOReader root (the directory containing `plugins/`), then use a disposable
+emulator profile:
+
+```sh
+export ZENPM_KOREADER_ROOT=/path/to/koreader
+./zenpm install <plugin-package-id>
+./zenpm uninstall <plugin-package-id>
+```
+
+Copy `zenpm.koplugin` to the emulator's `plugins/` directory and restart
+KOReader to test the plugin UI itself. `ZENPM_DRY_RUN=1` skips shell install
+scripts, but generic KOReader plugin installs are performed in-process and
+still write to `ZENPM_KOREADER_ROOT`; use a disposable emulator profile for
+those commands.
 
 ## API reference
 
@@ -275,7 +335,7 @@ The log includes: startup info (platform, home dir, log path), every HTTP reques
 | `ZENPM_HOME` | platform default | State directory root |
 | `ZENPM_PLATFORM` | auto-detected | Force `kindle`, `kobo`, or `host` |
 | `ZENPM_STATE_BACKEND` | `flat` | Use `flat` files or `sqlite` state storage |
-| `ZENPM_DRY_RUN` | unset | Set to `1` for no-op installs |
+| `ZENPM_DRY_RUN` | unset | Set to `1` to skip shell package scripts |
 | `ZENPM_DEFAULT_REPO_URL` | derived from binary path | Override default repo URL |
 | `ZENPM_REPO_PUBKEY` | ZenLabs key | Override Ed25519 public key for sig verification (hex-encoded 32 bytes) |
 
@@ -568,5 +628,5 @@ Repos served over plain HTTP will be set to `warn-unsigned` regardless of signat
 ## Safety notes
 
 - The HTTP daemon binds to `127.0.0.1` only — not accessible from other devices.
-- `ZENPM_DRY_RUN=1` skips all package script execution — safe for testing on host.
+- `ZENPM_DRY_RUN=1` skips shell package script execution. Generic KOReader plugin installs run in-process, so use a disposable KOReader root when testing them.
 - Do not run package installs without dry-run on non-Kindle/Kobo machines.
