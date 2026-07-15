@@ -16,4 +16,4 @@ cc="$prebuilt/$host/bin/armv7a-linux-androideabi19-clang"
 out="app/src/main/jniLibs/armeabi-v7a/libzenpm.so"
 mkdir -p "$(dirname "$out")"
 GOOS=android GOARCH=arm GOARM=7 CGO_ENABLED=1 CC="$cc" GOTOOLCHAIN=go1.20.14 \
-    go build -buildmode=c-shared -ldflags "-s -w -X ZPM/internal/androidbackend.Version=$(sed -n '1p' ../VERSION)" -o "$out" ./backend
+    go build -buildmode=c-shared -ldflags "-s -w -X github.com/xZenLabs/zen-pm/internal/androidbackend.Version=$(sed -n '1p' ../VERSION)" -o "$out" ./backend
