@@ -75,8 +75,8 @@ local function action_pill(view, bb, text, x, y, w, h, callback, icon, color)
     local ink = color or Theme.ink
     P.box(bb, x, y, w, h, { background = Theme.bg, border_size = 2, border_color = ink, radius = math.floor(h / 2) })
     if icon then
-        local icon_size = Theme.scale(18)
-        local gap = Theme.scale(4)
+        local icon_size = Theme.font_scale(18)
+        local gap = Theme.font_scale(4)
         local text_size = P.text_size(text, w - icon_size - gap, "small", { bold = true })
         local content_w = icon_size + gap + text_size.w
         local content_x = x + math.max(0, math.floor((w - content_w) / 2))
@@ -110,14 +110,27 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local pad = opts.pad or Theme.scale(10)
     local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(72), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(10) or 0)
+    local action_text = Models.package_action_label(pkg)
     local action_icon = pkg.installed and pkg.update_available and Images.asset("update.svg") or nil
-    local action_w = opts.action_w or m.action_w
+    local action_text_size = P.text_size(action_text, Theme.scale(256), "small", { bold = true })
+    local action_w = math.max(opts.action_w or m.action_w, action_text_size.w + Theme.scale(24))
+    local action_icon_size = Theme.font_scale(18)
     if action_icon then
-        action_w = action_w + Theme.scale(22)
+        action_w = action_w + action_icon_size + Theme.font_scale(4)
     end
-    local action_h = opts.action_h or m.action_h
+    local action_h = math.max(opts.action_h or m.action_h, action_text_size.h + Theme.scale(10))
+    if action_icon then
+        action_h = math.max(action_h, action_icon_size + Theme.scale(10))
+    end
     local action_x = x + w - action_w - pad
     local action_y = y + math.floor((h - action_h) / 2)
+    local status_icon_size = (pkg.installed or should_show_stars(view, pkg)) and Theme.font_scale(28) or 0
+    if status_icon_size > 0 then
+        action_y = math.min(
+            y + h - action_h - pad,
+            math.max(action_y, y + Theme.scale(5) + status_icon_size + Theme.scale(6))
+        )
+    end
     local text_w = action_x - text_x - Theme.scale(8)
     local disabled = pkg.installed and view.app:package_disabled(pkg)
     local ink = disabled and Theme.muted or nil
@@ -149,10 +162,10 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local title_y = y + vpad
     local max_bottom = y + h - vpad
     -- Meta row reserves room for the verification icon, so wrap it tighter.
-    local meta_w = text_w - Theme.scale(24)
+    local verify_size = Theme.font_scale(16)
+    local verify_gap = Theme.font_scale(5)
+    local meta_w = text_w - verify_size - verify_gap
 
-    -- Stack order: title, author, description, version/repo. Author/meta rows
-    -- skip when empty (e.g. details view overrides second_line for the author).
     local rows = {
         { text = title, w = text_w, role = title_role, bold = true },
     }
@@ -170,6 +183,14 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local total_text_h = 0
     for _, row in ipairs(rows) do
         total_text_h = total_text_h + row.size.h
+    end
+    -- Hide only the author when its rendered rows would overlap.
+    if author ~= "" and total_text_h > max_bottom - title_y then
+        table.remove(rows, 2)
+        total_text_h = 0
+        for _, row in ipairs(rows) do
+            total_text_h = total_text_h + row.size.h
+        end
     end
     local slack = (max_bottom - title_y) - total_text_h
     local gap = opts.text_gap or Theme.scale(4)
@@ -198,8 +219,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         P.text(bb, row.text, text_x, row.y, row.w, row.role, { bold = row.bold, color = ink })
     end
     local meta_row = rows[#rows]
-    local verify_size = Theme.scale(16)
-    local verify_x = text_x + math.min(meta_row.size.w + Theme.scale(5), text_w - verify_size)
+    local verify_x = text_x + math.min(meta_row.size.w + verify_gap, text_w - verify_size)
     local verify_y = meta_row.y + math.floor((meta_row.size.h - verify_size) / 2)
     draw_verification_icon(bb, Models.package_verified(pkg), verify_x, verify_y, verify_size)
     if disabled then
@@ -207,8 +227,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     end
 
     if pkg.installed then
-        local check = Theme.scale(28)
-        local cx = x + w - Theme.scale(34)
+        local check = status_icon_size
+        local cx = x + w - check - Theme.scale(6)
         local cy = y + Theme.scale(5)
         if not P.image(bb, Images.asset("checkmark.svg"), cx, cy, check, check, { is_icon = true }) then
             P.center_text(bb, "v", cx, cy + Theme.scale(2), check, "small", { bold = true, color = ink })
@@ -217,11 +237,11 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
             P.dim(bb, cx, cy, check, check)
         end
     elseif should_show_stars(view, pkg) then
-        local star = Theme.scale(28)
-        local sx = x + w - Theme.scale(34)
+        local star = status_icon_size
+        local sx = x + w - star - Theme.scale(6)
         local sy = y + Theme.scale(5)
         local stars = package_stars(pkg)
-        local gap = Theme.scale(4)
+        local gap = Theme.font_scale(4)
         local number_size = P.text_size(stars, Theme.scale(72), "small", { bold = true })
         P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true })
         if not P.image(bb, Images.asset("star.svg"), sx, sy, star, star, { is_icon = true }) then
@@ -229,7 +249,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
-    action_pill(view, bb, Models.package_action_label(pkg), action_x, action_y, action_w, action_h, function()
+    action_pill(view, bb, action_text, action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
@@ -287,9 +307,10 @@ function Cards.source(view, bb, repo, x, y, w)
     local text_w = w - (text_x - x) - pad - action_w - (action_w > 0 and Theme.scale(12) or 0)
     local title_y = y + Theme.scale(24)
     local url_y = y + Theme.scale(66)
-    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, text_w - Theme.scale(22), "heading", { bold = true })
-    local verify_size = Theme.scale(18)
-    draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + Theme.scale(5), text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
+    local verify_size = Theme.font_scale(18)
+    local verify_gap = Theme.font_scale(5)
+    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, text_w - verify_size - verify_gap, "heading", { bold = true })
+    draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + verify_gap, text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
     P.text(bb, ellipsize(repo.url or "", 54), text_x, url_y, text_w, "small")
 
     if action_w > 0 then

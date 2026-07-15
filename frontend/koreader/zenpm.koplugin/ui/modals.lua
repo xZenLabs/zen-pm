@@ -10,6 +10,7 @@ local InputDialog = require("ui/widget/inputdialog")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
+local logger = require("logger")
 local Screen = require("device").screen
 local Models = require("models")
 local _ = require("gettext")
@@ -112,7 +113,7 @@ function Modals.package_modify(pkg, callbacks)
     if callbacks.update then
         table.insert(buttons, {
             {
-                text = _("Update"),
+                text = _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""),
                 callback = function()
                     UIManager:close(dialog)
                     callbacks.update()
@@ -295,6 +296,7 @@ function Modals.restart_koreader(text, restart_callback)
                     text = _("Restart now"),
                     callback = function()
                         UIManager:close(dialog)
+                        logger.info("ZenPM: requesting KOReader restart")
                         restart_callback()
                     end,
                 },

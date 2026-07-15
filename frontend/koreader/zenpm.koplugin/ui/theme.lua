@@ -3,6 +3,8 @@ local Device = require("device")
 local Font = require("ui/font")
 
 local Screen = Device.screen
+local base_font_size = 14
+local default_base_font_size = base_font_size
 
 local Theme = {
     bg = Blitbuffer.COLOR_WHITE,
@@ -13,8 +15,34 @@ local Theme = {
     soft = Blitbuffer.COLOR_LIGHT_GRAY or Blitbuffer.COLOR_GRAY or Blitbuffer.COLOR_WHITE,
 }
 
+Theme.MIN_BASE_FONT_SIZE = 8
+Theme.MAX_BASE_FONT_SIZE = 32
+
+function Theme.normalize_base_font_size(value)
+    local size = tonumber(value)
+    if not size then
+        return base_font_size
+    end
+    return math.max(Theme.MIN_BASE_FONT_SIZE, math.min(Theme.MAX_BASE_FONT_SIZE, math.floor(size + 0.5)))
+end
+
+function Theme.set_base_font_size(value)
+    base_font_size = Theme.normalize_base_font_size(value)
+    return base_font_size
+end
+
+function Theme.get_base_font_size()
+    return base_font_size
+end
+
 function Theme.scale(value)
     return Screen:scaleBySize(value)
+end
+
+function Theme.font_scale(value)
+    local font_ratio = base_font_size / default_base_font_size
+    local damped_ratio = 1 + (font_ratio - 1) / 2
+    return math.max(1, math.floor(Theme.scale(value) * damped_ratio + 0.5))
 end
 
 function Theme.has_color()
@@ -46,23 +74,23 @@ end
 
 function Theme.face(role)
     if role == "title" then
-        return Font:getFace("cfont", Theme.scale(18))
+        return Font:getFace("cfont", base_font_size + 5)
     elseif role == "heading" then
-        return Font:getFace("cfont", Theme.scale(15))
+        return Font:getFace("cfont", base_font_size + 2)
     elseif role == "small" then
-        return Font:getFace("smallinfofont", Theme.scale(11))
+        return Font:getFace("smallinfofont", base_font_size - 2)
     elseif role == "card_title" then
-        return Font:getFace("smallinfofont", Theme.scale(10))
+        return Font:getFace("smallinfofont", base_font_size - 3)
     elseif role == "tiny" then
-        return Font:getFace("smallinfofont", Theme.scale(9))
+        return Font:getFace("smallinfofont", base_font_size - 4)
     elseif role == "tiny_lg" then
-        return Font:getFace("smallinfofont", Theme.scale(10))
+        return Font:getFace("smallinfofont", base_font_size - 3)
     elseif role == "nav" then
-        return Font:getFace("smallinfofont", Theme.scale(9))
+        return Font:getFace("smallinfofont", base_font_size - 4)
     elseif role == "mono" then
-        return Font:getFace("smallinfofont", Theme.scale(10))
+        return Font:getFace("smallinfofont", base_font_size - 3)
     end
-    return Font:getFace("cfont", Theme.scale(13))
+    return Font:getFace("cfont", base_font_size)
 end
 
 return Theme

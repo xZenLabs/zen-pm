@@ -336,7 +336,7 @@ local function extract(zip_path, stage_dir)
     return true
 end
 
-function Updater:update(daemon, allow_prerelease)
+local function latest_release(daemon, allow_prerelease)
     log_info("checking for updates", "platform=", daemon:detect_platform(), "prereleases=", allow_prerelease == true)
     local releases, err = fetch_releases()
     if not releases then return false, err end
@@ -351,8 +351,23 @@ function Updater:update(daemon, allow_prerelease)
     log_info("selected release", release.tag, "asset=", release.asset.name)
     if not version_gt(release.tag, daemon:plugin_version()) then
         log_info("already up to date", daemon:plugin_version())
-        return true, "up_to_date"
+        return true, nil
     end
+    return true, release
+end
+
+function Updater:check(daemon, allow_prerelease)
+    local ok, release_or_err = latest_release(daemon, allow_prerelease)
+    if not ok then return false, release_or_err end
+    if not release_or_err then return true, "up_to_date" end
+    return true, release_or_err.version
+end
+
+function Updater:update(daemon, allow_prerelease)
+    local ok, release_or_err = latest_release(daemon, allow_prerelease)
+    if not ok then return false, release_or_err end
+    local release = release_or_err
+    if not release then return true, "up_to_date" end
 
     local plugin_dir = Constants.PLUGIN_DIR
     local plugins_dir = plugin_dir:match("^(.*)/[^/]+$")

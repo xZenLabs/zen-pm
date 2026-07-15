@@ -42,7 +42,17 @@ local function device_name()
     return Device.model or Device.model_name or Device.device_model or Device.name or "unknown"
 end
 
-local function issue_body(description, app, username, uploaded_log_url, inline_log)
+local function koreader_crash_log(app)
+    local root = app.daemon:koreader_root()
+    if type(root) ~= "string" or root == "" then return "" end
+    local file = io.open(root .. "/crash.log", "rb")
+    if not file then return "" end
+    local contents = file:read("*a") or ""
+    file:close()
+    return contents
+end
+
+local function issue_body(description, app, username, uploaded_log_url, inline_log, has_crash_log)
     local parts = {
         "**Describe the bug**",
         description ~= "" and description or "_No description provided._",
@@ -54,11 +64,12 @@ local function issue_body(description, app, username, uploaded_log_url, inline_l
         "- Platform: " .. tostring(app:platform()),
         "",
     }
+    local log_name = has_crash_log and "ZenPM.log and KOReader crash.log" or "ZenPM.log"
     if uploaded_log_url then
-        table.insert(parts, "**ZenPM log:** [ZenPM.log](" .. uploaded_log_url .. ")")
+        table.insert(parts, "**Logs:** [" .. log_name .. "](" .. uploaded_log_url .. ")")
     else
         table.insert(parts, "<details>")
-        table.insert(parts, "<summary>ZenPM.log</summary>")
+        table.insert(parts, "<summary>" .. log_name .. "</summary>")
         table.insert(parts, "")
         table.insert(parts, "```")
         table.insert(parts, inline_log)
@@ -85,7 +96,7 @@ function Reporter:show(app)
     end
     local ConfirmBox = require("ui/widget/confirmbox")
     UIManager:show(ConfirmBox:new{
-        text = _("ZenPM.log will be attached to a public GitHub issue. It may contain package names, repository URLs, and file paths.") .. "\n\n" .. _("Continue?"),
+        text = _("ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths.") .. "\n\n" .. _("Continue?"),
         ok_text = _("Continue"),
         ok_callback = function()
             self:ask_title(app)
@@ -182,13 +193,17 @@ function Reporter:submit(app, title, description, username)
             return Modals.info(_("Could not retrieve the ZenPM log: ") .. tostring(log or "unknown error"))
         end
 
+        local crash_log = koreader_crash_log(app)
+        if crash_log ~= "" then
+            log = log .. "\n\n===== KOReader crash.log =====\n" .. crash_log
+        end
         local uploaded_log_url
         local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = log })
         if uploaded then
             uploaded_log_url = log_url(upload_response)
         end
         local inline_log = truncate_utf8_bytes(log, MAX_INLINE_LOG, "\n...[truncated]")
-        local body = issue_body(description, app, username, uploaded_log_url, inline_log)
+        local body = issue_body(description, app, username, uploaded_log_url, inline_log, crash_log ~= "")
         body = truncate_utf8_bytes(body, MAX_BODY, "\n...[truncated]")
         local report_title = truncate_utf8_bytes("[BUG] " .. title, MAX_TITLE + 6)
         local submitted, response, code = app.client:request("POST", PROXY_URL, {

@@ -11,14 +11,16 @@ local I18n = require("i18n")
 local Images = require("ui/images")
 local Modals = require("ui/modals")
 local Models = require("models")
+local Theme = require("ui/theme")
 local Updater = require("updater")
 local Util = require("zenpm_util")
 
 local App = {}
 
--- Persist UI preferences (filter, advanced mode, beta updates) in our own config file inside
+-- Persist UI preferences (filter, advanced mode, update checks) in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
 local config_settings = nil
+local UPDATE_CHECK_INTERVAL = 24 * 60 * 60
 
 local function open_config()
     if config_settings then return config_settings end
@@ -65,6 +67,9 @@ function App:new(plugin)
             filter_installable = App.load_setting("filter_installable", true),
             advanced = App.load_setting("advanced", false),
             beta_updates = App.load_setting("beta_updates", false),
+            update_auto_check = App.load_setting("update_auto_check", true),
+            update_available = App.load_setting("update_available", false),
+            base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", installed = "", categories = "", category = "" },
             sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
             scroll = {},
@@ -89,6 +94,7 @@ function App:new(plugin)
     }
     setmetatable(o, self)
     self.__index = self
+    Theme.set_base_font_size(o.state.base_font_size)
     return o
 end
 
@@ -445,6 +451,7 @@ function App:show()
         self.view = AppView:new{ app = self }
     end
     UIManager:show(self.view)
+    self:schedule_automatic_update_check()
     if self.backend_ready then
         self:navigate(self.state.active_tab or "home")
     else
@@ -452,6 +459,33 @@ function App:show()
         self:set_loading(_("Loading packages, please wait"))
         self:start_backend_then_reload()
     end
+end
+
+function App:set_update_available(available)
+    self.state.update_available = available == true
+    App.save_setting("update_available", self.state.update_available)
+end
+
+function App:schedule_automatic_update_check()
+    if not self.state.update_auto_check or self.state.update_checking then return end
+    local now = os.time()
+    local last_check = tonumber(App.load_setting("last_update_check", 0)) or 0
+    if now - last_check < UPDATE_CHECK_INTERVAL then return end
+
+    local ok_network, NetworkMgr = pcall(require, "ui/network/manager")
+    if ok_network and NetworkMgr and NetworkMgr.isWifiOn and not NetworkMgr:isWifiOn() then return end
+
+    self.state.update_checking = true
+    UIManager:scheduleIn(15, function()
+        self.state.update_checking = false
+        if not self.view or self.busy or not self.state.update_auto_check then return end
+        local completed, ok, result = pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
+        if completed and ok then
+            App.save_setting("last_update_check", os.time())
+            self:set_update_available(result ~= "up_to_date")
+            self:refresh()
+        end
+    end)
 end
 
 function App:close()
@@ -1860,6 +1894,31 @@ function App:toggle_beta_updates()
     App.save_setting("beta_updates", self.state.beta_updates)
 end
 
+function App:toggle_automatic_update_checks()
+    self.state.update_auto_check = not self.state.update_auto_check
+    App.save_setting("update_auto_check", self.state.update_auto_check)
+    if self.state.update_auto_check then
+        self:schedule_automatic_update_check()
+    end
+end
+
+function App:prompt_base_font_size()
+    local SpinWidget = require("ui/widget/spinwidget")
+    UIManager:show(SpinWidget:new{
+        title_text = _("ZenPM font size"),
+        value = self.state.base_font_size,
+        value_min = Theme.MIN_BASE_FONT_SIZE,
+        value_max = Theme.MAX_BASE_FONT_SIZE,
+        value_step = 1,
+        value_hold_step = 2,
+        callback = function(spin)
+            self.state.base_font_size = Theme.set_base_font_size(spin.value)
+            App.save_setting("base_font_size", self.state.base_font_size)
+            self:refresh()
+        end,
+    })
+end
+
 function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
         {
@@ -1883,8 +1942,17 @@ function App:show_actions(anchor)
             end,
         },
         {
-            text = _("Update"),
+            text = self.state.update_available and "↑  " .. _("Update") or _("Update"),
             callback = function() self:start_update() end,
+        },
+        {
+            text = _("Check for updates automatically"),
+            checked_func = function()
+                return self.state.update_auto_check
+            end,
+            callback = function()
+                self:toggle_automatic_update_checks()
+            end,
         },
         {
             text = _("Filter installable"),
@@ -1893,6 +1961,12 @@ function App:show_actions(anchor)
             end,
             callback = function()
                 self:toggle_filter_installable()
+            end,
+        },
+        {
+            text = _("Font size: ") .. tostring(self.state.base_font_size),
+            callback = function()
+                self:prompt_base_font_size()
             end,
         },
         {
@@ -1965,6 +2039,7 @@ function App:start_update()
             return
         end
         if result == "up_to_date" then
+            self:set_update_available(false)
             if companion_update_started then
                 Modals.info(_("ZenPM Companion is checking for an update."))
             else
@@ -1975,6 +2050,7 @@ function App:start_update()
 
         -- The next startup copies the new bundled backend; stop the old one
         -- now so it cannot be reused after KOReader restarts.
+        self:set_update_available(false)
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
         Modals.restart_koreader(
