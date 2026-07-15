@@ -3,7 +3,7 @@ local Device = require("device")
 local Font = require("ui/font")
 
 local Screen = Device.screen
-local base_font_size = 14
+local base_font_size = 24
 local default_base_font_size = base_font_size
 
 local Theme = {
