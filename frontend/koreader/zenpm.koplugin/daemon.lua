@@ -252,6 +252,16 @@ function Daemon:detect_abi()
     return "sf"
 end
 
+function Daemon:ereader_backend_suffix()
+    if self:detect_platform() == "kobo" then
+        local machine = self:uname_machine()
+        if machine == "arm64" or machine == "aarch64" then
+            return "arm64"
+        end
+    end
+    return self:detect_abi()
+end
+
 -- uname output never changes within a session; cache the two reads on self.
 function Daemon:uname_kernel()
     if self._uname_kernel == nil then
@@ -302,9 +312,9 @@ end
 function Daemon:bundled_backend_candidates()
     local dir = self:bundled_backend_dir()
     local platform = self:detect_platform()
-    local abi = self:detect_abi()
+    local ereader_suffix = self:ereader_backend_suffix()
     if platform == "kobo" or platform == "kindle" then
-        return { dir .. "/zenpm-ereader", dir .. "/zenpm-" .. abi, dir .. "/zenpm" }
+        return { dir .. "/zenpm-ereader", dir .. "/zenpm-" .. ereader_suffix, dir .. "/zenpm" }
     end
     local host_platform = self:host_backend_platform()
     local suffix = self:host_backend_suffix()
@@ -317,7 +327,7 @@ function Daemon:bundled_backend_candidates()
     end
     table.insert(candidates, dir .. "/zenpm-ereader")
     table.insert(candidates, dir .. "/zenpm-hf")
-    table.insert(candidates, dir .. "/zenpm-" .. abi)
+    table.insert(candidates, dir .. "/zenpm-" .. self:detect_abi())
     table.insert(candidates, dir .. "/zenpm")
     return candidates
 end

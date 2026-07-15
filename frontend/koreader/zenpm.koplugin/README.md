@@ -13,10 +13,18 @@ Release zips are platform-specific:
 
 - `ZenPM-koreader-ereader-hf-<version>.zip` for Kindle/Kobo e-readers with the ARM hard-float loader
 - `ZenPM-koreader-ereader-sf-<version>.zip` for older Kindle/Kobo e-readers without the ARM hard-float loader
+- `ZenPM-koreader-ereader-arm64-<version>.zip` for ARM64 Kobo e-readers, including the Kobo Libra Colour
 - `ZenPM-koreader-macos-<version>.zip` for macOS
 - `ZenPM-koreader-linux-<version>.zip` for Linux desktop
 
-To check an e-reader's ABI, run this on the device:
+On Kobo, check the CPU architecture first:
+
+```sh
+uname -m
+```
+
+Use the ARM64 package when this prints `aarch64` or `arm64`. Otherwise, check
+the 32-bit e-reader ABI:
 
 ```sh
 if [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi

@@ -45,28 +45,32 @@ Outputs:
 <!-- - `dist/ZenPM-kobo-sf-<version>.zip` -->
 - `dist/ZenPM-koreader-ereader-hf-<version>.zip`
 - `dist/ZenPM-koreader-ereader-sf-<version>.zip`
+- `dist/ZenPM-koreader-ereader-arm64-<version>.zip`
 - `dist/ZenPM-koreader-android-<version>.zip`
 - `dist/ZenPM-android-<version>.apk`
 - `dist/ZenPM-koreader-macos-<version>.zip`
 - `dist/ZenPM-koreader-linux-<version>.zip`
 
-Use the `hf` package on devices with the ARM hard-float loader, and the `sf`
-package on older soft-float devices. To check on the device:
+Use the `arm64` package on 64-bit Kobo devices. For 32-bit e-readers, use the
+`hf` package on devices with the ARM hard-float loader and the `sf` package on
+older soft-float devices. To check the architecture and ABI on the device:
 
 ```sh
-if [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
+if [ "$(uname -m)" = aarch64 ] || [ "$(uname -m)" = arm64 ]; then echo arm64; elif [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
 ```
 
 ### Choose an e-reader package
 
-The loader check above is authoritative. Kindle ABI can change with firmware,
-so use it if the device is not listed or its firmware is unusual.
+For Kobo, the architecture check is authoritative. For 32-bit e-readers, the
+loader check is authoritative; Kindle ABI can change with firmware, so use it
+if the device is not listed or its firmware is unusual.
 
 | Common device / firmware | Expected ABI | ZenPM standalone app | ZenPM KOReader plugin |
 |---|---|---|---|
 | Kindle running firmware 5.16.3 or newer (for example, current Paperwhite, Oasis, and Scribe devices) | `hf` | `ZenPM-kindle-hf-<version>.zip` | `ZenPM-koreader-ereader-hf-<version>.zip` |
 | Kindle running firmware 5.16.2 or older (including legacy Kindle, Touch, and early Paperwhite installs) | `sf` | `ZenPM-kindle-sf-<version>.zip` | `ZenPM-koreader-ereader-sf-<version>.zip` |
-| Kobo Touch and newer (Glo, Aura, Clara, Libra, Sage, Elipsa) | usually `hf` | <!-- `ZenPM-kobo-hf-<version>.zip` --> | `ZenPM-koreader-ereader-hf-<version>.zip` |
+| Kobo Libra Colour | `arm64` | — | `ZenPM-koreader-ereader-arm64-<version>.zip` |
+| Older Kobo devices (Touch, Glo, Aura, Clara, Libra, Sage, Elipsa) | usually `hf` | <!-- `ZenPM-kobo-hf-<version>.zip` --> | `ZenPM-koreader-ereader-hf-<version>.zip` |
 | Any device that reports `sf` from the loader check | `sf` | Choose the matching `*-sf-<version>.zip` package | `ZenPM-koreader-ereader-sf-<version>.zip` |
 | KOReader on Android | Android ABI | — | `ZenPM-koreader-android-<version>.zip` plus `ZenPM-android-<version>.apk` |
 
@@ -78,6 +82,7 @@ Package guide:
 | Kindle standalone app, ABI check prints `sf` | `ZenPM-kindle-sf-<version>.zip` |
 | KOReader on Kindle/Kobo, ABI check prints `hf` | `ZenPM-koreader-ereader-hf-<version>.zip` |
 | KOReader on Kindle/Kobo, ABI check prints `sf` | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| KOReader on Kobo, `uname -m` prints `aarch64` or `arm64` | `ZenPM-koreader-ereader-arm64-<version>.zip` |
 | KOReader on Android | `ZenPM-koreader-android-<version>.zip` plus `ZenPM-android-<version>.apk` |
 | KOReader on macOS | `ZenPM-koreader-macos-<version>.zip` |
 | KOReader on Linux desktop ARM64/AMD64 | `ZenPM-koreader-linux-<version>.zip` |
@@ -154,7 +159,8 @@ install the plugin normally. See [`android/README.md`](android/README.md) for
 local APK builds.
 
 1. Extract the KOReader plugin zip for your platform:
-   - `dist/ZenPM-koreader-ereader-hf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `hf`
+   - `dist/ZenPM-koreader-ereader-arm64-<version>.zip` for ARM64 Kobo e-readers such as the Kobo Libra Colour
+   - `dist/ZenPM-koreader-ereader-hf-<version>.zip` for 32-bit Kindle/Kobo e-readers whose ABI check prints `hf`
    - `dist/ZenPM-koreader-ereader-sf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `sf`
    - `dist/ZenPM-koreader-android-<version>.zip` for Android, alongside `ZenPM-android-<version>.apk`
    - `dist/ZenPM-koreader-macos-<version>.zip` for macOS

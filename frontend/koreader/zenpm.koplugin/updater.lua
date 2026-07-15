@@ -76,7 +76,7 @@ local function release_asset_name(daemon, version)
     end
     local platform = daemon:detect_platform()
     if platform == "kindle" or platform == "kobo" then
-        return "ZenPM-koreader-ereader-" .. daemon:detect_abi() .. "-" .. version .. ".zip"
+        return "ZenPM-koreader-ereader-" .. daemon:ereader_backend_suffix() .. "-" .. version .. ".zip"
     end
 
     local host_platform = daemon:host_backend_platform()

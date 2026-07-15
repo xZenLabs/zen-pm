@@ -56,7 +56,7 @@ function Pages.error(view, bb, x, y, w, h, message)
     local platform = view.app.daemon:detect_platform()
     local abi = nil
     if platform == "kindle" or platform == "kobo" then
-        abi = tostring(view.app.daemon:detect_abi())
+        abi = tostring(view.app.daemon:ereader_backend_suffix())
     end
 
     P.text(bb, message, x + pad, y + Theme.scale(16), w - pad * 2, "default", { color = Theme.muted })
