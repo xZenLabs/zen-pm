@@ -262,6 +262,24 @@ function Daemon:ereader_backend_suffix()
     return self:detect_abi()
 end
 
+function Daemon:wait_for_loopback()
+    if self:detect_platform() ~= "kobo" then
+        return true
+    end
+    for _ = 1, 20 do
+        local probe = socket.tcp()
+        if probe then
+            local ready = probe:bind("127.0.0.1", 0)
+            probe:close()
+            if ready then
+                return true
+            end
+        end
+        socket.sleep(0.5)
+    end
+    return false, _("Kobo network is not ready. Please wait a moment and try again.")
+end
+
 -- uname output never changes within a session; cache the two reads on self.
 function Daemon:uname_kernel()
     if self._uname_kernel == nil then
@@ -545,6 +563,10 @@ function Daemon:start()
             return false, _("ZenPM Android companion is not installed or could not start. See ") .. companion_log
         end
         return true
+    end
+    local loopback_ready, loopback_err = self:wait_for_loopback()
+    if not loopback_ready then
+        return false, loopback_err
     end
     if changed then
         self.backend_path = self:standalone_backend()
