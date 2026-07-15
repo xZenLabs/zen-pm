@@ -26,7 +26,7 @@ local Screen = Device.screen
 
 local AppView = InputContainer:extend{
     modal = false,
-    stop_events_propagation = false,
+    stop_events_propagation = true,
 }
 
 function AppView:init()
@@ -71,6 +71,9 @@ end
 
 function AppView:onTapZenPM(_, ges)
     local x, y = ges.pos.x, ges.pos.y
+    if self:tap_should_pass_to_koreader_menu(ges) then
+        return self:show_koreader_menu_from_gesture(ges, "tap")
+    end
     for i = #self.hitboxes, 1, -1 do
         local box = self.hitboxes[i]
         if P.contains(box, x, y) then
@@ -78,7 +81,39 @@ function AppView:onTapZenPM(_, ges)
             return true
         end
     end
+    return true
+end
+
+function AppView:tap_menu_enabled()
+    local activation = G_reader_settings and G_reader_settings.readSetting and G_reader_settings:readSetting("activate_menu") or "swipe_tap"
+    return activation == "tap" or activation == "swipe_tap" or activation == "tap_swipe" or activation == "both"
+end
+
+function AppView:tap_in_koreader_menu_zone(ges)
+    local pos = ges and ges.pos
+    if not pos then
+        return false
+    end
+    return pos.y <= (self.dimen.y or 0) + math.floor(Screen:getHeight() * 0.05)
+end
+
+function AppView:protects_koreader_menu_tap(ges)
+    local pos = ges and ges.pos
+    if not self:tap_menu_enabled() or not self:tap_in_koreader_menu_zone(ges) or not pos then
+        return false
+    end
+    for _, exclusion in ipairs(self.koreader_menu_tap_exclusions or {}) do
+        if P.contains(exclusion, pos.x, pos.y) then
+            return true
+        end
+    end
     return false
+end
+
+function AppView:tap_should_pass_to_koreader_menu(ges)
+    return self:tap_menu_enabled()
+        and self:tap_in_koreader_menu_zone(ges)
+        and not self:protects_koreader_menu_tap(ges)
 end
 
 function AppView:gesture_in_menu_zone(ges)
@@ -90,14 +125,17 @@ function AppView:gesture_in_menu_zone(ges)
 end
 
 function AppView:show_koreader_menu_from_gesture(ges, kind)
-    if not self:gesture_in_menu_zone(ges) then
+    if kind == "tap" then
+        if not self:tap_menu_enabled() or not self:tap_in_koreader_menu_zone(ges) then
+            return false
+        end
+    elseif not self:gesture_in_menu_zone(ges) then
         return false
-    end
-    local activation = G_reader_settings and G_reader_settings.readSetting and G_reader_settings:readSetting("activate_menu") or "swipe_tap"
-    if activation == "swipe_tap" or activation == "tap_swipe" or activation == "both" then
-        -- enabled for both activation gestures
-    elseif activation ~= kind then
-        return false
+    else
+        local activation = G_reader_settings and G_reader_settings.readSetting and G_reader_settings:readSetting("activate_menu") or "swipe_tap"
+        if activation ~= "swipe_tap" and activation ~= "tap_swipe" and activation ~= "both" and activation ~= kind then
+            return false
+        end
     end
     local plugin = self.app and self.app.plugin
     local ui = plugin and plugin.ui
@@ -276,6 +314,7 @@ function AppView:paintTo(bb, x, y)
     self.list_bounds = nil
     self.scroll_step = nil
     self.scrollbar = nil
+    self.koreader_menu_tap_exclusions = nil
     local m = Theme.metrics()
     self.dimen = Geom:new{ x = x, y = y, w = m.screen_w, h = m.screen_h }
     P.rect(bb, x, y, m.screen_w, m.screen_h, Theme.bg)

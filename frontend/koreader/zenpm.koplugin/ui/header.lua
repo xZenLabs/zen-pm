@@ -13,6 +13,18 @@ local _ = require("gettext")
 
 local Header = {}
 
+local function protect_koreader_menu_tap(view, x, y, size)
+    local exclusion_s = Theme.scale(72)
+    local exclusion_pad = math.floor((exclusion_s - size) / 2)
+    view.koreader_menu_tap_exclusions = view.koreader_menu_tap_exclusions or {}
+    table.insert(view.koreader_menu_tap_exclusions, {
+        x = x - exclusion_pad,
+        y = y - exclusion_pad,
+        w = exclusion_s,
+        h = exclusion_s,
+    })
+end
+
 local function ellipsize(value, limit)
     local title = tostring(value or "")
     if title and #title > limit then
@@ -34,6 +46,7 @@ function Header.draw_actions(view, bb, x, y)
     P.hit(view, x, y, s, s, function()
         view.app:show_actions(Geom:new{ x = x, y = y, w = s, h = s })
     end, "actions")
+    protect_koreader_menu_tap(view, x, y, s)
     return s
 end
 
@@ -56,6 +69,7 @@ function Header.draw_back(view, bb, x, y, callback)
         P.center_text(bb, "<", x, y + Theme.scale(13), s, "title", { bold = true })
     end
     P.hit(view, x, y, s, s, callback, "back")
+    protect_koreader_menu_tap(view, x, y, s)
 end
 
 function Header.draw(view, bb, x, y, w)
