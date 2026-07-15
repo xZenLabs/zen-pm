@@ -1,4 +1,5 @@
 local socket = require("socket")
+local Event = require("ui/event")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
@@ -1413,7 +1414,7 @@ function App:confirm_toggle_enable(pkg, kind, on_done)
             local done = disabled and _("enabled") or _("disabled")
             Modals.restart_koreader(
                 name .. " " .. done .. _(" successfully.\n\nRestart KOReader to apply the change."),
-                function() UIManager:restartKOReader() end)
+                function() UIManager:broadcastEvent(Event:new("Restart")) end)
             if on_done then on_done() end
         end
     )
@@ -1810,7 +1811,7 @@ function App:poll_package_action(op, attempt)
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
                     Modals.restart_koreader(op.name .. " " .. done .. tail, function()
-                        UIManager:restartKOReader()
+                        UIManager:broadcastEvent(Event:new("Restart"))
                     end)
                 else
                     Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
@@ -2055,7 +2056,7 @@ function App:start_update()
         self.backend_ready = false
         Modals.restart_koreader(
             _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
-            function() UIManager:restartKOReader() end)
+            function() UIManager:broadcastEvent(Event:new("Restart")) end)
     end)
 end
 

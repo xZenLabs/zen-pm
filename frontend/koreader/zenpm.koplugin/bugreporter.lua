@@ -52,7 +52,7 @@ local function koreader_crash_log(app)
     return contents
 end
 
-local function issue_body(description, app, username, uploaded_log_url, inline_log, has_crash_log)
+local function issue_body(description, app, username, uploaded_zenpm_log_url, uploaded_crash_log_url, inline_zenpm_log, inline_crash_log)
     local parts = {
         "**Describe the bug**",
         description ~= "" and description or "_No description provided._",
@@ -64,17 +64,30 @@ local function issue_body(description, app, username, uploaded_log_url, inline_l
         "- Platform: " .. tostring(app:platform()),
         "",
     }
-    local log_name = has_crash_log and "ZenPM.log and KOReader crash.log" or "ZenPM.log"
-    if uploaded_log_url then
-        table.insert(parts, "**Logs:** [" .. log_name .. "](" .. uploaded_log_url .. ")")
+    table.insert(parts, "**Logs:**")
+    if uploaded_zenpm_log_url then
+        table.insert(parts, "- [zenpm.log](" .. uploaded_zenpm_log_url .. ")")
     else
         table.insert(parts, "<details>")
-        table.insert(parts, "<summary>" .. log_name .. "</summary>")
+        table.insert(parts, "<summary>zenpm.log</summary>")
         table.insert(parts, "")
         table.insert(parts, "```")
-        table.insert(parts, inline_log)
+        table.insert(parts, inline_zenpm_log)
         table.insert(parts, "```")
         table.insert(parts, "</details>")
+    end
+    if inline_crash_log ~= "" then
+        if uploaded_crash_log_url then
+            table.insert(parts, "- [crash.log](" .. uploaded_crash_log_url .. ")")
+        else
+            table.insert(parts, "<details>")
+            table.insert(parts, "<summary>crash.log</summary>")
+            table.insert(parts, "")
+            table.insert(parts, "```")
+            table.insert(parts, inline_crash_log)
+            table.insert(parts, "```")
+            table.insert(parts, "</details>")
+        end
     end
     if username ~= "" then
         table.insert(parts, "")
@@ -187,23 +200,29 @@ function Reporter:submit(app, title, description, username)
     local Modals = require("ui/modals")
     Modals.status(_("Submitting report…"))
     UIManager:nextTick(function()
-        local ok_log, log = app.client:get_log(5000)
-        if not ok_log or type(log) ~= "string" or log == "" then
+        local ok_log, zenpm_log = app.client:get_log(5000)
+        if not ok_log or type(zenpm_log) ~= "string" or zenpm_log == "" then
             Modals.close_status()
-            return Modals.info(_("Could not retrieve the ZenPM log: ") .. tostring(log or "unknown error"))
+            return Modals.info(_("Could not retrieve the ZenPM log: ") .. tostring(zenpm_log or "unknown error"))
         end
 
         local crash_log = koreader_crash_log(app)
-        if crash_log ~= "" then
-            log = log .. "\n\n===== KOReader crash.log =====\n" .. crash_log
-        end
-        local uploaded_log_url
-        local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = log })
+        local uploaded_zenpm_log_url
+        local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log })
         if uploaded then
-            uploaded_log_url = log_url(upload_response)
+            uploaded_zenpm_log_url = log_url(upload_response)
         end
-        local inline_log = truncate_utf8_bytes(log, MAX_INLINE_LOG, "\n...[truncated]")
-        local body = issue_body(description, app, username, uploaded_log_url, inline_log, crash_log ~= "")
+        local uploaded_crash_log_url
+        if crash_log ~= "" then
+            uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = crash_log })
+            if uploaded then
+                uploaded_crash_log_url = log_url(upload_response)
+            end
+        end
+        local inline_log_limit = crash_log ~= "" and math.floor(MAX_INLINE_LOG / 2) or MAX_INLINE_LOG
+        local inline_zenpm_log = truncate_utf8_bytes(zenpm_log, inline_log_limit, "\n...[truncated]")
+        local inline_crash_log = truncate_utf8_bytes(crash_log, inline_log_limit, "\n...[truncated]")
+        local body = issue_body(description, app, username, uploaded_zenpm_log_url, uploaded_crash_log_url, inline_zenpm_log, inline_crash_log)
         body = truncate_utf8_bytes(body, MAX_BODY, "\n...[truncated]")
         local report_title = truncate_utf8_bytes("[BUG] " .. title, MAX_TITLE + 6)
         local submitted, response, code = app.client:request("POST", PROXY_URL, {
