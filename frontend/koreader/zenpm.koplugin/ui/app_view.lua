@@ -78,9 +78,6 @@ function AppView:onTapZenPM(_, ges)
             return true
         end
     end
-    if self:show_koreader_menu_from_gesture(ges, "tap") then
-        return true
-    end
     return true
 end
 

@@ -44,6 +44,27 @@ validate_semver() {
     printf '%s\n' "$candidate" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
 }
 
+next_version() {
+    version="$1"
+    case "$version" in
+        *-beta)
+            printf '%s1\n' "$version"
+            return
+            ;;
+    esac
+
+    beta_number=$(printf '%s\n' "$version" | sed -n 's/.*-beta\([0-9][0-9]*\)$/\1/p')
+    if [ -n "$beta_number" ]; then
+        printf '%s-beta%s\n' "${version%-beta*}" "$((beta_number + 1))"
+        return
+    fi
+
+    major=$(printf '%s' "$version" | cut -d. -f1)
+    minor=$(printf '%s' "$version" | cut -d. -f2)
+    patch=$(printf '%s' "$version" | cut -d. -f3)
+    printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))"
+}
+
 [ "$#" -eq 0 ] || usage
 
 VERSION=$(normalize_version "$(read_version_file)")
@@ -299,11 +320,8 @@ echo "KOReader Android plugin:     $KOREADER_ANDROID_ZIP"
 echo "KOReader macOS plugin:      $KOREADER_MACOS_ZIP"
 echo "KOReader Linux plugin:      $KOREADER_LINUX_ZIP"
 
-# Bump patch for the next build.
-_major=$(printf '%s' "$VERSION" | cut -d. -f1)
-_minor=$(printf '%s' "$VERSION" | cut -d. -f2)
-_patch=$(printf '%s' "$VERSION" | cut -d. -f3)
-NEXT_VERSION="$_major.$_minor.$((_patch + 1))"
+# Bump the beta number, or the patch version for stable releases.
+NEXT_VERSION=$(next_version "$VERSION")
 printf '%s\n' "$NEXT_VERSION" > "$VERSION_FILE"
 set_koreader_meta_version "$KOREADER_META_FILE" "$NEXT_VERSION"
 echo "Next version:     $NEXT_VERSION (VERSION bumped)"
