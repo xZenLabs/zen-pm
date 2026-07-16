@@ -9,6 +9,14 @@ local MAX_TITLE = 500
 local MAX_BODY = 65536
 
 local Reporter = {}
+local ok_android = pcall(require, "android")
+
+local function show_input_dialog(dialog)
+    UIManager:show(dialog)
+    if not ok_android then
+        dialog:onShowKeyboard()
+    end
+end
 
 local function truncate_utf8_bytes(text, max_bytes, suffix)
     suffix = suffix or ""
@@ -124,6 +132,7 @@ function Reporter:ask_title(app)
         title = _("Bug report title"),
         description = _("A short summary of what went wrong"),
         input_hint = _("Brief description of the bug"),
+        keyboard_visible = not ok_android,
         buttons = {{
             { text = _("Cancel"), callback = function() UIManager:close(dialog) end },
             {
@@ -138,8 +147,7 @@ function Reporter:ask_title(app)
             },
         }},
     }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+    show_input_dialog(dialog)
 end
 
 function Reporter:ask_description(app, title)
@@ -149,6 +157,7 @@ function Reporter:ask_description(app, title)
         title = _("Bug description (optional)"),
         description = _("Steps to reproduce, expected vs. actual behavior"),
         input_type = "text",
+        keyboard_visible = not ok_android,
         buttons = {{
             { text = _("Cancel"), callback = function() UIManager:close(dialog) end },
             {
@@ -162,8 +171,7 @@ function Reporter:ask_description(app, title)
             },
         }},
     }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+    show_input_dialog(dialog)
 end
 
 function Reporter:ask_username(app, title, description)
@@ -173,6 +181,7 @@ function Reporter:ask_username(app, title, description)
         title = _("GitHub username (optional)"),
         description = _("Enter your GitHub username to be tagged in the issue"),
         input_hint = _("username"),
+        keyboard_visible = not ok_android,
         buttons = {{
             {
                 text = _("Skip"),
@@ -192,21 +201,19 @@ function Reporter:ask_username(app, title, description)
             },
         }},
     }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+    show_input_dialog(dialog)
 end
 
 function Reporter:submit(app, title, description, username)
     local Modals = require("ui/modals")
     Modals.status(_("Submitting report…"))
     UIManager:nextTick(function()
+        local crash_log = koreader_crash_log(app)
         local ok_log, zenpm_log = app.client:get_log(5000)
         if not ok_log or type(zenpm_log) ~= "string" or zenpm_log == "" then
-            Modals.close_status()
-            return Modals.info(_("Could not retrieve the ZenPM log: ") .. tostring(zenpm_log or "unknown error"))
+            zenpm_log = "ZenPM log unavailable: " .. tostring(zenpm_log or "unknown error")
         end
 
-        local crash_log = koreader_crash_log(app)
         local uploaded_zenpm_log_url
         local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log })
         if uploaded then

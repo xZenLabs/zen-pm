@@ -268,6 +268,7 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	log.Infof("Health probe served")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":        true,
 		"version":   Version,

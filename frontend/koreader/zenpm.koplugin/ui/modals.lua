@@ -22,8 +22,16 @@ local _ = require("gettext")
 
 local Modals = {}
 local status_modal = nil
+local ok_android = pcall(require, "android")
 
 local InputClearOverlay = OverlapGroup:extend{}
+
+local function show_input_dialog(dialog)
+    UIManager:show(dialog)
+    if not ok_android then
+        dialog:onShowKeyboard()
+    end
+end
 
 function InputClearOverlay:propagateEvent(event)
     for i = #self, 1, -1 do
@@ -116,10 +124,10 @@ function Modals.input(title, input, hint, ok_text, callback, clear_callback)
         title = title,
         input = input or "",
         input_hint = hint,
+        keyboard_visible = not ok_android,
         buttons = buttons,
     }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+    show_input_dialog(dialog)
 end
 
 function Modals.search(title, input, hint, callback)
@@ -128,6 +136,7 @@ function Modals.search(title, input, hint, callback)
         title = title,
         input = input or "",
         input_hint = hint,
+        keyboard_visible = not ok_android,
         title_bar_left_icon = "close",
         title_bar_left_icon_tap_callback = function()
             UIManager:close(dialog)
@@ -157,7 +166,9 @@ function Modals.search(title, input, hint, callback)
         show_parent = dialog,
         callback = function()
             dialog:setInputText("", false, false)
-            dialog:onShowKeyboard()
+            if not ok_android then
+                dialog:onShowKeyboard()
+            end
         end,
     }
     local input_size = dialog._input_widget:getSize()
@@ -171,8 +182,7 @@ function Modals.search(title, input, hint, callback)
         math.floor((input_size.h - clear_button.dimen.h) / 2),
     }
 
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+    show_input_dialog(dialog)
 end
 
 function Modals.package_modify(pkg, callbacks)

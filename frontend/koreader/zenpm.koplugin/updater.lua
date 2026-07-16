@@ -1,5 +1,6 @@
 local Archiver = require("ffi/archiver")
 local JSON = require("json")
+local socket = require("socket")
 local _ = require("gettext")
 
 local Constants = require("constants")
@@ -8,6 +9,7 @@ local Util = require("zenpm_util")
 local Updater = {}
 
 local ok_logger, logger = pcall(require, "logger")
+local ok_socketutil, socketutil = pcall(require, "socketutil")
 
 local function log_info(...)
     if ok_logger and logger and logger.info then
@@ -121,15 +123,30 @@ local function request(url, sink, method)
     local ok_https, https = pcall(require, "ssl.https")
     local ok_ltn12, ltn12 = pcall(require, "ltn12")
     if not ok_https or not ok_ltn12 then
-        return nil, "HTTPS support is unavailable in this KOReader build."
+        return nil, _("Could not connect to GitHub: HTTPS support is unavailable in this KOReader build.")
     end
     local response = {}
-    local _, code, headers, status = https.request{
+    local started_at = socket.gettime()
+    log_info("GitHub request started", method or "GET", url)
+    if ok_socketutil then
+        socketutil:set_timeout(1, 4)
+    end
+    local ok, code, headers, status = https.request{
         url = url,
         method = method,
         headers = { ["User-Agent"] = "zenpm.koplugin" },
         sink = sink or ltn12.sink.table(response),
     }
+    if ok_socketutil then
+        socketutil:reset_timeout()
+    end
+    local elapsed_ms = math.floor((socket.gettime() - started_at) * 1000)
+    if not ok or not tonumber(code) then
+        local err = _("Could not connect to GitHub: ") .. tostring(code or status or _("request failed"))
+        log_warn("GitHub request failed after", elapsed_ms .. "ms", err)
+        return nil, err
+    end
+    log_info("GitHub request completed", method or "GET", "HTTP", code, "after", elapsed_ms .. "ms")
     return {
         code = tonumber(code),
         headers = headers,
@@ -155,27 +172,28 @@ local function resolved_download_url(url)
     for _ = 1, 5 do
         if not valid_download_url(resolved) then
             log_warn("download URL failed trust validation")
-            return nil
+            return nil, _("GitHub supplied an untrusted download URL.")
         end
-        local response = request(resolved, nil, "HEAD")
+        local response, err = request(resolved, nil, "HEAD")
         if not response then
-            log_warn("download URL probe failed")
-            return nil
+            log_warn("download URL probe failed", err)
+            return nil, err
         end
         if response.code ~= 301 and response.code ~= 302 and response.code ~= 307 and response.code ~= 308 then
             if response.code ~= 200 then
                 log_warn("download URL probe returned HTTP", response.code or response.status or "?")
-                return nil
+                return nil, _("GitHub download returned HTTP ") .. tostring(response.code or "?")
             end
             return resolved
         end
         resolved = resolve_redirect(resolved, response.headers and response.headers.location)
         if not resolved then
             log_warn("download URL redirect was invalid")
-            return nil
+            return nil, _("GitHub supplied an invalid download redirect.")
         end
     end
     log_warn("download URL exceeded redirect limit")
+    return nil, _("GitHub download redirected too many times.")
 end
 
 local function find_asset(release, daemon)
@@ -256,9 +274,9 @@ local function fetch_releases()
 end
 
 local function download(url, path, digest)
-    local resolved = resolved_download_url(url)
+    local resolved, resolve_err = resolved_download_url(url)
     if not resolved then
-        return false, "GitHub supplied an untrusted download URL."
+        return false, resolve_err
     end
     local ok_ltn12, ltn12 = pcall(require, "ltn12")
     if not ok_ltn12 then

@@ -8,14 +8,50 @@ local Constants = require("constants")
 
 local ok_https, https = pcall(require, "ssl.https")
 local ok_socketutil, socketutil = pcall(require, "socketutil")
+local ok_logger, logger = pcall(require, "logger")
 
 local Client = {}
+local UI_BLOCK_TIMEOUT_SECONDS = 1
+local UI_TOTAL_TIMEOUT_SECONDS = 4
 
 local function url_encode(value)
     value = tostring(value or "")
     return (value:gsub("([^%w%-_%.~])", function(c)
         return string.format("%%%02X", string.byte(c))
     end))
+end
+
+local function request_target(url)
+    if url:sub(1, #Constants.API_BASE) == Constants.API_BASE then
+        return _("ZenPM backend")
+    end
+    local host = (url:match("^https?://([^/%?#:]+)") or ""):lower()
+    if host == "github.com" or host:match("%.github%.com$") or host:match("githubusercontent%.com$") then
+        return _("GitHub")
+    end
+    if host:match("^zen%-pm%-reporter%.") then
+        return _("ZenPM bug reporter")
+    end
+    return _("remote server")
+end
+
+local function connection_error(url, detail)
+    return _("Could not connect to ") .. request_target(url) .. ": "
+        .. tostring(detail or _("request failed"))
+end
+
+local function http_error(url, code, detail)
+    local message = request_target(url) .. _(" returned HTTP ") .. tostring(code)
+    if detail and detail ~= "" then
+        message = message .. ": " .. detail
+    end
+    return message
+end
+
+local function log_request(method, url, started_at, outcome)
+    if not (ok_logger and logger and logger.info) then return end
+    local elapsed_ms = math.floor((socket.gettime() - started_at) * 1000)
+    logger.info("ZenPM HTTP " .. method .. " " .. url .. " " .. outcome .. " after " .. elapsed_ms .. "ms")
 end
 
 function Client:new(opts)
@@ -37,6 +73,10 @@ end
 
 function Client:request(method, path, body, timeout)
     local url = self:build_url(path)
+    local started_at = socket.gettime()
+    if ok_logger and logger and logger.info then
+        logger.info("ZenPM HTTP " .. method .. " " .. url .. " started")
+    end
     local sink = {}
     local headers = {
         ["Accept"] = "application/json, text/plain, */*",
@@ -62,15 +102,17 @@ function Client:request(method, path, body, timeout)
     local requester = http
     if url:match("^https://") then
         if not ok_https then
-            return false, _("HTTPS support is unavailable in this KOReader build.")
+            local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
+            log_request(method, url, started_at, err)
+            return false, err
         end
         requester = https
     end
 
     if ok_socketutil then
         socketutil:set_timeout(
-            timeout and timeout.block or socketutil.LARGE_BLOCK_TIMEOUT,
-            timeout and timeout.total or socketutil.LARGE_TOTAL_TIMEOUT)
+            timeout and timeout.block or UI_BLOCK_TIMEOUT_SECONDS,
+            timeout and timeout.total or UI_TOTAL_TIMEOUT_SECONDS)
     end
 
     local code, resp_headers, status = socket.skip(1, requester.request(request))
@@ -80,29 +122,38 @@ function Client:request(method, path, body, timeout)
     end
 
     local text = table.concat(sink)
-    if not code then
-        return false, status or _("network error")
+    local numeric_code = tonumber(code)
+    if not numeric_code then
+        local err = connection_error(url, code or status or _("network error"))
+        log_request(method, url, started_at, err)
+        return false, err
     end
-    if type(code) ~= "number" then
-        code = tonumber(code)
-    end
-    if not code or code < 200 or code >= 300 then
-        local detail = text ~= "" and text or tostring(status or _("request failed"))
-        return false, "HTTP " .. tostring(code or "?") .. ": " .. detail, code, resp_headers
+    if numeric_code < 200 or numeric_code >= 300 then
+        local detail = text ~= "" and text or nil
+        local err = http_error(url, numeric_code, detail)
+        log_request(method, url, started_at, err)
+        return false, err, numeric_code, resp_headers
     end
     if text == "" then
-        return true, nil, code, resp_headers
+        log_request(method, url, started_at, "HTTP " .. numeric_code)
+        return true, nil, numeric_code, resp_headers
     end
 
     local ok, decoded = pcall(JSON.decode, text)
     if ok then
-        return true, decoded, code, resp_headers
+        log_request(method, url, started_at, "HTTP " .. numeric_code)
+        return true, decoded, numeric_code, resp_headers
     end
-    return true, text, code, resp_headers
+    log_request(method, url, started_at, "HTTP " .. numeric_code)
+    return true, text, numeric_code, resp_headers
 end
 
 function Client:download(path)
     local url = self:build_url(path)
+    local started_at = socket.gettime()
+    if ok_logger and logger and logger.info then
+        logger.info("ZenPM HTTP GET " .. url .. " started")
+    end
     local sink = {}
     local request = {
         url = url,
@@ -116,13 +167,15 @@ function Client:download(path)
     local requester = http
     if url:match("^https://") then
         if not ok_https then
-            return false, _("HTTPS support is unavailable in this KOReader build.")
+            local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
+            log_request("GET", url, started_at, err)
+            return false, err
         end
         requester = https
     end
 
     if ok_socketutil then
-        socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
+        socketutil:set_timeout(UI_BLOCK_TIMEOUT_SECONDS, UI_TOTAL_TIMEOUT_SECONDS)
     end
 
     local code, resp_headers, status = socket.skip(1, requester.request(request))
@@ -131,13 +184,19 @@ function Client:download(path)
         socketutil:reset_timeout()
     end
 
-    if type(code) ~= "number" then
-        code = tonumber(code)
+    local numeric_code = tonumber(code)
+    if not numeric_code then
+        local err = connection_error(url, code or status or _("download failed"))
+        log_request("GET", url, started_at, err)
+        return false, err
     end
-    if not code or code < 200 or code >= 300 then
-        return false, "HTTP " .. tostring(code or "?") .. ": " .. tostring(status or _("download failed")), code, resp_headers
+    if numeric_code < 200 or numeric_code >= 300 then
+        local err = http_error(url, numeric_code, nil)
+        log_request("GET", url, started_at, err)
+        return false, err, numeric_code, resp_headers
     end
-    return true, table.concat(sink), code, resp_headers
+    log_request("GET", url, started_at, "HTTP " .. numeric_code)
+    return true, table.concat(sink), numeric_code, resp_headers
 end
 
 function Client:health()

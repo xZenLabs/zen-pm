@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -20,25 +21,39 @@ import (
 // Version is injected when the Android shared library is built.
 var Version = "dev"
 
-var startOnce sync.Once
+var serverMu sync.Mutex
+var serverRunning bool
 
-// Start launches the local HTTP API once for the lifetime of the Android app.
+// Start launches the local HTTP API unless a running instance already owns it.
 func Start(home, logHome, koreaderRoot string, port int) {
 	home = strings.TrimSpace(home)
 	if home == "" || port < 1 || port > 65535 {
 		return
 	}
-	startOnce.Do(func() {
-		_ = os.Setenv("ZENPM_PLATFORM", platform.Host)
-		_ = os.Setenv("ZENPM_HOME", home)
-		_ = os.Setenv("ZENPM_KOREADER_ROOT", strings.TrimSpace(koreaderRoot))
-		_ = os.Setenv("ZENPM_STARTUP_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
-		_ = os.Setenv("ZENPM_COMPANION_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
-		go serve(home, logHome, port)
-	})
+	serverMu.Lock()
+	if serverRunning {
+		serverMu.Unlock()
+		writeCompanionLog(logHome, "Native backend is already starting or running.")
+		return
+	}
+	serverRunning = true
+	_ = os.Setenv("ZENPM_PLATFORM", platform.Host)
+	_ = os.Setenv("ZENPM_HOME", home)
+	_ = os.Setenv("ZENPM_KOREADER_ROOT", strings.TrimSpace(koreaderRoot))
+	_ = os.Setenv("ZENPM_STARTUP_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
+	_ = os.Setenv("ZENPM_COMPANION_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
+	serverMu.Unlock()
+	writeCompanionLog(logHome, fmt.Sprintf("Native backend start accepted: goarch=%s port=%d.", runtime.GOARCH, port))
+	go serve(home, logHome, port)
 }
 
 func serve(home, logHome string, port int) {
+	defer func() {
+		serverMu.Lock()
+		serverRunning = false
+		serverMu.Unlock()
+		writeCompanionLog(logHome, "Native backend server exited.")
+	}()
 	startedAt := time.Now()
 	writeCompanionLog(logHome, "Native backend initializing.")
 	st, err := state.Init(platform.Host)
