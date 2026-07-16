@@ -76,6 +76,7 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	if err := st.WriteCatalog([]state.CatalogEntry{{
 		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
 		Platforms: []string{"host"}, Featured: true, FeaturedOrder: &featuredOrder,
+		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -91,6 +92,9 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 	if len(packages) != 1 || packages[0].FeaturedOrder == nil || *packages[0].FeaturedOrder != featuredOrder {
 		t.Fatalf("packages = %#v", packages)
+	}
+	if packages[0].ReadmeURL != "https://repo.zen-labs.org/packages/host/pkg/README.md" {
+		t.Fatalf("ReadmeURL = %q", packages[0].ReadmeURL)
 	}
 }
 
@@ -278,6 +282,32 @@ func TestPackageGitHubSourceUsesCatalogMetadata(t *testing.T) {
 	}
 	if _, err := srv.packageGitHubSource("other"); err == nil {
 		t.Fatal("non-GitHub package returned no error")
+	}
+}
+
+func TestPackageReadmeURLPrefersHostedCatalogMetadata(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Source: "https://github.com/owner/reader",
+		ReadmeURL: "https://repo.zen-labs.org/packages/koreader/reader/README.md",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+
+	readmeURL, hosted, err := srv.packageReadmeURL("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hosted || readmeURL != "https://repo.zen-labs.org/packages/koreader/reader/README.md" {
+		t.Fatalf("packageReadmeURL() = %q, %v", readmeURL, hosted)
 	}
 }
 

@@ -8,6 +8,15 @@ local Search = {}
 function Search.draw(view, bb, x, y, w, value, placeholder, callback, clear_callback)
     local m = Theme.metrics()
     P.box(bb, x, y, w, m.search_h, { radius = math.floor(m.search_h / 2), background = Theme.bg })
+    local exclusion_w = math.max(Theme.scale(72), w)
+    local exclusion_h = math.max(Theme.scale(72), m.search_h)
+    view.koreader_menu_tap_exclusions = view.koreader_menu_tap_exclusions or {}
+    table.insert(view.koreader_menu_tap_exclusions, {
+        x = x - math.floor((exclusion_w - w) / 2),
+        y = y - math.floor((exclusion_h - m.search_h) / 2),
+        w = exclusion_w,
+        h = exclusion_h,
+    })
     local icon_size = Theme.scale(24)
     if not P.image(bb, Images.asset("search.svg"), x + Theme.scale(14), y + math.floor((m.search_h - icon_size) / 2), icon_size, icon_size, { is_icon = true }) then
         P.text(bb, _("Search"), x + Theme.scale(14), y + Theme.scale(14), Theme.scale(46), "small", { bold = true })

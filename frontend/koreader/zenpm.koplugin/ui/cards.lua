@@ -57,6 +57,26 @@ local function package_author_text(pkg)
     return Util.trim(I18n.dynamic_or(pkg and pkg.author, ""))
 end
 
+local function queued_action(view, pkg)
+    local id = pkg and (pkg.id or pkg.name)
+    if not id then return nil end
+    local asset = Models.is_patch_package(pkg) and pkg.patch_asset or nil
+    local key = tostring(id) .. "\0" .. tostring(asset or "")
+    for _, entry in ipairs(view.app.state.queue or {}) do
+        if entry.key == key then
+            return entry.action
+        end
+    end
+end
+
+local function queued_action_icon(action)
+    if action == "uninstall" then return "uninstall.svg" end
+    if action == "reinstall" then return "reinstall.svg" end
+    if action == "install" then return "download.svg" end
+    if action == "downgrade" then return "downgrade.svg" end
+    return "upgrade.svg"
+end
+
 local function package_version_repo_text(pkg)
     local parts = {}
     local version = pkg and pkg.version
@@ -71,11 +91,11 @@ local function package_version_repo_text(pkg)
     return table.concat(parts, " • ")
 end
 
-local function action_pill(view, bb, text, x, y, w, h, callback, icon, color)
+local function action_pill(view, bb, text, x, y, w, h, callback, icon, color, icon_size)
     local ink = color or Theme.ink
     P.box(bb, x, y, w, h, { background = Theme.bg, border_size = 2, border_color = ink, radius = math.floor(h / 2) })
     if icon then
-        local icon_size = Theme.font_scale(18)
+        icon_size = icon_size or Theme.font_scale(18)
         local gap = Theme.font_scale(4)
         local text_size = P.text_size(text, w - icon_size - gap, "small", { bold = true })
         local content_w = icon_size + gap + text_size.w
@@ -110,11 +130,13 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local pad = opts.pad or Theme.scale(10)
     local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(72), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(10) or 0)
-    local action_text = Models.package_action_label(pkg)
-    local action_icon = pkg.installed and pkg.update_available and Images.asset("update.svg") or nil
+    local queued = queued_action(view, pkg)
+    local action_text = queued and _("Queued") or Models.package_action_label(pkg)
+    local action_icon = queued and Images.asset(queued_action_icon(queued))
+        or (pkg.installed and pkg.update_available and Images.asset("upgrade.svg") or nil)
     local action_text_size = P.text_size(action_text, Theme.scale(256), "small", { bold = true })
     local action_w = math.max(opts.action_w or m.action_w, action_text_size.w + Theme.scale(24))
-    local action_icon_size = Theme.font_scale(18)
+    local action_icon_size = pkg.installed and pkg.update_available and Theme.font_scale(24) or Theme.font_scale(18)
     if action_icon then
         action_w = action_w + action_icon_size + Theme.font_scale(4)
     end
@@ -253,7 +275,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
-    end, action_icon)
+    end, action_icon, nil, action_icon_size)
     P.hit(view, x, y, action_x - x, h, function()
         view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
     end, "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))
@@ -324,33 +346,53 @@ function Cards.source(view, bb, repo, x, y, w)
     return h
 end
 
-function Cards.category(view, bb, category, x, y, w)
+function Cards.compact(view, bb, x, y, w, opts)
+    opts = opts or {}
     local m = Theme.metrics()
-    local h = m.category_h
+    local h = opts.height or m.category_h
     P.box(bb, x, y, w, h)
     local pad = Theme.scale(10)
-    local icon = Theme.scale(52)
+    local icon = math.min(Theme.scale(52), math.max(Theme.scale(32), h - Theme.scale(16)))
     local ix = x + pad
     local iy = y + math.floor((h - icon) / 2)
-    if not P.image(bb, Images.asset(category.icon or "packages.svg"), ix, iy, icon, icon, { is_icon = true }) then
-        P.center_text(bb, tostring(category.label or "?"):sub(1, 1), ix, iy + Theme.scale(14), icon, "small", { bold = true })
+    if not P.image(bb, opts.icon, ix, iy, icon, icon, { is_icon = true }) then
+        P.center_text(bb, opts.icon_fallback or "?", ix, iy + Theme.scale(14), icon, "small", { bold = true })
     end
 
     local text_x = x + pad + icon + Theme.scale(10)
-    local text_w = w - (text_x - x) - pad
-    local title_size = P.text_size(I18n.dynamic_or(category.label, _("Category")), text_w, "heading", { bold = true })
-    local sub_size = P.text_size("0 " .. _("packages"), text_w, "small")
-    local gap = Theme.scale(1)
+    local right_icon = opts.right_icon and math.min(Theme.scale(30), h - Theme.scale(16)) or 0
+    local text_w = w - (text_x - x) - pad - right_icon - (right_icon > 0 and Theme.scale(12) or 0)
+    local compact = h < m.category_h
+    local title_role = opts.title_role or (compact and "card_title" or "heading")
+    local subtitle_role = opts.subtitle_role or (compact and "tiny" or "small")
+    local title_size = P.text_size(opts.title or "", text_w, title_role, { bold = true })
+    local sub_size = P.text_size(opts.subtitle or "", text_w, subtitle_role)
+    local gap = opts.subtitle_gap or Theme.scale(1)
     local stack_h = title_size.h + sub_size.h + gap
-    local title_y = y + math.floor((h - stack_h) / 2)
+    local title_y = y + math.floor((h - stack_h) / 2) + (opts.text_offset_y or 0)
     local subtitle_y = title_y + title_size.h + gap
-    P.text(bb, I18n.dynamic_or(category.label, _("Category")), text_x, title_y, text_w, "heading", { bold = true })
-    P.text(bb, tostring(category.count or 0) .. " " .. _("packages"), text_x, subtitle_y, text_w, "small")
+    P.text(bb, opts.title or "", text_x, title_y, text_w, title_role, { bold = true })
+    P.text(bb, opts.subtitle or "", text_x, subtitle_y, text_w, subtitle_role, { color = opts.subtitle_color })
+    if right_icon > 0 then
+        local icon_x = x + w - pad - right_icon
+        P.image(bb, opts.right_icon, icon_x, y + math.floor((h - right_icon) / 2), right_icon, right_icon, { is_icon = true })
+    end
 
-    P.hit(view, x, y, w, h, function()
-        view.app:show_category_details(category.id)
-    end, "category:" .. tostring(category.id))
+    P.hit(view, x, y, w, h, opts.callback, opts.hit_id)
     return h
+end
+
+function Cards.category(view, bb, category, x, y, w, opts)
+    opts = opts or {}
+    return Cards.compact(view, bb, x, y, w, {
+        height = opts.height,
+        icon = Images.asset(category.icon or "packages.svg"),
+        icon_fallback = tostring(category.label or "?"):sub(1, 1),
+        title = I18n.dynamic_or(category.label, _("Category")),
+        subtitle = tostring(category.count or 0) .. " " .. _("packages"),
+        callback = function() view.app:show_category_details(category.id) end,
+        hit_id = "category:" .. tostring(category.id),
+    })
 end
 
 return Cards

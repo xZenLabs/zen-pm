@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
 )
 
 type sqliteStore struct {
@@ -102,7 +101,8 @@ func (s *sqliteStore) migrate() error {
 			stars TEXT NOT NULL DEFAULT '',
 			assets TEXT NOT NULL DEFAULT '',
 			constraints TEXT NOT NULL DEFAULT '',
-			plugin_module TEXT NOT NULL DEFAULT ''
+			plugin_module TEXT NOT NULL DEFAULT '',
+			readme_url TEXT NOT NULL DEFAULT ''
 		)`,
 		`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`,
 	}
@@ -131,6 +131,9 @@ func (s *sqliteStore) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "plugin_module", "plugin_module TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "readme_url", "readme_url TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "featured_order", "featured_order INTEGER"); err != nil {
@@ -383,7 +386,7 @@ func (s *sqliteStore) WriteValue(key, value string) error {
 }
 
 func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
-	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module FROM catalog_packages ORDER BY position`)
+	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url FROM catalog_packages ORDER BY position`)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +397,7 @@ func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
 		var featured int
 		var featuredOrder sql.NullInt64
 		var platforms, deps, tags string
-		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &deps, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &featuredOrder, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints, &e.PluginModule); err != nil {
+		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &deps, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &featuredOrder, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints, &e.PluginModule, &e.ReadmeURL); err != nil {
 			return nil, err
 		}
 		e.Platforms = splitCatalogList(platforms)
@@ -421,9 +424,9 @@ func (s *sqliteStore) WriteCatalog(entries []CatalogEntry) error {
 	}
 	for i, e := range entries {
 		if _, err := tx.Exec(
-			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.FeaturedOrder, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints, e.PluginModule,
+			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.FeaturedOrder, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints, e.PluginModule, e.ReadmeURL,
 		); err != nil {
 			tx.Rollback()
 			return err

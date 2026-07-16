@@ -13,15 +13,16 @@ local _ = require("gettext")
 
 local Header = {}
 
-local function protect_koreader_menu_tap(view, x, y, size)
-    local exclusion_s = Theme.scale(72)
-    local exclusion_pad = math.floor((exclusion_s - size) / 2)
+local function protect_koreader_menu_tap(view, x, y, w, h)
+    h = h or w
+    local exclusion_w = math.max(Theme.scale(72), w)
+    local exclusion_h = math.max(Theme.scale(72), h)
     view.koreader_menu_tap_exclusions = view.koreader_menu_tap_exclusions or {}
     table.insert(view.koreader_menu_tap_exclusions, {
-        x = x - exclusion_pad,
-        y = y - exclusion_pad,
-        w = exclusion_s,
-        h = exclusion_s,
+        x = x - math.floor((exclusion_w - w) / 2),
+        y = y - math.floor((exclusion_h - h) / 2),
+        w = exclusion_w,
+        h = exclusion_h,
     })
 end
 
@@ -169,6 +170,26 @@ function Header.draw(view, bb, x, y, w)
         Header.draw_back(view, bb, x + pad, y + Theme.scale(8), function() view.app:go_back_from_details() end)
         local pkg = view.app.state.current_package or {}
         P.vcenter_text(bb, ellipsize(Models.package_display_name(pkg, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
+        return y + h
+    elseif page == "queue" then
+        local h = Theme.scale(68)
+        local button_h = Theme.scale(42)
+        local confirm_w = Theme.scale(120)
+        local button_y = y + Theme.scale(12)
+        local confirm_x = x + w - pad - confirm_w
+        local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
+        P.center_text_box(bb, _("Queue"), x, button_y - Theme.scale(5), w, button_h, "heading", { bold = true })
+        Header.draw_back(view, bb, x + pad, y + Theme.scale(10), function() view.app:close_queue() end)
+        P.box(bb, confirm_x, button_y, confirm_w, button_h, {
+            background = enabled and Theme.panel or Theme.bg,
+            border_color = enabled and Theme.border or Theme.soft,
+            radius = math.floor(button_h / 2),
+        })
+        P.center_text_box(bb, _("Confirm"), confirm_x, button_y, confirm_w, button_h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+        if enabled then
+            P.hit(view, confirm_x, button_y, confirm_w, button_h, function() view.app:prompt_queue_confirmation() end, "confirm-queue")
+        end
+        protect_koreader_menu_tap(view, confirm_x, button_y, confirm_w, button_h)
         return y + h
     elseif page == "debug" then
         local h = Theme.scale(54)

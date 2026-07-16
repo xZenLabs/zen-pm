@@ -306,11 +306,11 @@ paths:
     get:
       tags:
         - Packages
-      summary: Read the package GitHub README
+      summary: Read the package README
       operationId: getPackageReadme
       responses:
         "200":
-          description: Raw README Markdown from the GitHub source in package metadata.
+          description: Raw README Markdown from the repository-hosted URL in package metadata, or the GitHub source when no URL is provided.
           content:
             application/json:
               schema:
@@ -758,6 +758,10 @@ components:
           type: string
           format: uri
           description: Upstream source URL, used for GitHub release update checks when available.
+        readme_url:
+          type: string
+          format: uri
+          description: Repository-hosted README Markdown URL, when available.
     GitHubRelease:
       type: object
       required:

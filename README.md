@@ -384,6 +384,7 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
       "featured": true,
       "featured_order": 10,
       "featured_image": "packages/my-package/featured.png",
+      "readme_url": "packages/my-package/README.md",
       "platforms": ["kindle"],
       "dependencies": [],
       "install_url": "packages/my-package/scripts/install.sh",
@@ -417,6 +418,7 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].featured` | no | Mark this package for the Featured page |
 | `packages[].featured_order` | no | Numeric ascending order on the Featured page; unordered packages follow ordered ones |
 | `packages[].featured_image` | no | Large Featured-page banner image; relative paths resolve against `repo.url` |
+| `packages[].readme_url` | no | Package README Markdown; relative paths resolve against `repo.url` and take precedence over the GitHub README fallback |
 | `packages[].platforms` | yes | Array of `"kindle"` and/or `"kobo"` |
 | `packages[].dependencies` | no | Array of package `id` strings required before install |
 | `packages[].install_url` | yes | Path to install script (relative to repo URL) |

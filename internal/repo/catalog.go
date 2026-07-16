@@ -24,7 +24,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|plugin_module|featured_order
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|plugin_module|featured_order|readme_url
 type CatalogEntry struct {
 	Repo          string
 	Priority      int
@@ -54,6 +54,7 @@ type CatalogEntry struct {
 	Assets        string
 	Constraints   string
 	PluginModule  string
+	ReadmeURL     string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -97,6 +98,7 @@ func (e *CatalogEntry) serialize() string {
 		e.Constraints,
 		e.PluginModule,
 		optionalIntField(e.FeaturedOrder),
+		e.ReadmeURL,
 	}, "|")
 }
 
@@ -181,6 +183,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 28 {
 		e.FeaturedOrder = parseOptionalInt(parts[27])
+	}
+	if len(parts) >= 29 {
+		e.ReadmeURL = parts[28]
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -302,6 +307,7 @@ type manifestJSON struct {
 		SourceAsset   string          `json:"source_asset,omitempty"`
 		SourceType    string          `json:"source_type,omitempty"`
 		SourceURL     string          `json:"source_url,omitempty"`
+		ReadmeURL     string          `json:"readme_url,omitempty"`
 		Stars         string          `json:"stars,omitempty"`
 		Assets        json.RawMessage `json:"assets,omitempty"`
 		Constraints   json.RawMessage `json:"constraints,omitempty"`
@@ -412,6 +418,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			SourceAsset:   p.SourceAsset,
 			SourceType:    p.SourceType,
 			SourceURL:     resolveURL(repoURL, p.SourceURL),
+			ReadmeURL:     resolveURL(repoURL, p.ReadmeURL),
 			Stars:         strings.TrimSpace(p.Stars),
 			Assets:        compactJSONField(p.Assets),
 			Constraints:   compactJSONField(p.Constraints),

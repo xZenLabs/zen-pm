@@ -36,6 +36,7 @@ Example:
       "featured_order": 10,
       "featured_image": "packages/koreader-kindle/featured.png",
       "source": "https://github.com/koreader/koreader",
+      "readme_url": "packages/koreader-kindle/README.md",
       "dependencies": ["kual"],
       "install_url": "packages/koreader-kindle/scripts/install.sh",
       "uninstall_url": "packages/koreader-kindle/scripts/uninstall.sh",

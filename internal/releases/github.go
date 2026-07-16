@@ -70,6 +70,36 @@ func FetchGitHubReadme(source string) (string, error) {
 	return string(data), nil
 }
 
+// FetchReadme retrieves Markdown from a repository-hosted README URL.
+func FetchReadme(readmeURL string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(readmeURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", fmt.Errorf("README URL must be an HTTP(S) URL")
+	}
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "ZenPackageManager")
+	client := cabundle.Client(15 * time.Second)
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("README request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("README request returned %s", resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > githubResponseLimit {
+		return "", fmt.Errorf("README response is too large")
+	}
+	return string(data), nil
+}
+
 // FetchGitHubReleases returns up to limit releases in one request. The frontend
 // paginates the result for display; fetching them all at once keeps GitHub API
 // calls low, which matters under the anonymous rate limit (60 req/hr per IP).

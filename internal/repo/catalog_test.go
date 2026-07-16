@@ -118,6 +118,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		Assets:        `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`,
 		Constraints:   `{"abi":["hf","sf"]}`,
 		FeaturedOrder: &featuredOrder,
+		ReadmeURL:     "https://example.invalid/readme.md",
 	}
 
 	got, err := parseCatalogLine(entry.serialize())
@@ -133,7 +134,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	if got.FeaturedOrder == nil || *got.FeaturedOrder != featuredOrder {
 		t.Fatalf("FeaturedOrder = %v, want %d", got.FeaturedOrder, featuredOrder)
 	}
-	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints {
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
 	}
 }
@@ -152,6 +153,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"source": "https://github.com/karpushchenko/koreader-rsvp-plugin",
 				"source_type": "source",
 				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
+				"readme_url": "packages/koreader/koreader-rsvp-plugin/README.md",
 				"featured_order": 10,
 				"stars": "31",
 				"assets": [{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}],
@@ -183,6 +185,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].SourceURL != "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main" {
 		t.Fatalf("SourceURL = %q", entries[0].SourceURL)
+	}
+	if entries[0].ReadmeURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/README.md" {
+		t.Fatalf("ReadmeURL = %q", entries[0].ReadmeURL)
 	}
 	if entries[0].UninstallURL != "https://example.invalid/repo/packages/koreader/uninstall-plugin.sh" {
 		t.Fatalf("UninstallURL = %q", entries[0].UninstallURL)

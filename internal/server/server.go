@@ -60,6 +60,7 @@ type pkgJSON struct {
 	Source          string          `json:"source,omitempty"`
 	SourceType      string          `json:"source_type,omitempty"`
 	SourceURL       string          `json:"source_url,omitempty"`
+	ReadmeURL       string          `json:"readme_url,omitempty"`
 	Stars           string          `json:"stars,omitempty"`
 	PluginModule    string          `json:"plugin_module,omitempty"`
 	Assets          json.RawMessage `json:"assets,omitempty"`
@@ -513,6 +514,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Source:        e.Source,
 			SourceType:    e.SourceType,
 			SourceURL:     e.SourceURL,
+			ReadmeURL:     e.ReadmeURL,
 			Stars:         e.Stars,
 			PluginModule:  e.PluginModule,
 			Assets:        rawJSON(e.Assets),
@@ -685,17 +687,41 @@ func (s *Server) packageGitHubSource(id string) (string, error) {
 	return "", fmt.Errorf("package %q not found", id)
 }
 
+func (s *Server) packageReadmeURL(id string) (string, bool, error) {
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		return "", false, err
+	}
+	for _, entry := range catalog {
+		if entry.ID == id {
+			if entry.ReadmeURL != "" {
+				return entry.ReadmeURL, true, nil
+			}
+			if _, ok := releases.GitHubRepository(entry.Source); !ok {
+				return "", false, fmt.Errorf("package %q has no README URL", id)
+			}
+			return entry.Source, false, nil
+		}
+	}
+	return "", false, fmt.Errorf("package %q not found", id)
+}
+
 func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	source, err := s.packageGitHubSource(id)
+	readmeURL, hosted, err := s.packageReadmeURL(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	readme, err := releases.FetchGitHubReadme(source)
+	var readme string
+	if hosted {
+		readme, err = releases.FetchReadme(readmeURL)
+	} else {
+		readme, err = releases.FetchGitHubReadme(readmeURL)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

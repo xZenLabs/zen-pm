@@ -29,4 +29,5 @@ type CatalogEntry struct {
 	Assets        string
 	Constraints   string
 	PluginModule  string
+	ReadmeURL     string
 }

@@ -321,9 +321,17 @@ function AppView:paintTo(bb, x, y)
 
     local content_top = y
     content_top = Header.draw(self, bb, x, content_top, m.screen_w)
+    if self.app.state.page == "queue" then
+        self:draw_content(bb, x, content_top, m.screen_w, y + m.screen_h - content_top)
+        return
+    end
     local nav_top = y + m.screen_h - m.nav_h - m.nav_bottom_margin
-    local content_h = nav_top - content_top
-    self:draw_content(bb, x, content_top, m.screen_w, content_h)
+    local banner_h = self.app:queue_count() > 0 and Theme.scale(56) or 0
+    local content_bottom = nav_top
+    self:draw_content(bb, x, content_top, m.screen_w, content_bottom - content_top)
+    if banner_h > 0 then
+        Nav.draw_queue_banner(self, bb, x, nav_top - banner_h, m.screen_w, banner_h)
+    end
     Nav.draw(self, bb, x, nav_top, m.screen_w, m.nav_h)
 end
 
@@ -361,6 +369,8 @@ function AppView:draw_content(bb, x, y, w, h)
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)
     elseif page == "installed" then
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
+    elseif page == "queue" then
+        max_scroll = Pages.queue(self, bb, x, y, w, h, scroll)
     elseif page == "sources" then
         max_scroll = Pages.sources(self, bb, x, y, w, h, scroll)
     elseif page == "source_details" then

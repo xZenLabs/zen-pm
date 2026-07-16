@@ -23,6 +23,12 @@ func TestGitHubRepository(t *testing.T) {
 	}
 }
 
+func TestFetchReadmeRejectsNonHTTPURL(t *testing.T) {
+	if _, err := FetchReadme("file:///README.md"); err == nil {
+		t.Fatal("FetchReadme accepted a file URL")
+	}
+}
+
 func TestFetchGitHubMetadata(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.RequestURI() {

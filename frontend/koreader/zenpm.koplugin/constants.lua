@@ -36,7 +36,7 @@ return {
         { id = "media", label = "Media", icon = "media.svg" },
         { id = "utility", label = "Utility", icon = "utility.svg" },
         { id = "productivity", label = "Productivity", icon = "productivity.svg" },
-        { id = "games", label = "Games", icon = "games.svg.svg" },
+        { id = "games", label = "Games", icon = "games.svg" },
         { id = "theme", label = "Theme", icon = "theme.svg" },
         { id = "koreader-patches", label = "Patches", icon = "patch.svg" },
     },

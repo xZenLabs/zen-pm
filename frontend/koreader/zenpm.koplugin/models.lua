@@ -375,6 +375,10 @@ function Models.has_github_source(pkg)
     return source:match("^https?://github%.com/[^/]+/[^/]+/?$") ~= nil
 end
 
+function Models.has_readme(pkg)
+    return tostring(pkg and pkg.readme_url or "") ~= "" or Models.has_github_source(pkg)
+end
+
 function Models.readme_text(value)
     value = tostring(value or ""):gsub("\r\n", "\n")
     value = value:gsub("<!%-%-.-%-%->", "")

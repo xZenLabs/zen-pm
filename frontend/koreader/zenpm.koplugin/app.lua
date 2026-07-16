@@ -88,6 +88,9 @@ function App:new(plugin)
             current_category = nil,
             details_from = "search",
             details_tab = "readme",
+            queue = {},
+            queue_origin = nil,
+            queue_running = false,
             loading = nil,
             error = nil,
             log_lines = {},
@@ -117,13 +120,6 @@ local function action_present(action)
         return _("reinstall")
     end
     return _("install")
-end
-
-local function action_label(action)
-    if action == "update" then return _("Update") end
-    if action == "downgrade" then return _("Downgrade") end
-    if action == "reinstall" then return _("Reinstall") end
-    return _("Get")
 end
 
 local function action_progress(action)
@@ -162,24 +158,16 @@ local function action_done(action)
     return _("uninstalled")
 end
 
+local function queue_key(id, asset)
+    return tostring(id or "") .. "\0" .. tostring(asset or "")
+end
+
 local function package_is_koreader_plugin(pkg)
     if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
         return false
     end
     for _, platform in ipairs(pkg.platforms) do
         if Util.trim(tostring(platform or "")):lower() == "koreader" then
-            return true
-        end
-    end
-    return false
-end
-
-local function package_targets_kindle(pkg)
-    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
-        return false
-    end
-    for _, platform in ipairs(pkg.platforms) do
-        if Util.trim(tostring(platform or "")):lower() == "kindle" then
             return true
         end
     end
@@ -445,6 +433,310 @@ local function remove_patch_file(asset)
         return ok ~= nil, err
     end
     return false, _("Patch file not found.")
+end
+
+function App:queue_count()
+    return #(self.state.queue or {})
+end
+
+function App:installed_update_count()
+    local count = 0
+    for _, pkg in ipairs(self.state.packages or {}) do
+        if pkg.installed and pkg.update_available then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+function App:queue_all_updates()
+    if self.state.queue_running then return end
+    local queued = {}
+    local added = 0
+    for _, entry in ipairs(self.state.queue) do
+        queued[entry.key] = true
+    end
+    for _, pkg in ipairs(self.state.packages or {}) do
+        if pkg.installed and pkg.update_available then
+            local key = queue_key(pkg.id or pkg.name, nil)
+            if not queued[key] then
+                if self:queue_package_action(pkg, "update", nil, { silent = true }) then
+                    added = added + 1
+                end
+                queued[key] = true
+            end
+        end
+    end
+    if added > 0 then
+        Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+    end
+    self:refresh()
+end
+
+function App:queue_entry_for(pkg, action, asset, opts)
+    local id = pkg and (pkg.id or pkg.name)
+    if not id then return nil end
+    opts = opts or {}
+    local is_patch = Models.is_patch_package(pkg)
+    local display_name = is_patch and asset and asset ~= ""
+        and (_("patch") .. " " .. tostring(asset))
+        or package_title(pkg, id)
+    return {
+        key = queue_key(id, is_patch and asset or nil),
+        id = id,
+        pkg = pkg,
+        name = display_name,
+        action = action,
+        asset = asset,
+        release = opts.release,
+        is_patch = is_patch,
+        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
+            and (action_installs_package(action) or action == "uninstall"),
+        settings_deleter = action == "uninstall" and resolve_plugin_settings_deleter(pkg) or nil,
+    }
+end
+
+function App:queue_package_action(pkg, action, asset, opts)
+    if self.state.queue_running then
+        Modals.info(_("Queue is running. Please wait."))
+        return false
+    end
+    opts = opts or {}
+    local entry = self:queue_entry_for(pkg, action, asset, opts)
+    if not entry then
+        Modals.info(_("Package has no id."))
+        return false
+    end
+    for index, queued in ipairs(self.state.queue) do
+        if queued.key == entry.key then
+            self.state.queue[index] = entry
+            if not opts.silent then
+                Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+            end
+            self:refresh()
+            return true
+        end
+    end
+    table.insert(self.state.queue, entry)
+    if not opts.silent then
+        Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+    end
+    self:refresh()
+    return true
+end
+
+function App:clear_queue()
+    if self.state.queue_running then return end
+    self.state.queue = {}
+    self:refresh()
+end
+
+function App:confirm_clear_queue()
+    if self.state.queue_running or self:queue_count() == 0 then return end
+    Modals.confirm(
+        _("Are you sure you want to clear the queue?"),
+        _("Clear"),
+        function() self:clear_queue() end
+    )
+end
+
+function App:show_queue()
+    if self.state.page ~= "queue" then
+        self.state.queue_origin = {
+            page = self.state.page,
+            active_tab = self.state.active_tab,
+        }
+    end
+    self.state.page = "queue"
+    self:reset_scroll("queue")
+    self:refresh()
+end
+
+function App:close_queue()
+    if self.state.queue_running then return end
+    local origin = self.state.queue_origin or {}
+    self.state.queue_origin = nil
+    self.state.page = origin.page or "home"
+    self.state.active_tab = origin.active_tab or self.state.active_tab or "home"
+    self:refresh()
+end
+
+function App:remove_queue_entry(entry)
+    for index, queued in ipairs(self.state.queue) do
+        if queued == entry then
+            table.remove(self.state.queue, index)
+            return
+        end
+    end
+end
+
+function App:confirm_remove_queue_entry(entry)
+    if self.state.queue_running then return end
+    Modals.confirm(
+        string.format(_("Remove %s from queue?"), entry.name or _("Package")),
+        _("Remove"),
+        function()
+            self:remove_queue_entry(entry)
+            self:refresh()
+        end
+    )
+end
+
+function App:show_queue_entry_modify(entry)
+    if self.state.queue_running or not entry or not entry.pkg then return end
+    local pkg = entry.pkg
+    local remove_queue = function() self:confirm_remove_queue_entry(entry) end
+    if entry.is_patch then
+        Modals.package_modify(pkg, {
+            title_icon = self:package_icon_file(pkg),
+            remove_queue = remove_queue,
+            uninstall = entry.action ~= "uninstall" and function()
+                self:queue_package_action(pkg, "uninstall", entry.asset, nil)
+            end or nil,
+        })
+        return
+    end
+    if not pkg.installed then
+        local actions = {
+            {
+                text = _("Remove from queue"),
+                callback = remove_queue,
+            },
+        }
+        if entry.action ~= "install" then
+            table.insert(actions, {
+                text = _("Install"),
+                callback = function()
+                    self:confirm_package_action(pkg, "install")
+                end,
+            })
+        end
+        Modals.actions(Models.package_display_name(pkg, _("Package")), actions)
+        return
+    end
+    Modals.package_modify(pkg, {
+        title_icon = self:package_icon_file(pkg),
+        remove_queue = remove_queue,
+        update = entry.action ~= "update" and pkg.update_available and function()
+            self:confirm_package_action(pkg, "update")
+        end or nil,
+            downgrade = Models.has_github_source(pkg) and function()
+                self:prompt_package_versions(pkg)
+            end or nil,
+        uninstall = entry.action ~= "uninstall" and function()
+            self:confirm_package_action(pkg, "uninstall")
+        end or nil,
+    })
+end
+
+function App:queue_result_text(batch)
+    local succeeded = #batch.succeeded
+    local failed = #batch.failed
+    if failed == 0 then
+        return string.format(_("Queue completed: %d succeeded."), succeeded)
+    end
+    return string.format(_("Queue completed: %d succeeded, %d failed."), succeeded, failed)
+end
+
+function App:refresh_queue_package_state()
+    local ok, packages = self:load_packages(true, true)
+    if not ok then return end
+    self.state.packages = packages
+    local installed = Models.installed_packages(packages)
+    self.state.installed_packages = installed
+    self.state.visible_packages = self:sorted_packages("installed", Models.filter_packages(installed, self.state.filters.installed))
+end
+
+function App:finish_queue_batch(batch)
+    self:refresh_queue_package_state()
+
+    local function finish_prompts(index)
+        local cleanup = batch.settings_cleanup[index]
+        if cleanup then
+            Modals.plugin_settings_cleanup(cleanup.name .. " " .. _("uninstalled successfully.\n\nRemove plugin settings?"), function(remove_settings)
+                if remove_settings then cleanup.callback() end
+                finish_prompts(index + 1)
+            end)
+            return
+        end
+
+        local result = self:queue_result_text(batch)
+        local queue_completed = #batch.failed == 0
+        self.state.queue_running = false
+        self:refresh()
+        if batch.prompt_restart then
+            Modals.restart_koreader(result .. "\n\n" .. _("Restart KOReader to apply the changes."), function()
+                self:restart_koreader()
+            end, queue_completed and function()
+                self:close_queue()
+            end or nil)
+        else
+            if queue_completed then self:close_queue() end
+            Modals.info_for(result, #batch.failed > 0 and Constants.PACKAGE_ERROR_NOTICE_SECONDS or Constants.PACKAGE_NOTICE_SECONDS)
+        end
+    end
+    finish_prompts(1)
+end
+
+function App:run_next_queue_operation(batch)
+    local entry = batch.operations[batch.index]
+    if not entry then
+        self:finish_queue_batch(batch)
+        return
+    end
+    local position = batch.index
+    self:run_package_action(entry.pkg, entry.action, entry.asset, nil, {
+        release = entry.release,
+        settings_deleter = entry.settings_deleter,
+        queue_entry = entry,
+        status_prefix = string.format(_("Queue %d/%d: "), position, #batch.operations),
+        on_result = function(succeeded, detail, op)
+            if succeeded then
+                self:remove_queue_entry(entry)
+                table.insert(batch.succeeded, entry)
+                if entry.action == "uninstall" and type(entry.settings_deleter) == "function" then
+                    table.insert(batch.settings_cleanup, { name = entry.name, callback = entry.settings_deleter })
+                end
+                if entry.prompt_restart then batch.prompt_restart = true end
+            else
+                table.insert(batch.failed, { entry = entry, detail = detail })
+            end
+            batch.index = batch.index + 1
+            UIManager:nextTick(function()
+                self:run_next_queue_operation(batch)
+            end)
+        end,
+    })
+end
+
+function App:confirm_queue()
+    if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
+    local operations = {}
+    for _, entry in ipairs(self.state.queue) do
+        if entry.action == "uninstall" then table.insert(operations, entry) end
+    end
+    for _, entry in ipairs(self.state.queue) do
+        if entry.action ~= "uninstall" then table.insert(operations, entry) end
+    end
+    self.state.queue_running = true
+    self:run_next_queue_operation({
+        operations = operations,
+        index = 1,
+        succeeded = {},
+        failed = {},
+        settings_cleanup = {},
+        prompt_restart = false,
+    })
+    self:refresh()
+end
+
+function App:prompt_queue_confirmation()
+    if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
+    Modals.confirm(
+        _("Are you sure you want to perform all queued actions?"),
+        _("Confirm"),
+        function() self:confirm_queue() end
+    )
 end
 
 function App:show()
@@ -1087,7 +1379,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
     end
     self.state.packages = packages
     local cache_key = tostring(pkg.id or pkg.name or "")
-    if Models.has_github_source(pkg) and cache_key ~= "" then
+    if Models.has_readme(pkg) and cache_key ~= "" then
         local cached = self.state.readme_cache[cache_key]
         if cached == nil then
             local readme_ok, data = self.client:get_package_readme(cache_key)
@@ -1095,7 +1387,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             self.state.readme_cache[cache_key] = cached
         end
         if type(cached) == "string" then
-            pkg.github_readme = cached
+            pkg.readme = cached
         end
     end
     self.state.current_package = pkg
@@ -1232,10 +1524,8 @@ function App:prompt_filter(kind)
         title = _("Search category")
         hint = _("Search category...")
     end
-    Modals.input(title, self.state.filters[kind] or "", hint, _("Search"), function(text)
+    Modals.search(title, self.state.filters[kind] or "", hint, function(text)
         self:set_filter(kind, Util.trim(text))
-    end, function()
-        self:set_filter(kind, "")
     end)
 end
 
@@ -1318,6 +1608,7 @@ function App:perform_package_action(pkg, on_done)
     if pkg.installed then
         local is_koplugin = package_is_koreader_plugin(pkg)
         Modals.package_modify(pkg, {
+            title_icon = self:package_icon_file(pkg),
             info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
             end or nil,
@@ -1328,12 +1619,9 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:confirm_toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            reinstall_downgrade = Models.has_github_source(pkg) and function()
+            downgrade = Models.has_github_source(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
-            reinstall = function()
-                self:confirm_package_action(pkg, "reinstall", on_done)
-            end,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
@@ -1348,6 +1636,7 @@ end
 function App:show_unmanaged_patch_modify(pkg, on_done)
     local asset = pkg.patch_asset
     Modals.package_modify(pkg, {
+        title_icon = self:package_icon_file(pkg),
         manage_only = true,
         disabled = is_patch_disabled(pkg),
         enable_disable = function()
@@ -1362,15 +1651,13 @@ end
 function App:show_patch_modify(pkg, on_done)
     local asset = pkg.patch_asset
     Modals.package_modify(pkg, {
+        title_icon = self:package_icon_file(pkg),
         info = self.state.page ~= "package_details" and function()
             self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
         end or nil,
         disabled = is_patch_disabled(pkg),
         enable_disable = function()
             self:confirm_toggle_enable(pkg, "patch", on_done)
-        end,
-        reinstall = function()
-            self:confirm_patch_item_action(pkg, "reinstall", asset, on_done)
         end,
         uninstall = function()
             self:confirm_patch_item_action(pkg, "uninstall", asset, on_done)
@@ -1433,15 +1720,7 @@ function App:confirm_patch_item_action(pkg, action, asset, on_done)
         Modals.info(_("Patch has no file name."))
         return
     end
-    local question = _("Are you sure you want to reinstall ") .. name .. "?"
-    local label = _("Reinstall")
-    if action == "uninstall" then
-        question = _("Are you sure you want to uninstall ") .. name .. "?"
-        label = _("Uninstall")
-    end
-    Modals.confirm(question, label, function()
-        self:run_package_action(pkg, action, name, on_done, nil)
-    end)
+    self:queue_package_action(pkg, action, name, nil)
 end
 
 function App:confirm_remove_unmanaged_patch(asset, on_done)
@@ -1556,44 +1835,11 @@ function App:choose_version_release(pkg, release, action, on_done)
 end
 
 function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
-    local name = package_title(pkg, pkg.id or pkg.name)
-    local verb = action_present(action)
-    local notice = package_targets_kindle(pkg)
-        and ("\n\n" .. _("This package installs to the Kindle UI, not KOReader.")) or ""
-    Modals.confirm(
-        _("Are you sure you want to ") .. verb .. " " .. name .. " " .. _("to") .. " " .. tostring(release_tag) .. "?" .. notice,
-        action_label(action),
-        function()
-            self:run_package_action(pkg, action, asset, on_done, { release = release_tag })
-        end
-    )
+    self:queue_package_action(pkg, action, asset, { release = release_tag })
 end
 
 function App:confirm_package_action(pkg, action, on_done)
-    local name = package_title(pkg, "?")
-    local question = _("Are you sure you want to download ") .. name .. "?"
-    local label = _("Get")
-    if action == "reinstall" then
-        question = _("Are you sure you want to reinstall ") .. name .. "?"
-        label = _("Reinstall")
-    elseif action == "update" then
-        local latest = pkg.latest_version and pkg.latest_version ~= "" and (" " .. _("to") .. " " .. pkg.latest_version) or ""
-        question = _("Are you sure you want to update ") .. name .. latest .. "?"
-        label = _("Update")
-    elseif action == "uninstall" then
-        question = _("Are you sure you want to uninstall ") .. name .. "?"
-        label = _("Uninstall")
-    end
-    if action_installs_package(action) and package_targets_kindle(pkg) then
-        question = question .. "\n\n" .. _("This package installs to the Kindle UI, not KOReader.")
-    end
-    local opts = nil
-    if action == "uninstall" then
-        opts = { settings_deleter = resolve_plugin_settings_deleter(pkg) }
-    end
-    Modals.confirm(question, label, function()
-        self:start_package_action(pkg, action, on_done, opts)
-    end)
+    self:start_package_action(pkg, action, on_done, nil)
 end
 
 function App:start_package_action(pkg, action, on_done, opts)
@@ -1609,7 +1855,7 @@ function App:start_package_action(pkg, action, on_done, opts)
             return
         end
     end
-    self:run_package_action(pkg, action, nil, on_done, opts)
+    self:queue_package_action(pkg, action, nil, opts)
 end
 
 function App:choose_package_asset(pkg, action, candidates, on_done, opts)
@@ -1620,13 +1866,13 @@ function App:choose_package_asset(pkg, action, candidates, on_done, opts)
             table.insert(rows, {
                 text = name,
                 callback = function()
-                    self:run_package_action(pkg, action, name, on_done, opts)
+                    self:queue_package_action(pkg, action, name, opts)
                 end,
             })
         end
     end
     if #rows == 0 then
-        self:run_package_action(pkg, action, nil, on_done, opts)
+        self:queue_package_action(pkg, action, nil, opts)
         return
     end
     local title = Models.is_patch_package(pkg)
@@ -1644,25 +1890,12 @@ function App:confirm_package_asset_action(pkg, asset, on_done)
         Modals.info(_("Patch has no file name."))
         return
     end
-    local name = package_title(pkg, pkg.id or pkg.name)
     local patch_name = tostring(asset.asset)
     if Models.patch_file_installed(pkg, patch_name) then
-        Modals.confirm(
-            _("Are you sure you want to uninstall ") .. patch_name .. "?",
-            _("Uninstall"),
-            function()
-                self:run_package_action(pkg, "uninstall", patch_name, on_done, nil)
-            end
-        )
+        self:queue_package_action(pkg, "uninstall", patch_name, nil)
         return
     end
-    Modals.confirm(
-        _("Are you sure you want to install ") .. patch_name .. " " .. _("from") .. " " .. name .. "?",
-        _("Install"),
-        function()
-            self:run_package_action(pkg, "install", patch_name, on_done, nil)
-        end
-    )
+    self:queue_package_action(pkg, "install", patch_name, nil)
 end
 
 function App:run_package_action(pkg, action, asset, on_done, opts)
@@ -1677,13 +1910,18 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
     self.busy = true
-    Modals.status(action_progress(action) .. " "
+    Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
         .. display_name .. "\n\n" .. _("Downloading... Please wait."))
     local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
     if not ok then
         self.busy = false
         Modals.close_status()
-        Modals.info_for(_("Failed to start package action: ") .. tostring(err), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        local message = _("Failed to start package action: ") .. tostring(err)
+        if opts and opts.on_result then
+            opts.on_result(false, message)
+        else
+            Modals.info_for(message, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        end
         return
     end
     self:poll_package_action({
@@ -1700,6 +1938,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
         on_done = on_done,
+        on_result = opts and opts.on_result or nil,
     }, 1)
 end
 
@@ -1782,7 +2021,11 @@ function App:poll_package_action(op, attempt)
         if detail then
             self.busy = false
             Modals.close_status()
-            Modals.info_for(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+            if op.on_result then
+                op.on_result(false, detail, op)
+            else
+                Modals.info_for(action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " failed.\n\n" .. detail, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+            end
             return
         end
 
@@ -1794,7 +2037,12 @@ function App:poll_package_action(op, attempt)
             if attempt >= Constants.MAX_POLL_RETRIES then
                 self.busy = false
                 Modals.close_status()
-                Modals.info_for(_("Package operation status could not be checked. See Debug log."), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+                local message = _("Package operation status could not be checked. See Debug log.")
+                if op.on_result then
+                    op.on_result(false, message, op)
+                else
+                    Modals.info_for(message, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+                end
                 return
             end
             self:poll_package_action(op, attempt + 1)
@@ -1811,6 +2059,10 @@ function App:poll_package_action(op, attempt)
             self.busy = false
             local done = action_done(op.action)
             Modals.close_status()
+            if op.on_result then
+                op.on_result(true, nil, op)
+                return
+            end
             local finish = function()
                 if op.prompt_restart then
                     local tail = _(" successfully.\n\nRestart KOReader to load the plugin.")
@@ -1845,7 +2097,11 @@ function App:poll_package_action(op, attempt)
                 message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
             end
             Modals.close_status()
-            Modals.info_for(message, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+            if op.on_result then
+                op.on_result(false, message, op)
+            else
+                Modals.info_for(message, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+            end
         else
             self:poll_package_action(op, attempt + 1)
         end
@@ -1950,7 +2206,7 @@ function App:show_actions(anchor)
             end,
         },
         {
-            text = self.state.update_available and "↑  " .. _("Update") or _("Update"),
+            text = self.state.update_available and "\239\128\155  " .. _("Update") or _("Update"),
             callback = function() self:start_update() end,
         },
         {
@@ -2022,49 +2278,78 @@ function App:show_about()
 end
 
 function App:start_update()
-    Modals.confirm(_("Check for and start a ZenPM update?"), _("Update"), function()
-        local companion_update_started = false
-        if self.daemon:is_android() then
-            local started, err = self.daemon:request_android_update()
-            if not started then
-                Modals.info(_("Companion update failed to start: ") .. tostring(err))
-                return
-            end
-            companion_update_started = true
-        end
-        self.busy = true
-        Modals.status(_("Checking for ZenPM updates..."))
-        UIManager:forceRePaint()
-        local completed, ok, result = pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
-        self.busy = false
-        Modals.close_status()
-        if not completed then
-            Modals.info(_("Update failed: ") .. tostring(ok))
-            return
-        end
-        if not ok then
-            Modals.info(_("Update failed: ") .. tostring(result))
-            return
-        end
-        if result == "up_to_date" then
-            self:set_update_available(false)
-            if companion_update_started then
-                Modals.info(_("ZenPM Companion is checking for an update."))
-            else
-                Modals.info(_("ZenPM is up to date."))
-            end
-            return
-        end
-
-        -- The next startup copies the new bundled backend; stop the old one
-        -- now so it cannot be reused after KOReader restarts.
+    if self.busy then return end
+    self.busy = true
+    Modals.status(_("Checking for update..."))
+    UIManager:forceRePaint()
+    local completed, ok, result = pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
+    self.busy = false
+    Modals.close_status()
+    if not completed then
+        Modals.info(_("Update failed: ") .. tostring(ok))
+        return
+    end
+    if not ok then
+        Modals.info(_("Update failed: ") .. tostring(result))
+        return
+    end
+    if result == "up_to_date" then
         self:set_update_available(false)
-        self.daemon:stop_standalone_backend()
-        self.backend_ready = false
-        Modals.restart_koreader(
-            _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
-            function() self:restart_koreader() end)
-    end)
+        Modals.info(_("ZenPM is up to date."))
+        return
+    end
+
+    self:set_update_available(true)
+    Modals.confirm(
+        _("ZenPM update v") .. tostring(result) .. _(" is available. Update now?"),
+        _("Update"),
+        function() self:apply_update() end,
+        true
+    )
+end
+
+function App:apply_update()
+    local companion_update_started = false
+    if self.daemon:is_android() then
+        local started, err = self.daemon:request_android_update()
+        if not started then
+            Modals.info(_("Companion update failed to start: ") .. tostring(err))
+            return
+        end
+        companion_update_started = true
+    end
+    self.busy = true
+    Modals.status(_("Updating ZenPM..."))
+    UIManager:forceRePaint()
+    local completed, ok, result = pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
+    self.busy = false
+    Modals.close_status()
+    if not completed then
+        Modals.info(_("Update failed: ") .. tostring(ok))
+        return
+    end
+    if not ok then
+        Modals.info(_("Update failed: ") .. tostring(result))
+        return
+    end
+    if result == "up_to_date" then
+        self:set_update_available(false)
+        if companion_update_started then
+            Modals.info(_("ZenPM Companion is checking for an update."))
+        else
+            Modals.info(_("ZenPM is up to date."))
+        end
+        return
+    end
+
+    -- The next startup copies the new bundled backend; stop the old one
+    -- now so it cannot be reused after KOReader restarts.
+    self:set_update_available(false)
+    self.daemon:stop_standalone_backend()
+    self.backend_ready = false
+    Modals.restart_koreader(
+        _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
+        function() self:restart_koreader() end)
 end
 
 function App:image_summary(pkg)

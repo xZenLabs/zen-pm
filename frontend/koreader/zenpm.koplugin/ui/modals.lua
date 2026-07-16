@@ -5,18 +5,34 @@ local Geom = require("ui/geometry")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconWidget = require("ui/widget/iconwidget")
+local IconButton = require("ui/widget/iconbutton")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local LeftContainer = require("ui/widget/container/leftcontainer")
+local OverlapGroup = require("ui/widget/overlapgroup")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local Screen = require("device").screen
 local Models = require("models")
+local InlineIcons = require("ui/inline_icon_map")
+local Images = require("ui/images")
+local Theme = require("ui/theme")
 local _ = require("gettext")
 
 local Modals = {}
 local status_modal = nil
+
+local InputClearOverlay = OverlapGroup:extend{}
+
+function InputClearOverlay:propagateEvent(event)
+    for i = #self, 1, -1 do
+        if self[i]:handleEvent(event) then
+            return true
+        end
+    end
+    return false
+end
 
 function Modals.info(text)
     UIManager:show(InfoMessage:new{ text = text })
@@ -48,12 +64,22 @@ function Modals.close_status()
     end
 end
 
-function Modals.confirm(text, ok_text, ok_callback)
-    UIManager:show(ConfirmBox:new{
+function Modals.confirm(text, ok_text, ok_callback, close_before_callback)
+    local dialog
+    dialog = ConfirmBox:new{
         text = text,
         ok_text = ok_text or _("OK"),
-        ok_callback = ok_callback,
-    })
+        keep_dialog_open = close_before_callback,
+        ok_callback = function()
+            if close_before_callback then
+                UIManager:close(dialog)
+                UIManager:nextTick(ok_callback)
+            else
+                ok_callback()
+            end
+        end,
+    }
+    UIManager:show(dialog)
 end
 
 function Modals.input(title, input, hint, ok_text, callback, clear_callback)
@@ -96,84 +122,122 @@ function Modals.input(title, input, hint, ok_text, callback, clear_callback)
     dialog:onShowKeyboard()
 end
 
+function Modals.search(title, input, hint, callback)
+    local dialog
+    dialog = InputDialog:new{
+        title = title,
+        input = input or "",
+        input_hint = hint,
+        title_bar_left_icon = "close",
+        title_bar_left_icon_tap_callback = function()
+            UIManager:close(dialog)
+        end,
+        buttons = {
+            {
+                {
+                    text = InlineIcons.label("search", _("Search")),
+                    is_enter_default = true,
+                    callback = function()
+                        local text = dialog:getInputText()
+                        UIManager:close(dialog)
+                        callback(text)
+                    end,
+                },
+            },
+        },
+    }
+
+    local input_container = dialog.vgroup[3]
+    local clear_button = IconButton:new{
+        icon = "close",
+        width = Theme.scale(20),
+        height = Theme.scale(20),
+        padding = Theme.scale(10),
+        allow_flash = false,
+        show_parent = dialog,
+        callback = function()
+            dialog:setInputText("", false, false)
+            dialog:onShowKeyboard()
+        end,
+    }
+    local input_size = dialog._input_widget:getSize()
+    input_container[1] = InputClearOverlay:new{
+        dimen = input_size,
+        dialog._input_widget,
+        clear_button,
+    }
+    clear_button.overlap_offset = {
+        input_size.w - clear_button.dimen.w,
+        math.floor((input_size.h - clear_button.dimen.h) / 2),
+    }
+
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+end
+
 function Modals.package_modify(pkg, callbacks)
     local dialog
     local buttons = {}
-    if callbacks.info then
+    local function add_button(icon, text, callback)
         table.insert(buttons, {
             {
-                text = _("Info"),
+                text = InlineIcons.label(icon, text),
+                align = "left",
                 callback = function()
                     UIManager:close(dialog)
-                    callbacks.info()
+                    callback()
                 end,
             },
         })
+    end
+    if callbacks.remove_queue then
+        add_button("remove", _("Remove from queue"), callbacks.remove_queue)
+    end
+    if callbacks.info then
+        add_button("info", _("Details"), callbacks.info)
     end
     if callbacks.update then
-        table.insert(buttons, {
-            {
-                text = _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""),
-                callback = function()
-                    UIManager:close(dialog)
-                    callbacks.update()
-                end,
-            },
-        })
+        add_button("update", _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""), callbacks.update)
+    end
+    if not callbacks.manage_only and callbacks.downgrade then
+        add_button("downgrade", _("Downgrade"), callbacks.downgrade)
     end
     if callbacks.enable_disable then
-        table.insert(buttons, {
-            {
-                text = callbacks.disabled and _("Enable") or _("Disable"),
-                callback = function()
-                    UIManager:close(dialog)
-                    callbacks.enable_disable()
-                end,
-            },
-        })
+        add_button(callbacks.disabled and "enable" or "disable", callbacks.disabled and _("Enable") or _("Disable"), callbacks.enable_disable)
     end
-    if not callbacks.manage_only then
-        if callbacks.reinstall_downgrade then
-            table.insert(buttons, {
-                {
-                    text = _("Reinstall / Downgrade"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        callbacks.reinstall_downgrade()
-                    end,
-                },
-            })
-        else
-            table.insert(buttons, {
-                {
-                    text = _("Reinstall"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        callbacks.reinstall()
-                    end,
-                },
-            })
-        end
+    if callbacks.uninstall then
+        add_button("uninstall", _("Uninstall"), callbacks.uninstall)
     end
-    table.insert(buttons, {
-        {
-            text = _("Uninstall"),
-            callback = function()
-                UIManager:close(dialog)
-                callbacks.uninstall()
-            end,
-        },
-    })
-    table.insert(buttons, {
-        {
-            text = _("Cancel"),
-            callback = function() UIManager:close(dialog) end,
-        },
-    })
+    local title = Models.package_display_name(pkg, _("Package"))
+    local title_icon = callbacks.title_icon
+        or Images.category_icon(pkg and pkg.category)
+        or Images.asset("packages.svg")
     dialog = ButtonDialog:new{
-        title = Models.package_display_name(pkg, _("Package")),
+        title = nil,
         buttons = buttons,
     }
+    local icon_size = Screen:scaleBySize(28)
+    local gap = Screen:scaleBySize(8)
+    dialog:addWidget(LeftContainer:new{
+        not_focusable = true,
+        dimen = Geom:new{
+            w = dialog:getAddedWidgetAvailableWidth(),
+            h = icon_size,
+        },
+        HorizontalGroup:new{
+            align = "center",
+            IconWidget:new{
+                file = title_icon,
+                width = icon_size,
+                height = icon_size,
+            },
+            HorizontalSpan:new{ width = gap },
+            TextWidget:new{
+                text = title,
+                face = Font:getFace("infofont"),
+            },
+        },
+    })
     UIManager:show(dialog)
 end
 
@@ -282,7 +346,7 @@ function Modals.plugin_settings_cleanup(text, callback)
     UIManager:show(dialog)
 end
 
-function Modals.restart_koreader(text, restart_callback)
+function Modals.restart_koreader(text, restart_callback, restart_later_callback)
     local dialog
     dialog = ButtonDialog:new{
         title = text,
@@ -290,7 +354,10 @@ function Modals.restart_koreader(text, restart_callback)
             {
                 {
                     text = _("Restart later"),
-                    callback = function() UIManager:close(dialog) end,
+                    callback = function()
+                        UIManager:close(dialog)
+                        if restart_later_callback then restart_later_callback() end
+                    end,
                 },
                 {
                     text = _("Restart now"),

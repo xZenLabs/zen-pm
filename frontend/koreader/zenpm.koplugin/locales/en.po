@@ -312,3 +312,63 @@ msgstr "uninstall"
 
 msgid "uninstalled"
 msgstr "uninstalled"
+
+msgid "Confirm"
+msgstr "Confirm"
+
+msgid "Install"
+msgstr "Install"
+
+msgid "No queued operations."
+msgstr "No queued operations."
+
+msgid "Queue"
+msgstr "Queue"
+
+msgid "Queued"
+msgstr "Queued"
+
+msgid "Queue %d/%d: "
+msgstr "Queue %d/%d: "
+
+msgid "Queue completed: %d succeeded."
+msgstr "Queue completed: %d succeeded."
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Queue completed: %d succeeded, %d failed."
+
+msgid "Queue is running. Please wait."
+msgstr "Queue is running. Please wait."
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Restart KOReader to apply the changes."
+
+msgid "Updates"
+msgstr "Updates"
+
+msgid "Update All"
+msgstr "Update All"
+
+msgid "%d packages queued"
+msgstr "%d packages queued"
+
+msgid "1 package queued"
+msgstr "1 package queued"
+
+msgid "Remove %s from queue?"
+msgstr "Remove %s from queue?"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Are you sure you want to clear the queue?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Are you sure you want to perform all queued actions?"
+
+msgid "Added to Queue"
+msgstr "Added to Queue"
+
+msgid "Remove from queue"
+msgstr "Remove from queue"
+
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "uninstalled successfully.\n\nRemove plugin settings?"

@@ -5,6 +5,7 @@
 local Cards = require("ui/cards")
 local Header = require("ui/header")
 local I18n = require("i18n")
+local Images = require("ui/images")
 local Models = require("models")
 local P = require("ui/primitives")
 local Scroll = require("ui/scroll")
@@ -15,6 +16,7 @@ local _ = require("gettext")
 local Pages = {}
 local PACKAGE_ROWS_PER_SCREEN = 4
 local PATCH_ROWS_PER_SCREEN = 5
+local COMPACT_ROWS_PER_SCREEN = 6
 
 local function ellipsize(value, limit)
     local text = tostring(value or "")
@@ -31,6 +33,12 @@ end
 
 local function patch_row_height(list_h, gap)
     return math.max(Theme.metrics().touch_min, math.floor((list_h - gap * (PATCH_ROWS_PER_SCREEN - 1)) / PATCH_ROWS_PER_SCREEN))
+end
+
+local function compact_row_height(list_h, gap)
+    local m = Theme.metrics()
+    return math.max(m.touch_min, math.min(m.category_h,
+        math.floor((list_h - gap * (COMPACT_ROWS_PER_SCREEN - 1)) / COMPACT_ROWS_PER_SCREEN)))
 end
 
 local function patch_asset_meta(asset)
@@ -103,10 +111,30 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         count = count .. "/" .. tostring(#(total or {}))
     end
     local cy = y
-    local sort_s = Theme.scale(42)
-    local sort_x = x + w - pad - sort_s
-    P.text(bb, title .. " (" .. count .. ")", x + pad, cy + Theme.scale(6), sort_x - x - pad - Theme.scale(8), "heading", { bold = true })
-    Header.draw_sort_button(view, bb, sort_x, cy + Theme.scale(6), kind)
+    local action_w = Theme.scale(42)
+    local action_x = x + w - pad - action_w
+    local heading = title .. " (" .. count .. ")"
+    if kind == "installed" then
+        action_w = Theme.scale(180)
+        action_x = x + w - pad - action_w
+        heading = _("Installed") .. " (" .. tostring(#(total or {})) .. ")"
+        local updates = view.app:installed_update_count()
+        local enabled = updates > 0 and not view.app.state.queue_running
+        P.box(bb, action_x, cy + Theme.scale(6), action_w, Theme.scale(42), {
+            border_color = enabled and Theme.border or Theme.soft,
+            background = enabled and Theme.panel or Theme.bg,
+            radius = math.floor(Theme.scale(42) / 2),
+        })
+        P.center_text_box(bb, _("Update All") .. " (" .. tostring(updates) .. ")", action_x, cy + Theme.scale(6), action_w, Theme.scale(42), "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+        if enabled then
+            P.hit(view, action_x, cy + Theme.scale(6), action_w, Theme.scale(42), function()
+                view.app:queue_all_updates()
+            end, "upgrade-all")
+        end
+    else
+        Header.draw_sort_button(view, bb, action_x, cy + Theme.scale(6), kind)
+    end
+    P.text(bb, heading, x + pad, cy + Theme.scale(6), action_x - x - pad - Theme.scale(8), "heading", { bold = true })
     cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
@@ -127,6 +155,92 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
+    end)
+end
+
+local function queue_action_text(action)
+    if action == "uninstall" then return _("Uninstall") end
+    if action == "update" then return _("Update") end
+    if action == "downgrade" then return _("Downgrade") end
+    if action == "reinstall" then return _("Reinstall") end
+    return _("Install")
+end
+
+local function queue_action_icon(action)
+    if action == "uninstall" then return "uninstall.svg" end
+    if action == "reinstall" then return "reinstall.svg" end
+    if action == "install" then return "download.svg" end
+    if action == "downgrade" then return "downgrade.svg" end
+    return "upgrade.svg"
+end
+
+local function queue_version(value)
+    value = tostring(value or "")
+    if value == "" then return "v?" end
+    return value:match("^[vV]") and value or "v" .. value
+end
+
+local function queue_version_line(entry)
+    local pkg = entry.pkg or {}
+    local current = pkg.installed and (pkg.installed_version or pkg.version) or nil
+    if entry.is_patch then
+        current = pkg.installed_version or pkg.version
+    end
+    local text = queue_action_text(entry.action) .. " " .. queue_version(current)
+    if entry.action == "update" or entry.action == "downgrade" then
+        local target = entry.release or pkg.latest_version or pkg.version
+        text = text .. "  →  " .. queue_version(target)
+    elseif entry.action == "install" then
+        local target = entry.release or pkg.latest_version or pkg.version
+        text = queue_action_text(entry.action) .. " " .. queue_version(target)
+    end
+    return text
+end
+
+function Pages.queue(view, bb, x, y, w, h, scroll)
+    local m = Theme.metrics()
+    local pad = m.pad
+    local entries = view.app.state.queue or {}
+    local clear_h = Theme.scale(42)
+    local clear_icon_s = clear_h - Theme.scale(14)
+    local clear_label = _("Clear")
+    local clear_label_size = P.text_size(clear_label, Theme.scale(128), "small", { bold = true })
+    local clear_w = Theme.scale(14) + clear_icon_s + Theme.scale(6) + clear_label_size.w + Theme.scale(14)
+    local clear_x = x + pad
+    local clear_y = y + Theme.scale(4)
+    local clear_enabled = #entries > 0 and not view.app.state.queue_running
+    P.box(bb, clear_x, clear_y, clear_w, clear_h, {
+        border = false,
+        background = clear_enabled and Theme.panel or Theme.bg,
+    })
+    P.image(bb, Images.asset("clear.svg"), clear_x + Theme.scale(7), clear_y + Theme.scale(7), clear_icon_s, clear_icon_s, { is_icon = true })
+    P.vcenter_text(bb, clear_label, clear_x + Theme.scale(7) + clear_icon_s + Theme.scale(6), clear_y, clear_label_size.w, clear_h, "small", { bold = true, color = clear_enabled and Theme.ink or Theme.muted })
+    if clear_enabled then
+        P.hit(view, clear_x, clear_y, clear_w, clear_h, function() view.app:confirm_clear_queue() end, "clear-queue")
+    end
+    local list_y = clear_y + clear_h + Theme.scale(8)
+    local list_h = h - (list_y - y) - Theme.scale(8)
+    if #entries == 0 then
+        P.text(bb, _("No queued operations."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
+        Scroll.set_list_bounds(view, x, list_y, w, list_h, m.card_h + m.card_gap)
+        return 0
+    end
+    local row_h = compact_row_height(list_h, m.card_gap)
+    return Scroll.scrolled_list(view, bb, entries, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(entry, row_y, scrollable)
+        local gutter = scrollable and Theme.scale(14) or 0
+        local row_x = x + pad
+        local row_w = w - pad * 2 - gutter
+        Cards.compact(view, bb, row_x, row_y, row_w, {
+            height = row_h,
+            icon = view.app:package_icon_file(entry.pkg),
+            icon_fallback = "?",
+            title = entry.name or _("Package"),
+            subtitle = queue_version_line(entry),
+            subtitle_color = Theme.ink,
+            right_icon = Images.asset(queue_action_icon(entry.action)),
+            callback = function() view.app:show_queue_entry_modify(entry) end,
+            hit_id = "queue-entry:" .. tostring(entry.key),
+        })
     end)
 end
 
@@ -167,9 +281,10 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, m.category_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, m.category_h, m.card_gap, function(category, row_y, scrollable)
+    local row_h = compact_row_height(list_h, m.card_gap)
+    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter)
+        Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, { height = row_h })
     end)
 end
 
@@ -235,9 +350,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
-    local readme = Models.readme_text(pkg.github_readme)
+    local readme = Models.readme_text(pkg.readme)
     local content = readme
-    local heading = _("GitHub README")
+    local heading = _("README")
     if content == "" then
         content = I18n.dynamic_or(pkg.description, _("No description available."))
         heading = _("Description")
@@ -264,7 +379,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
                 view.app:set_package_details_tab(id)
             end, "details-tab:" .. id)
         end
-        draw_tab("readme", _("GitHub README"), inner_x, tab_w)
+        draw_tab("readme", _("README"), inner_x, tab_w)
         draw_tab("patches", _("Patches"), inner_x + tab_w + gap, inner_w - tab_w - gap)
         iy = iy + tab_h + Theme.scale(14)
     else
