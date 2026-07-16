@@ -115,7 +115,7 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     local action_x = x + w - pad - action_w
     local heading = title .. " (" .. count .. ")"
     if kind == "installed" then
-        action_w = Theme.scale(180)
+        action_w = Theme.scale(200)
         action_x = x + w - pad - action_w
         heading = _("Installed") .. " (" .. tostring(#(total or {})) .. ")"
         local updates = view.app:installed_update_count()

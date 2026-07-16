@@ -136,7 +136,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         or (pkg.installed and pkg.update_available and Images.asset("upgrade.svg") or nil)
     local action_text_size = P.text_size(action_text, Theme.scale(256), "small", { bold = true })
     local action_w = math.max(opts.action_w or m.action_w, action_text_size.w + Theme.scale(24))
-    local action_icon_size = pkg.installed and pkg.update_available and Theme.font_scale(24) or Theme.font_scale(18)
+    local action_icon_size = (queued or (pkg.installed and pkg.update_available)) and Theme.font_scale(24) or Theme.font_scale(18)
     if action_icon then
         action_w = action_w + action_icon_size + Theme.font_scale(4)
     end
