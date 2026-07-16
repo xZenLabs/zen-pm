@@ -943,17 +943,11 @@ function App:ensure_backend()
     end
 
     self:set_loading(_("Loading packages, please wait"))
-    local ok, data = self.daemon:ensure(self.client, changed)
-    if not ok then
-        local message = data or _("ZenPM daemon not reachable. Re-run ZenPM installer if it is not running.")
-        self:set_error(message)
-        Modals.info(message)
-        self.backend_ready = false
-        return false
-    end
-    self.backend_ready = true
-    self.version = data and data.version or "?"
-    return true
+    -- Do not use Daemon:ensure here: it retries with socket.sleep() on the
+    -- UI thread. Startup is scheduled by start_backend_then_reload() so touch
+    -- input remains responsive while the companion comes up.
+    self:start_backend_then_reload()
+    return false
 end
 
 function App:platform()

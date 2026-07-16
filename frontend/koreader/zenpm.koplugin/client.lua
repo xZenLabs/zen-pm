@@ -35,7 +35,7 @@ function Client:build_url(path)
     return self.base_url .. path
 end
 
-function Client:request(method, path, body)
+function Client:request(method, path, body, timeout)
     local url = self:build_url(path)
     local sink = {}
     local headers = {
@@ -68,7 +68,9 @@ function Client:request(method, path, body)
     end
 
     if ok_socketutil then
-        socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
+        socketutil:set_timeout(
+            timeout and timeout.block or socketutil.LARGE_BLOCK_TIMEOUT,
+            timeout and timeout.total or socketutil.LARGE_TOTAL_TIMEOUT)
     end
 
     local code, resp_headers, status = socket.skip(1, requester.request(request))
@@ -139,7 +141,9 @@ function Client:download(path)
 end
 
 function Client:health()
-    return self:request("GET", "/health", nil)
+    -- Startup runs on KOReader's UI thread. A daemon that is unavailable or
+    -- wedged must not make the reader appear unresponsive while it is probed.
+    return self:request("GET", "/health", nil, { block = 1, total = 1 })
 end
 
 function Client:list_repos()
