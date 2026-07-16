@@ -67,15 +67,12 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 func TestInstallGenericPluginNatively(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
-	koRoot := filepath.Join(t.TempDir(), "koreader")
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
 	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
-
 	st, err := state.Init("host")
 	if err != nil {
 		t.Fatal(err)
@@ -134,18 +131,37 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 }
 
+func TestRemoveKOReaderPluginAcceptsRelativeTrackedPath(t *testing.T) {
+	root := t.TempDir()
+	plugin := filepath.Join(root, "plugins", "solitaire.koplugin")
+	tracking := filepath.Join(root, ".zenpm-plugins", "solitaire.koplugin")
+	if err := os.MkdirAll(plugin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(tracking), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tracking, []byte("plugin_dir=plugins/solitaire.koplugin\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeKOReaderPlugin(root, "solitaire.koplugin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(plugin); !os.IsNotExist(err) {
+		t.Fatalf("plugin was not removed: %v", err)
+	}
+}
+
 func TestInstallGenericPatchNatively(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
-	koRoot := filepath.Join(t.TempDir(), "koreader")
-	if err := os.MkdirAll(koRoot, 0755); err != nil {
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
-
 	st, err := state.Init("host")
 	if err != nil {
 		t.Fatal(err)
@@ -686,7 +702,11 @@ func TestSelectAssetNeedsChoiceForPatchPackages(t *testing.T) {
 
 func TestInstallAndUninstallEnvResolveKOReaderOverride(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "koreader")
+	plugins := filepath.Join(root, "external", "plugins")
+	patches := filepath.Join(root, "external", "patches")
 	t.Setenv("ZENPM_KOREADER_DIR", root)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	t.Setenv("ZENPM_KOREADER_PATCH_DIR", patches)
 
 	m := &Manager{plat: "kindle"}
 	installEnv := m.installEnv(&repo.CatalogEntry{ID: "patch"}, "")
@@ -696,9 +716,27 @@ func TestInstallAndUninstallEnvResolveKOReaderOverride(t *testing.T) {
 		if got := env["ZENPM_KOREADER_DIR"]; got != root {
 			t.Fatalf("%s ZENPM_KOREADER_DIR = %q, want %q", name, got, root)
 		}
-		if got := env["ZENPM_KOREADER_PLUGIN_DIR"]; got != filepath.Join(root, "plugins") {
-			t.Fatalf("%s ZENPM_KOREADER_PLUGIN_DIR = %q, want %q", name, got, filepath.Join(root, "plugins"))
+		if got := env["ZENPM_KOREADER_PLUGIN_DIR"]; got != plugins {
+			t.Fatalf("%s ZENPM_KOREADER_PLUGIN_DIR = %q, want %q", name, got, plugins)
 		}
+		if got := env["ZENPM_KOREADER_PATCH_DIR"]; got != patches {
+			t.Fatalf("%s ZENPM_KOREADER_PATCH_DIR = %q, want %q", name, got, patches)
+		}
+	}
+}
+
+func TestKOReaderDirectoriesUseExplicitEnvironment(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "koreader")
+	plugins := filepath.Join(root, "external", "plugins")
+	patches := filepath.Join(root, "external", "patches")
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	t.Setenv("ZENPM_KOREADER_PATCH_DIR", patches)
+
+	if got := koreaderPluginDir(root); got != plugins {
+		t.Fatalf("koreaderPluginDir() = %q, want %q", got, plugins)
+	}
+	if got := koreaderPatchDir(root); got != patches {
+		t.Fatalf("koreaderPatchDir() = %q, want %q", got, patches)
 	}
 }
 

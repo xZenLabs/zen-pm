@@ -1,12 +1,18 @@
 plugins { id 'com.android.application' }
 
 def zenpmVersion = file('../../VERSION').text.trim()
-def zenpmVersionParts = zenpmVersion.replaceFirst('^v', '').tokenize('-')[0].tokenize('.')
+def zenpmVersionValue = zenpmVersion.replaceFirst('^v', '')
+def zenpmVersionParts = zenpmVersionValue.tokenize('-')[0].tokenize('.')
 if (zenpmVersionParts.size() != 3) {
     throw new GradleException("VERSION must be major.minor.patch, got: ${zenpmVersion}")
 }
-def zenpmVersionCode = zenpmVersionParts[0].toInteger() * 1000000 +
-    zenpmVersionParts[1].toInteger() * 10000 + zenpmVersionParts[2].toInteger()
+def zenpmPrereleaseMatcher = zenpmVersionValue =~ /[-+].*?(\d+)$/
+def zenpmPrereleaseCode = zenpmPrereleaseMatcher.find() ? zenpmPrereleaseMatcher.group(1).toInteger() : 999
+if (zenpmPrereleaseCode > 998) {
+    throw new GradleException("VERSION prerelease number must be below 999, got: ${zenpmVersion}")
+}
+def zenpmVersionCode = zenpmVersionParts[0].toInteger() * 10000000 +
+    zenpmVersionParts[1].toInteger() * 100000 + zenpmVersionParts[2].toInteger() * 1000 + zenpmPrereleaseCode
 def releaseKeystore = System.getenv('ANDROID_KEYSTORE_PATH')
 
 android {

@@ -367,25 +367,30 @@ local function latest_release(daemon, allow_prerelease)
         return false, "No compatible ZenPM release is available for this platform."
     end
     log_info("selected release", release.tag, "asset=", release.asset.name)
-    if not version_gt(release.tag, daemon:plugin_version()) then
-        log_info("already up to date", daemon:plugin_version())
-        return true, nil
-    end
     return true, release
 end
 
 function Updater:check(daemon, allow_prerelease)
     local ok, release_or_err = latest_release(daemon, allow_prerelease)
     if not ok then return false, release_or_err end
-    if not release_or_err then return true, "up_to_date" end
-    return true, release_or_err.version
+    local release = release_or_err
+    local plugin_update = release and version_gt(release.tag, daemon:plugin_version())
+    local companion_version = daemon:is_android() and daemon:android_companion_version() or nil
+    local companion_update = release and companion_version and version_gt(release.tag, companion_version)
+    if not plugin_update and not companion_update then
+        log_info("already up to date", daemon:plugin_version(), companion_version or "")
+        return true, "up_to_date"
+    end
+    return true, release.version
 end
 
 function Updater:update(daemon, allow_prerelease)
     local ok, release_or_err = latest_release(daemon, allow_prerelease)
     if not ok then return false, release_or_err end
     local release = release_or_err
-    if not release then return true, "up_to_date" end
+    if not release or not version_gt(release.tag, daemon:plugin_version()) then
+        return true, "up_to_date"
+    end
 
     local plugin_dir = Constants.PLUGIN_DIR
     local plugins_dir = plugin_dir:match("^(.*)/[^/]+$")

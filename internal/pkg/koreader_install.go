@@ -112,12 +112,8 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 }
 
 func (m *Manager) koreaderRoot() (string, error) {
-	explicitRoot := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_ROOT"))
-	if explicitRoot != "" {
-		explicitRoot = filepath.Clean(explicitRoot)
-	}
 	for _, root := range koreaderRootCandidates(m.plat) {
-		if isKOReaderRoot(root) || (root == explicitRoot && isKOReaderPluginRoot(root)) {
+		if isKOReaderRoot(root) || isKOReaderPluginRoot(root) {
 			return root, nil
 		}
 	}
@@ -135,16 +131,29 @@ func isKOReaderRoot(root string) bool {
 	return err == nil
 }
 
-// Android keeps KOReader's runnable files inside its APK, while the external
-// KOReader data directory only contains user files such as plugins. The
-// companion supplies that directory explicitly.
+// Some KOReader platforms keep runnable files separately from the user data
+// directory, which contains plugins and patches.
 func isKOReaderPluginRoot(root string) bool {
 	info, err := os.Stat(filepath.Join(root, "plugins"))
 	return err == nil && info.IsDir()
 }
 
+func koreaderPluginDir(root string) string {
+	if path := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PLUGIN_DIR")); path != "" {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(root, "plugins")
+}
+
+func koreaderPatchDir(root string) string {
+	if path := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PATCH_DIR")); path != "" {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(root, "patches")
+}
+
 func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName, assetURL string, data []byte) (string, error) {
-	pluginsDir := filepath.Join(root, "plugins")
+	pluginsDir := koreaderPluginDir(root)
 	if info, err := os.Stat(pluginsDir); err != nil || !info.IsDir() {
 		return "", fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
 	}
@@ -177,7 +186,7 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 }
 
 func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName, assetURL string, data []byte) error {
-	patchesDir := filepath.Join(root, "patches")
+	patchesDir := koreaderPatchDir(root)
 	if err := os.MkdirAll(patchesDir, 0755); err != nil {
 		return fmt.Errorf("create KOReader patches directory: %w", err)
 	}
@@ -233,15 +242,16 @@ func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind
 
 func removeKOReaderPlugin(root, name string) error {
 	tracking := filepath.Join(root, ".zenpm-plugins", name)
-	destination := filepath.Join(root, "plugins", name)
+	destination := filepath.Join(koreaderPluginDir(root), name)
 	if value, err := trackingValue(tracking, "plugin_dir"); err == nil && value != "" {
 		destination = value
 	}
-	if !pathWithinRoot(root, destination) {
+	if destination, ok := trackedPathWithinRoot(root, destination); ok {
+		if err := os.RemoveAll(destination); err != nil {
+			return fmt.Errorf("remove KOReader plugin %s: %w", destination, err)
+		}
+	} else {
 		return fmt.Errorf("invalid tracked KOReader plugin path %q", destination)
-	}
-	if err := os.RemoveAll(destination); err != nil {
-		return fmt.Errorf("remove KOReader plugin %s: %w", destination, err)
 	}
 	if err := os.Remove(tracking); err != nil && !os.IsNotExist(err) {
 		return err
@@ -277,7 +287,7 @@ func removeKOReaderPatch(root, id, asset string) error {
 	}
 	if !removedDir {
 		for _, name := range []string{asset, asset + ".disabled"} {
-			path := filepath.Join(root, "patches", name)
+			path := filepath.Join(koreaderPatchDir(root), name)
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("remove KOReader patch %s: %w", path, err)
 			}
@@ -310,6 +320,16 @@ func removeEmptyDir(path string) error {
 func pathWithinRoot(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// Older generic KOReader install scripts recorded plugin_dir relative to the
+// KOReader data directory. Resolve that form before retaining the root check.
+func trackedPathWithinRoot(root, path string) (string, bool) {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	path = filepath.Clean(path)
+	return path, pathWithinRoot(root, path)
 }
 
 func pluginTrackingName(entry *repo.CatalogEntry, assetName string) string {

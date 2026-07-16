@@ -459,6 +459,14 @@ func (m *Manager) baseScriptEnv(id string) map[string]string {
 }
 
 func addKOReaderEnv(env map[string]string, plat string) {
+	pluginDir := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PLUGIN_DIR"))
+	patchDir := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PATCH_DIR"))
+	if pluginDir != "" {
+		env["ZENPM_KOREADER_PLUGIN_DIR"] = filepath.Clean(pluginDir)
+	}
+	if patchDir != "" {
+		env["ZENPM_KOREADER_PATCH_DIR"] = filepath.Clean(patchDir)
+	}
 	candidates := koreaderRootCandidates(plat)
 	if len(candidates) == 0 {
 		return
@@ -477,7 +485,12 @@ func addKOReaderEnv(env map[string]string, plat string) {
 		}
 		if explicit[root] || pathExists(root) {
 			env["ZENPM_KOREADER_DIR"] = root
-			env["ZENPM_KOREADER_PLUGIN_DIR"] = filepath.Join(root, "plugins")
+			if pluginDir == "" {
+				env["ZENPM_KOREADER_PLUGIN_DIR"] = filepath.Join(root, "plugins")
+			}
+			if patchDir == "" {
+				env["ZENPM_KOREADER_PATCH_DIR"] = filepath.Join(root, "patches")
+			}
 			return
 		}
 	}
@@ -513,6 +526,10 @@ func koreaderRootCandidates(plat string) []string {
 		add("/mnt/us/koreader")
 	case platform.Kobo:
 		add("/mnt/onboard/.adds/koreader")
+	case platform.Host:
+		if home, err := os.UserHomeDir(); err == nil {
+			add(filepath.Join(home, ".config", "koreader"))
+		}
 	}
 	return candidates
 }

@@ -195,14 +195,25 @@ final class ZenPMUpdater {
     }
 
     private static int compareVersions(String left, String right) {
-        String[] leftParts = left.replaceFirst("^v", "").split("[-+]", 2)[0].split("\\.");
-        String[] rightParts = right.replaceFirst("^v", "").split("[-+]", 2)[0].split("\\.");
+        String leftValue = left.replaceFirst("^v", "");
+        String rightValue = right.replaceFirst("^v", "");
+        String[] leftParts = leftValue.split("[-+]", 2)[0].split("\\.");
+        String[] rightParts = rightValue.split("[-+]", 2)[0].split("\\.");
         for (int i = 0; i < 3; i++) {
             int a = i < leftParts.length ? Integer.parseInt(leftParts[i]) : 0;
             int b = i < rightParts.length ? Integer.parseInt(rightParts[i]) : 0;
             if (a != b) return a < b ? -1 : 1;
         }
-        return 0;
+        boolean leftPrerelease = leftValue.matches(".*[-+].+");
+        boolean rightPrerelease = rightValue.matches(".*[-+].+");
+        if (leftPrerelease != rightPrerelease) return leftPrerelease ? -1 : 1;
+        if (!leftPrerelease) return 0;
+        return Integer.compare(prereleaseNumber(leftValue), prereleaseNumber(rightValue));
+    }
+
+    private static int prereleaseNumber(String value) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)$").matcher(value);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
     private static final class Release {

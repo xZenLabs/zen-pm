@@ -214,15 +214,35 @@ function Daemon:state_home()
     return self:device_home()
 end
 
-function Daemon:koreader_root()
-    local root = tostring(Constants.PLUGIN_DIR or ""):match("^(.*)/plugins/[^/]+$")
-    if root and root ~= "" then
-        return root
+function Daemon:android_companion_version()
+    if not self:is_android() then
+        return nil
     end
+    local version = read_text(self:state_home() .. "/android-companion.version")
+    return version ~= "" and version or nil
+end
+
+function Daemon:koreader_data_dir()
     if ok_datastorage and DataStorage and DataStorage.getFullDataDir then
-        return DataStorage:getFullDataDir() or ""
+        local data_dir = DataStorage:getFullDataDir()
+        if type(data_dir) == "string" and data_dir ~= "" then
+            return data_dir
+        end
     end
-    return ""
+    local root = tostring(Constants.PLUGIN_DIR or ""):match("^(.*)/plugins/[^/]+$")
+    return root or ""
+end
+
+function Daemon:koreader_plugin_dir()
+    return self:koreader_data_dir() .. "/plugins"
+end
+
+function Daemon:koreader_patch_dir()
+    return self:koreader_data_dir() .. "/patches"
+end
+
+function Daemon:koreader_root()
+    return self:koreader_data_dir()
 end
 
 function Daemon:standalone_backend_dir()
@@ -637,7 +657,9 @@ function Daemon:start()
     end
 
     local env = "ZENPM_PLATFORM=" .. Util.sh_quote(platform)
-        .. " ZENPM_KOREADER_PLUGIN_DIR=" .. Util.sh_quote(dirname(Constants.PLUGIN_DIR))
+        .. " ZENPM_KOREADER_DIR=" .. Util.sh_quote(self:koreader_data_dir())
+        .. " ZENPM_KOREADER_PLUGIN_DIR=" .. Util.sh_quote(self:koreader_plugin_dir())
+        .. " ZENPM_KOREADER_PATCH_DIR=" .. Util.sh_quote(self:koreader_patch_dir())
     if set_home then
         env = env .. " ZENPM_HOME=" .. Util.sh_quote(set_home)
     end

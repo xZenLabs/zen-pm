@@ -190,7 +190,7 @@ func (m *Manager) UnmanagedKOReaderPatches() ([]UnmanagedKOReaderPatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(filepath.Join(root, "patches"))
+	entries, err := os.ReadDir(koreaderPatchDir(root))
 	if os.IsNotExist(err) {
 		return nil, nil
 	}

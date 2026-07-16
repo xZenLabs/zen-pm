@@ -33,6 +33,7 @@ public final class ZenPMActivity extends Activity {
             String root = data.getQueryParameter("root");
             service.putExtra("zenpm_log_home", logHome);
             service.putExtra("koreader_root", root);
+            CompanionLog.writeVersion(this, logHome);
             CompanionLog.write(this, logHome, "Received KOReader start request. KOReader root=" + root);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
                 CompanionLog.write(this, logHome, "All files access is required; opening Android settings.");

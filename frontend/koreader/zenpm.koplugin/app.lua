@@ -5,8 +5,10 @@ local _ = require("gettext")
 
 local AppView = require("ui/app_view")
 local BugReporter = require("bugreporter")
-local Client = require("client")
 local Constants = require("constants")
+-- KOReader may already have a module named "client" loaded. Load our HTTP
+-- client explicitly so that cache entry cannot replace it.
+local Client = dofile(Constants.PLUGIN_DIR .. "/client.lua")
 local Daemon = require("daemon")
 local I18n = require("i18n")
 local Images = require("ui/images")
