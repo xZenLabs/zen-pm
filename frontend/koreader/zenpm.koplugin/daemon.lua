@@ -587,10 +587,14 @@ function Daemon:start()
                 return true
             end
         end
-        local cmd = "/system/bin/am startservice -n org.zenlabs.zenpm/.ZenPMService"
+        local service_args = " -n org.zenlabs.zenpm/.ZenPMService"
             .. " --es zenpm_home " .. Util.sh_quote(self:state_home())
             .. " --es koreader_root " .. Util.sh_quote(root)
-            .. " </dev/null >>" .. Util.sh_quote(companion_log) .. " 2>&1"
+        -- Android 8+ rejects a background-service start once KOReader is not
+        -- foreground. Fall back to the old command only for older Android.
+        local cmd = "( /system/bin/am start-foreground-service" .. service_args
+            .. " >/dev/null 2>&1 || /system/bin/am startservice" .. service_args
+            .. " ) </dev/null >>" .. Util.sh_quote(companion_log) .. " 2>&1"
         if os.execute(cmd) ~= 0 then
             return false, _("ZenPM Android companion is not installed or could not start. See ") .. companion_log
         end

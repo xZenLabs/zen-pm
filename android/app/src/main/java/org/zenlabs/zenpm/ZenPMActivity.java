@@ -42,7 +42,11 @@ public final class ZenPMActivity extends Activity {
                 finish();
                 return;
             }
-            startService(service);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(service);
+            } else {
+                startService(service);
+            }
         }
         finish();
     }

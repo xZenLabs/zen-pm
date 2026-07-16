@@ -2,6 +2,8 @@
 
 This APK hosts the ZenPM Go backend as `libzenpm.so`, so Android executes code
 installed with the APK rather than a binary copied to noexec shared storage.
+It includes both 32-bit ARM (`armeabi-v7a`) and 64-bit ARM (`arm64-v8a`) native
+libraries.
 
 On macOS, install JDK 17, Gradle, and the Android command-line tools (or install
 them with Android Studio). Then install the SDK components and build:
