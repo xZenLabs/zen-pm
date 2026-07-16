@@ -35,18 +35,29 @@ public final class ZenPMActivity extends Activity {
             service.putExtra("koreader_root", root);
             CompanionLog.writeVersion(this, logHome);
             CompanionLog.write(this, logHome, "Received KOReader start request. KOReader root=" + root);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-                CompanionLog.write(this, logHome, "All files access is required; opening Android settings.");
-                Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:" + getPackageName()));
-                startActivity(settings);
-                finish();
-                return;
+            boolean requestAllFilesAccess = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !Environment.isExternalStorageManager();
+            boolean requestPackageInstalls = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !getPackageManager().canRequestPackageInstalls();
+            if (requestAllFilesAccess) {
+                CompanionLog.write(this, logHome, "All files access is not granted; opening Android settings.");
+            }
+            if (requestPackageInstalls) {
+                CompanionLog.write(this, logHome, "Unknown apps installs are not allowed; opening Android settings.");
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(service);
             } else {
                 startService(service);
+            }
+            if (requestPackageInstalls) {
+                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + getPackageName()));
+                startActivity(settings);
+            } else if (requestAllFilesAccess) {
+                Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+                startActivity(settings);
             }
         }
         finish();

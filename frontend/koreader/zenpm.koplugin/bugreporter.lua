@@ -9,7 +9,7 @@ local MAX_TITLE = 500
 local MAX_BODY = 65536
 
 local Reporter = {}
-local ok_android = pcall(require, "android")
+local ok_android, android = pcall(require, "android")
 
 local function show_input_dialog(dialog)
     UIManager:show(dialog)
@@ -51,9 +51,31 @@ local function device_name()
 end
 
 local function koreader_crash_log(app)
+    if ok_android and type(android.dumpLogs) == "function" then
+        pcall(android.dumpLogs)
+    end
+    local ok_datastorage, DataStorage = pcall(require, "datastorage")
+    local data_dir = ok_datastorage and DataStorage:getDataDir() or nil
+    if type(data_dir) == "string" and data_dir ~= "" then
+        local file = io.open(data_dir .. "/crash.log", "rb")
+        if file then
+            local contents = file:read("*a") or ""
+            file:close()
+            return contents
+        end
+    end
     local root = app.daemon:koreader_root()
     if type(root) ~= "string" or root == "" then return "" end
     local file = io.open(root .. "/crash.log", "rb")
+    if not file then return "" end
+    local contents = file:read("*a") or ""
+    file:close()
+    return contents
+end
+
+local function android_companion_log(app)
+    if not app.daemon:is_android() then return "" end
+    local file = io.open(app.daemon:state_home() .. "/android-companion.log", "rb")
     if not file then return "" end
     local contents = file:read("*a") or ""
     file:close()
@@ -212,6 +234,10 @@ function Reporter:submit(app, title, description, username)
         local ok_log, zenpm_log = app.client:get_log(5000)
         if not ok_log or type(zenpm_log) ~= "string" or zenpm_log == "" then
             zenpm_log = "ZenPM log unavailable: " .. tostring(zenpm_log or "unknown error")
+            local companion_log = android_companion_log(app)
+            if companion_log ~= "" then
+                zenpm_log = zenpm_log .. "\n\nAndroid companion log:\n" .. companion_log
+            end
         end
 
         local uploaded_zenpm_log_url

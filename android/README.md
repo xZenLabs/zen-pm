@@ -25,9 +25,9 @@ install Rosetta if macOS cannot run it: `softwareupdate --install-rosetta --agre
 
 Install `android/app/build/outputs/apk/release/app-release.apk`. On Android 11
 and newer, the first ZenPM launch opens Android settings for **All files
-access**; grant it, then open ZenPM again. Android 4.4 uses the normal storage
-permission declared by the APK. The KOReader plugin starts the companion
-automatically.
+access**; grant it for KOReader package management. Android 4.4 uses the normal
+storage permission declared by the APK. The KOReader plugin starts the
+companion automatically.
 
 Published APKs are signed in CI with the persistent release keystore held in
 GitHub Actions secrets. The companion’s **Update** action checks the matching
