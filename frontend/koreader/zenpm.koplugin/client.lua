@@ -9,10 +9,11 @@ local Constants = require("constants")
 local ok_https, https = pcall(require, "ssl.https")
 local ok_socketutil, socketutil = pcall(require, "socketutil")
 local ok_logger, logger = pcall(require, "logger")
+local ok_android = pcall(require, "android")
 
 local Client = {}
-local UI_BLOCK_TIMEOUT_SECONDS = 1
-local UI_TOTAL_TIMEOUT_SECONDS = 4
+local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
+local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 
 local function url_encode(value)
     value = tostring(value or "")

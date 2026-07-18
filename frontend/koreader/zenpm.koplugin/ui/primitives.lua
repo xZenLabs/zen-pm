@@ -137,6 +137,23 @@ function P.scrollable_paragraph(bb, text, x, y, width, height, role, scroll, opt
     return math.max(0, total_lines - visible_lines) * line_height, line_height
 end
 
+function P.paragraph_line_count(text, width, role, opts)
+    opts = opts or {}
+    local widget = TextBoxWidget:new{
+        text = tostring(text or ""),
+        face = opts.face or Theme.face(role),
+        bold = opts.bold,
+        fgcolor = opts.color or Theme.ink,
+        width = width,
+        height = 1,
+        height_adjust = true,
+        line_height = opts.line_height,
+    }
+    local lines = #(widget.vertical_string_list or {})
+    widget:free()
+    return lines
+end
+
 function P.text_size(text, width, role, opts)
     opts = opts or {}
     local widget = TextWidget:new{

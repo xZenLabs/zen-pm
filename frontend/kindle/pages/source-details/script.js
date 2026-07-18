@@ -107,19 +107,35 @@
         setTimeout(tryPoll, POLL_DELAY);
     }
 
-    function startPackageAction(pkg, action) {
+    function beginPackageAction(pkg, action, asset) {
         var backendAction = action === "reinstall" ? "install" : action;
         setBusy(true, (action === "uninstall" ? "Uninstalling " : (action === "reinstall" ? "Reinstalling " : "Installing ")) + pkg.name);
         state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
         var actionLabel = action === "uninstall" ? "Uninstalling" : (action === "reinstall" ? "Reinstalling" : "Installing");
         showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", { className: "modal-overlay-clear" });
-        fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction, null).then(function () {
+        var path = "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction;
+        if (asset) path += "?asset=" + encodeURIComponent(asset);
+        fetchJSON("POST", path, null).then(function () {
             postLog("[source-details] " + action + " started for " + pkg.id);
             pollAfterOp();
         }).catch(function (err) {
             postLog("[source-details] Failed to start " + action + ": " + String(err));
             showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err));
             state.pendingOp = null;
+            setBusy(false, "");
+        });
+    }
+
+    function startPackageAction(pkg, action) {
+        if (action === "uninstall") return beginPackageAction(pkg, action, "");
+        setBusy(true, "Finding a compatible package build...");
+        ZenUtils.choosePackageAsset(pkg, function (asset) {
+            beginPackageAction(pkg, action, asset);
+        }, function () {
+            setBusy(false, "");
+        }, function (err) {
+            postLog("[source-details] Asset selection failed for " + pkg.id + ": " + String(err));
+            showModal("Error", "Could not choose a build for " + pkg.name + ".\n\n" + String(err));
             setBusy(false, "");
         });
     }

@@ -3,7 +3,6 @@
 -- shared state and hitbox registration.
 
 local Cards = require("ui/cards")
-local Header = require("ui/header")
 local I18n = require("i18n")
 local Images = require("ui/images")
 local Models = require("models")
@@ -97,45 +96,18 @@ function Pages.featured(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, m.featured_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, list, x, list_y, w, list_h, scroll, m.featured_h, m.card_gap, function(pkg, cy, scrollable)
+    local bottom_inset = Theme.scale(12)
+    local card_h = math.max(1, math.floor((list_h - bottom_inset - m.card_gap) / 2))
+    return Scroll.scrolled_list(view, bb, list, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, cy, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.featured(view, bb, pkg, x + pad, cy, w - pad * 2 - gutter)
+        Cards.featured(view, bb, pkg, x + pad, cy, w - pad * 2 - gutter, { height = card_h })
     end)
 end
 
 function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible, total, query)
     local m = Theme.metrics()
     local pad = m.pad
-    local count = tostring(#(visible or {}))
-    if query and query ~= "" then
-        count = count .. "/" .. tostring(#(total or {}))
-    end
     local cy = y
-    local action_w = Theme.scale(42)
-    local action_x = x + w - pad - action_w
-    local heading = title .. " (" .. count .. ")"
-    if kind == "installed" then
-        action_w = Theme.scale(200)
-        action_x = x + w - pad - action_w
-        heading = _("Installed") .. " (" .. tostring(#(total or {})) .. ")"
-        local updates = view.app:installed_update_count()
-        local enabled = updates > 0 and not view.app.state.queue_running
-        P.box(bb, action_x, cy + Theme.scale(6), action_w, Theme.scale(42), {
-            border_color = enabled and Theme.border or Theme.soft,
-            background = enabled and Theme.panel or Theme.bg,
-            radius = math.floor(Theme.scale(42) / 2),
-        })
-        P.center_text_box(bb, _("Update All") .. " (" .. tostring(updates) .. ")", action_x, cy + Theme.scale(6), action_w, Theme.scale(42), "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
-        if enabled then
-            P.hit(view, action_x, cy + Theme.scale(6), action_w, Theme.scale(42), function()
-                view.app:queue_all_updates()
-            end, "upgrade-all")
-        end
-    else
-        Header.draw_sort_button(view, bb, action_x, cy + Theme.scale(6), kind)
-    end
-    P.text(bb, heading, x + pad, cy + Theme.scale(6), action_x - x - pad - Theme.scale(8), "heading", { bold = true })
-    cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     local card_h = package_card_height(list_h, m.card_gap)
@@ -201,24 +173,7 @@ function Pages.queue(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
     local entries = view.app.state.queue or {}
-    local clear_h = Theme.scale(42)
-    local clear_icon_s = clear_h - Theme.scale(14)
-    local clear_label = _("Clear")
-    local clear_label_size = P.text_size(clear_label, Theme.scale(128), "small", { bold = true })
-    local clear_w = Theme.scale(14) + clear_icon_s + Theme.scale(6) + clear_label_size.w + Theme.scale(14)
-    local clear_x = x + pad
-    local clear_y = y + Theme.scale(4)
-    local clear_enabled = #entries > 0 and not view.app.state.queue_running
-    P.box(bb, clear_x, clear_y, clear_w, clear_h, {
-        border = false,
-        background = clear_enabled and Theme.panel or Theme.bg,
-    })
-    P.image(bb, Images.asset("clear.svg"), clear_x + Theme.scale(7), clear_y + Theme.scale(7), clear_icon_s, clear_icon_s, { is_icon = true })
-    P.vcenter_text(bb, clear_label, clear_x + Theme.scale(7) + clear_icon_s + Theme.scale(6), clear_y, clear_label_size.w, clear_h, "small", { bold = true, color = clear_enabled and Theme.ink or Theme.muted })
-    if clear_enabled then
-        P.hit(view, clear_x, clear_y, clear_w, clear_h, function() view.app:confirm_clear_queue() end, "clear-queue")
-    end
-    local list_y = clear_y + clear_h + Theme.scale(8)
+    local list_y = y + Theme.scale(8)
     local list_h = h - (list_y - y) - Theme.scale(8)
     if #entries == 0 then
         P.text(bb, _("No queued operations."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
@@ -264,15 +219,8 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
     local categories = view.app.state.visible_categories or {}
-    local total = view.app.state.categories or {}
     local query = view.app.state.filters.categories
-    local count = tostring(#categories)
-    if query and query ~= "" then
-        count = count .. "/" .. tostring(#total)
-    end
-    local cy = y
-    P.text(bb, _("Categories") .. " (" .. count .. ")", x + pad, cy + Theme.scale(6), w - pad * 2, "heading", { bold = true })
-    cy = cy + Theme.scale(54)
+    local cy = y + Theme.scale(8)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     if #categories == 0 then
@@ -291,13 +239,8 @@ end
 function Pages.source_details(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
-    local cy = y + Theme.scale(8)
+    local cy = y + Theme.scale(4)
     local visible = view.app.state.visible_packages or {}
-    local sort_s = Theme.scale(42)
-    local sort_x = x + w - pad - sort_s
-    P.text(bb, _("Packages") .. " (" .. tostring(#visible) .. ")", x + pad, cy, sort_x - x - pad - Theme.scale(8), "heading", { bold = true })
-    Header.draw_sort_button(view, bb, sort_x, cy, "source")
-    cy = cy + Theme.scale(54)
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     local card_h = package_card_height(list_h, m.card_gap)
@@ -350,13 +293,15 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
+    local description = I18n.dynamic_or(pkg.description, _("No description available."))
     local readme = Models.readme_text(pkg.readme)
-    local content = readme
-    local heading = _("README")
-    if content == "" then
-        content = I18n.dynamic_or(pkg.description, _("No description available."))
-        heading = _("Description")
+    if readme == "" then
+        readme = _("No README available.")
     end
+    local description_heading = _("Description")
+    local readme_heading = _("README")
+    local content_prefix = description_heading .. "\n\n" .. description .. "\n\n"
+    local content = content_prefix .. readme_heading .. "\n\n" .. readme
     local assets = Models.package_assets(pkg)
     local show_patch_tabs = Models.is_patch_package(pkg) and #assets > 0
     local details_tab = show_patch_tabs and (view.app.state.details_tab or "readme") or "readme"
@@ -382,9 +327,6 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         draw_tab("readme", _("README"), inner_x, tab_w)
         draw_tab("patches", _("Patches"), inner_x + tab_w + gap, inner_w - tab_w - gap)
         iy = iy + tab_h + Theme.scale(14)
-    else
-        P.text(bb, heading, inner_x, iy, inner_w, "small", { bold = true })
-        iy = iy + Theme.scale(34)
     end
     local content_h = cy + panel_h - Theme.scale(14) - iy
     if content_h <= 0 then
@@ -419,7 +361,19 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         end)
         return max_scroll
     end
-    local max_scroll, line_h = P.scrollable_paragraph(bb, content, inner_x, iy, inner_w - Theme.scale(12), content_h, "small", scroll)
+    local paragraph_w = inner_w - Theme.scale(12)
+    local readme_heading_line = P.paragraph_line_count(content_prefix .. readme_heading, paragraph_w, "small")
+    local max_scroll, line_h = P.scrollable_paragraph(bb, content, inner_x, iy, paragraph_w, content_h, "small", scroll)
+    local top_line = math.floor((scroll or 0) / math.max(1, line_h)) + 1
+    local function draw_bold_heading(line, text)
+        local heading_y = iy + (line - top_line) * line_h
+        if heading_y >= iy and heading_y < iy + content_h then
+            P.rect(bb, inner_x, heading_y, paragraph_w, line_h, Theme.panel)
+            P.text(bb, text, inner_x, heading_y, paragraph_w, "small", { bold = true })
+        end
+    end
+    draw_bold_heading(1, description_heading)
+    draw_bold_heading(readme_heading_line, readme_heading)
     Scroll.set_list_bounds(view, inner_x, iy, inner_w, content_h, line_h)
     return max_scroll
 end

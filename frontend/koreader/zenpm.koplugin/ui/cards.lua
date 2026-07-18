@@ -282,9 +282,10 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     return h
 end
 
-function Cards.featured(view, bb, pkg, x, y, w)
+function Cards.featured(view, bb, pkg, x, y, w, opts)
+    opts = opts or {}
     local m = Theme.metrics()
-    local h = m.featured_h
+    local h = opts.height or m.featured_h
     P.box(bb, x, y, w, h)
     local art_h = h - Theme.scale(150)
     local border = Theme.scale(2)

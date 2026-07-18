@@ -8,6 +8,7 @@
 --   ui/scroll.lua  scrolled lists + scrollbar drag
 
 local Device = require("device")
+local Input = require("device/input")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
@@ -58,6 +59,12 @@ function AppView:init()
             },
         },
     }
+    if Device:hasKeys() then
+        self.key_events = {
+            ZenPMPageForward = { { Input.group.PgFwd }, event = "ZenPMScroll", args = 1 },
+            ZenPMPageBack = { { Input.group.PgBack }, event = "ZenPMScroll", args = -1 },
+        }
+    end
 end
 
 function AppView:getSize()
@@ -71,15 +78,15 @@ end
 
 function AppView:onTapZenPM(_, ges)
     local x, y = ges.pos.x, ges.pos.y
-    if self:tap_should_pass_to_koreader_menu(ges) then
-        return self:show_koreader_menu_from_gesture(ges, "tap")
-    end
     for i = #self.hitboxes, 1, -1 do
         local box = self.hitboxes[i]
         if P.contains(box, x, y) then
             box.callback(x, y)
             return true
         end
+    end
+    if self:tap_should_pass_to_koreader_menu(ges) then
+        return self:show_koreader_menu_from_gesture(ges, "tap")
     end
     return true
 end
@@ -91,37 +98,17 @@ end
 
 function AppView:tap_in_koreader_menu_zone(ges)
     local pos = ges and ges.pos
-    if not pos then
-        return false
-    end
-    return pos.y <= (self.dimen.y or 0) + math.floor(Screen:getHeight() * 0.05)
-end
-
-function AppView:protects_koreader_menu_tap(ges)
-    local pos = ges and ges.pos
-    if not self:tap_menu_enabled() or not self:tap_in_koreader_menu_zone(ges) or not pos then
-        return false
-    end
-    for _, exclusion in ipairs(self.koreader_menu_tap_exclusions or {}) do
-        if P.contains(exclusion, pos.x, pos.y) then
-            return true
-        end
-    end
-    return false
+    return pos and self.koreader_menu_zone and P.contains(self.koreader_menu_zone, pos.x, pos.y)
 end
 
 function AppView:tap_should_pass_to_koreader_menu(ges)
     return self:tap_menu_enabled()
         and self:tap_in_koreader_menu_zone(ges)
-        and not self:protects_koreader_menu_tap(ges)
 end
 
 function AppView:gesture_in_menu_zone(ges)
     local pos = ges and ges.pos
-    if not pos then
-        return false
-    end
-    return pos.y <= (self.dimen.y or 0) + math.floor(Screen:getHeight() * 0.05)
+    return pos and self.koreader_menu_zone and P.contains(self.koreader_menu_zone, pos.x, pos.y)
 end
 
 function AppView:show_koreader_menu_from_gesture(ges, kind)
@@ -162,16 +149,24 @@ function AppView:show_koreader_menu_from_gesture(ges, kind)
     return false
 end
 
-function AppView:_scroll_list(steps)
+function AppView:_scroll_list(steps, page_sized)
     local key = self.app:scroll_key()
     local old = self.app.state.scroll[key] or 0
     local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
+    if page_sized and self.list_bounds then
+        delta = math.floor(self.list_bounds.h * 0.9)
+    end
     local new = math.max(0, math.min(old + steps * delta, self.max_scroll or 0))
     if new == old then
         return false
     end
     self.app.state.scroll[key] = new
     self:refresh()
+    return true
+end
+
+function AppView:onZenPMScroll(steps)
+    self:_scroll_list(steps, true)
     return true
 end
 
@@ -314,7 +309,7 @@ function AppView:paintTo(bb, x, y)
     self.list_bounds = nil
     self.scroll_step = nil
     self.scrollbar = nil
-    self.koreader_menu_tap_exclusions = nil
+    self.koreader_menu_zone = nil
     local m = Theme.metrics()
     self.dimen = Geom:new{ x = x, y = y, w = m.screen_w, h = m.screen_h }
     P.rect(bb, x, y, m.screen_w, m.screen_h, Theme.bg)

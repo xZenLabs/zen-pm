@@ -367,17 +367,32 @@
                 setTimeout(tryPoll, POLL_DELAY);
             }
 
-            function startPackageAction(pkg, action) {
+            function beginPackageAction(pkg, action, asset) {
                 var backendAction = action === "reinstall" ? "install" : action;
                 state.busy = true;
                 state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
                 var actionLabel = action === "uninstall" ? "Uninstalling" : (action === "reinstall" ? "Reinstalling" : "Installing");
                 showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", { className: "modal-overlay-clear" });
-                fetchJSON("POST", "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction, null).then(function () {
+                var path = "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction;
+                if (asset) path += "?asset=" + encodeURIComponent(asset);
+                fetchJSON("POST", path, null).then(function () {
                     pollAfterOp();
                 }).catch(function (err) {
                     showModal("Error", "Failed to " + action + " " + pkg.name + ".\n\n" + String(err));
                     state.pendingOp = null;
+                    state.busy = false;
+                });
+            }
+
+            function startPackageAction(pkg, action) {
+                if (action === "uninstall") return beginPackageAction(pkg, action, "");
+                state.busy = true;
+                ZenUtils.choosePackageAsset(pkg, function (asset) {
+                    beginPackageAction(pkg, action, asset);
+                }, function () {
+                    state.busy = false;
+                }, function (err) {
+                    showModal("Error", "Could not choose a build for " + pkg.name + ".\n\n" + String(err));
                     state.busy = false;
                 });
             }

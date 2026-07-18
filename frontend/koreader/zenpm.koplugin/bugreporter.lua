@@ -7,6 +7,7 @@ local UPLOAD_URL = PROXY_URL .. "upload"
 local MAX_INLINE_LOG = 60000
 local MAX_TITLE = 500
 local MAX_BODY = 65536
+local REPORT_TIMEOUT = { block = 10, total = 30 }
 
 local Reporter = {}
 local ok_android, android = pcall(require, "android")
@@ -241,13 +242,13 @@ function Reporter:submit(app, title, description, username)
         end
 
         local uploaded_zenpm_log_url
-        local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log })
+        local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log }, REPORT_TIMEOUT)
         if uploaded then
             uploaded_zenpm_log_url = log_url(upload_response)
         end
         local uploaded_crash_log_url
         if crash_log ~= "" then
-            uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = crash_log })
+            uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = crash_log }, REPORT_TIMEOUT)
             if uploaded then
                 uploaded_crash_log_url = log_url(upload_response)
             end
@@ -262,7 +263,7 @@ function Reporter:submit(app, title, description, username)
             title = report_title,
             body = body,
             labels = { "bug" },
-        })
+        }, REPORT_TIMEOUT)
         Modals.close_status()
         if submitted then
             local url = log_url(response) or "https://github.com/AnthonyGress/ZenPackageManager/issues"

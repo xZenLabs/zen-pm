@@ -1,6 +1,4 @@
--- Top bar rendering for AppView: the per-page header, plus the shared back
--- button, overflow-actions button and sort button. Each function takes the
--- AppView instance so it can register hitboxes via P.hit(view, ...).
+-- Shared title bar and per-page toolbar rendering for AppView.
 
 local Images = require("ui/images")
 local Models = require("models")
@@ -13,26 +11,52 @@ local _ = require("gettext")
 
 local Header = {}
 
-local function protect_koreader_menu_tap(view, x, y, w, h)
-    h = h or w
-    local exclusion_w = math.max(Theme.scale(72), w)
-    local exclusion_h = math.max(Theme.scale(72), h)
-    view.koreader_menu_tap_exclusions = view.koreader_menu_tap_exclusions or {}
-    table.insert(view.koreader_menu_tap_exclusions, {
-        x = x - math.floor((exclusion_w - w) / 2),
-        y = y - math.floor((exclusion_h - h) / 2),
-        w = exclusion_w,
-        h = exclusion_h,
-    })
-end
-
 local function ellipsize(value, limit)
     local title = tostring(value or "")
-    if title and #title > limit then
+    if #title > limit then
         title = title:sub(1, limit)
         title = require("zenpm_util").fixUtf8(title, "") .. "…"
     end
     return title
+end
+
+local function filtered_count(visible, total, query)
+    local count = tostring(#(visible or {}))
+    if query and query ~= "" then
+        count = count .. "/" .. tostring(#(total or {}))
+    end
+    return count
+end
+
+function Header.page_title(view)
+    local state = view.app.state
+    local page = state.page
+    if page == "home" then
+        return _("Featured") .. " (" .. tostring(#(state.featured_packages or {})) .. ")"
+    elseif page == "search" then
+        return _("Search") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
+    elseif page == "categories" then
+        return _("Categories") .. " (" .. filtered_count(state.visible_categories, state.categories, state.filters.categories) .. ")"
+    elseif page == "category_details" then
+        local category = state.current_category or {}
+        return I18n.dynamic_or(category.label, _("Category")) .. " ("
+            .. filtered_count(state.visible_packages, state.category_packages, state.filters.category) .. ")"
+    elseif page == "installed" then
+        return _("Installed") .. " (" .. tostring(#(state.installed_packages or {})) .. ")"
+    elseif page == "sources" then
+        return _("Sources") .. " (" .. tostring(#(state.repos or {})) .. ")"
+    elseif page == "source_details" then
+        local repo = state.current_repo or {}
+        return Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))) .. " ("
+            .. tostring(#(state.visible_packages or {})) .. ")"
+    elseif page == "package_details" then
+        return Models.package_display_name(state.current_package or {}, _("Package Details"))
+    elseif page == "queue" then
+        return _("Queue") .. " (" .. tostring(view.app:queue_count()) .. ")"
+    elseif page == "debug" then
+        return _("Debug")
+    end
+    return _("ZenPM")
 end
 
 function Header.draw_actions(view, bb, x, y)
@@ -42,12 +66,15 @@ function Header.draw_actions(view, bb, x, y)
     local cx = x + math.floor((s - dot) / 2)
     local first_y = y + math.floor((s - Theme.scale(24)) / 2)
     for i = 0, 2 do
-        P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, { border = false, background = Theme.ink, radius = math.floor(dot / 2) })
+        P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, {
+            border = false,
+            background = Theme.ink,
+            radius = math.floor(dot / 2),
+        })
     end
     P.hit(view, x, y, s, s, function()
         view.app:show_actions(Geom:new{ x = x, y = y, w = s, h = s })
     end, "actions")
-    protect_koreader_menu_tap(view, x, y, s)
     return s
 end
 
@@ -55,9 +82,9 @@ function Header.draw_sort_button(view, bb, x, y, kind)
     local s = Theme.scale(42)
     local icon = Theme.scale(32)
     P.box(bb, x, y, s, s, { border = false })
-    local icon_y = y + math.floor((s - icon) / 2) + Theme.scale(8)
+    local icon_y = y + math.floor((s - icon) / 2)
     if not P.image(bb, Images.asset("sort.svg"), x + math.floor((s - icon) / 2), icon_y, icon, icon, { is_icon = true }) then
-        P.center_text_box(bb, "Sort", x, y + Theme.scale(8), s, s, "small", { bold = true })
+        P.center_text_box(bb, "Sort", x, y, s, s, "small", { bold = true })
     end
     P.hit(view, x, y, s, s, function() view.app:prompt_sort(kind) end, "sort:" .. tostring(kind))
     return s
@@ -70,132 +97,156 @@ function Header.draw_back(view, bb, x, y, callback)
         P.center_text(bb, "<", x, y + Theme.scale(13), s, "title", { bold = true })
     end
     P.hit(view, x, y, s, s, callback, "back")
-    protect_koreader_menu_tap(view, x, y, s)
+    return s
+end
+
+function Header.draw_search_button(view, bb, x, y, kind)
+    local s = Theme.scale(42)
+    local icon = Theme.scale(28)
+    P.box(bb, x, y, s, s, { border = false })
+    if not P.image(bb, Images.asset("search.svg"), x + math.floor((s - icon) / 2), y + math.floor((s - icon) / 2), icon, icon, { is_icon = true }) then
+        P.center_text_box(bb, _("Search"), x, y, s, s, "small", { bold = true })
+    end
+    P.hit(view, x, y, s, s, function() view.app:prompt_filter(kind) end, "search:" .. kind)
+    return s
+end
+
+local function toolbar_y(y, h, control_h)
+    return y + math.floor((h - control_h) / 2)
+end
+
+local function draw_title_button(view, bb, x, y, label, callback, hit_id, enabled)
+    local h = Theme.scale(42)
+    local label_size = P.text_size(label, Theme.scale(256), "small", { bold = true })
+    local w = label_size.w + Theme.scale(28)
+    P.box(bb, x, y, w, h, {
+        border_color = enabled and Theme.border or Theme.soft,
+        background = enabled and Theme.panel or Theme.bg,
+        radius = math.floor(h / 2),
+    })
+    P.center_text_box(bb, label, x, y, w, h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+    if enabled then
+        P.hit(view, x, y, w, h, callback, hit_id)
+    end
+    return w
+end
+
+local function page_back_callback(view, page)
+    if page == "category_details" then
+        return function() view.app:show_categories() end
+    elseif page == "source_details" then
+        return function() view.app:show_sources() end
+    elseif page == "package_details" then
+        return function() view.app:go_back_from_details() end
+    elseif page == "queue" then
+        return function() view.app:close_queue() end
+    end
+end
+
+local function draw_queue_clear_button(view, bb, x, y)
+    local h = Theme.scale(42)
+    local icon = h - Theme.scale(14)
+    local label = _("Clear")
+    local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
+    local w = Theme.scale(14) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
+    local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
+    P.box(bb, x, y, w, h, { border = false, background = enabled and Theme.panel or Theme.bg })
+    P.image(bb, Images.asset("clear.svg"), x + Theme.scale(7), y + Theme.scale(7), icon, icon, { is_icon = true })
+    P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+    if enabled then
+        P.hit(view, x, y, w, h, function() view.app:confirm_clear_queue() end, "clear-queue")
+    end
+end
+
+local function draw_title_bar(view, bb, x, y, w)
+    local m = Theme.metrics()
+    local h = m.titlebar_h
+    local page = view.app.state.page
+    local pad = m.pad
+    local title_x = x + pad
+    local title_right = x + w - pad
+    P.box(bb, x, y, w, h, { border = false, background = Theme.panel })
+    local back_callback = page_back_callback(view, page)
+    if back_callback then
+        title_x = title_x + Header.draw_back(view, bb, title_x, toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
+    end
+    local action_s = Theme.scale(42)
+    local action_x = title_right - action_s
+    Header.draw_actions(view, bb, action_x, toolbar_y(y, h, action_s))
+    title_right = action_x - Theme.scale(8)
+    if page == "home" then
+        local logo = Theme.scale(42)
+        if not P.image(bb, Images.asset("zenpm.svg"), title_x, toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
+            P.center_text_box(bb, "Z", title_x, toolbar_y(y, h, logo), logo, logo, "title", { bold = true })
+        end
+        title_x = title_x + logo + Theme.scale(14)
+        P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
+    else
+        P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
+    end
+    P.rect(bb, x, y + h - Theme.scale(1), w, Theme.scale(1), Theme.soft)
+    view.koreader_menu_zone = { x = x, y = y, w = w, h = h }
+    return y + h
 end
 
 function Header.draw(view, bb, x, y, w)
     local page = view.app.state.page
     local m = Theme.metrics()
     local pad = m.pad
-    if page == "home" then
-        local h = Theme.scale(78)
-        P.box(bb, x, y, w, h, { border = false })
-        local row_h = Theme.scale(42)
-        local row_y = y + Theme.scale(12)
-        local action_x = x + w - pad - row_h
-        Header.draw_actions(view, bb, action_x, row_y)
-        local logo = Theme.scale(42)
-        if not P.image(bb, Images.asset("zenpm.svg"), x + pad, row_y, logo, logo, { is_icon = true }) then
-            P.center_text_box(bb, "Z", x + pad, row_y, logo, logo, "title", { bold = true })
-        end
-        local text_x = x + pad + logo + Theme.scale(14)
-        local title = _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM")
-        local title_size = P.text_size(title, action_x - text_x - Theme.scale(8), "title", { bold = true })
-        local title_y = row_y + math.floor((row_h - title_size.h) / 2) - Theme.scale(3)
-        P.text(bb, title, text_x, title_y, action_x - text_x - Theme.scale(8), "title", { bold = true })
-        return y + h
-    elseif page == "search" then
-        local h = Theme.scale(68)
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
-        require("ui/search").draw(view, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), view.app.state.filters.search, _("Search..."), function()
-            view.app:prompt_filter("search")
-        end, function()
-            view.app:set_filter("search", "")
-        end)
-        return y + h
-    elseif page == "categories" then
-        local h = Theme.scale(68)
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
-        require("ui/search").draw(view, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), view.app.state.filters.categories, _("Search categories..."), function()
-            view.app:prompt_filter("categories")
-        end, function()
-            view.app:set_filter("categories", "")
-        end)
-        return y + h
-    elseif page == "category_details" then
-        local h = Theme.scale(68)
-        local action_s = Theme.scale(42)
-        local back_s = Theme.scale(46)
-        local gap = Theme.scale(6)
-        local action_x = x + w - pad - action_s
-        local search_x = x + pad + back_s + gap
-        Header.draw_back(view, bb, x + pad, y + Theme.scale(11), function() view.app:show_categories() end)
-        Header.draw_actions(view, bb, action_x, y + Theme.scale(12))
-        require("ui/search").draw(view, bb, search_x, y + Theme.scale(11), action_x - search_x - gap, view.app.state.filters.category, _("Search category..."), function()
-            view.app:prompt_filter("category")
-        end, function()
-            view.app:set_filter("category", "")
-        end)
-        return y + h
+    y = draw_title_bar(view, bb, x, y, w)
+    local toolbar_h = m.toolbar_h
+
+    local button_y = toolbar_y(y, toolbar_h, Theme.scale(42))
+    local control_x = x + pad
+    local gap = Theme.scale(6)
+    local filter_kind = ({
+        search = "search",
+        category_details = "category",
+        installed = "installed",
+    })[page]
+    local sort_kind = ({
+        search = "search",
+        category_details = "category",
+        source_details = "source",
+    })[page]
+    if page == "sources" then
+        draw_title_button(view, bb, control_x, button_y, "+ " .. _("Add Source"), function()
+            view.app:prompt_add_source()
+        end, "add-source", true)
+        return y + toolbar_h
     elseif page == "installed" then
-        local h = Theme.scale(68)
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(12))
-        require("ui/search").draw(view, bb, x + pad, y + Theme.scale(11), w - pad * 2 - Theme.scale(52), view.app.state.filters.installed, _("Filter installed..."), function()
-            view.app:prompt_filter("installed")
-        end, function()
-            view.app:set_filter("installed", "")
-        end)
-        return y + h
-    elseif page == "sources" then
-        local h = Theme.scale(68)
-        local action_s = Theme.scale(42)
-        local bw, bh = Theme.scale(170), Theme.scale(44)
-        local gap = Theme.scale(8)
-        local action_x = x + w - pad - action_s
-        local button_x = action_x - gap - bw
-        P.vcenter_text(bb, _("Sources"), x + pad, y + Theme.scale(12), button_x - x - pad - Theme.scale(8), bh, "title", { bold = true })
-        P.box(bb, button_x, y + Theme.scale(12), bw, bh, { radius = math.floor(bh / 2) })
-        P.center_text_box(bb, "+ " .. _("Add Source"), button_x, y + Theme.scale(12), bw, bh, "small", { bold = true })
-        P.hit(view, button_x, y + Theme.scale(12), bw, bh, function() view.app:prompt_add_source() end, "add-source")
-        Header.draw_actions(view, bb, action_x, y + Theme.scale(13))
-        return y + h
-    elseif page == "source_details" then
-        local h = Theme.scale(78)
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(18))
-        Header.draw_back(view, bb, x + pad, y + Theme.scale(14), function() view.app:show_sources() end)
-        local repo = view.app.state.current_repo or {}
-        local icon = Theme.scale(68)
-        local icon_x = x + pad + Theme.scale(56)
-        local icon_y = y + Theme.scale(5)
-        if not P.image(bb, view.app:repo_icon_file(repo), icon_x, icon_y, icon, icon, { is_icon = true }) then
-            P.center_text(bb, "SRC", icon_x, icon_y + Theme.scale(27), icon, "small", { bold = true })
-        end
-        local text_x = icon_x + icon + Theme.scale(18)
-        P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source Details"))), 60), text_x, y + Theme.scale(13), w - text_x - pad - Theme.scale(48), "heading", { bold = true })
-        P.text(bb, ellipsize(repo.url or "", 70), text_x, y + Theme.scale(44), w - text_x - pad - Theme.scale(48), "small")
-        return y + h
-    elseif page == "package_details" then
-        local h = Theme.scale(68)
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(8))
-        Header.draw_back(view, bb, x + pad, y + Theme.scale(8), function() view.app:go_back_from_details() end)
-        local pkg = view.app.state.current_package or {}
-        P.vcenter_text(bb, ellipsize(Models.package_display_name(pkg, _("Package Details")), 60), x + pad + Theme.scale(60), y + Theme.scale(8), w - pad * 2 - Theme.scale(112), Theme.scale(46), "heading", { bold = true })
-        return y + h
-    elseif page == "queue" then
-        local h = Theme.scale(68)
+        local updates = view.app:installed_update_count()
+        local enabled = updates > 0 and not view.app.state.queue_running
+        control_x = control_x + draw_title_button(view, bb, control_x, button_y, _("Update All") .. " (" .. tostring(updates) .. ")", function()
+            view.app:queue_all_updates()
+        end, "upgrade-all", enabled) + gap
+    end
+    if sort_kind then
+        control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
+    end
+    if filter_kind then
+        Header.draw_search_button(view, bb, x + w - pad - Theme.scale(42), button_y, filter_kind)
+    end
+    if page == "queue" then
         local button_h = Theme.scale(42)
         local confirm_w = Theme.scale(120)
-        local button_y = y + Theme.scale(12)
         local confirm_x = x + w - pad - confirm_w
         local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
-        P.center_text_box(bb, _("Queue"), x, button_y - Theme.scale(5), w, button_h, "heading", { bold = true })
-        Header.draw_back(view, bb, x + pad, y + Theme.scale(10), function() view.app:close_queue() end)
-        P.box(bb, confirm_x, button_y, confirm_w, button_h, {
+        local row_y = button_y
+        draw_queue_clear_button(view, bb, control_x, row_y)
+        P.box(bb, confirm_x, row_y, confirm_w, button_h, {
             background = enabled and Theme.panel or Theme.bg,
             border_color = enabled and Theme.border or Theme.soft,
             radius = math.floor(button_h / 2),
         })
-        P.center_text_box(bb, _("Confirm"), confirm_x, button_y, confirm_w, button_h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+        P.center_text_box(bb, _("Confirm"), confirm_x, row_y, confirm_w, button_h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
         if enabled then
-            P.hit(view, confirm_x, button_y, confirm_w, button_h, function() view.app:prompt_queue_confirmation() end, "confirm-queue")
+            P.hit(view, confirm_x, row_y, confirm_w, button_h, function() view.app:prompt_queue_confirmation() end, "confirm-queue")
         end
-        protect_koreader_menu_tap(view, confirm_x, button_y, confirm_w, button_h)
-        return y + h
-    elseif page == "debug" then
-        local h = Theme.scale(54)
-        Header.draw_actions(view, bb, x + w - pad - Theme.scale(42), y + Theme.scale(6))
-        P.text(bb, _("ZenPM - Debug"), x + pad, y + Theme.scale(18), w - pad * 2, "heading", { bold = true })
-        return y + h
+        return y + toolbar_h
+    end
+    if filter_kind or sort_kind then
+        return y + toolbar_h
     end
     return y
 end

@@ -291,7 +291,10 @@ var ZenUtils = (function () {
             closeBtn.className = "modal-close-btn";
             closeBtn.setAttribute("aria-label", "Close");
             closeBtn.innerHTML = "<svg class='modal-close-icon' viewBox='0 0 24 24' aria-hidden='true'><line x1='18' y1='6' x2='6' y2='18'></line><line x1='6' y1='6' x2='18' y2='18'></line></svg>";
-            closeBtn.onclick = hideModal;
+            closeBtn.onclick = function () {
+                hideModal();
+                if (options.onClose) options.onClose();
+            };
             box.appendChild(closeBtn);
         }
 
@@ -333,7 +336,10 @@ var ZenUtils = (function () {
         document.body.appendChild(overlay);
 
         overlay.onclick = function (e) {
-            if (e.target === overlay) hideModal();
+            if (e.target === overlay) {
+                hideModal();
+                if (options.onClose) options.onClose();
+            }
         };
     }
 
@@ -411,6 +417,42 @@ var ZenUtils = (function () {
             boxClassName: "modify-modal-box add-source-modal-box",
             content: content
         });
+    }
+
+    function choosePackageAsset(pkg, onSelect, onCancel, onError) {
+        fetchJSON("GET", "/packages/" + encodeURIComponent(pkg.id) + "/assets", null).then(function (result) {
+            if (!result || !result.needs_choice) {
+                onSelect(result && result.auto ? result.auto : "");
+                return;
+            }
+            var candidates = Array.isArray(result.candidates) ? result.candidates : [];
+            if (!candidates.length) throw new Error("no compatible package builds are available");
+
+            var content = document.createElement("div");
+            content.className = "modify-options";
+            for (var i = 0; i < candidates.length; i++) {
+                (function (asset) {
+                    var button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "modify-option";
+                    button.textContent = asset.asset + (asset.arch ? " (" + asset.arch + ")" : "");
+                    button.onclick = function () {
+                        hideModal();
+                        onSelect(asset.asset);
+                    };
+                    content.appendChild(button);
+                })(candidates[i]);
+            }
+            showBaseModal({
+                title: "Choose Package Build",
+                message: "ZenPM could not determine the compatible build. Choose one to continue.",
+                className: "add-source-modal-overlay",
+                boxClassName: "modify-modal-box add-source-modal-box",
+                content: content,
+                onClose: onCancel,
+                actions: [{ label: "Cancel", onClick: onCancel }]
+            });
+        }).catch(onError);
     }
 
     function hideModal() {
@@ -904,6 +946,7 @@ var ZenUtils = (function () {
         showConfirmModal: showConfirmModal,
         showPackageActionConfirm: showPackageActionConfirm,
         showPackageModifyModal: showPackageModifyModal,
+        choosePackageAsset: choosePackageAsset,
         hideModal:       hideModal,
         showAboutModal:  showAboutModal,
         setupPageChrome: setupPageChrome,

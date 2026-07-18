@@ -104,6 +104,25 @@ function App:new(plugin)
     return o
 end
 
+function App:run_update_task(task, trap_widget, on_done)
+    local ok_trapper, Trapper = pcall(require, "ui/trapper")
+    if not ok_trapper or not Trapper then
+        UIManager:nextTick(function()
+            local invoked, called, ok, result = pcall(task)
+            if invoked then
+                on_done(true, called, ok, result)
+            else
+                on_done(true, false, called)
+            end
+        end)
+        return
+    end
+    Trapper:wrap(function()
+        local completed, called, ok, result = Trapper:dismissableRunInSubprocess(task, trap_widget)
+        on_done(completed, called, ok, result)
+    end)
+end
+
 local function package_title(pkg, fallback)
     return Models.package_display_name(pkg, fallback)
 end
@@ -772,14 +791,20 @@ function App:schedule_automatic_update_check()
 
     self.state.update_checking = true
     UIManager:scheduleIn(15, function()
-        self.state.update_checking = false
-        if not self.view or self.busy or not self.state.update_auto_check then return end
-        local completed, ok, result = pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
-        if completed and ok then
-            App.save_setting("last_update_check", os.time())
-            self:set_update_available(result ~= "up_to_date")
-            self:refresh()
+        if not self.view or self.busy or not self.state.update_auto_check then
+            self.state.update_checking = false
+            return
         end
+        self:run_update_task(function()
+            return pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
+        end, nil, function(completed, called, ok, result)
+            self.state.update_checking = false
+            if completed and called and ok then
+                App.save_setting("last_update_check", os.time())
+                self:set_update_available(result ~= "up_to_date")
+                self:refresh()
+            end
+        end)
     end)
 end
 
@@ -1511,8 +1536,8 @@ function App:prompt_filter(kind)
     local title = _("Search packages")
     local hint = _("Search...")
     if kind == "installed" then
-        title = _("Filter installed packages")
-        hint = _("Filter installed...")
+        title = _("Search installed packages")
+        hint = _("Search installed...")
     elseif kind == "categories" then
         title = _("Search categories")
         hint = _("Search categories...")
@@ -1846,7 +1871,11 @@ function App:start_package_action(pkg, action, on_done, opts)
     end
     if action_installs_package(action) then
         local ok, info = self.client:get_package_assets(id)
-        if ok and type(info) == "table" and info.needs_choice and type(info.candidates) == "table" then
+        if not ok then
+            Modals.info(_("Could not determine which build to install: ") .. tostring(info))
+            return
+        end
+        if type(info) == "table" and info.needs_choice and type(info.candidates) == "table" then
             self:choose_package_asset(pkg, action, info.candidates, on_done, opts)
             return
         end
@@ -1859,8 +1888,12 @@ function App:choose_package_asset(pkg, action, candidates, on_done, opts)
     for _, asset in ipairs(candidates) do
         local name = asset.asset
         if name and name ~= "" then
+            local label = name
+            if asset.arch and asset.arch ~= "" then
+                label = tostring(asset.arch) .. " — " .. name
+            end
             table.insert(rows, {
-                text = name,
+                text = label,
                 callback = function()
                     self:queue_package_action(pkg, action, name, opts)
                 end,
@@ -2276,32 +2309,39 @@ end
 function App:start_update()
     if self.busy then return end
     self.busy = true
-    Modals.status(_("Checking for update..."))
+    local status = Modals.status(_("Checking for update..."))
     UIManager:forceRePaint()
-    local completed, ok, result = pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
-    self.busy = false
-    Modals.close_status()
-    if not completed then
-        Modals.info(_("Update failed: ") .. tostring(ok))
-        return
-    end
-    if not ok then
-        Modals.info(_("Update failed: ") .. tostring(result))
-        return
-    end
-    if result == "up_to_date" then
-        self:set_update_available(false)
-        Modals.info(_("ZenPM is up to date."))
-        return
-    end
+    self:run_update_task(function()
+        return pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
+    end, status, function(completed, called, ok, result)
+        self.busy = false
+        Modals.close_status()
+        if not completed then
+            Modals.info(_("Update check was cancelled."))
+            return
+        end
+        if not called then
+            Modals.info(_("Update failed: ") .. tostring(ok))
+            return
+        end
+        if not ok then
+            Modals.info(_("Update failed: ") .. tostring(result))
+            return
+        end
+        if result == "up_to_date" then
+            self:set_update_available(false)
+            Modals.info(_("ZenPM is up to date."))
+            return
+        end
 
-    self:set_update_available(true)
-    Modals.confirm(
-        _("ZenPM update v") .. tostring(result) .. _(" is available. Update now?"),
-        _("Update"),
-        function() self:apply_update() end,
-        true
-    )
+        self:set_update_available(true)
+        Modals.confirm(
+            _("ZenPM update v") .. tostring(result) .. _(" is available. Update now?"),
+            _("Update"),
+            function() self:apply_update() end,
+            true
+        )
+    end)
 end
 
 function App:apply_update()
@@ -2315,37 +2355,44 @@ function App:apply_update()
         companion_update_started = true
     end
     self.busy = true
-    Modals.status(_("Updating ZenPM..."))
+    local status = Modals.status(_("Updating ZenPM..."))
     UIManager:forceRePaint()
-    local completed, ok, result = pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
-    self.busy = false
-    Modals.close_status()
-    if not completed then
-        Modals.info(_("Update failed: ") .. tostring(ok))
-        return
-    end
-    if not ok then
-        Modals.info(_("Update failed: ") .. tostring(result))
-        return
-    end
-    if result == "up_to_date" then
-        self:set_update_available(false)
-        if companion_update_started then
-            Modals.info(_("ZenPM Companion is checking for an update."))
-        else
-            Modals.info(_("ZenPM is up to date."))
+    self:run_update_task(function()
+        return pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
+    end, status, function(completed, called, ok, result)
+        self.busy = false
+        Modals.close_status()
+        if not completed then
+            Modals.info(_("Update was cancelled."))
+            return
         end
-        return
-    end
+        if not called then
+            Modals.info(_("Update failed: ") .. tostring(ok))
+            return
+        end
+        if not ok then
+            Modals.info(_("Update failed: ") .. tostring(result))
+            return
+        end
+        if result == "up_to_date" then
+            self:set_update_available(false)
+            if companion_update_started then
+                Modals.info(_("ZenPM Companion is checking for an update."))
+            else
+                Modals.info(_("ZenPM is up to date."))
+            end
+            return
+        end
 
-    -- The next startup copies the new bundled backend; stop the old one
-    -- now so it cannot be reused after KOReader restarts.
-    self:set_update_available(false)
-    self.daemon:stop_standalone_backend()
-    self.backend_ready = false
-    Modals.restart_koreader(
-        _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
-        function() self:restart_koreader() end)
+        -- The next startup copies the new bundled backend; stop the old one
+        -- now so it cannot be reused after KOReader restarts.
+        self:set_update_available(false)
+        self.daemon:stop_standalone_backend()
+        self.backend_ready = false
+        Modals.restart_koreader(
+            _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
+            function() self:restart_koreader() end)
+    end)
 end
 
 function App:image_summary(pkg)

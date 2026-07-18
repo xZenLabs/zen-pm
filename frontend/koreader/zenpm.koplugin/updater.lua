@@ -129,7 +129,7 @@ local function request(url, sink, method)
     local started_at = socket.gettime()
     log_info("GitHub request started", method or "GET", url)
     if ok_socketutil then
-        socketutil:set_timeout(1, 4)
+        socketutil:set_timeout(10, 30)
     end
     local ok, code, headers, status = https.request{
         url = url,
