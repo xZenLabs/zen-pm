@@ -98,6 +98,22 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 }
 
+func TestApplyUpdateInfoRequiresKnownInstalledVersion(t *testing.T) {
+	for _, installedVersion := range []string{"", "0.0.0", "v0.0.0"} {
+		item := pkgJSON{Version: "1.2.0", InstalledVer: installedVersion}
+		applyUpdateInfo(&item)
+		if item.UpdateAvail {
+			t.Errorf("installed version %q marked update available", installedVersion)
+		}
+	}
+
+	item := pkgJSON{Version: "1.2.0", InstalledVer: "1.1.0"}
+	applyUpdateInfo(&item)
+	if !item.UpdateAvail {
+		t.Fatal("known older installed version was not marked update available")
+	}
+}
+
 func TestPackageListIncludesUnmanagedKOReaderPatch(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	root := filepath.Join(t.TempDir(), "koreader")

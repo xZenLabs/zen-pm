@@ -582,15 +582,16 @@ func applyUpdateInfo(item *pkgJSON) {
 		return
 	}
 	latest := item.Version // catalog (repo) version
-	if latest == "" {
+	if latest == "" || !hasKnownVersion(item.InstalledVer) {
 		return
 	}
 	item.LatestVersion = latest
-	base := item.InstalledVer
-	if base == "" {
-		base = item.Version
-	}
-	item.UpdateAvail = releases.VersionGreater(latest, base)
+	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer)
+}
+
+func hasKnownVersion(version string) bool {
+	version = releases.NormalizeVersion(version)
+	return version != "" && version != "0.0.0"
 }
 
 func firstString(values []string) string {
