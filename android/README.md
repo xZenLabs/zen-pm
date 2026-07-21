@@ -15,13 +15,12 @@ export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
 export ANDROID_HOME="$(brew --prefix)/share/android-commandlinetools"
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
 sdkmanager --licenses
-sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;23.2.8568313"
-export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/23.2.8568313"
+sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/25.2.9519653"
 gradle -p android assembleRelease
 ```
 
-NDK 23 supplies an Intel macOS compiler on some Apple Silicon installations;
-install Rosetta if macOS cannot run it: `softwareupdate --install-rosetta --agree-to-license`.
+NDK 25 supplies a macOS compiler compatible with Apple Silicon.
 
 Install `android/app/build/outputs/apk/release/app-release.apk`. On Android 11
 and newer, the first ZenPM launch opens Android settings for **All files

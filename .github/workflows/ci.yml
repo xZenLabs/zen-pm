@@ -87,7 +87,7 @@ jobs:
 
       - name: Install Android SDK and NDK
         if: steps.version_check.outputs.skip == 'false'
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;23.2.8568313"
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
       - name: Restore Android release signing key
         if: steps.version_check.outputs.skip == 'false'
@@ -109,7 +109,7 @@ jobs:
       - name: Build Android companion APK
         if: steps.version_check.outputs.skip == 'false'
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/23.2.8568313
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/zenpm-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
