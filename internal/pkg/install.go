@@ -621,15 +621,7 @@ func displayVersion(version string) string {
 }
 
 func isGenericKOReaderPlugin(entry *repo.CatalogEntry) bool {
-	if entry == nil || !strings.HasSuffix(entry.InstallURL, "/install-plugin.sh") {
-		return false
-	}
-	for _, platform := range entry.Platforms {
-		if strings.EqualFold(strings.TrimSpace(platform), "koreader") {
-			return true
-		}
-	}
-	return false
+	return genericKOReaderInstaller(entry) == genericPluginInstaller
 }
 
 func isPatchPackage(entry *repo.CatalogEntry) bool {

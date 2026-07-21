@@ -91,14 +91,13 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	defer srv.Close()
 
 	if err := st.WriteCatalog([]state.CatalogEntry{{
-		ID:         "plugin",
-		Name:       "Plugin",
-		Version:    "1.0.0",
-		Repo:       "ZenLabs",
-		Platforms:  []string{"koreader"},
-		InstallURL: srv.URL + "/install-plugin.sh",
-		Source:     "https://github.com/owner/plugin",
-		Assets:     `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
+		ID:        "plugin",
+		Name:      "Plugin",
+		Version:   "1.0.0",
+		Repo:      "ZenLabs",
+		Platforms: []string{"koreader"},
+		Source:    "https://github.com/owner/plugin",
+		Assets:    `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -199,11 +198,10 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 	}
 }
 
-func TestNativeKOReaderInstallerClaimsGenericScripts(t *testing.T) {
+func TestNativeKOReaderInstallerClassifiesPackagesWithoutScripts(t *testing.T) {
 	manager := &Manager{plat: "host"}
 	patch := &repo.CatalogEntry{
 		Platforms:  []string{"koreader"},
-		InstallURL: "https://example.invalid/install-patch.sh",
 		Source:     "https://github.com/owner/patches",
 		SourceType: "source",
 		Assets:     `[{"asset":"patch.lua"}]`,
@@ -213,11 +211,18 @@ func TestNativeKOReaderInstallerClaimsGenericScripts(t *testing.T) {
 	}
 
 	plugin := &repo.CatalogEntry{
-		Platforms:  []string{"koreader"},
-		InstallURL: "https://example.invalid/install-plugin.sh",
+		Platforms: []string{"koreader"},
 	}
 	if got := manager.nativeKOReaderInstaller(plugin, ""); got != genericPluginInstaller {
 		t.Fatalf("native plugin installer = %q, want %q", got, genericPluginInstaller)
+	}
+
+	kindle := &repo.CatalogEntry{
+		Platforms:  []string{"kindle"},
+		InstallURL: "https://example.invalid/install.sh",
+	}
+	if got := manager.nativeKOReaderInstaller(kindle, ""); got != "" {
+		t.Fatalf("native Kindle installer = %q, want empty", got)
 	}
 }
 
@@ -242,9 +247,15 @@ func zipContents(t *testing.T, files map[string]string) []byte {
 
 func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
-	out := filepath.Join(t.TempDir(), "asset.out")
 	t.Setenv("ZENPM_HOME", home)
-	t.Setenv("ZENPM_ENV_OUT", out)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "patches"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
 
 	st, err := state.Init("host")
 	if err != nil {
@@ -252,21 +263,23 @@ func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "#!/bin/sh\n")
-		io.WriteString(w, "printf '%s\\n' \"$ZENPM_PACKAGE_SOURCE_ASSET\" >> \"$ZENPM_ENV_OUT\"\n")
+		switch r.URL.Path {
+		case "/2-menu-size.lua", "/2-ui-font.lua":
+			io.WriteString(w, "return {}\n")
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer srv.Close()
 
 	if err := st.WriteCatalog([]state.CatalogEntry{{
-		ID:           "koreader-11",
-		Name:         "Koreader",
-		Version:      "0.0.0-source",
-		Repo:         "ZenLabs",
-		Category:     "patches",
-		Platforms:    []string{"koreader"},
-		InstallURL:   srv.URL,
-		UninstallURL: srv.URL,
-		Assets:       `[{"arch":"any","asset":"2-menu-size.lua"},{"arch":"any","asset":"2-ui-font.lua"}]`,
+		ID:        "koreader-11",
+		Name:      "Koreader",
+		Version:   "0.0.0-source",
+		Repo:      "ZenLabs",
+		Category:  "patches",
+		Platforms: []string{"koreader"},
+		Assets:    `[{"arch":"any","asset":"2-menu-size.lua","url":"` + srv.URL + `/2-menu-size.lua"},{"arch":"any","asset":"2-ui-font.lua","url":"` + srv.URL + `/2-ui-font.lua"}]`,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -279,10 +292,6 @@ func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	if err := manager.InstallAsset("koreader-11", "2-ui-font.lua"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(st.CachedUninstallScriptPath("koreader-11")); err != nil {
-		t.Fatalf("cached patch uninstall script missing: %v", err)
-	}
-
 	// Patch files must NOT collapse into installed_packages.
 	if installed, _ := st.ReadInstalled(); len(installed) != 0 {
 		t.Fatalf("installed_packages = %#v, want empty", installed)
@@ -413,6 +422,14 @@ func TestPatchInstallScriptURLWithQueryTracksPerFileState(t *testing.T) {
 func TestSourcePatchRepoTracksPerFileStateWithoutPatchCategory(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "patches"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
 
 	st, err := state.Init("host")
 	if err != nil {
@@ -420,20 +437,22 @@ func TestSourcePatchRepoTracksPerFileStateWithoutPatchCategory(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "#!/bin/sh\n")
+		if r.URL.Path != "/2---stretched-covers.lua" {
+			http.NotFound(w, r)
+			return
+		}
+		io.WriteString(w, "return {}\n")
 	}))
 	defer srv.Close()
 
 	if err := st.WriteCatalog([]state.CatalogEntry{{
-		ID:           "koreader-5",
-		Name:         "Koreader",
-		Version:      "0.0.0-source",
-		Repo:         "ZenLabs",
-		Platforms:    []string{"koreader"},
-		InstallURL:   srv.URL + "/install.sh",
-		UninstallURL: srv.URL + "/uninstall.sh",
-		Source:       "https://github.com/SeriousHornet/KOReader.patches",
-		Assets:       `[{"arch":"any","asset":"2---stretched-covers.lua","url":"https://raw.githubusercontent.com/SeriousHornet/KOReader.patches/HEAD/2---stretched-covers.lua"}]`,
+		ID:        "koreader-5",
+		Name:      "Koreader",
+		Version:   "0.0.0-source",
+		Repo:      "ZenLabs",
+		Platforms: []string{"koreader"},
+		Source:    "https://github.com/SeriousHornet/KOReader.patches",
+		Assets:    `[{"arch":"any","asset":"2---stretched-covers.lua","url":"` + srv.URL + `/2---stretched-covers.lua"}]`,
 	}}); err != nil {
 		t.Fatal(err)
 	}

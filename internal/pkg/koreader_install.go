@@ -21,31 +21,18 @@ const (
 )
 
 func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
-	if entry == nil {
+	if !packageHasPlatform(entry, "koreader") {
 		return ""
 	}
-	installURL := strings.TrimSpace(entry.InstallURL)
-	if i := strings.IndexAny(installURL, "?#"); i >= 0 {
-		installURL = installURL[:i]
-	}
-	switch filepath.Base(installURL) {
-	case "install-plugin.sh":
-		return genericPluginInstaller
-	case "install-patch.sh":
+	if isPatchPackage(entry) {
 		return genericPatchInstaller
-	default:
-		return ""
 	}
+	return genericPluginInstaller
 }
 
-// nativeKOReaderInstaller claims ZenPM's generic KOReader scripts. Go handles
-// their asset download, filesystem changes, and tracking without a shell.
+// nativeKOReaderInstaller handles KOReader plugins and patches in-process.
 func (m *Manager) nativeKOReaderInstaller(entry *repo.CatalogEntry, override string) string {
-	kind := genericKOReaderInstaller(entry)
-	if kind == "" || !packageHasPlatform(entry, "koreader") {
-		return ""
-	}
-	return kind
+	return genericKOReaderInstaller(entry)
 }
 
 // installGenericKOReader performs the work of the repository's generic shell
