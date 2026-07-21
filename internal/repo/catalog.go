@@ -437,8 +437,8 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			IncompatiblePlatforms: p.IncompatiblePlatforms,
 			Deps:                  p.Dependencies,
 			Conflicts:             p.Conflicts,
-			InstallURL:            resolveURL(repoURL, p.InstallURL),
-			UninstallURL:          resolveURL(repoURL, p.UninstallURL),
+			InstallURL:            packageScriptURL(repoURL, p.ID, p.Platforms, p.InstallURL, "install.sh"),
+			UninstallURL:          packageScriptURL(repoURL, p.ID, p.Platforms, p.UninstallURL, "uninstall.sh"),
 			Size:                  p.Size,
 			IconURL:               iconURL,
 			RepoIconURL:           repoIcon,
@@ -460,6 +460,23 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 		entries = append(entries, entry)
 	}
 	return entries
+}
+
+// packageScriptURL fills in the conventional ZenLabs Kindle package scripts
+// directory when a manifest omits an explicit script URL.
+func packageScriptURL(repoURL, packageID string, platforms []string, configuredURL, script string) string {
+	if strings.TrimSpace(configuredURL) != "" {
+		return resolveURL(repoURL, configuredURL)
+	}
+	if packageID == "" {
+		return ""
+	}
+	for _, platform := range platforms {
+		if normalizePlatform(platform) == "kindle" {
+			return joinURL(repoURL, "packages/kindle/"+url.PathEscape(packageID)+"/scripts/"+script)
+		}
+	}
+	return ""
 }
 
 func compactJSONField(value json.RawMessage) string {

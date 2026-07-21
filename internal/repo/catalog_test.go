@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 func TestFilterByPlatformRequiresAllEntryPlatforms(t *testing.T) {
@@ -89,6 +91,12 @@ func TestParseKindleForgeCatalogMapsTagsToCategory(t *testing.T) {
 	}
 	if entries[0].Category != "utility" {
 		t.Fatalf("Category = %q, want %q", entries[0].Category, "utility")
+	}
+	if entries[0].InstallURL != "https://example.invalid/notebook/install.sh" {
+		t.Fatalf("InstallURL = %q", entries[0].InstallURL)
+	}
+	if entries[0].UninstallURL != "https://example.invalid/notebook/uninstall.sh" {
+		t.Fatalf("UninstallURL = %q", entries[0].UninstallURL)
 	}
 }
 
@@ -188,6 +196,12 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"platforms": ["koreader"],
 				"install_url": "packages/koreader/install-plugin.sh",
 				"stars": null
+			},
+			{
+				"id": "kindle-browser",
+				"name": "Kindle Browser",
+				"version": "1.0.0",
+				"platforms": ["kindle"]
 			}
 		]
 	}`), &manifest); err != nil {
@@ -195,8 +209,8 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 
 	entries := parseZenPMCatalog("ZenLabs", "https://example.invalid/repo", 10, manifest)
-	if len(entries) != 2 {
-		t.Fatalf("got %d entries, want 2", len(entries))
+	if len(entries) != 3 {
+		t.Fatalf("got %d entries, want 3", len(entries))
 	}
 	if entries[0].Stars != "31" {
 		t.Fatalf("Stars = %q, want %q", entries[0].Stars, "31")
@@ -230,6 +244,28 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[1].Stars != "" {
 		t.Fatalf("null Stars = %q, want empty", entries[1].Stars)
+	}
+	if entries[2].InstallURL != "https://example.invalid/repo/packages/kindle/kindle-browser/scripts/install.sh" {
+		t.Fatalf("Kindle InstallURL = %q", entries[2].InstallURL)
+	}
+	if entries[2].UninstallURL != "https://example.invalid/repo/packages/kindle/kindle-browser/scripts/uninstall.sh" {
+		t.Fatalf("Kindle UninstallURL = %q", entries[2].UninstallURL)
+	}
+}
+
+func TestFillMissingKindleScriptURLsForCachedCatalog(t *testing.T) {
+	entries := []*CatalogEntry{{
+		Repo:      "ZenLabs",
+		ID:        "kindle-browser",
+		Platforms: []string{"kindle"},
+	}}
+	fillMissingKindleScriptURLs(entries, []state.RepoEntry{{Name: "ZenLabs", URL: "https://example.invalid/repo"}})
+
+	if entries[0].InstallURL != "https://example.invalid/repo/packages/kindle/kindle-browser/scripts/install.sh" {
+		t.Fatalf("Kindle InstallURL = %q", entries[0].InstallURL)
+	}
+	if entries[0].UninstallURL != "https://example.invalid/repo/packages/kindle/kindle-browser/scripts/uninstall.sh" {
+		t.Fatalf("Kindle UninstallURL = %q", entries[0].UninstallURL)
 	}
 }
 

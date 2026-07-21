@@ -162,7 +162,26 @@ func (m *Manager) ReadCatalog() ([]*CatalogEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fromStateCatalog(entries), nil
+	catalog := fromStateCatalog(entries)
+	repositories, err := m.st.ReadRepos()
+	if err == nil {
+		fillMissingKindleScriptURLs(catalog, repositories)
+	}
+	return catalog, nil
+}
+
+func fillMissingKindleScriptURLs(catalog []*CatalogEntry, repositories []state.RepoEntry) {
+	urls := make(map[string]string, len(repositories))
+	for _, repository := range repositories {
+		urls[repository.Name] = repository.URL
+	}
+	for _, entry := range catalog {
+		if entry == nil || urls[entry.Repo] == "" {
+			continue
+		}
+		entry.InstallURL = packageScriptURL(urls[entry.Repo], entry.ID, entry.Platforms, entry.InstallURL, "install.sh")
+		entry.UninstallURL = packageScriptURL(urls[entry.Repo], entry.ID, entry.Platforms, entry.UninstallURL, "uninstall.sh")
+	}
 }
 
 // FetchScript downloads a script URL to a temp file and returns its path.
