@@ -14,6 +14,7 @@ local ok_android = pcall(require, "android")
 local Client = {}
 local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
 local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
+local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
 
 local function url_encode(value)
     value = tostring(value or "")
@@ -219,7 +220,7 @@ function Client:remove_repo(name)
 end
 
 function Client:refresh_repos()
-    return self:request("POST", "/repo/refresh", nil)
+    return self:request("POST", "/repo/refresh", nil, REPO_REFRESH_TIMEOUT)
 end
 
 function Client:scan_installed_plugins()

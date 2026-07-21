@@ -6,7 +6,6 @@ local Util = require("zenpm_util")
 
 local ok_datastorage, DataStorage = pcall(require, "datastorage")
 local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
-local ok_meta, Meta = pcall(dofile, Constants.PLUGIN_DIR .. "/_meta.lua")
 local ok_android, android = pcall(require, "android")
 
 local Daemon = {}
@@ -175,10 +174,15 @@ function Daemon:package_platform_filter()
 end
 
 function Daemon:plugin_version()
-    if ok_meta and type(Meta) == "table" and Meta.version then
-        return tostring(Meta.version)
+    local version = read_text(Constants.PLUGIN_DIR .. "/VERSION")
+    if version ~= "" then
+        return version
     end
-    return read_text(Constants.PLUGIN_DIR .. "/VERSION")
+    local ok_meta, meta = pcall(dofile, Constants.PLUGIN_DIR .. "/_meta.lua")
+    if ok_meta and type(meta) == "table" and meta.version then
+        return tostring(meta.version)
+    end
+    return ""
 end
 
 function Daemon:native_home()
@@ -387,7 +391,7 @@ function Daemon:bundled_backend_candidates()
     local platform = self:detect_platform()
     local ereader_suffix = self:ereader_backend_suffix()
     if platform == "kobo" or platform == "kindle" then
-        return { dir .. "/zenpm-ereader", dir .. "/zenpm-" .. ereader_suffix, dir .. "/zenpm" }
+        return { dir .. "/zenpm-" .. ereader_suffix }
     end
     local host_platform = self:host_backend_platform()
     local suffix = self:host_backend_suffix()
@@ -420,6 +424,10 @@ function Daemon:bundled_backend_version()
         return value
     end
     return read_text(Constants.PLUGIN_DIR .. "/VERSION")
+end
+
+function Daemon:installed_backend_version()
+    return read_text(self:standalone_backend_dir() .. "/VERSION")
 end
 
 function Daemon:bundled_backend_companions(source)
@@ -498,7 +506,12 @@ function Daemon:health_matches(data)
     if ok_android then
         return data.ok == true
     end
-    return tostring(data.home or "") == self:state_home()
+    if tostring(data.home or "") ~= self:state_home() then
+        return false
+    end
+    local expected_version = self:bundled_backend_version():gsub("^v", "")
+    local running_version = tostring(data.version or ""):gsub("^v", "")
+    return expected_version == "" or running_version == expected_version
 end
 
 function Daemon:ensure_backend_files()
@@ -534,6 +547,8 @@ function Daemon:ensure_backend_files()
         self.backend_path = backend
         return false, nil
     end
+    -- Normalize the selected ABI-specific source (for example zenpm-hf) to
+    -- the stable executable name used by the launcher.
     if not copy_file(source, backend) then
         return false, _("Could not install bundled ZenPM backend to: ") .. backend
     end

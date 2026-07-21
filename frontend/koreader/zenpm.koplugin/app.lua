@@ -63,6 +63,7 @@ function App:new(plugin)
         busy = false,
         backend_ready = false,
         backend_starting = false,
+        scan_installed_on_open = false,
         image_files = {},
         state = {
             page = "home",
@@ -1045,7 +1046,7 @@ function App:navigate(tab_id)
     elseif tab_id == "sources" then
         self:show_sources()
     elseif tab_id == "installed" then
-        self:show_installed()
+        self:show_installed(true)
     elseif tab_id == "debug" then
         self:show_debug()
     else
@@ -1061,6 +1062,8 @@ function App:reload_current_page()
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
         self:show_source_details(self.state.current_repo.name)
+    elseif self.state.page == "installed" then
+        self:show_installed()
     else
         self:navigate(self.state.active_tab or "home")
     end
@@ -1298,11 +1301,21 @@ function App:show_category_details(category_id)
     self:refresh()
 end
 
-function App:show_installed()
+function App:show_installed(scan_plugins)
     self.state.page = "installed"
     self.state.active_tab = "installed"
+    if scan_plugins then
+        self.scan_installed_on_open = true
+    end
     if not self:ensure_backend() then return end
     self:set_loading(_("Loading installed packages..."))
+    if self.scan_installed_on_open then
+        self.scan_installed_on_open = false
+        local scan_ok, scan_err = self.client:scan_installed_plugins()
+        if not scan_ok then
+            Modals.info_for(_("Plugin scan failed: ") .. tostring(scan_err), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        end
+    end
     local ok, packages, err = self:load_packages(true)
     if not ok then
         self:set_error(_("Failed to load packages: ") .. tostring(err))
@@ -2307,7 +2320,11 @@ function App:show_actions(anchor)
 end
 
 function App:show_about()
-    local version = tostring(self.version or "?"):gsub("^v", "")
+    local version = self.daemon:installed_backend_version()
+    if version == "" then
+        version = self.version or "?"
+    end
+    version = tostring(version):gsub("^v", "")
     local platform = tostring(self:package_platforms())
     local device_platform = self.daemon:detect_platform()
     local abi = nil

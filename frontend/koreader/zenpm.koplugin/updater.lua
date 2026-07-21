@@ -377,11 +377,14 @@ function Updater:check(daemon, allow_prerelease)
     local ok, release_or_err = latest_release(daemon, allow_prerelease)
     if not ok then return false, release_or_err end
     local release = release_or_err
-    local plugin_update = release and version_gt(release.tag, daemon:plugin_version())
+    local plugin_version = daemon:plugin_version()
+    local plugin_update = release and version_gt(release.tag, plugin_version)
     local companion_version = daemon:is_android() and daemon:android_companion_version() or nil
     local companion_update = release and companion_version and version_gt(release.tag, companion_version)
+    log_info("version comparison", "release=", release and release.tag or "", "plugin=", plugin_version,
+        "companion=", companion_version or "")
     if not plugin_update and not companion_update then
-        log_info("already up to date", daemon:plugin_version(), companion_version or "")
+        log_info("already up to date", plugin_version, companion_version or "")
         return true, "up_to_date"
     end
     return true, release.version
