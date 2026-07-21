@@ -524,6 +524,29 @@ function App:queue_package_action(pkg, action, asset, opts)
         return false
     end
     opts = opts or {}
+    if action_installs_package(action) and not opts.conflict_confirmed then
+        local conflicts = self:conflicting_packages(pkg)
+        if #conflicts > 0 then
+            local names = {}
+            for _, conflict in ipairs(conflicts) do
+                table.insert(names, package_title(conflict, conflict.id or _("Package")))
+            end
+            Modals.confirm(
+                string.format(
+                    _("%s conflicts with %s. They should not be used together. Install anyway?"),
+                    package_title(pkg, pkg.id or _("Package")),
+                    table.concat(names, ", ")
+                ),
+                _("Install anyway"),
+                function()
+                    opts.conflict_confirmed = true
+                    self:queue_package_action(pkg, action, asset, opts)
+                end,
+                true
+            )
+            return false
+        end
+    end
     local entry = self:queue_entry_for(pkg, action, asset, opts)
     if not entry then
         Modals.info(_("Package has no id."))
@@ -545,6 +568,57 @@ function App:queue_package_action(pkg, action, asset, opts)
     end
     self:refresh()
     return true
+end
+
+local function conflict_set(pkg)
+    local set = {}
+    for _, id in ipairs(type(pkg and pkg.conflicts) == "table" and pkg.conflicts or {}) do
+        id = Util.trim(tostring(id or "")):lower()
+        if id ~= "" then
+            set[id] = true
+        end
+    end
+    return set
+end
+
+local function package_id(pkg)
+    return Util.trim(tostring(pkg and (pkg.id or pkg.name) or "")):lower()
+end
+
+function App:conflicting_packages(pkg)
+    local id = package_id(pkg)
+    if id == "" then return {} end
+
+    local present = {}
+    for _, candidate in ipairs(self.state.packages or {}) do
+        local candidate_id = package_id(candidate)
+        if candidate_id ~= "" and candidate_id ~= id
+            and (candidate.installed or #(candidate.installed_assets or {}) > 0) then
+            present[candidate_id] = candidate
+        end
+    end
+    for _, queued in ipairs(self.state.queue or {}) do
+        local candidate_id = package_id(queued.pkg)
+        if candidate_id ~= "" and candidate_id ~= id then
+            if action_installs_package(queued.action) then
+                present[candidate_id] = queued.pkg
+            elseif queued.action == "uninstall" then
+                present[candidate_id] = nil
+            end
+        end
+    end
+
+    local target_conflicts = conflict_set(pkg)
+    local conflicts = {}
+    for candidate_id, candidate in pairs(present) do
+        if target_conflicts[candidate_id] or conflict_set(candidate)[id] then
+            table.insert(conflicts, candidate)
+        end
+    end
+    table.sort(conflicts, function(a, b)
+        return package_title(a, a.id or "") < package_title(b, b.id or "")
+    end)
+    return conflicts
 end
 
 function App:clear_queue()
@@ -1152,6 +1226,12 @@ local function package_matches_platforms(pkg, platforms)
             if not platforms[normalized] then
                 return false
             end
+        end
+    end
+    for _, platform in ipairs(type(pkg.incompatible_platforms) == "table" and pkg.incompatible_platforms or {}) do
+        local normalized = Util.trim(tostring(platform or "")):lower()
+        if normalized ~= "" and platforms[normalized] then
+            return false
         end
     end
     return required > 0
@@ -1906,20 +1986,34 @@ function App:start_package_action(pkg, action, on_done, opts)
         local ok, info = self.client:get_package_assets(id)
         local has_candidates = type(info) == "table" and info.needs_choice
             and type(info.candidates) == "table" and #info.candidates > 0
+        local has_remembered_candidate = false
+        if has_candidates and pkg.installed_asset and pkg.installed_asset ~= "" then
+            for _, candidate in ipairs(info.candidates) do
+                if candidate.asset == pkg.installed_asset then
+                    has_remembered_candidate = true
+                    break
+                end
+            end
+        end
         if not ok then
-            if action == "update" and Models.has_github_source(pkg) then
+            if Models.has_github_source(pkg) then
                 self:prompt_package_versions(pkg, on_done)
                 return
             end
             Modals.info(_("Could not determine which build to install: ") .. tostring(info))
             return
         end
-        if action == "update" and Models.has_github_source(pkg)
+        if Models.has_github_source(pkg)
             and (type(info) ~= "table" or ((not info.auto or info.auto == "") and not has_candidates)) then
             self:prompt_package_versions(pkg, on_done)
             return
         end
         if has_candidates then
+            if action == "update" and Models.has_github_source(pkg)
+                and not has_remembered_candidate then
+                self:prompt_package_versions(pkg, on_done)
+                return
+            end
             self:choose_package_asset(pkg, action, info.candidates, on_done, opts)
             return
         end

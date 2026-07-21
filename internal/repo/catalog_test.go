@@ -55,6 +55,23 @@ func TestFilterByPlatformTreatsKindleForgeAsKindle(t *testing.T) {
 	assertEntryIDs(t, filtered, []string{"kindle-only", "kindleforge-only"})
 }
 
+func TestFilterByPlatformSupportsAndroidKoreader(t *testing.T) {
+	entries := []*CatalogEntry{
+		{ID: "android-only", Platforms: []string{"android"}},
+		{ID: "android-koreader", Platforms: []string{"android", "koreader"}},
+		{ID: "not-android", Platforms: []string{"koreader"}, IncompatiblePlatforms: []string{"android", "host"}},
+		{ID: "host-only", Platforms: []string{"host"}},
+	}
+
+	filtered := FilterByPlatform(entries, "android,koreader")
+
+	assertEntryIDs(t, filtered, []string{"android-only", "android-koreader"})
+
+	filtered = FilterByPlatform(entries, "host,koreader")
+
+	assertEntryIDs(t, filtered, []string{"host-only"})
+}
+
 func TestKindleForgeCategoryUsesFirstMappedTag(t *testing.T) {
 	got := kindleForgeCategory([]string{"unknown", "Audio", "Games"})
 	if got != "media" {
@@ -104,21 +121,23 @@ func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
 func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	featuredOrder := 10
 	entry := &CatalogEntry{
-		Repo:          "ZenLabs",
-		Priority:      10,
-		ID:            "sudoku-koplugin",
-		Name:          "Sudoku",
-		Version:       "1.2.1",
-		InstallURL:    "install.sh",
-		Source:        "omer-faruq/sudoku.koplugin",
-		SourceAsset:   "sudoku.koplugin.zip",
-		SourceType:    "release",
-		SourceURL:     "https://example.invalid/source.zip",
-		Stars:         "42",
-		Assets:        `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`,
-		Constraints:   `{"abi":["hf","sf"]}`,
-		FeaturedOrder: &featuredOrder,
-		ReadmeURL:     "https://example.invalid/readme.md",
+		Repo:                  "ZenLabs",
+		Priority:              10,
+		ID:                    "sudoku-koplugin",
+		Name:                  "Sudoku",
+		Version:               "1.2.1",
+		InstallURL:            "install.sh",
+		Source:                "omer-faruq/sudoku.koplugin",
+		SourceAsset:           "sudoku.koplugin.zip",
+		SourceType:            "release",
+		SourceURL:             "https://example.invalid/source.zip",
+		Stars:                 "42",
+		Assets:                `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`,
+		Constraints:           `{"abi":["hf","sf"]}`,
+		Conflicts:             []string{"zen-ui"},
+		IncompatiblePlatforms: []string{"android", "host"},
+		FeaturedOrder:         &featuredOrder,
+		ReadmeURL:             "https://example.invalid/readme.md",
 	}
 
 	got, err := parseCatalogLine(entry.serialize())
@@ -134,7 +153,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	if got.FeaturedOrder == nil || *got.FeaturedOrder != featuredOrder {
 		t.Fatalf("FeaturedOrder = %v, want %d", got.FeaturedOrder, featuredOrder)
 	}
-	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL {
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
 	}
 }
@@ -158,6 +177,8 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"stars": "31",
 				"assets": [{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}],
 				"constraints": {"abi":["hf","sf"]},
+				"conflicts": ["zen-ui"],
+				"incompatible_platforms": ["android", "host"],
 				"launcher": {"kobo":{"type":"nickelmenu"}}
 			},
 			{
@@ -197,6 +218,12 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].Constraints != `{"abi":["hf","sf"]}` {
 		t.Fatalf("Constraints = %q", entries[0].Constraints)
+	}
+	if len(entries[0].Conflicts) != 1 || entries[0].Conflicts[0] != "zen-ui" {
+		t.Fatalf("Conflicts = %#v", entries[0].Conflicts)
+	}
+	if len(entries[0].IncompatiblePlatforms) != 2 || entries[0].IncompatiblePlatforms[0] != "android" || entries[0].IncompatiblePlatforms[1] != "host" {
+		t.Fatalf("IncompatiblePlatforms = %#v", entries[0].IncompatiblePlatforms)
 	}
 	if entries[0].FeaturedOrder == nil || *entries[0].FeaturedOrder != 10 {
 		t.Fatalf("FeaturedOrder = %v, want 10", entries[0].FeaturedOrder)

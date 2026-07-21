@@ -109,3 +109,29 @@ func TestResolveGitHubReleaseAsset(t *testing.T) {
 		t.Fatalf("resolved = %#v / %#v, want v2.0 reader asset", release, asset)
 	}
 }
+
+func TestResolveGitHubReleaseAssetSpecificTag(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/repos/owner/repo/releases?per_page=30" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `[
+			{"tag_name":"v1.4.1","assets":[{"name":"localsend-koplugin-armv7.zip","browser_download_url":"https://example.test/v1.4.1.zip"}]},
+			{"tag_name":"v1.4.3","assets":[{"name":"localsend-koplugin-armv7.zip","browser_download_url":"https://example.test/v1.4.3.zip"}]}
+		]`)
+	}))
+	defer srv.Close()
+
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	release, asset, err := ResolveGitHubReleaseAsset("https://github.com/owner/repo", "v1.4.3", "localsend-koplugin-armv7.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release.TagName != "v1.4.3" || asset.URL != "https://example.test/v1.4.3.zip" {
+		t.Fatalf("resolved = %#v / %#v, want v1.4.3 localsend asset", release, asset)
+	}
+}

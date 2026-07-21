@@ -291,6 +291,8 @@ type InstalledEntry struct {
 	Name        string // display name (falls back to ID if empty)
 	Version     string
 	Repo        string
+	Asset       string // selected release asset, empty when ZenPM did not install it
+	AssetArch   string // selected release asset architecture
 	InstalledAt string
 }
 

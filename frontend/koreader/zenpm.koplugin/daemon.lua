@@ -143,7 +143,9 @@ function Daemon:detect_platform()
     if self.platform then
         return self.platform
     end
-    if path_exists("/mnt/onboard/.kobo") then
+    if self:is_android() then
+        self.platform = "android"
+    elseif path_exists("/mnt/onboard/.kobo") then
         self.platform = "kobo"
     elseif path_exists("/mnt/us") then
         self.platform = "kindle"
@@ -159,7 +161,7 @@ end
 
 function Daemon:platform_filter()
     local platform = self:detect_platform()
-    if platform == "host" then
+    if platform == "host" or platform == "android" then
         return "koreader"
     end
     return platform
@@ -169,6 +171,9 @@ function Daemon:package_platform_filter()
     local platform = self:detect_platform()
     if platform == "host" then
         return "host,koreader"
+    end
+    if platform == "android" then
+        return "android,koreader"
     end
     return platform .. ",koreader"
 end

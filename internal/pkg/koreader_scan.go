@@ -127,6 +127,8 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 				if previous.Name == current.Name && previous.Version == current.Version && previous.Repo == current.Repo {
 					continue
 				}
+				current.Asset = previous.Asset
+				current.AssetArch = previous.AssetArch
 				current.InstalledAt = previous.InstalledAt
 				if err := m.st.AppendInstalled(current); err != nil {
 					return result, fmt.Errorf("record KOReader plugin %s: %w", pkg.ID, err)

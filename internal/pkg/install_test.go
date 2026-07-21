@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xZenLabs/zen-pm/internal/platform"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
@@ -103,7 +104,7 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 
 	manager := New(st, repo.New(st), "host")
-	if err := manager.InstallRelease("plugin", "v2.0.0", "plugin.koplugin.zip"); err != nil {
+	if err := manager.Install("plugin"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin", "_meta.lua")); err != nil {
@@ -114,6 +115,10 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 	if _, version := st.IsInstalled("plugin"); version != "1.2.3" {
 		t.Fatalf("installed version = %q, want 1.2.3", version)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Asset != "plugin.koplugin.zip" || installed[0].AssetArch != "any" {
+		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 	if err := manager.Uninstall("plugin", ""); err != nil {
 		t.Fatal(err)
@@ -128,6 +133,21 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 	if _, version := st.IsInstalled("plugin"); version != "" {
 		t.Fatalf("installed version = %q, want empty", version)
+	}
+}
+
+func TestDownloadInstallAssetResolvesRequestedReleaseBeforeCatalogURL(t *testing.T) {
+	entry := &repo.CatalogEntry{
+		Source: "https://example.invalid/plugin",
+		Assets: `[{
+			"asset":"plugin.koplugin.zip",
+			"url":"://catalog-release.zip"
+		}]`,
+	}
+
+	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "plugin.koplugin.zip", "v1.4.3")
+	if err == nil || !strings.Contains(err.Error(), "source is not a GitHub repository") {
+		t.Fatalf("download error = %v, want GitHub release resolution error", err)
 	}
 }
 
@@ -675,6 +695,69 @@ func TestSelectAssetNeedsChoiceForPatchPackages(t *testing.T) {
 	}
 	if !result.NeedsChoice || len(result.Candidates) != 2 {
 		t.Fatalf("SelectAsset = %+v, want two patch candidates", result)
+	}
+}
+
+func TestSelectAssetUsesAndroidDeviceForAndroidKOReaderCapabilities(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
+		Assets: `[{"asset":"reader-android.zip"},{"asset":"reader-kindle.zip"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := New(st, repo.New(st), platform.AndroidKOReader).SelectAsset("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NeedsChoice || result.Auto != "reader-android.zip" {
+		t.Fatalf("SelectAsset = %+v, want Android asset", result)
+	}
+}
+
+func TestSelectAssetReusesInstalledAssetWhenAmbiguous(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "localsend", Name: "LocalSend", Version: "1.4.1", Repo: "ZenLabs",
+		Platforms: []string{"koreader"}, InstallURL: "packages/koreader/install-plugin.sh",
+		Assets: `[{"arch":"arm","asset":"localsend-koplugin-v1.4.1-arm-legacy.zip"},{"arch":"armv7","asset":"localsend-koplugin-v1.4.1-armv7.zip"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "localsend", Name: "LocalSend", Version: "1.4.0", Repo: "ZenLabs", Asset: "localsend-koplugin-v1.4.0-armv7.zip", AssetArch: "armv7",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := New(st, repo.New(st), "host").SelectAsset("localsend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NeedsChoice || result.Auto != "localsend-koplugin-v1.4.1-armv7.zip" {
+		t.Fatalf("SelectAsset = %+v, want remembered armv7 asset", result)
+	}
+}
+
+func TestAssetNamesMatchIgnoringVersion(t *testing.T) {
+	if !assetNamesMatchIgnoringVersion("localsend-koplugin-v1.4.1-armv7.zip", "localsend-koplugin-v1.4.0-armv7.zip") {
+		t.Fatal("versioned armv7 assets did not match")
+	}
+	if assetNamesMatchIgnoringVersion("localsend-koplugin-v1.4.1-armv7.zip", "localsend-koplugin-v1.4.0-arm64.zip") {
+		t.Fatal("different architectures matched")
 	}
 }
 

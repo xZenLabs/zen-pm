@@ -62,6 +62,8 @@ func (s *sqliteStore) migrate() error {
 			name TEXT NOT NULL,
 			version TEXT NOT NULL,
 			repo TEXT NOT NULL,
+			asset TEXT NOT NULL DEFAULT '',
+			asset_arch TEXT NOT NULL DEFAULT '',
 			installed_at TEXT NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS installed_patch_files (
@@ -81,7 +83,9 @@ func (s *sqliteStore) migrate() error {
 			name TEXT NOT NULL,
 			version TEXT NOT NULL,
 			platforms TEXT NOT NULL DEFAULT '',
+			incompatible_platforms TEXT NOT NULL DEFAULT '',
 			deps TEXT NOT NULL DEFAULT '',
+			conflicts TEXT NOT NULL DEFAULT '',
 			install_url TEXT NOT NULL,
 			uninstall_url TEXT NOT NULL,
 			size TEXT NOT NULL,
@@ -115,6 +119,12 @@ func (s *sqliteStore) migrate() error {
 	if err := s.ensureColumn("catalog_packages", "source_asset", "source_asset TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("installed_packages", "asset", "asset TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("installed_packages", "asset_arch", "asset_arch TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("catalog_packages", "source_type", "source_type TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
@@ -128,6 +138,12 @@ func (s *sqliteStore) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "constraints", "constraints TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "conflicts", "conflicts TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "incompatible_platforms", "incompatible_platforms TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "plugin_module", "plugin_module TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -285,7 +301,7 @@ func (s *sqliteStore) WriteRepos(repos []RepoEntry) error {
 }
 
 func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
-	rows, err := s.db.Query(`SELECT id, name, version, repo, installed_at FROM installed_packages ORDER BY name, id`)
+	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, installed_at FROM installed_packages ORDER BY name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +309,7 @@ func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
 	var entries []InstalledEntry
 	for rows.Next() {
 		var e InstalledEntry
-		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.InstalledAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstalledAt); err != nil {
 			return nil, err
 		}
 		if e.Name == "" {
@@ -312,8 +328,8 @@ func (s *sqliteStore) AppendInstalled(e InstalledEntry) error {
 		e.Name = e.ID
 	}
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO installed_packages(id, name, version, repo, installed_at) VALUES(?, ?, ?, ?, ?)`,
-		e.ID, e.Name, e.Version, e.Repo, e.InstalledAt,
+		`INSERT OR REPLACE INTO installed_packages(id, name, version, repo, asset, asset_arch, installed_at) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstalledAt,
 	)
 	return err
 }
@@ -386,7 +402,7 @@ func (s *sqliteStore) WriteValue(key, value string) error {
 }
 
 func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
-	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url FROM catalog_packages ORDER BY position`)
+	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, incompatible_platforms, deps, conflicts, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url FROM catalog_packages ORDER BY position`)
 	if err != nil {
 		return nil, err
 	}
@@ -396,12 +412,14 @@ func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
 		var e CatalogEntry
 		var featured int
 		var featuredOrder sql.NullInt64
-		var platforms, deps, tags string
-		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &deps, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &featuredOrder, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints, &e.PluginModule, &e.ReadmeURL); err != nil {
+		var platforms, incompatiblePlatforms, deps, conflicts, tags string
+		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &incompatiblePlatforms, &deps, &conflicts, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &featuredOrder, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints, &e.PluginModule, &e.ReadmeURL); err != nil {
 			return nil, err
 		}
 		e.Platforms = splitCatalogList(platforms)
+		e.IncompatiblePlatforms = splitCatalogList(incompatiblePlatforms)
 		e.Deps = splitCatalogList(deps)
+		e.Conflicts = splitCatalogList(conflicts)
 		e.Tags = splitCatalogList(tags)
 		e.Featured = featured != 0
 		if featuredOrder.Valid {
@@ -424,9 +442,9 @@ func (s *sqliteStore) WriteCatalog(entries []CatalogEntry) error {
 	}
 	for i, e := range entries {
 		if _, err := tx.Exec(
-			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, deps, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.Deps, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.FeaturedOrder, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints, e.PluginModule, e.ReadmeURL,
+			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, incompatible_platforms, deps, conflicts, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.IncompatiblePlatforms, ","), strings.Join(e.Deps, ","), strings.Join(e.Conflicts, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.FeaturedOrder, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints, e.PluginModule, e.ReadmeURL,
 		); err != nil {
 			tx.Rollback()
 			return err

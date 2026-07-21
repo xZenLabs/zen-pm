@@ -48,17 +48,21 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if !ok || version != "1.0.0" {
 		t.Fatalf("IsInstalled = %v, %q", ok, version)
 	}
-	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "repo"}); err != nil {
+	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "repo", Asset: "pkg-armv7.zip", AssetArch: "armv7"}); err != nil {
 		t.Fatal(err)
 	}
 	ok, version = st.IsInstalled("pkg")
 	if !ok || version != "1.1.0" {
 		t.Fatalf("updated IsInstalled = %v, %q", ok, version)
 	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
 	featuredOrder := 10
 	catalog := []CatalogEntry{{
 		ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "repo", Priority: 10,
-		Platforms: []string{"host", "koreader"}, Deps: []string{"dep"}, Tags: []string{"tag"},
+		Platforms: []string{"host", "koreader"}, IncompatiblePlatforms: []string{"android"}, Deps: []string{"dep"}, Conflicts: []string{"zen-ui"}, Tags: []string{"tag"},
 		InstallURL: "https://example.invalid/install.sh", UninstallURL: "https://example.invalid/uninstall.sh",
 		Featured: true, FeaturedImage: "featured", FeaturedOrder: &featuredOrder, Category: "utility", Source: "source", SourceAsset: "pkg.zip",
 		SourceType: "release", SourceURL: "https://example.invalid/source.zip", Stars: "42",
@@ -72,7 +76,7 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
+	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
 		t.Fatalf("catalog = %#v", gotCatalog)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/xZenLabs/zen-pm/internal/assets"
@@ -73,16 +74,6 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		if pkgID == id {
 			override = assetOverride
 		}
-		patchReason := patchPackageReason(entry)
-		log.Infof("Package %s patch classification: patch=%t reason=%s category=%q install_url=%q source=%q source_type=%q assets=%d selected_asset=%q",
-			pkgID, patchReason != "", patchReason, entry.Category, shortLogValue(entry.InstallURL), shortLogValue(entry.Source), entry.SourceType, len(assets.Parse(entry.Assets)), override)
-		if patchAsset := ""; patchReason != "" {
-			patchAsset = m.resolvePatchAsset(entry, override)
-			log.Infof("Installing patch file %q from %s (repo %s)", patchAsset, entry.ID, entry.Repo)
-		} else {
-			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(entry.Version), entry.Repo)
-		}
-
 		installEntry := entry
 		if pkgID == id && releaseTag != "" {
 			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
@@ -94,6 +85,15 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			entryCopy.Source = releaseSource
 			entryCopy.Version = releaseTag
 			installEntry = &entryCopy
+		}
+		patchReason := patchPackageReason(entry)
+		log.Infof("Package %s patch classification: patch=%t reason=%s category=%q install_url=%q source=%q source_type=%q assets=%d selected_asset=%q",
+			pkgID, patchReason != "", patchReason, entry.Category, shortLogValue(entry.InstallURL), shortLogValue(entry.Source), entry.SourceType, len(assets.Parse(entry.Assets)), override)
+		if patchAsset := ""; patchReason != "" {
+			patchAsset = m.resolvePatchAsset(entry, override)
+			log.Infof("Installing patch file %q from %s (repo %s)", patchAsset, entry.ID, entry.Repo)
+		} else {
+			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(installEntry.Version), entry.Repo)
 		}
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
 		genericInstaller := m.nativeKOReaderInstaller(entry, override)
@@ -149,9 +149,11 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			continue
 		}
 
+		selectedName, selectedArch := m.installedAsset(installEntry, override)
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
 			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
+			Asset: selectedName, AssetArch: selectedArch,
 		}); err != nil {
 			j.Abort("record failed: " + err.Error())
 			return err
@@ -329,8 +331,9 @@ func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
 }
 
 func (m *Manager) device() assets.Device {
-	dev := assets.Device{Platform: m.plat}
-	if m.plat == platform.Kindle {
+	devicePlatform := strings.SplitN(m.plat, ",", 2)[0]
+	dev := assets.Device{Platform: devicePlatform}
+	if devicePlatform == platform.Kindle {
 		dev.KindleHF = platform.KindleABI() == "hf"
 		dev.CortexA9 = platform.KindleIsCortexA9()
 	}
@@ -354,7 +357,7 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 					return assets.Result{Auto: parsed[0].Asset}, nil
 				}
 			}
-			return assets.Select(e.Assets, m.device()), nil
+			return m.selectAsset(e), nil
 		}
 	}
 	return assets.Result{}, fmt.Errorf("package %q not found", id)
@@ -395,9 +398,76 @@ func (m *Manager) installEnv(entry *repo.CatalogEntry, override string) map[stri
 func (m *Manager) installAssetName(entry *repo.CatalogEntry, override string) string {
 	asset := strings.TrimSpace(override)
 	if asset == "" {
-		asset = assets.Select(entry.Assets, m.device()).Auto
+		asset = m.selectAsset(entry).Auto
 	}
 	return asset
+}
+
+func (m *Manager) selectAsset(entry *repo.CatalogEntry) assets.Result {
+	result := assets.Select(entry.Assets, m.device())
+	if result.Auto != "" || !result.NeedsChoice {
+		return result
+	}
+	installed, err := m.st.ReadInstalled()
+	if err != nil {
+		return result
+	}
+	for _, item := range installed {
+		if item.ID != entry.ID || item.Asset == "" {
+			continue
+		}
+		for _, candidate := range result.Candidates {
+			if assetNamesMatchIgnoringVersion(candidate.Asset, item.Asset) {
+				return assets.Result{Auto: candidate.Asset}
+			}
+		}
+		if isSpecificAssetArch(item.AssetArch) {
+			match := ""
+			for _, candidate := range result.Candidates {
+				if strings.EqualFold(candidate.Arch, item.AssetArch) {
+					if match != "" {
+						match = ""
+						break
+					}
+					match = candidate.Asset
+				}
+			}
+			if match != "" {
+				return assets.Result{Auto: match}
+			}
+		}
+	}
+	return result
+}
+
+func (m *Manager) installedAsset(entry *repo.CatalogEntry, override string) (string, string) {
+	name := m.installAssetName(entry, override)
+	asset, ok := selectedAsset(entry.Assets, name)
+	if !ok {
+		return name, ""
+	}
+	return name, asset.Arch
+}
+
+var assetVersion = regexp.MustCompile(`(?i)(^|[^a-z0-9])v?[0-9]+(?:[._][0-9]+)+`)
+
+func assetNamesMatchIgnoringVersion(a, b string) bool {
+	normalize := func(name string) string {
+		name = strings.ToLower(strings.TrimSpace(name))
+		name = assetVersion.ReplaceAllString(name, "$1")
+		return strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				return r
+			}
+			return -1
+		}, name)
+	}
+	return normalize(a) != "" && normalize(a) == normalize(b)
+}
+
+func isSpecificAssetArch(arch string) bool {
+	arch = strings.TrimSpace(arch)
+	return arch != "" && !strings.EqualFold(arch, "any") && !strings.EqualFold(arch, "all")
 }
 
 func sourceType(entry *repo.CatalogEntry) string {

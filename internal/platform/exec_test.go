@@ -57,12 +57,13 @@ func TestExecuteScriptWithEnvLogsScriptOutput(t *testing.T) {
 
 func TestDefaultHomeMatchesKOReaderPluginParents(t *testing.T) {
 	tests := map[string]string{
-		"kobo":       "/mnt/onboard/.adds",
-		"kindle":     "/mnt/base-us",
-		"pocketbook": "/mnt/ext1/applications",
-		"android":    "/sdcard",
-		"host":       "/tmp",
-		"":           "/tmp",
+		"kobo":             "/mnt/onboard/.adds",
+		"kindle":           "/mnt/base-us",
+		"pocketbook":       "/mnt/ext1/applications",
+		"android":          "/sdcard",
+		"android,koreader": "/sdcard",
+		"host":             "/tmp",
+		"":                 "/tmp",
 	}
 	for platform, want := range tests {
 		t.Setenv("ZENPM_PLATFORM", platform)

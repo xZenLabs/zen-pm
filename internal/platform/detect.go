@@ -3,9 +3,11 @@ package platform
 import "os"
 
 const (
-	Kindle = "kindle"
-	Kobo   = "kobo"
-	Host   = "host"
+	Kindle          = "kindle"
+	Kobo            = "kobo"
+	Android         = "android"
+	AndroidKOReader = Android + ",koreader"
+	Host            = "host"
 )
 
 // Detect returns the current platform. Can be overridden via ZENPM_PLATFORM env var.

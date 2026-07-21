@@ -712,8 +712,19 @@ components:
             enum:
               - kindle
               - kobo
+              - android
               - host
               - koreader
+        incompatible_platforms:
+          type: array
+          items:
+            type: string
+          description: Platform capabilities that explicitly exclude the package.
+        conflicts:
+          type: array
+          items:
+            type: string
+          description: Package IDs that should not be used together; the client warns but may allow installation.
         repo:
           type: string
         repo_trust:

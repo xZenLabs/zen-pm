@@ -75,7 +75,7 @@ func lookupEnv(env []string, key string) (string, bool) {
 }
 
 func defaultHome() string {
-	switch os.Getenv("ZENPM_PLATFORM") {
+	switch strings.SplitN(os.Getenv("ZENPM_PLATFORM"), ",", 2)[0] {
 	case "kindle":
 		return "/mnt/base-us"
 	case "kobo":

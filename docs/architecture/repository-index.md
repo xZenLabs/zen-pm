@@ -32,12 +32,14 @@ Example:
       "version": "2026.03.0",
       "category": "utility",
       "platforms": ["kindle", "koreader"],
+      "incompatible_platforms": ["android", "host"],
       "featured": true,
       "featured_order": 10,
       "featured_image": "packages/koreader-kindle/featured.png",
       "source": "https://github.com/koreader/koreader",
       "readme_url": "packages/koreader-kindle/README.md",
       "dependencies": ["kual"],
+      "conflicts": ["zen-ui"],
       "install_url": "packages/koreader-kindle/scripts/install.sh",
       "uninstall_url": "packages/koreader-kindle/scripts/uninstall.sh",
       "size": ""
@@ -49,6 +51,12 @@ Example:
 `platforms` are required compatibility capabilities, not alternatives. For
 example, `["kindle", "koreader"]` is shown only when both Kindle and KOReader
 compatibility are present.
+
+`incompatible_platforms` excludes a package when any listed capability is
+present on the device.
+
+`conflicts` lists package IDs that should not be used together. Clients must
+warn before installation but may allow the user to continue.
 
 ## Merge and precedence behavior
 

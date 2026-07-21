@@ -24,40 +24,48 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|plugin_module|featured_order|readme_url
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url
 type CatalogEntry struct {
-	Repo          string
-	Priority      int
-	ID            string
-	Name          string
-	Version       string
-	Platforms     []string
-	Deps          []string
-	InstallURL    string
-	UninstallURL  string
-	Size          string
-	Description   string
-	Author        string
-	Tags          []string
-	IconURL       string
-	RepoIconURL   string
-	Images        []string
-	Featured      bool
-	FeaturedImage string
-	FeaturedOrder *int
-	Category      string
-	Source        string
-	SourceAsset   string
-	SourceType    string
-	SourceURL     string
-	Stars         string
-	Assets        string
-	Constraints   string
-	PluginModule  string
-	ReadmeURL     string
+	Repo                  string
+	Priority              int
+	ID                    string
+	Name                  string
+	Version               string
+	Platforms             []string
+	IncompatiblePlatforms []string
+	Deps                  []string
+	Conflicts             []string
+	InstallURL            string
+	UninstallURL          string
+	Size                  string
+	Description           string
+	Author                string
+	Tags                  []string
+	IconURL               string
+	RepoIconURL           string
+	Images                []string
+	Featured              bool
+	FeaturedImage         string
+	FeaturedOrder         *int
+	Category              string
+	Source                string
+	SourceAsset           string
+	SourceType            string
+	SourceURL             string
+	Stars                 string
+	Assets                string
+	Constraints           string
+	PluginModule          string
+	ReadmeURL             string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
+	for _, pl := range e.IncompatiblePlatforms {
+		pl = normalizePlatform(pl)
+		if pl != "" && platforms[pl] {
+			return false
+		}
+	}
 	required := 0
 	for _, pl := range e.Platforms {
 		pl = normalizePlatform(pl)
@@ -96,6 +104,8 @@ func (e *CatalogEntry) serialize() string {
 		e.Stars,
 		e.Assets,
 		e.Constraints,
+		strings.Join(e.Conflicts, ","),
+		strings.Join(e.IncompatiblePlatforms, ","),
 		e.PluginModule,
 		optionalIntField(e.FeaturedOrder),
 		e.ReadmeURL,
@@ -178,14 +188,33 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	if len(parts) >= 26 {
 		e.Constraints = parts[25]
 	}
-	if len(parts) >= 27 {
-		e.PluginModule = parts[26]
-	}
-	if len(parts) >= 28 {
-		e.FeaturedOrder = parseOptionalInt(parts[27])
-	}
-	if len(parts) >= 29 {
-		e.ReadmeURL = parts[28]
+	if len(parts) >= 31 {
+		if parts[26] != "" {
+			e.Conflicts = strings.Split(parts[26], ",")
+		}
+		if parts[27] != "" {
+			e.IncompatiblePlatforms = strings.Split(parts[27], ",")
+		}
+		e.PluginModule = parts[28]
+		e.FeaturedOrder = parseOptionalInt(parts[29])
+		e.ReadmeURL = parts[30]
+	} else if len(parts) >= 30 {
+		if parts[26] != "" {
+			e.Conflicts = strings.Split(parts[26], ",")
+		}
+		e.PluginModule = parts[27]
+		e.FeaturedOrder = parseOptionalInt(parts[28])
+		e.ReadmeURL = parts[29]
+	} else {
+		if len(parts) >= 27 {
+			e.PluginModule = parts[26]
+		}
+		if len(parts) >= 28 {
+			e.FeaturedOrder = parseOptionalInt(parts[27])
+		}
+		if len(parts) >= 29 {
+			e.ReadmeURL = parts[28]
+		}
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -291,32 +320,34 @@ type manifestJSON struct {
 		IconURL string `json:"icon_url,omitempty"`
 	} `json:"repo"`
 	Packages []struct {
-		ID            string          `json:"id"`
-		Name          string          `json:"name"`
-		Version       string          `json:"version"`
-		Description   string          `json:"description"`
-		Author        string          `json:"author"`
-		Platforms     []string        `json:"platforms"`
-		Dependencies  []string        `json:"dependencies"`
-		InstallURL    string          `json:"install_url"`
-		UninstallURL  string          `json:"uninstall_url"`
-		Size          string          `json:"size"`
-		IconURL       string          `json:"icon_url,omitempty"`
-		ImageURL      string          `json:"image_url,omitempty"`
-		Source        string          `json:"source,omitempty"`
-		SourceAsset   string          `json:"source_asset,omitempty"`
-		SourceType    string          `json:"source_type,omitempty"`
-		SourceURL     string          `json:"source_url,omitempty"`
-		ReadmeURL     string          `json:"readme_url,omitempty"`
-		Stars         string          `json:"stars,omitempty"`
-		Assets        json.RawMessage `json:"assets,omitempty"`
-		Constraints   json.RawMessage `json:"constraints,omitempty"`
-		Featured      bool            `json:"featured,omitempty"`
-		FeaturedImage string          `json:"featured_image,omitempty"`
-		FeaturedOrder *int            `json:"featured_order,omitempty"`
-		Category      string          `json:"category,omitempty"`
-		Images        []string        `json:"images,omitempty"`
-		Screenshots   []string        `json:"screenshots,omitempty"`
+		ID                    string          `json:"id"`
+		Name                  string          `json:"name"`
+		Version               string          `json:"version"`
+		Description           string          `json:"description"`
+		Author                string          `json:"author"`
+		Platforms             []string        `json:"platforms"`
+		IncompatiblePlatforms []string        `json:"incompatible_platforms,omitempty"`
+		Dependencies          []string        `json:"dependencies"`
+		Conflicts             []string        `json:"conflicts,omitempty"`
+		InstallURL            string          `json:"install_url"`
+		UninstallURL          string          `json:"uninstall_url"`
+		Size                  string          `json:"size"`
+		IconURL               string          `json:"icon_url,omitempty"`
+		ImageURL              string          `json:"image_url,omitempty"`
+		Source                string          `json:"source,omitempty"`
+		SourceAsset           string          `json:"source_asset,omitempty"`
+		SourceType            string          `json:"source_type,omitempty"`
+		SourceURL             string          `json:"source_url,omitempty"`
+		ReadmeURL             string          `json:"readme_url,omitempty"`
+		Stars                 string          `json:"stars,omitempty"`
+		Assets                json.RawMessage `json:"assets,omitempty"`
+		Constraints           json.RawMessage `json:"constraints,omitempty"`
+		Featured              bool            `json:"featured,omitempty"`
+		FeaturedImage         string          `json:"featured_image,omitempty"`
+		FeaturedOrder         *int            `json:"featured_order,omitempty"`
+		Category              string          `json:"category,omitempty"`
+		Images                []string        `json:"images,omitempty"`
+		Screenshots           []string        `json:"screenshots,omitempty"`
 	} `json:"packages"`
 }
 
@@ -395,33 +426,35 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 		}
 		source := resolveURL(repoURL, p.Source)
 		entry := &CatalogEntry{
-			Repo:          repoName,
-			Priority:      priority,
-			ID:            p.ID,
-			Name:          p.Name,
-			Version:       p.Version,
-			Description:   p.Description,
-			Author:        p.Author,
-			Platforms:     p.Platforms,
-			Deps:          p.Dependencies,
-			InstallURL:    resolveURL(repoURL, p.InstallURL),
-			UninstallURL:  resolveURL(repoURL, p.UninstallURL),
-			Size:          p.Size,
-			IconURL:       iconURL,
-			RepoIconURL:   repoIcon,
-			Images:        images,
-			Featured:      p.Featured,
-			FeaturedImage: featuredImage,
-			FeaturedOrder: p.FeaturedOrder,
-			Category:      p.Category,
-			Source:        source,
-			SourceAsset:   p.SourceAsset,
-			SourceType:    p.SourceType,
-			SourceURL:     resolveURL(repoURL, p.SourceURL),
-			ReadmeURL:     resolveURL(repoURL, p.ReadmeURL),
-			Stars:         strings.TrimSpace(p.Stars),
-			Assets:        compactJSONField(p.Assets),
-			Constraints:   compactJSONField(p.Constraints),
+			Repo:                  repoName,
+			Priority:              priority,
+			ID:                    p.ID,
+			Name:                  p.Name,
+			Version:               p.Version,
+			Description:           p.Description,
+			Author:                p.Author,
+			Platforms:             p.Platforms,
+			IncompatiblePlatforms: p.IncompatiblePlatforms,
+			Deps:                  p.Dependencies,
+			Conflicts:             p.Conflicts,
+			InstallURL:            resolveURL(repoURL, p.InstallURL),
+			UninstallURL:          resolveURL(repoURL, p.UninstallURL),
+			Size:                  p.Size,
+			IconURL:               iconURL,
+			RepoIconURL:           repoIcon,
+			Images:                images,
+			Featured:              p.Featured,
+			FeaturedImage:         featuredImage,
+			FeaturedOrder:         p.FeaturedOrder,
+			Category:              p.Category,
+			Source:                source,
+			SourceAsset:           p.SourceAsset,
+			SourceType:            p.SourceType,
+			SourceURL:             resolveURL(repoURL, p.SourceURL),
+			ReadmeURL:             resolveURL(repoURL, p.ReadmeURL),
+			Stars:                 strings.TrimSpace(p.Stars),
+			Assets:                compactJSONField(p.Assets),
+			Constraints:           compactJSONField(p.Constraints),
 		}
 		entry.ensurePluginModule()
 		entries = append(entries, entry)

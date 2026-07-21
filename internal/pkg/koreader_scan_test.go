@@ -106,6 +106,11 @@ func TestScanKOReaderPluginsAutomaticOnceManualRescans(t *testing.T) {
 	if result, err := manager.ScanKOReaderPlugins(false); err != nil || result.Added != 1 {
 		t.Fatalf("first scan = %+v, %v", result, err)
 	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "reader", Name: "Reader", Version: "1.0.0", Repo: "ZenLabs", Asset: "reader-armv7.koplugin.zip", AssetArch: "armv7",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(meta, []byte(`return { version = "2.0.0" }`), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -120,6 +125,10 @@ func TestScanKOReaderPluginsAutomaticOnceManualRescans(t *testing.T) {
 	}
 	if _, version := st.IsInstalled("reader"); version != "2.0.0" {
 		t.Fatalf("version after manual scan = %q, want 2.0.0", version)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Asset != "reader-armv7.koplugin.zip" || installed[0].AssetArch != "armv7" {
+		t.Fatalf("installed after manual scan = %#v, %v", installed, err)
 	}
 }
 

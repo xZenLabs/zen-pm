@@ -37,7 +37,7 @@ func Start(home, logHome, koreaderRoot string, port int) {
 		return
 	}
 	serverRunning = true
-	_ = os.Setenv("ZENPM_PLATFORM", platform.Host)
+	_ = os.Setenv("ZENPM_PLATFORM", platform.AndroidKOReader)
 	_ = os.Setenv("ZENPM_HOME", home)
 	_ = os.Setenv("ZENPM_KOREADER_ROOT", strings.TrimSpace(koreaderRoot))
 	_ = os.Setenv("ZENPM_STARTUP_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
@@ -56,7 +56,7 @@ func serve(home, logHome string, port int) {
 	}()
 	startedAt := time.Now()
 	writeCompanionLog(logHome, "Native backend initializing.")
-	st, err := state.Init(platform.Host)
+	st, err := state.Init(platform.Android)
 	if err != nil {
 		writeCompanionLog(logHome, fmt.Sprintf("Native backend initialization failed: %v", err))
 		fmt.Fprintf(os.Stderr, "Error initializing state: %v\n", err)
@@ -64,9 +64,9 @@ func serve(home, logHome string, port int) {
 	}
 	writeCompanionLog(logHome, "Native backend state initialized.")
 	log.Init(st.LogFile)
-	log.Infof("ZenPM %s | platform=%s | home=%s | log=%s", Version, platform.Host, st.Home, st.LogFile)
+	log.Infof("ZenPM %s | platform=%s | home=%s | log=%s", Version, platform.AndroidKOReader, st.Home, st.LogFile)
 	repos := repo.New(st)
-	pkgs := pkg.New(st, repos, platform.Host)
+	pkgs := pkg.New(st, repos, platform.AndroidKOReader)
 	server.Version = Version
 	srv := server.New(st, repos, pkgs, port)
 	srv.StartedAt = startedAt

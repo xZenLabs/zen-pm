@@ -33,38 +33,41 @@ type Server struct {
 }
 
 type pkgJSON struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name"`
-	Version         string          `json:"version"`
-	Description     string          `json:"description"`
-	Author          string          `json:"author"`
-	Tags            []string        `json:"tags"`
-	Category        string          `json:"category,omitempty"`
-	Platforms       []string        `json:"platforms"`
-	Repo            string          `json:"repo"`
-	RepoTrust       string          `json:"repo_trust,omitempty"`
-	RepoDefault     bool            `json:"repo_default,omitempty"`
-	Installed       bool            `json:"installed"`
-	InstalledVer    string          `json:"installed_version,omitempty"`
-	InstalledAssets []string        `json:"installed_assets,omitempty"`
-	UnmanagedPatch  bool            `json:"unmanaged_patch,omitempty"`
-	LatestVersion   string          `json:"latest_version,omitempty"`
-	UpdateAvail     bool            `json:"update_available,omitempty"`
-	IconURL         string          `json:"icon_url,omitempty"`
-	RepoIconURL     string          `json:"repo_icon_url,omitempty"`
-	ImageURL        string          `json:"image_url,omitempty"`
-	Images          []string        `json:"images,omitempty"`
-	Featured        bool            `json:"featured,omitempty"`
-	FeaturedImage   string          `json:"featured_image,omitempty"`
-	FeaturedOrder   *int            `json:"featured_order,omitempty"`
-	Source          string          `json:"source,omitempty"`
-	SourceType      string          `json:"source_type,omitempty"`
-	SourceURL       string          `json:"source_url,omitempty"`
-	ReadmeURL       string          `json:"readme_url,omitempty"`
-	Stars           string          `json:"stars,omitempty"`
-	PluginModule    string          `json:"plugin_module,omitempty"`
-	Assets          json.RawMessage `json:"assets,omitempty"`
-	Constraints     json.RawMessage `json:"constraints,omitempty"`
+	ID                    string          `json:"id"`
+	Name                  string          `json:"name"`
+	Version               string          `json:"version"`
+	Description           string          `json:"description"`
+	Author                string          `json:"author"`
+	Tags                  []string        `json:"tags"`
+	Category              string          `json:"category,omitempty"`
+	Platforms             []string        `json:"platforms"`
+	IncompatiblePlatforms []string        `json:"incompatible_platforms,omitempty"`
+	Conflicts             []string        `json:"conflicts,omitempty"`
+	Repo                  string          `json:"repo"`
+	RepoTrust             string          `json:"repo_trust,omitempty"`
+	RepoDefault           bool            `json:"repo_default,omitempty"`
+	Installed             bool            `json:"installed"`
+	InstalledVer          string          `json:"installed_version,omitempty"`
+	InstalledAsset        string          `json:"installed_asset,omitempty"`
+	InstalledAssets       []string        `json:"installed_assets,omitempty"`
+	UnmanagedPatch        bool            `json:"unmanaged_patch,omitempty"`
+	LatestVersion         string          `json:"latest_version,omitempty"`
+	UpdateAvail           bool            `json:"update_available,omitempty"`
+	IconURL               string          `json:"icon_url,omitempty"`
+	RepoIconURL           string          `json:"repo_icon_url,omitempty"`
+	ImageURL              string          `json:"image_url,omitempty"`
+	Images                []string        `json:"images,omitempty"`
+	Featured              bool            `json:"featured,omitempty"`
+	FeaturedImage         string          `json:"featured_image,omitempty"`
+	FeaturedOrder         *int            `json:"featured_order,omitempty"`
+	Source                string          `json:"source,omitempty"`
+	SourceType            string          `json:"source_type,omitempty"`
+	SourceURL             string          `json:"source_url,omitempty"`
+	ReadmeURL             string          `json:"readme_url,omitempty"`
+	Stars                 string          `json:"stars,omitempty"`
+	PluginModule          string          `json:"plugin_module,omitempty"`
+	Assets                json.RawMessage `json:"assets,omitempty"`
+	Constraints           json.RawMessage `json:"constraints,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -475,9 +478,11 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	installed, _ := s.st.ReadInstalled()
 	installedSet := make(map[string]bool, len(installed))
 	installedVersion := make(map[string]string, len(installed))
+	installedAsset := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
 		installedVersion[e.ID] = e.Version
+		installedAsset[e.ID] = e.Asset
 	}
 
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
@@ -505,27 +510,30 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Tags:      e.Tags,
 			Category:  e.Category,
 			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID] || len(installedAssets[e.ID]) > 0,
-			IconURL:       e.IconURL,
-			RepoIconURL:   e.RepoIconURL,
-			ImageURL:      firstString(e.Images),
-			Images:        e.Images,
-			Featured:      e.Featured,
-			FeaturedImage: e.FeaturedImage,
-			FeaturedOrder: e.FeaturedOrder,
-			Source:        e.Source,
-			SourceType:    e.SourceType,
-			SourceURL:     e.SourceURL,
-			ReadmeURL:     e.ReadmeURL,
-			Stars:         e.Stars,
-			PluginModule:  e.PluginModule,
-			Assets:        rawJSON(e.Assets),
-			Constraints:   rawJSON(e.Constraints),
+			IncompatiblePlatforms: e.IncompatiblePlatforms,
+			Conflicts:             e.Conflicts,
+			IconURL:               e.IconURL,
+			RepoIconURL:           e.RepoIconURL,
+			ImageURL:              firstString(e.Images),
+			Images:                e.Images,
+			Featured:              e.Featured,
+			FeaturedImage:         e.FeaturedImage,
+			FeaturedOrder:         e.FeaturedOrder,
+			Source:                e.Source,
+			SourceType:            e.SourceType,
+			SourceURL:             e.SourceURL,
+			ReadmeURL:             e.ReadmeURL,
+			Stars:                 e.Stars,
+			PluginModule:          e.PluginModule,
+			Assets:                rawJSON(e.Assets),
+			Constraints:           rawJSON(e.Constraints),
 		}
 		if files := installedAssets[e.ID]; len(files) > 0 {
 			item.InstalledAssets = files
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
+			item.InstalledAsset = installedAsset[e.ID]
 			if checkUpdates {
 				applyUpdateInfo(&item)
 			}
@@ -543,8 +551,9 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item := pkgJSON{
 				ID: e.ID, Name: name, Version: e.Version,
 				Repo: e.Repo, Installed: true,
-				InstalledVer: e.Version,
-				Platforms:    platformList,
+				InstalledVer:   e.Version,
+				InstalledAsset: e.Asset,
+				Platforms:      platformList,
 			}
 			result = append(result, item)
 		}

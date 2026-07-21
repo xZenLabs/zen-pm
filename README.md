@@ -414,8 +414,10 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].featured_order` | no | Numeric ascending order on the Featured page; unordered packages follow ordered ones |
 | `packages[].featured_image` | no | Large Featured-page banner image; relative paths resolve against `repo.url` |
 | `packages[].readme_url` | no | Package README Markdown; relative paths resolve against `repo.url` and take precedence over the GitHub README fallback |
-| `packages[].platforms` | yes | Array of `"kindle"` and/or `"kobo"` |
+| `packages[].platforms` | yes | Array of platform capabilities such as `"kindle"`, `"kobo"`, `"android"`, and `"koreader"` |
+| `packages[].incompatible_platforms` | no | Array of platform capabilities that explicitly exclude the package, such as `["android", "host"]` |
 | `packages[].dependencies` | no | Array of package `id` strings required before install |
+| `packages[].conflicts` | no | Array of package `id` strings that should not be used together; ZenPM warns but permits installation |
 | `packages[].install_url` | yes | Path to install script (relative to repo URL) |
 | `packages[].uninstall_url` | no | Path to uninstall script |
 | `packages[].constraints.abi` | no | Restrict to ARMhf (`hf`) or ARMsf (`sf`) — planned, not yet enforced |

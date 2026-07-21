@@ -187,7 +187,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 		}
 		out = append(out, state.CatalogEntry{
 			Repo: e.Repo, Priority: e.Priority, ID: e.ID, Name: e.Name, Version: e.Version,
-			Platforms: e.Platforms, Deps: e.Deps, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
+			Platforms: e.Platforms, IncompatiblePlatforms: e.IncompatiblePlatforms, Deps: e.Deps, Conflicts: e.Conflicts, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
@@ -203,7 +203,7 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 	for _, e := range entries {
 		out = append(out, &CatalogEntry{
 			Repo: e.Repo, Priority: e.Priority, ID: e.ID, Name: e.Name, Version: e.Version,
-			Platforms: e.Platforms, Deps: e.Deps, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
+			Platforms: e.Platforms, IncompatiblePlatforms: e.IncompatiblePlatforms, Deps: e.Deps, Conflicts: e.Conflicts, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,

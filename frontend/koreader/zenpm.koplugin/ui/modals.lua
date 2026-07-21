@@ -5,11 +5,9 @@ local Geom = require("ui/geometry")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconWidget = require("ui/widget/iconwidget")
-local IconButton = require("ui/widget/iconbutton")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local LeftContainer = require("ui/widget/container/leftcontainer")
-local OverlapGroup = require("ui/widget/overlapgroup")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
@@ -17,29 +15,17 @@ local Screen = require("device").screen
 local Models = require("models")
 local InlineIcons = require("ui/inline_icon_map")
 local Images = require("ui/images")
-local Theme = require("ui/theme")
 local _ = require("gettext")
 
 local Modals = {}
 local status_modal = nil
 local ok_android = pcall(require, "android")
 
-local InputClearOverlay = OverlapGroup:extend{}
-
 local function show_input_dialog(dialog)
     UIManager:show(dialog)
     if not ok_android then
         dialog:onShowKeyboard()
     end
-end
-
-function InputClearOverlay:propagateEvent(event)
-    for i = #self, 1, -1 do
-        if self[i]:handleEvent(event) then
-            return true
-        end
-    end
-    return false
 end
 
 function Modals.info(text)
@@ -155,33 +141,13 @@ function Modals.search(title, input, hint, callback)
             },
         },
     }
-
-    local input_container = dialog.vgroup[3]
-    local clear_button = IconButton:new{
-        icon = "close",
-        width = Theme.scale(20),
-        height = Theme.scale(20),
-        padding = Theme.scale(10),
-        allow_flash = false,
-        show_parent = dialog,
-        callback = function()
-            dialog:setInputText("", false, false)
-            if not ok_android then
-                dialog:onShowKeyboard()
-            end
-        end,
-    }
-    local input_size = dialog._input_widget:getSize()
-    input_container[1] = InputClearOverlay:new{
-        dimen = input_size,
-        dialog._input_widget,
-        clear_button,
-    }
-    clear_button.overlap_offset = {
-        input_size.w - clear_button.dimen.w,
-        math.floor((input_size.h - clear_button.dimen.h) / 2),
-    }
-
+    function dialog:onTap(arg, ges)
+        if ges.pos:notIntersectWith(self.dialog_frame.dimen) then
+            UIManager:close(self)
+            return true
+        end
+        return InputDialog.onTap(self, arg, ges)
+    end
     show_input_dialog(dialog)
 end
 

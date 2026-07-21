@@ -72,10 +72,12 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 
 func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, releaseTag string) (string, string, []byte, error) {
 	assetName := m.installAssetName(entry, override)
-	selected, selectedOK := selectedAsset(entry.Assets, assetName)
 	assetURL := ""
-	if selectedOK {
-		assetURL = strings.TrimSpace(selected.URL)
+	if releaseTag == "" {
+		selected, selectedOK := selectedAsset(entry.Assets, assetName)
+		if selectedOK {
+			assetURL = strings.TrimSpace(selected.URL)
+		}
 	}
 	if assetName == "" {
 		assetName = strings.TrimSpace(entry.SourceAsset)
@@ -84,7 +86,7 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 		assetName = ".koplugin.zip"
 	}
 
-	if assetURL == "" && usesSourcePackage(entry) {
+	if assetURL == "" && releaseTag == "" && usesSourcePackage(entry) {
 		if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
 			if repository, ok := releases.GitHubRepository(entry.Source); ok {
 				assetURL = "https://raw.githubusercontent.com/" + repository + "/HEAD/" + url.PathEscape(assetName)
