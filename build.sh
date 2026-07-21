@@ -74,16 +74,14 @@ if ! validate_semver "$VERSION"; then
     exit 1
 fi
 
-KINDLE_HF_STAGE="$BUILD_DIR/kindle-hf"
-KINDLE_SF_STAGE="$BUILD_DIR/kindle-sf"
+KINDLE_STAGE="$BUILD_DIR/kindle-standalone"
 # Kobo packages are not available yet; keep their paths ready for when they are enabled.
 # shellcheck disable=SC2034
 KOBO_HF_STAGE="$BUILD_DIR/kobo-hf"
 # shellcheck disable=SC2034
 KOBO_SF_STAGE="$BUILD_DIR/kobo-sf"
 KOREADER_PLUGIN_BASE_STAGE="$BUILD_DIR/koreader-plugin-base"
-KOREADER_EREADER_HF_STAGE="$BUILD_DIR/koreader-ereader-hf"
-KOREADER_EREADER_SF_STAGE="$BUILD_DIR/koreader-ereader-sf"
+KOREADER_EREADER_STAGE="$BUILD_DIR/koreader-ereader"
 KOREADER_EREADER_ARM64_STAGE="$BUILD_DIR/koreader-ereader-arm64"
 KOREADER_ANDROID_STAGE="$BUILD_DIR/koreader-android"
 KOREADER_MACOS_STAGE="$BUILD_DIR/koreader-macos"
@@ -172,12 +170,12 @@ mkdir -p "$KOREADER_PLUGIN_BASE_STAGE" "$DIST_DIR"
 build_go
 
 stage_kindle() {
-    abi="$1"
-    stage="$2"
+    stage="$1"
     # Payload staged at ZenPM/ (zip root) so it extracts to /mnt/us/ZenPM/ — the final install
     # location. Shell scripts outside documents/ are never indexed as Kindle books.
     mkdir -p "$stage/documents" "$stage/ZenPM/backend"
-    cp "$BUILD_DIR/zenpm-$abi" "$stage/ZenPM/backend/zenpm-$abi"
+    cp "$BUILD_DIR/zenpm-hf" "$stage/ZenPM/backend/zenpm-hf"
+    cp "$BUILD_DIR/zenpm-sf" "$stage/ZenPM/backend/zenpm-sf"
     copy_tree "$ROOT_DIR/frontend" "$stage/ZenPM"
     copy_tree "$ROOT_DIR/installers" "$stage/ZenPM"
     cp "$ROOT_DIR/installers/kindle/ZenPM.sh" "$stage/documents/ZenPM.sh"
@@ -210,8 +208,7 @@ stage_kobo() {
     ensure_exec "$stage/.adds/ZenPM"
 }
 
-stage_kindle hf "$KINDLE_HF_STAGE"
-stage_kindle sf "$KINDLE_SF_STAGE"
+stage_kindle "$KINDLE_STAGE"
 # Kobo packages are not available yet.
 # stage_kobo hf "$KOBO_HF_STAGE"
 # stage_kobo sf "$KOBO_SF_STAGE"
@@ -230,13 +227,10 @@ stage_koreader_plugin() {
     cp "$ROOT_DIR/VERSION" "$stage/zenpm.koplugin/backend/VERSION"
 }
 
-stage_koreader_plugin "$KOREADER_EREADER_HF_STAGE"
-cp "$BUILD_DIR/zenpm-hf" "$KOREADER_EREADER_HF_STAGE/zenpm.koplugin/backend/zenpm-hf"
-ensure_exec "$KOREADER_EREADER_HF_STAGE/zenpm.koplugin"
-
-stage_koreader_plugin "$KOREADER_EREADER_SF_STAGE"
-cp "$BUILD_DIR/zenpm-sf" "$KOREADER_EREADER_SF_STAGE/zenpm.koplugin/backend/zenpm-sf"
-ensure_exec "$KOREADER_EREADER_SF_STAGE/zenpm.koplugin"
+stage_koreader_plugin "$KOREADER_EREADER_STAGE"
+cp "$BUILD_DIR/zenpm-hf" "$KOREADER_EREADER_STAGE/zenpm.koplugin/backend/zenpm-hf"
+cp "$BUILD_DIR/zenpm-sf" "$KOREADER_EREADER_STAGE/zenpm.koplugin/backend/zenpm-sf"
+ensure_exec "$KOREADER_EREADER_STAGE/zenpm.koplugin"
 
 stage_koreader_plugin "$KOREADER_EREADER_ARM64_STAGE"
 cp "$BUILD_DIR/zenpm-linux-arm64" "$KOREADER_EREADER_ARM64_STAGE/zenpm.koplugin/backend/zenpm-arm64"
@@ -255,27 +249,20 @@ cp "$BUILD_DIR/zenpm-linux-arm64" "$KOREADER_LINUX_STAGE/zenpm.koplugin/backend/
 cp "$BUILD_DIR/zenpm-linux-amd64" "$KOREADER_LINUX_STAGE/zenpm.koplugin/backend/zenpm-linux-amd64"
 ensure_exec "$KOREADER_LINUX_STAGE/zenpm.koplugin"
 
-KINDLE_HF_ZIP="$DIST_DIR/ZenPM-kindle-hf-$VERSION.zip"
-KINDLE_SF_ZIP="$DIST_DIR/ZenPM-kindle-sf-$VERSION.zip"
+KINDLE_ZIP="$DIST_DIR/ZenPM-kindle-standalone-$VERSION.zip"
 # shellcheck disable=SC2034
 KOBO_HF_ZIP="$DIST_DIR/ZenPM-kobo-hf-$VERSION.zip"
 # shellcheck disable=SC2034
 KOBO_SF_ZIP="$DIST_DIR/ZenPM-kobo-sf-$VERSION.zip"
-KOREADER_EREADER_HF_ZIP="$DIST_DIR/ZenPM-koreader-ereader-hf-$VERSION.zip"
-KOREADER_EREADER_SF_ZIP="$DIST_DIR/ZenPM-koreader-ereader-sf-$VERSION.zip"
+KOREADER_EREADER_ZIP="$DIST_DIR/ZenPM-koreader-ereader-$VERSION.zip"
 KOREADER_EREADER_ARM64_ZIP="$DIST_DIR/ZenPM-koreader-ereader-arm64-$VERSION.zip"
 KOREADER_ANDROID_ZIP="$DIST_DIR/ZenPM-koreader-android-$VERSION.zip"
 KOREADER_MACOS_ZIP="$DIST_DIR/ZenPM-koreader-macos-$VERSION.zip"
 KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 
 (
-    cd "$KINDLE_HF_STAGE"
-    zip -qr "$KINDLE_HF_ZIP" documents ZenPM
-)
-
-(
-    cd "$KINDLE_SF_STAGE"
-    zip -qr "$KINDLE_SF_ZIP" documents ZenPM
+    cd "$KINDLE_STAGE"
+    zip -qr "$KINDLE_ZIP" documents ZenPM
 )
 
 # (
@@ -289,13 +276,8 @@ KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 # )
 
 (
-    cd "$KOREADER_EREADER_HF_STAGE"
-    zip -qr "$KOREADER_EREADER_HF_ZIP" zenpm.koplugin
-)
-
-(
-    cd "$KOREADER_EREADER_SF_STAGE"
-    zip -qr "$KOREADER_EREADER_SF_ZIP" zenpm.koplugin
+    cd "$KOREADER_EREADER_STAGE"
+    zip -qr "$KOREADER_EREADER_ZIP" zenpm.koplugin
 )
 
 (
@@ -320,12 +302,10 @@ KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 
 echo "Build complete"
 echo "Version:          $VERSION"
-echo "Kindle ARMhf package:       $KINDLE_HF_ZIP"
-echo "Kindle ARMsf package:       $KINDLE_SF_ZIP"
+echo "Kindle standalone package:  $KINDLE_ZIP"
 # echo "Kobo ARMhf package:         $KOBO_HF_ZIP"
 # echo "Kobo ARMsf package:         $KOBO_SF_ZIP"
-echo "KOReader e-reader ARMhf:    $KOREADER_EREADER_HF_ZIP"
-echo "KOReader e-reader ARMsf:    $KOREADER_EREADER_SF_ZIP"
+echo "KOReader e-reader 32-bit:   $KOREADER_EREADER_ZIP"
 echo "KOReader e-reader ARM64:    $KOREADER_EREADER_ARM64_ZIP"
 echo "KOReader Android plugin:     $KOREADER_ANDROID_ZIP"
 echo "KOReader macOS plugin:      $KOREADER_MACOS_ZIP"

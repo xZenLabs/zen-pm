@@ -289,7 +289,10 @@ function Daemon:expected_plugin_asset()
     end
     local platform = self:detect_platform()
     if platform == "kindle" or platform == "kobo" then
-        return "ZenPM-koreader-ereader-" .. self:ereader_backend_suffix() .. "-" .. version .. ".zip"
+        if self:ereader_backend_suffix() == "arm64" then
+            return "ZenPM-koreader-ereader-arm64-" .. version .. ".zip"
+        end
+        return "ZenPM-koreader-ereader-" .. version .. ".zip"
     end
     if self:is_android() then
         return "ZenPM-koreader-android-" .. version .. ".zip"

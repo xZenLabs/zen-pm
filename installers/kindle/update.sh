@@ -75,7 +75,7 @@ if [ -f /lib/ld-linux-armhf.so.3 ]; then
 else
     ABI=sf
 fi
-ZIP_ASSET="ZenPM-kindle-$ABI-$LATEST_VERSION.zip"
+ZIP_ASSET="ZenPM-kindle-standalone-$LATEST_VERSION.zip"
 
 # --- Version comparison ---
 CMP=$(semver_cmp "$LATEST_VERSION" "$CURRENT_VERSION")
@@ -85,7 +85,7 @@ if [ "$CMP" -le 0 ]; then
 fi
 
 # --- Parse download URL, expected size, and SHA256 from release assets ---
-# grep the asset block for the matching Kindle ABI zip, then extract url, size, and sha256 digest.
+# grep the asset block for the Kindle standalone zip, then extract url, size, and sha256 digest.
 ASSET_BLOCK=$(grep -A 50 '"name"[[:space:]]*:[[:space:]]*"'"$ZIP_ASSET"'"' "$API_JSON")
 DOWNLOAD_URL=$(echo "$ASSET_BLOCK" | grep '"browser_download_url"' | head -1 | sed 's/.*"\(https:[^"]*\)".*/\1/')
 EXPECTED_SIZE=$(echo "$ASSET_BLOCK" | grep '"size"' | head -1 | sed 's/[^0-9]//g')

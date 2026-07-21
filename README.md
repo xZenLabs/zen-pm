@@ -39,21 +39,20 @@ Requires Go 1.22+. Set the version in `VERSION` (SemVer):
 
 Outputs:
 
-- `dist/ZenPM-kindle-hf-<version>.zip`
-- `dist/ZenPM-kindle-sf-<version>.zip`
+- `dist/ZenPM-kindle-standalone-<version>.zip`
 <!-- - `dist/ZenPM-kobo-hf-<version>.zip` -->
 <!-- - `dist/ZenPM-kobo-sf-<version>.zip` -->
-- `dist/ZenPM-koreader-ereader-hf-<version>.zip`
-- `dist/ZenPM-koreader-ereader-sf-<version>.zip`
+- `dist/ZenPM-koreader-ereader-<version>.zip`
 - `dist/ZenPM-koreader-ereader-arm64-<version>.zip`
 - `dist/ZenPM-koreader-android-<version>.zip`
 - `dist/ZenPM-android-<version>.apk`
 - `dist/ZenPM-koreader-macos-<version>.zip`
 - `dist/ZenPM-koreader-linux-<version>.zip`
 
-Use the `arm64` package on 64-bit Kobo devices. For 32-bit e-readers, use the
-`hf` package on devices with the ARM hard-float loader and the `sf` package on
-older soft-float devices. To check the architecture and ABI on the device:
+Use the `arm64` package on 64-bit Kobo devices. The 32-bit e-reader and Kindle
+standalone packages include both the ARM hard-float (`hf`) and soft-float (`sf`)
+binaries and select the correct one on the device. To check the architecture
+and ABI on the device:
 
 ```sh
 if [ "$(uname -m)" = aarch64 ] || [ "$(uname -m)" = arm64 ]; then echo arm64; elif [ -f /lib/ld-linux-armhf.so.3 ]; then echo hf; else echo sf; fi
@@ -61,27 +60,24 @@ if [ "$(uname -m)" = aarch64 ] || [ "$(uname -m)" = arm64 ]; then echo arm64; el
 
 ### Choose an e-reader package
 
-For Kobo, the architecture check is authoritative. For 32-bit e-readers, the
-loader check is authoritative; Kindle ABI can change with firmware, so use it
-if the device is not listed or its firmware is unusual.
+For Kobo, the architecture check determines whether to use the ARM64 or
+combined 32-bit package. The `hf`/`sf` ABI does not require a separate download.
 
 | Common device / firmware | Expected ABI | ZenPM standalone app | ZenPM KOReader plugin |
 |---|---|---|---|
-| Kindle running firmware 5.16.3 or newer (for example, current Paperwhite, Oasis, and Scribe devices) | `hf` | `ZenPM-kindle-hf-<version>.zip` | `ZenPM-koreader-ereader-hf-<version>.zip` |
-| Kindle running firmware 5.16.2 or older (including legacy Kindle, Touch, and early Paperwhite installs) | `sf` | `ZenPM-kindle-sf-<version>.zip` | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| Kindle running firmware 5.16.3 or newer (for example, current Paperwhite, Oasis, and Scribe devices) | `hf` | `ZenPM-kindle-standalone-<version>.zip` | `ZenPM-koreader-ereader-<version>.zip` |
+| Kindle running firmware 5.16.2 or older (including legacy Kindle, Touch, and early Paperwhite installs) | `sf` | `ZenPM-kindle-standalone-<version>.zip` | `ZenPM-koreader-ereader-<version>.zip` |
 | Kobo Libra Colour | `arm64` | — | `ZenPM-koreader-ereader-arm64-<version>.zip` |
-| Older Kobo devices (Touch, Glo, Aura, Clara, Libra, Sage, Elipsa) | usually `hf` | <!-- `ZenPM-kobo-hf-<version>.zip` --> | `ZenPM-koreader-ereader-hf-<version>.zip` |
-| Any device that reports `sf` from the loader check | `sf` | Choose the matching `*-sf-<version>.zip` package | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| Older Kobo devices (Touch, Glo, Aura, Clara, Libra, Sage, Elipsa) | usually `hf` | <!-- `ZenPM-kobo-hf-<version>.zip` --> | `ZenPM-koreader-ereader-<version>.zip` |
+| Any 32-bit e-reader that reports `sf` from the loader check | `sf` | `ZenPM-kindle-standalone-<version>.zip` on Kindle | `ZenPM-koreader-ereader-<version>.zip` |
 | KOReader on Android | Android ABI | — | `ZenPM-koreader-android-<version>.zip` plus `ZenPM-android-<version>.apk` |
 
 Package guide:
 
 | Device/runtime | Use this package |
 |---|---|
-| Kindle standalone app, ABI check prints `hf` | `ZenPM-kindle-hf-<version>.zip` |
-| Kindle standalone app, ABI check prints `sf` | `ZenPM-kindle-sf-<version>.zip` |
-| KOReader on Kindle/Kobo, ABI check prints `hf` | `ZenPM-koreader-ereader-hf-<version>.zip` |
-| KOReader on Kindle/Kobo, ABI check prints `sf` | `ZenPM-koreader-ereader-sf-<version>.zip` |
+| Kindle standalone app (`hf` or `sf`) | `ZenPM-kindle-standalone-<version>.zip` |
+| KOReader on a 32-bit Kindle/Kobo (`hf` or `sf`) | `ZenPM-koreader-ereader-<version>.zip` |
 | KOReader on Kobo, `uname -m` prints `aarch64` or `arm64` | `ZenPM-koreader-ereader-arm64-<version>.zip` |
 | KOReader on Android | `ZenPM-koreader-android-<version>.zip` plus `ZenPM-android-<version>.apk` |
 | KOReader on macOS | `ZenPM-koreader-macos-<version>.zip` |
@@ -177,7 +173,7 @@ The local daemon API is documented as OpenAPI 3.0 in
 Prerequisites: jailbroken Kindle with root, `sqlite3` on device.
 
 1. Build: `./build.sh`
-2. Extract `dist/ZenPM-kindle-hf-<version>.zip` or `dist/ZenPM-kindle-sf-<version>.zip` to the Kindle USB root.
+2. Extract `dist/ZenPM-kindle-standalone-<version>.zip` to the Kindle USB root.
    - Places `documents/ZenPM.sh` and the payload under `ZenPM/` at the USB root.
 3. Eject and run `documents/ZenPM.sh` from your script launcher (KUAL, etc.).
 4. The installer:
@@ -220,8 +216,7 @@ local APK builds.
 
 1. Extract the KOReader plugin zip for your platform:
    - `dist/ZenPM-koreader-ereader-arm64-<version>.zip` for ARM64 Kobo e-readers such as the Kobo Libra Colour
-   - `dist/ZenPM-koreader-ereader-hf-<version>.zip` for 32-bit Kindle/Kobo e-readers whose ABI check prints `hf`
-   - `dist/ZenPM-koreader-ereader-sf-<version>.zip` for Kindle/Kobo e-readers whose ABI check prints `sf`
+   - `dist/ZenPM-koreader-ereader-<version>.zip` for 32-bit Kindle/Kobo e-readers (`hf` or `sf`)
    - `dist/ZenPM-koreader-android-<version>.zip` for Android, alongside `ZenPM-android-<version>.apk`
    - `dist/ZenPM-koreader-macos-<version>.zip` for macOS
    - `dist/ZenPM-koreader-linux-<version>.zip` for Linux desktop
@@ -241,7 +236,7 @@ ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Upd
 1. Reads the current version from `/mnt/us/ZenPM/VERSION`
 2. Queries the GitHub Releases API for the latest tag
 3. If the latest version is ≤ current, shows "up to date" and exits
-4. Downloads the latest matching `ZenPM-kindle-hf-<version>.zip` or `ZenPM-kindle-sf-<version>.zip`
+4. Downloads the latest `ZenPM-kindle-standalone-<version>.zip`
 5. Validates the download (size + SHA256 digest from the GitHub API release metadata)
 6. Stops the daemon and WAF, replaces the payload
 7. Restarts the daemon and relaunches ZenPM

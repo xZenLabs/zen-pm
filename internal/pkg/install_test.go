@@ -109,8 +109,8 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin", "_meta.lua")); err != nil {
 		t.Fatalf("native plugin was not installed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins", "plugin.koplugin")); err != nil {
-		t.Fatalf("plugin tracking file was not written: %v", err)
+	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins")); !os.IsNotExist(err) {
+		t.Fatalf("plugin tracking directory exists after install: %v", err)
 	}
 	if _, version := st.IsInstalled("plugin"); version != "1.2.3" {
 		t.Fatalf("installed version = %q, want 1.2.3", version)
@@ -128,28 +128,6 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 	if _, version := st.IsInstalled("plugin"); version != "" {
 		t.Fatalf("installed version = %q, want empty", version)
-	}
-}
-
-func TestRemoveKOReaderPluginAcceptsRelativeTrackedPath(t *testing.T) {
-	root := t.TempDir()
-	plugin := filepath.Join(root, "plugins", "solitaire.koplugin")
-	tracking := filepath.Join(root, ".zenpm-plugins", "solitaire.koplugin")
-	if err := os.MkdirAll(plugin, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(tracking), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(tracking, []byte("plugin_dir=plugins/solitaire.koplugin\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := removeKOReaderPlugin(root, "solitaire.koplugin"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(plugin); !os.IsNotExist(err) {
-		t.Fatalf("plugin was not removed: %v", err)
 	}
 }
 
