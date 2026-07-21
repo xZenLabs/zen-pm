@@ -105,7 +105,40 @@ function App:new(plugin)
     return o
 end
 
+local function is_sdl_wayland_desktop()
+    if os.getenv("WAYLAND_DISPLAY") == nil and os.getenv("SDL_VIDEODRIVER") ~= "wayland" then
+        return false
+    end
+    if type(jit) == "table" and jit.os ~= "Linux" and jit.os ~= "BSD" and jit.os ~= "POSIX" then
+        return false
+    end
+
+    local ok, Device = pcall(require, "device")
+    if not ok or not Device then return false end
+    local function device_bool(name)
+        if type(Device[name]) ~= "function" then return false end
+        local called, value = pcall(Device[name], Device)
+        if called then return value == true end
+        called, value = pcall(Device[name])
+        return called and value == true
+    end
+    return device_bool("isSDL") or device_bool("isDesktop")
+end
+
 function App:run_update_task(task, trap_widget, on_done)
+    -- Forking with live EGL state aborts KOReader on SDL/Wayland desktop.
+    if is_sdl_wayland_desktop() then
+        UIManager:nextTick(function()
+            local invoked, called, ok, result = pcall(task)
+            if invoked then
+                on_done(true, called, ok, result)
+            else
+                on_done(true, false, called)
+            end
+        end)
+        return
+    end
+
     local ok_trapper, Trapper = pcall(require, "ui/trapper")
     if not ok_trapper or not Trapper then
         UIManager:nextTick(function()
