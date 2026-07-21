@@ -115,10 +115,7 @@ run_dev() {
     fi
 
     DEV_BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/zenpm-dev.XXXXXX")
-    cleanup_dev() {
-        rm -rf "$DEV_BUILD_DIR"
-    }
-    trap cleanup_dev EXIT INT TERM
+    trap 'rm -rf "$DEV_BUILD_DIR"' EXIT INT TERM
 
     echo "Building macOS backend..."
     GOFLAGS="-trimpath -buildvcs=false"
