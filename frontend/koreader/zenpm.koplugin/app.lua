@@ -1871,11 +1871,22 @@ function App:start_package_action(pkg, action, on_done, opts)
     end
     if action_installs_package(action) then
         local ok, info = self.client:get_package_assets(id)
+        local has_candidates = type(info) == "table" and info.needs_choice
+            and type(info.candidates) == "table" and #info.candidates > 0
         if not ok then
+            if action == "update" and Models.has_github_source(pkg) then
+                self:prompt_package_versions(pkg, on_done)
+                return
+            end
             Modals.info(_("Could not determine which build to install: ") .. tostring(info))
             return
         end
-        if type(info) == "table" and info.needs_choice and type(info.candidates) == "table" then
+        if action == "update" and Models.has_github_source(pkg)
+            and (type(info) ~= "table" or ((not info.auto or info.auto == "") and not has_candidates)) then
+            self:prompt_package_versions(pkg, on_done)
+            return
+        end
+        if has_candidates then
             self:choose_package_asset(pkg, action, info.candidates, on_done, opts)
             return
         end
