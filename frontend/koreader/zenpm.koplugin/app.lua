@@ -63,7 +63,7 @@ function App:new(plugin)
         busy = false,
         backend_ready = false,
         backend_starting = false,
-        scan_installed_on_open = false,
+        scan_plugins_on_open = false,
         image_files = {},
         state = {
             page = "home",
@@ -767,8 +767,10 @@ function App:show()
     end
     UIManager:show(self.view)
     self:schedule_automatic_update_check()
+    self.scan_plugins_on_open = true
     if self.backend_ready then
         self:navigate(self.state.active_tab or "home")
+        self:schedule_plugin_scan_after_open()
     else
         self.t_open = socket.gettime()
         self:set_loading(_("Loading packages, please wait"))
@@ -864,6 +866,35 @@ function App:log_timing(label, since)
     return now
 end
 
+function App:schedule_plugin_scan_after_open()
+    if not self.scan_plugins_on_open then return end
+    UIManager:scheduleIn(0.1, function()
+        if not self.view or not self.backend_ready then return end
+        self:scan_plugins_after_open(1)
+    end)
+end
+
+function App:scan_plugins_after_open(attempt)
+    if not self.scan_plugins_on_open then return end
+    local ok, data = self.client:scan_installed_plugins()
+    if ok then
+        self.scan_plugins_on_open = false
+        self.state.packages = {}
+        self:reload_current_page()
+        return
+    end
+    if tostring(data):find("non-empty catalog", 1, true)
+        and attempt < Constants.MAX_POLL_RETRIES then
+        UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
+            if not self.view then return end
+            self:scan_plugins_after_open(attempt + 1)
+        end)
+        return
+    end
+    self.scan_plugins_on_open = false
+    Modals.info_for(_("Plugin scan failed: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+end
+
 function App:backend_started(data, on_ready)
     self.backend_starting = false
     self.backend_ready = true
@@ -877,6 +908,7 @@ function App:backend_started(data, on_ready)
     else
         self:refresh()
     end
+    self:schedule_plugin_scan_after_open()
 end
 
 function App:backend_failed(message)
@@ -1046,7 +1078,7 @@ function App:navigate(tab_id)
     elseif tab_id == "sources" then
         self:show_sources()
     elseif tab_id == "installed" then
-        self:show_installed(true)
+        self:show_installed()
     elseif tab_id == "debug" then
         self:show_debug()
     else
@@ -1062,8 +1094,6 @@ function App:reload_current_page()
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
         self:show_source_details(self.state.current_repo.name)
-    elseif self.state.page == "installed" then
-        self:show_installed()
     else
         self:navigate(self.state.active_tab or "home")
     end
@@ -1301,21 +1331,11 @@ function App:show_category_details(category_id)
     self:refresh()
 end
 
-function App:show_installed(scan_plugins)
+function App:show_installed()
     self.state.page = "installed"
     self.state.active_tab = "installed"
-    if scan_plugins then
-        self.scan_installed_on_open = true
-    end
     if not self:ensure_backend() then return end
     self:set_loading(_("Loading installed packages..."))
-    if self.scan_installed_on_open then
-        self.scan_installed_on_open = false
-        local scan_ok, scan_err = self.client:scan_installed_plugins()
-        if not scan_ok then
-            Modals.info_for(_("Plugin scan failed: ") .. tostring(scan_err), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
-        end
-    end
     local ok, packages, err = self:load_packages(true)
     if not ok then
         self:set_error(_("Failed to load packages: ") .. tostring(err))
