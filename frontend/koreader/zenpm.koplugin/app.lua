@@ -128,6 +128,10 @@ local function package_title(pkg, fallback)
     return Models.package_display_name(pkg, fallback)
 end
 
+local function package_id(pkg)
+    return Util.trim(tostring(pkg and (pkg.id or pkg.name) or "")):lower()
+end
+
 local function action_present(action)
     if action == "update" then
         return _("update")
@@ -526,17 +530,25 @@ function App:queue_package_action(pkg, action, asset, opts)
     opts = opts or {}
     if action_installs_package(action) and not opts.conflict_confirmed then
         local conflicts = self:conflicting_packages(pkg)
-        if #conflicts > 0 then
+        local zen_ui_warning = Models.is_patch_package(pkg) and self:zen_ui_installed()
+        if zen_ui_warning or #conflicts > 0 then
             local names = {}
             for _, conflict in ipairs(conflicts) do
                 table.insert(names, package_title(conflict, conflict.id or _("Package")))
             end
-            Modals.confirm(
-                string.format(
+            local message = zen_ui_warning and _("Zen UI is installed. Most patches should not be used with Zen UI.") or ""
+            if #names > 0 then
+                local conflict_message = string.format(
                     _("%s conflicts with %s. They should not be used together. Install anyway?"),
                     package_title(pkg, pkg.id or _("Package")),
                     table.concat(names, ", ")
-                ),
+                )
+                message = message ~= "" and message .. "\n\n" .. conflict_message or conflict_message
+            else
+                message = message .. "\n\n" .. _("Install anyway?")
+            end
+            Modals.confirm(
+                message,
                 _("Install anyway"),
                 function()
                     opts.conflict_confirmed = true
@@ -581,10 +593,6 @@ local function conflict_set(pkg)
     return set
 end
 
-local function package_id(pkg)
-    return Util.trim(tostring(pkg and (pkg.id or pkg.name) or "")):lower()
-end
-
 function App:conflicting_packages(pkg)
     local id = package_id(pkg)
     if id == "" then return {} end
@@ -619,6 +627,15 @@ function App:conflicting_packages(pkg)
         return package_title(a, a.id or "") < package_title(b, b.id or "")
     end)
     return conflicts
+end
+
+function App:zen_ui_installed()
+    for _, candidate in ipairs(self.state.packages or {}) do
+        if package_id(candidate) == "zen-ui" and candidate.installed then
+            return true
+        end
+    end
+    return false
 end
 
 function App:clear_queue()

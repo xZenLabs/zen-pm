@@ -149,6 +149,7 @@ end
 local function queue_version(value)
     value = tostring(value or "")
     if value == "" then return "v?" end
+    if value:lower():gsub("^[vV]", "") == "source" then return "source" end
     return value:match("^[vV]") and value or "v" .. value
 end
 
