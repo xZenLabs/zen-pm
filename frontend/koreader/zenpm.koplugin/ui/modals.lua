@@ -254,7 +254,10 @@ function Modals.actions(title, rows, options)
         table.insert(buttons, {
             {
                 text = _("Cancel"),
-                callback = function() UIManager:close(dialog) end,
+                callback = function()
+                    UIManager:close(dialog)
+                    if options.cancel_callback then options.cancel_callback() end
+                end,
             },
         })
     end

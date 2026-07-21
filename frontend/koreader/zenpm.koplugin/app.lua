@@ -482,21 +482,51 @@ function App:queue_all_updates()
     for _, entry in ipairs(self.state.queue) do
         queued[entry.key] = true
     end
-    for _, pkg in ipairs(self.state.packages or {}) do
+    local packages = self.state.packages or {}
+    local function finish()
+        if added > 0 then
+            Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+        end
+        self:refresh()
+    end
+    local add_next
+    add_next = function(index)
+        local pkg = packages[index]
+        if not pkg then
+            finish()
+            return
+        end
         if pkg.installed and pkg.update_available then
             local key = queue_key(pkg.id or pkg.name, nil)
             if not queued[key] then
-                if self:queue_package_action(pkg, "update", nil, { silent = true }) then
+                local asset = nil
+                local ok, info = self.client:get_package_assets(pkg.id or pkg.name)
+                local candidates = ok and type(info) == "table" and info.needs_choice
+                    and type(info.candidates) == "table" and info.candidates or nil
+                if candidates and #candidates > 0 then
+                    self:choose_package_asset(pkg, "update", candidates, nil, {
+                        silent = true,
+                        on_queued = function(was_added)
+                            if was_added then added = added + 1 end
+                            queued[key] = true
+                            add_next(index + 1)
+                        end,
+                        on_cancel = finish,
+                    })
+                    return
+                end
+                if ok and type(info) == "table" and info.auto and info.auto ~= "" then
+                    asset = info.auto
+                end
+                if self:queue_package_action(pkg, "update", asset, { silent = true }) then
                     added = added + 1
                 end
                 queued[key] = true
             end
         end
+        add_next(index + 1)
     end
-    if added > 0 then
-        Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
-    end
-    self:refresh()
+    add_next(1)
 end
 
 function App:queue_entry_for(pkg, action, asset, opts)
@@ -822,6 +852,61 @@ function App:run_next_queue_operation(batch)
     })
 end
 
+function App:prepare_queue_assets(operations, index, on_ready)
+    local entry = operations[index]
+    if not entry then
+        on_ready()
+        return
+    end
+    if not action_installs_package(entry.action) or (entry.asset and entry.asset ~= "") then
+        self:prepare_queue_assets(operations, index + 1, on_ready)
+        return
+    end
+
+    local ok, info = self.client:get_package_assets(entry.id)
+    if not ok then
+        self.state.queue_running = false
+        self:refresh()
+        Modals.info(_("Could not determine which build to install: ") .. tostring(info))
+        return
+    end
+    if type(info) ~= "table" or not info.needs_choice then
+        if type(info) == "table" and info.auto and info.auto ~= "" then
+            entry.asset = info.auto
+        end
+        self:prepare_queue_assets(operations, index + 1, on_ready)
+        return
+    end
+
+    local rows = {}
+    for _, asset in ipairs(info.candidates or {}) do
+        local name = asset.asset
+        if name and name ~= "" then
+            local label = name
+            if asset.arch and asset.arch ~= "" then
+                label = tostring(asset.arch) .. " — " .. name
+            end
+            table.insert(rows, {
+                text = label,
+                callback = function()
+                    entry.asset = name
+                    self:prepare_queue_assets(operations, index + 1, on_ready)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then
+        self:prepare_queue_assets(operations, index + 1, on_ready)
+        return
+    end
+    Modals.actions(_("Choose a build for ") .. package_title(entry.pkg, entry.id), rows, {
+        cancel_callback = function()
+            self.state.queue_running = false
+            self:refresh()
+        end,
+    })
+end
+
 function App:confirm_queue()
     if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
     local operations = {}
@@ -832,14 +917,17 @@ function App:confirm_queue()
         if entry.action ~= "uninstall" then table.insert(operations, entry) end
     end
     self.state.queue_running = true
-    self:run_next_queue_operation({
+    local batch = {
         operations = operations,
         index = 1,
         succeeded = {},
         failed = {},
         settings_cleanup = {},
         prompt_restart = false,
-    })
+    }
+    self:prepare_queue_assets(operations, 1, function()
+        self:run_next_queue_operation(batch)
+    end)
     self:refresh()
 end
 
@@ -2003,15 +2091,6 @@ function App:start_package_action(pkg, action, on_done, opts)
         local ok, info = self.client:get_package_assets(id)
         local has_candidates = type(info) == "table" and info.needs_choice
             and type(info.candidates) == "table" and #info.candidates > 0
-        local has_remembered_candidate = false
-        if has_candidates and pkg.installed_asset and pkg.installed_asset ~= "" then
-            for _, candidate in ipairs(info.candidates) do
-                if candidate.asset == pkg.installed_asset then
-                    has_remembered_candidate = true
-                    break
-                end
-            end
-        end
         if not ok then
             if Models.has_github_source(pkg) then
                 self:prompt_package_versions(pkg, on_done)
@@ -2026,11 +2105,6 @@ function App:start_package_action(pkg, action, on_done, opts)
             return
         end
         if has_candidates then
-            if action == "update" and Models.has_github_source(pkg)
-                and not has_remembered_candidate then
-                self:prompt_package_versions(pkg, on_done)
-                return
-            end
             self:choose_package_asset(pkg, action, info.candidates, on_done, opts)
             return
         end
@@ -2050,19 +2124,21 @@ function App:choose_package_asset(pkg, action, candidates, on_done, opts)
             table.insert(rows, {
                 text = label,
                 callback = function()
-                    self:queue_package_action(pkg, action, name, opts)
+                    local queued = self:queue_package_action(pkg, action, name, opts)
+                    if opts and opts.on_queued then opts.on_queued(queued) end
                 end,
             })
         end
     end
     if #rows == 0 then
-        self:queue_package_action(pkg, action, nil, opts)
+        local queued = self:queue_package_action(pkg, action, nil, opts)
+        if opts and opts.on_queued then opts.on_queued(queued) end
         return
     end
     local title = Models.is_patch_package(pkg)
         and (_("Choose a patch for ") .. package_title(pkg, pkg.id or pkg.name))
         or (_("Choose a build for ") .. package_title(pkg, pkg.id or pkg.name))
-    Modals.actions(title, rows)
+    Modals.actions(title, rows, { cancel_callback = opts and opts.on_cancel })
 end
 
 function App:confirm_package_asset_action(pkg, asset, on_done)
