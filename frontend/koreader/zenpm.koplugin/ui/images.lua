@@ -182,4 +182,25 @@ function Images.file_for(client, platform, value)
     return path
 end
 
+function Images.cached_file(value)
+    value = tostring(value or "")
+    if value == "" then
+        return nil
+    end
+    if value:match("^file://") then
+        return value:gsub("^file://", "")
+    end
+    if not value:match("^https?://") then
+        return value
+    end
+    if Images.cached[value] and Util.path_exists(Images.cached[value]) then
+        return Images.cached[value]
+    end
+    return nil
+end
+
+function Images.is_failed(value)
+    return Images.failed[tostring(value or "")] == true
+end
+
 return Images

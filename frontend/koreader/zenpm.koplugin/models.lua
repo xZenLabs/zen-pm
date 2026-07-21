@@ -376,21 +376,7 @@ function Models.has_github_source(pkg)
 end
 
 function Models.has_readme(pkg)
-    return tostring(pkg and pkg.readme_url or "") ~= "" or Models.has_github_source(pkg)
-end
-
-function Models.readme_text(value)
-    value = tostring(value or ""):gsub("\r\n", "\n")
-    value = value:gsub("<!%-%-.-%-%->", "")
-    value = value:gsub("!%[([^%]]*)%]%([^%)]+%)", "%1")
-    value = value:gsub("%[([^%]]+)%]%([^%)]+%)", "%1")
-    value = value:gsub("<[^>]+>", "")
-    value = value:gsub("\n[ \t]*#+[ \t]+", "\n")
-    value = value:gsub("^#+[ \t]+", "")
-    value = value:gsub("```[%w_-]*", "")
-    value = value:gsub("[%*_]([%w][^%*_]-)[%*_]", "%1")
-    value = value:gsub("\n[ \t]*\n[ \t]*\n+", "\n\n")
-    return Util.trim(value)
+    return tostring(pkg and pkg.readme_url or "") ~= ""
 end
 
 function Models.package_meta(pkg)

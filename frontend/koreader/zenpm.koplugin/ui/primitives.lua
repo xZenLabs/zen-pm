@@ -154,6 +154,24 @@ function P.paragraph_line_count(text, width, role, opts)
     return lines
 end
 
+function P.paragraph_metrics(text, width, role, opts)
+    opts = opts or {}
+    local widget = TextBoxWidget:new{
+        text = tostring(text or ""),
+        face = opts.face or Theme.face(role),
+        bold = opts.bold,
+        fgcolor = opts.color or Theme.ink,
+        width = width,
+        height = 1,
+        height_adjust = true,
+        line_height = opts.line_height,
+    }
+    local lines = #(widget.vertical_string_list or {})
+    local line_height = widget.line_height_px or 1
+    widget:free()
+    return lines, line_height
+end
+
 function P.text_size(text, width, role, opts)
     opts = opts or {}
     local widget = TextWidget:new{
@@ -246,6 +264,111 @@ function P.image(bb, file, x, y, w, h, opts)
         widget:free()
     end
     return painted
+end
+
+function P.image_dimensions(file, max_width, max_height)
+    if not file or file == "" or not max_width or max_width <= 0 then
+        return nil
+    end
+    local ok, widget = pcall(function()
+        return ImageWidget:new{
+            file = file,
+            width = max_width,
+            height = max_height or max_width,
+            scale_factor = 0,
+            alpha = true,
+            file_do_cache = true,
+        }
+    end)
+    if not ok or not widget then
+        return nil
+    end
+    local width, height
+    local measured = pcall(function()
+        local size = widget:getSize()
+        local image = widget._bb
+        if image then
+            local image_width, image_height = image:getWidth(), image:getHeight()
+            if image_width > 0 and image_height > 0 then
+                width = max_width
+                height = math.max(1, math.floor(image_height * width / image_width + 0.5))
+                if max_height and height > max_height then
+                    height = max_height
+                    width = math.max(1, math.floor(image_width * height / image_height + 0.5))
+                end
+            end
+        end
+        if not width and size and size.w and size.h and size.w > 0 and size.h > 0 then
+            width = math.min(max_width, size.w)
+            height = math.max(1, math.floor(size.h * width / size.w + 0.5))
+            if max_height and height > max_height then
+                height = max_height
+                width = math.max(1, math.floor(size.w * height / size.h + 0.5))
+            end
+        end
+    end)
+    widget:free()
+    if not measured then
+        return nil
+    end
+    return width, height
+end
+
+function P.image_cropped(bb, file, x, y, w, h, source_h, source_y, opts)
+    if not file or file == "" or w <= 0 or h <= 0 or source_h <= 0 then
+        return false
+    end
+    opts = opts or {}
+    local base_ok, base = pcall(function()
+        return ImageWidget:new{
+            file = file,
+            width = w,
+            height = source_h,
+            scale_factor = 0,
+            alpha = opts.alpha ~= false,
+            is_icon = opts.is_icon,
+            file_do_cache = true,
+        }
+    end)
+    if not base_ok or not base then
+        return false
+    end
+
+    local painted = false
+    local render_ok = pcall(function()
+        base:getSize()
+        local image = base._bb
+        if image then
+            local image_width = image:getWidth()
+            if image_width > 0 then
+                local center_y_ratio = math.max(0, math.min(1, (source_y + h / 2) / source_h))
+                local widget = ImageWidget:new{
+                    image = image,
+                    image_disposable = false,
+                    width = w,
+                    height = h,
+                    scale_factor = w / image_width,
+                    alpha = opts.alpha ~= false,
+                    is_icon = opts.is_icon,
+                    center_x_ratio = 0.5,
+                    center_y_ratio = center_y_ratio,
+                }
+                painted = pcall(function()
+                    widget:paintTo(bb, x, y)
+                end)
+                if widget.free then
+                    widget:free()
+                end
+            end
+        end
+    end)
+    if base.free then
+        base:free()
+    end
+    if render_ok and painted then
+        return true
+    end
+    return P.image(bb, file, x, y, w, h, opts)
 end
 
 function P.image_zoomed(bb, file, x, y, w, h, zoom, opts)

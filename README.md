@@ -413,7 +413,7 @@ Top-level JSON object listing every package in the repo. Fetched on every `repo 
 | `packages[].featured` | no | Mark this package for the Featured page |
 | `packages[].featured_order` | no | Numeric ascending order on the Featured page; unordered packages follow ordered ones |
 | `packages[].featured_image` | no | Large Featured-page banner image; relative paths resolve against `repo.url` |
-| `packages[].readme_url` | no | Package README Markdown; relative paths resolve against `repo.url` and take precedence over the GitHub README fallback |
+| `packages[].readme_url` | no | Package README Markdown; relative paths resolve against `repo.url`. ZenPM fetches README content only from this repository-hosted URL. |
 | `packages[].platforms` | yes | Array of platform capabilities such as `"kindle"`, `"kobo"`, `"android"`, and `"koreader"` |
 | `packages[].incompatible_platforms` | no | Array of platform capabilities that explicitly exclude the package, such as `["android", "host"]` |
 | `packages[].dependencies` | no | Array of package `id` strings required before install |

@@ -379,12 +379,76 @@ func TestPackageReadmeURLPrefersHostedCatalogMetadata(t *testing.T) {
 	repos := repo.New(st)
 	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
 
-	readmeURL, hosted, err := srv.packageReadmeURL("reader")
+	readmeURL, imageBaseURL, err := srv.packageReadmeMetadata("reader")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hosted || readmeURL != "https://repo.zen-labs.org/packages/koreader/reader/README.md" {
-		t.Fatalf("packageReadmeURL() = %q, %v", readmeURL, hosted)
+	if readmeURL != "https://repo.zen-labs.org/packages/koreader/reader/README.md" || imageBaseURL != "https://github.com/owner/reader/raw/HEAD/" {
+		t.Fatalf("packageReadmeMetadata() = %q, %q", readmeURL, imageBaseURL)
+	}
+}
+
+func TestPackageReadmeURLRequiresHostedMetadata(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Source: "https://github.com/owner/reader",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	if _, _, err := srv.packageReadmeMetadata("reader"); err == nil || !strings.Contains(err.Error(), "no README URL") {
+		t.Fatalf("packageReadmeMetadata() error = %v", err)
+	}
+}
+
+func TestHandlePackageReadmeReturnsMarkdownAndBaseURL(t *testing.T) {
+	readmeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/README.md" {
+			http.Redirect(w, r, "/docs/README.md", http.StatusFound)
+			return
+		}
+		if r.URL.Path != "/docs/README.md" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte("# Reader\n\n![Logo](logo.png)"))
+	}))
+	defer readmeServer.Close()
+
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Source: "https://github.com/owner/reader", ReadmeURL: readmeServer.URL + "/README.md",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, repo.New(st), pkg.New(st, repo.New(st), "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageReadme(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/readme", nil), "reader")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Readme        string `json:"readme"`
+		ReadmeBaseURL string `json:"readme_base_url"`
+		ImageBaseURL  string `json:"readme_image_base_url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Readme != "# Reader\n\n![Logo](logo.png)" || response.ReadmeBaseURL != readmeServer.URL+"/docs/" || response.ImageBaseURL != "https://github.com/owner/reader/raw/HEAD/" {
+		t.Fatalf("response = %#v", response)
 	}
 }
 

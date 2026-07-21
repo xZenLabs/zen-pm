@@ -89,7 +89,7 @@ function Theme.face(role)
     elseif role == "nav" then
         return Font:getFace("smallinfofont", base_font_size - 4)
     elseif role == "mono" then
-        return Font:getFace("smallinfofont", base_font_size - 3)
+        return Font:getFace("smallinfont", base_font_size - 3)
     end
     return Font:getFace("cfont", base_font_size)
 end

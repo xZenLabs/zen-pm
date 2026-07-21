@@ -5,6 +5,8 @@
 local Cards = require("ui/cards")
 local I18n = require("i18n")
 local Images = require("ui/images")
+local Markdown = require("ui/markdown")
+local MarkdownRenderer = require("ui/markdown_renderer")
 local Models = require("models")
 local P = require("ui/primitives")
 local Scroll = require("ui/scroll")
@@ -295,14 +297,20 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
     local description = I18n.dynamic_or(pkg.description, _("No description available."))
-    local readme = Models.readme_text(pkg.readme)
+    local readme = tostring(pkg.readme or "")
     if readme == "" then
         readme = _("No README available.")
     end
     local description_heading = _("Description")
     local readme_heading = _("README")
-    local content_prefix = description_heading .. "\n\n" .. description .. "\n\n"
-    local content = content_prefix .. readme_heading .. "\n\n" .. readme
+    local readme_blocks = {
+        { kind = "heading", level = 2, text = description_heading, plain = true },
+        { kind = "paragraph", text = description, plain = true },
+        { kind = "heading", level = 2, text = readme_heading, plain = true },
+    }
+    for _, block in ipairs(Markdown.parse(readme)) do
+        table.insert(readme_blocks, block)
+    end
     local assets = Models.package_assets(pkg)
     local show_patch_tabs = Models.is_patch_package(pkg) and #assets > 0
     local details_tab = show_patch_tabs and (view.app.state.details_tab or "readme") or "readme"
@@ -362,20 +370,24 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         end)
         return max_scroll
     end
+    local viewport_inset = Theme.scale(6)
     local paragraph_w = inner_w - Theme.scale(12)
-    local readme_heading_line = P.paragraph_line_count(content_prefix .. readme_heading, paragraph_w, "small")
-    local max_scroll, line_h = P.scrollable_paragraph(bb, content, inner_x, iy, paragraph_w, content_h, "small", scroll)
-    local top_line = math.floor((scroll or 0) / math.max(1, line_h)) + 1
-    local function draw_bold_heading(line, text)
-        local heading_y = iy + (line - top_line) * line_h
-        if heading_y >= iy and heading_y < iy + content_h then
-            P.rect(bb, inner_x, heading_y, paragraph_w, line_h, Theme.panel)
-            P.text(bb, text, inner_x, heading_y, paragraph_w, "small", { bold = true })
-        end
+    local readme_base_url = pkg.readme_base_url or Markdown.base_url(pkg.readme_url)
+    local readme_link_base_url = Markdown.source_base_url(pkg.source)
+    if readme_link_base_url == "" then
+        readme_link_base_url = readme_base_url
     end
-    draw_bold_heading(1, description_heading)
-    draw_bold_heading(readme_heading_line, readme_heading)
-    Scroll.set_list_bounds(view, inner_x, iy, inner_w, content_h, line_h)
+    local readme_image_base_url = pkg.readme_image_base_url
+    if not readme_image_base_url or readme_image_base_url == "" then
+        readme_image_base_url = Markdown.public_image_base_url(pkg.source)
+    end
+    if readme_image_base_url == "" then
+        readme_image_base_url = readme_base_url
+    end
+    local viewport_y = iy + viewport_inset
+    local viewport_h = math.max(1, content_h - viewport_inset * 2)
+    local max_scroll = MarkdownRenderer.render(view, bb, readme_blocks, readme_link_base_url, readme_image_base_url, inner_x, viewport_y, paragraph_w, viewport_h, scroll)
+    Scroll.set_list_bounds(view, inner_x, viewport_y, inner_w, viewport_h, Theme.scale(96))
     return max_scroll
 end
 

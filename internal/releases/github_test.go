@@ -29,14 +29,31 @@ func TestFetchReadmeRejectsNonHTTPURL(t *testing.T) {
 	}
 }
 
+func TestFetchReadmeDocumentUsesFinalRedirectURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/README.md":
+			http.Redirect(w, r, "/docs/README.md", http.StatusFound)
+		case "/docs/README.md":
+			fmt.Fprint(w, "# Reader")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	document, err := FetchReadmeDocument(srv.URL + "/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if document.Readme != "# Reader" || document.BaseURL != srv.URL+"/docs/" {
+		t.Fatalf("document = %#v", document)
+	}
+}
+
 func TestFetchGitHubMetadata(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.RequestURI() {
-		case "/repos/owner/repo/readme":
-			if got := r.Header.Get("Accept"); got != "application/vnd.github.raw+json" {
-				t.Fatalf("README Accept = %q", got)
-			}
-			fmt.Fprint(w, "# Reader\n\nHello.")
 		case "/repos/owner/repo/releases?per_page=2":
 			fmt.Fprint(w, `[
 				{"tag_name":"v2.0","name":"Two","draft":false,"assets":[
@@ -56,14 +73,6 @@ func TestFetchGitHubMetadata(t *testing.T) {
 	oldBase := githubAPIBaseURL
 	githubAPIBaseURL = srv.URL
 	t.Cleanup(func() { githubAPIBaseURL = oldBase })
-
-	readme, err := FetchGitHubReadme("https://github.com/owner/repo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if readme != "# Reader\n\nHello." {
-		t.Fatalf("README = %q", readme)
-	}
 
 	got, err := FetchGitHubReleases("https://github.com/owner/repo", 2)
 	if err != nil {

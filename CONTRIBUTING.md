@@ -78,6 +78,16 @@ To test changes:
 
 The [KOReader emulator](https://github.com/koreader/koreader/blob/master/doc/Building.md) is the fastest way to iterate without a physical device.
 
+For the local KOReader development build, set `KOREADER_DIR` in `.env`, then run:
+
+```sh
+./build.sh --dev
+```
+
+This compiles the macOS backend, deploys `zenpm.koplugin` to the emulator, and
+restarts and focuses KOReader. It does not create release archives or change
+the project version.
+
 ### Static linting (LuaCheck)
 
 this project uses [LuaCheck](https://github.com/mpeterv/luacheck) for static analysis.

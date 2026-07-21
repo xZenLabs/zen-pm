@@ -310,16 +310,24 @@ paths:
       operationId: getPackageReadme
       responses:
         "200":
-          description: Raw README Markdown from the repository-hosted URL in package metadata, or the GitHub source when no URL is provided.
+          description: Raw README Markdown and the directory used to resolve its relative links and images.
           content:
             application/json:
               schema:
                 type: object
                 required:
                   - readme
+                  - readme_base_url
+                  - readme_image_base_url
                 properties:
                   readme:
                     type: string
+                  readme_base_url:
+                    type: string
+                    format: uri
+                  readme_image_base_url:
+                    type: string
+                    format: uri
         "404":
           $ref: "#/components/responses/TextError"
         "502":

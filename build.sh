@@ -8,12 +8,29 @@ DIST_DIR="$ROOT_DIR/dist"
 BUILD_DIR="$DIST_DIR/.build"
 VERSION_FILE="$ROOT_DIR/VERSION"
 KOREADER_META_FILE="$ROOT_DIR/frontend/koreader/zenpm.koplugin/_meta.lua"
+DEV_MODE=false
+DEV_PID_FILE="$ROOT_DIR/.dev-kodev.pid"
 
 usage() {
-    echo "Usage: $0"
-    echo "Version is read from $VERSION_FILE"
+    echo "Usage: $0 [--dev]"
+    echo "Without --dev, version is read from $VERSION_FILE"
     exit 1
 }
+
+case "$#" in
+    0)
+        ;;
+    1)
+        if [ "$1" = "--dev" ]; then
+            DEV_MODE=true
+        else
+            usage
+        fi
+        ;;
+    *)
+        usage
+        ;;
+esac
 
 read_version_file() {
     if [ ! -f "$VERSION_FILE" ]; then
@@ -65,7 +82,137 @@ next_version() {
     printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))"
 }
 
-[ "$#" -eq 0 ] || usage
+run_dev() {
+    ENV_FILE="$ROOT_DIR/.env"
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "Missing development configuration: $ENV_FILE"
+        exit 1
+    fi
+
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    if [ -z "${KOREADER_DIR:-}" ] || [ ! -d "$KOREADER_DIR" ]; then
+        echo "KOREADER_DIR must point to a KOReader checkout"
+        exit 1
+    fi
+    if [ ! -x "$KOREADER_DIR/kodev" ]; then
+        echo "KOReader development command not found: $KOREADER_DIR/kodev"
+        exit 1
+    fi
+    if ! command -v rsync >/dev/null 2>&1; then
+        echo "rsync is required for development builds"
+        exit 1
+    fi
+    if ! command -v lipo >/dev/null 2>&1; then
+        echo "lipo is required to build the macOS universal backend"
+        exit 1
+    fi
+
+    VERSION=$(normalize_version "$(read_version_file)")
+    if ! validate_semver "$VERSION"; then
+        echo "Invalid SemVer version in $VERSION_FILE: $VERSION"
+        exit 1
+    fi
+
+    DEV_BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/zenpm-dev.XXXXXX")
+    cleanup_dev() {
+        rm -rf "$DEV_BUILD_DIR"
+    }
+    trap cleanup_dev EXIT INT TERM
+
+    echo "Building macOS backend..."
+    GOFLAGS="-trimpath -buildvcs=false"
+    LDFLAGS="-s -w -buildid= -X main.version=$VERSION"
+    GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$DEV_BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm
+    GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$DEV_BUILD_DIR/zenpm-darwin-amd64" ./cmd/zenpm
+    lipo -create -output "$DEV_BUILD_DIR/zenpm-darwin" "$DEV_BUILD_DIR/zenpm-darwin-amd64" "$DEV_BUILD_DIR/zenpm-darwin-arm64"
+
+    DEV_PLUGIN_DIR="$KOREADER_DIR/plugins/zenpm.koplugin"
+    mkdir -p "$DEV_PLUGIN_DIR"
+    rsync -a --delete --exclude 'backend/' --exclude 'VERSION' "$ROOT_DIR/frontend/koreader/zenpm.koplugin/" "$DEV_PLUGIN_DIR/"
+    rm -rf "$DEV_PLUGIN_DIR/backend"
+    mkdir -p "$DEV_PLUGIN_DIR/backend"
+    cp "$VERSION_FILE" "$DEV_PLUGIN_DIR/VERSION"
+    cp "$VERSION_FILE" "$DEV_PLUGIN_DIR/backend/VERSION"
+    cp "$DEV_BUILD_DIR/zenpm-darwin" "$DEV_PLUGIN_DIR/backend/zenpm-darwin"
+    chmod +x "$DEV_PLUGIN_DIR/backend/zenpm-darwin"
+    echo "Deployed plugin to: $DEV_PLUGIN_DIR"
+
+    find_luajit_child() {
+        parent_pid="$1"
+        for child_pid in $(pgrep -P "$parent_pid" 2>/dev/null || true); do
+            command=$(ps -p "$child_pid" -o comm= 2>/dev/null || true)
+            if [ "${command#*luajit}" != "$command" ]; then
+                printf '%s\n' "$child_pid"
+                return
+            fi
+            result=$(find_luajit_child "$child_pid")
+            if [ -n "$result" ]; then
+                printf '%s\n' "$result"
+                return
+            fi
+        done
+    }
+
+    focus_koreader() {
+        kodev_pid="$1"
+        [ "$(uname)" = "Darwin" ] || return
+
+        attempt=1
+        while [ "$attempt" -le 120 ]; do
+            reader_pid=$(find_luajit_child "$kodev_pid")
+            if [ -n "$reader_pid" ]; then
+                osascript \
+                    -e "tell application \"System Events\"" \
+                    -e "tell (first process whose unix id is $reader_pid)" \
+                    -e 'if not (exists window 1) then error "KOReader window not ready"' \
+                    -e 'set visible to true' \
+                    -e 'set frontmost to true' \
+                    -e 'perform action "AXRaise" of window 1' \
+                    -e 'end tell' \
+                    -e 'end tell' \
+                    >/dev/null 2>&1 && return
+            fi
+            attempt=$((attempt + 1))
+            sleep 0.5
+        done
+    }
+
+    terminate_process_tree() {
+        parent_pid="$1"
+        for child_pid in $(pgrep -P "$parent_pid" 2>/dev/null || true); do
+            terminate_process_tree "$child_pid"
+        done
+        kill "$parent_pid" 2>/dev/null || true
+    }
+
+    if [ -f "$DEV_PID_FILE" ]; then
+        kodev_pid=$(cat "$DEV_PID_FILE")
+        case "$kodev_pid" in
+            ''|*[!0-9]*)
+                ;;
+            *)
+                if kill -0 "$kodev_pid" 2>/dev/null; then
+                    terminate_process_tree "$kodev_pid"
+                fi
+                ;;
+        esac
+    fi
+
+    (
+        cd "$KOREADER_DIR"
+        nohup "$KOREADER_DIR/kodev" run >/dev/null 2>&1 &
+        kodev_pid=$!
+        printf '%s\n' "$kodev_pid" > "$DEV_PID_FILE"
+        focus_koreader "$kodev_pid" &
+    )
+    echo "Restarted KOReader development build"
+}
+
+if [ "$DEV_MODE" = true ]; then
+    run_dev
+    exit 0
+fi
 
 VERSION=$(normalize_version "$(read_version_file)")
 if ! validate_semver "$VERSION"; then

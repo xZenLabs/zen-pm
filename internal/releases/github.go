@@ -30,6 +30,13 @@ type Release struct {
 	Assets     []ReleaseAsset `json:"assets"`
 }
 
+// ReadmeDocument is the raw README Markdown together with the directory used
+// to resolve relative links and images embedded in it.
+type ReadmeDocument struct {
+	Readme  string
+	BaseURL string
+}
+
 func GitHubRepository(source string) (string, bool) {
 	u, err := url.Parse(strings.TrimSpace(source))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !strings.EqualFold(u.Hostname(), "github.com") {
@@ -58,46 +65,61 @@ func GitHubReleaseURL(source, tag string) (string, error) {
 	return "https://github.com/" + repository + "/releases/tag/" + url.PathEscape(tag), nil
 }
 
-func FetchGitHubReadme(source string) (string, error) {
-	repository, ok := GitHubRepository(source)
-	if !ok {
-		return "", fmt.Errorf("source is not a GitHub repository")
-	}
-	data, err := githubRequest("/repos/"+repository+"/readme", "application/vnd.github.raw+json")
+// FetchReadme retrieves Markdown from a repository-hosted README URL.
+func FetchReadme(readmeURL string) (string, error) {
+	document, err := FetchReadmeDocument(readmeURL)
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	return document.Readme, nil
 }
 
-// FetchReadme retrieves Markdown from a repository-hosted README URL.
-func FetchReadme(readmeURL string) (string, error) {
+// FetchReadmeDocument retrieves Markdown and the final response directory
+// after following redirects.
+func FetchReadmeDocument(readmeURL string) (ReadmeDocument, error) {
 	u, err := url.Parse(strings.TrimSpace(readmeURL))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return "", fmt.Errorf("README URL must be an HTTP(S) URL")
+		return ReadmeDocument{}, fmt.Errorf("README URL must be an HTTP(S) URL")
 	}
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
-		return "", err
+		return ReadmeDocument{}, err
 	}
 	req.Header.Set("User-Agent", "ZenPackageManager")
 	client := cabundle.Client(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("README request: %w", err)
+		return ReadmeDocument{}, fmt.Errorf("README request: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("README request returned %s", resp.Status)
+		return ReadmeDocument{}, fmt.Errorf("README request returned %s", resp.Status)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
 	if err != nil {
-		return "", err
+		return ReadmeDocument{}, err
 	}
 	if len(data) > githubResponseLimit {
-		return "", fmt.Errorf("README response is too large")
+		return ReadmeDocument{}, fmt.Errorf("README response is too large")
 	}
-	return string(data), nil
+	baseURL, err := readmeBaseURL(resp.Request.URL)
+	if err != nil {
+		return ReadmeDocument{}, err
+	}
+	return ReadmeDocument{Readme: string(data), BaseURL: baseURL}, nil
+}
+
+func readmeBaseURL(readmeURL *url.URL) (string, error) {
+	if readmeURL == nil || readmeURL.Scheme == "" || readmeURL.Host == "" {
+		return "", fmt.Errorf("README response has no URL")
+	}
+	base := *readmeURL
+	base.RawQuery = ""
+	base.Fragment = ""
+	if !strings.HasSuffix(base.Path, "/") {
+		base.Path = base.Path[:strings.LastIndex(base.Path, "/")+1]
+	}
+	return base.String(), nil
 }
 
 // FetchGitHubReleases returns up to limit releases in one request. The frontend

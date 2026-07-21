@@ -10,6 +10,7 @@
 
 # Local runtime state
 .zenpm/
+.dev-kodev.pid
 AGENTS.md
 .codex
 
@@ -19,3 +20,5 @@ AGENTS.md
 
 # Build artifacts
 dist/
+.env
+.dev-kodev.pid

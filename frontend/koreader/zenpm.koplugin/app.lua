@@ -65,6 +65,9 @@ function App:new(plugin)
         backend_starting = false,
         scan_plugins_on_open = false,
         image_files = {},
+        readme_image_queue = {},
+        readme_image_pending = {},
+        readme_image_loading = false,
         state = {
             page = "home",
             active_tab = "home",
@@ -72,6 +75,7 @@ function App:new(plugin)
             advanced = App.load_setting("advanced", false),
             beta_updates = App.load_setting("beta_updates", false),
             update_auto_check = App.load_setting("update_auto_check", true),
+            show_readme_images = App.load_setting("show_readme_images", true),
             update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", installed = "", categories = "", category = "" },
@@ -1245,6 +1249,61 @@ function App:image_file_for(value)
     return file
 end
 
+function App:cached_image_file(value)
+    value = tostring(value or "")
+    if value == "" then
+        return nil, false
+    end
+    if self.image_files[value] and Util.path_exists(self.image_files[value]) then
+        return self.image_files[value], false
+    end
+    local file = Images.cached_file(value)
+    if file then
+        self.image_files[value] = file
+        return file, false
+    end
+    return nil, Images.is_failed(value)
+end
+
+function App:load_next_readme_image()
+    if not self.state.show_readme_images then
+        self.readme_image_queue = {}
+        self.readme_image_pending = {}
+        self.readme_image_loading = false
+        return
+    end
+    local value = table.remove(self.readme_image_queue, 1)
+    if not value then
+        self.readme_image_loading = false
+        return
+    end
+    self:image_file_for(value)
+    self.readme_image_pending[value] = nil
+    self:refresh()
+    UIManager:scheduleIn(0.05, function()
+        self:load_next_readme_image()
+    end)
+end
+
+function App:queue_readme_image(value)
+    value = tostring(value or "")
+    if not self.state.show_readme_images or value == "" or self.readme_image_pending[value] or Images.is_failed(value) then
+        return
+    end
+    if self:cached_image_file(value) then
+        return
+    end
+    self.readme_image_pending[value] = true
+    table.insert(self.readme_image_queue, value)
+    if self.readme_image_loading then
+        return
+    end
+    self.readme_image_loading = true
+    UIManager:nextTick(function()
+        self:load_next_readme_image()
+    end)
+end
+
 function App:package_icon_file(pkg)
     local icon_value = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
@@ -1655,11 +1714,17 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
         local cached = self.state.readme_cache[cache_key]
         if cached == nil then
             local readme_ok, data = self.client:get_package_readme(cache_key)
-            cached = readme_ok and type(data) == "table" and data.readme or false
+            cached = readme_ok and type(data) == "table" and type(data.readme) == "string" and {
+                readme = data.readme,
+                base_url = data.readme_base_url,
+                image_base_url = data.readme_image_base_url,
+            } or false
             self.state.readme_cache[cache_key] = cached
         end
-        if type(cached) == "string" then
-            pkg.readme = cached
+        if type(cached) == "table" then
+            pkg.readme = cached.readme
+            pkg.readme_base_url = cached.base_url
+            pkg.readme_image_base_url = cached.image_base_url
         end
     end
     self.state.current_package = pkg
@@ -2459,6 +2524,16 @@ function App:toggle_automatic_update_checks()
     end
 end
 
+function App:toggle_readme_images()
+    self.state.show_readme_images = not self.state.show_readme_images
+    App.save_setting("show_readme_images", self.state.show_readme_images)
+    if not self.state.show_readme_images then
+        self.readme_image_queue = {}
+        self.readme_image_pending = {}
+    end
+    self:refresh()
+end
+
 function App:prompt_base_font_size()
     local SpinWidget = require("ui/widget/spinwidget")
     UIManager:show(SpinWidget:new{
@@ -2524,6 +2599,15 @@ function App:show_actions(anchor)
             text = _("Font size: ") .. tostring(self.state.base_font_size),
             callback = function()
                 self:prompt_base_font_size()
+            end,
+        },
+        {
+            text = _("Show README images"),
+            checked_func = function()
+                return self.state.show_readme_images
+            end,
+            callback = function()
+                self:toggle_readme_images()
             end,
         },
         {

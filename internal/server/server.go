@@ -698,23 +698,31 @@ func (s *Server) packageGitHubSource(id string) (string, error) {
 	return "", fmt.Errorf("package %q not found", id)
 }
 
-func (s *Server) packageReadmeURL(id string) (string, bool, error) {
+func (s *Server) packageReadmeMetadata(id string) (string, string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", false, err
+		return "", "", err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
 			if entry.ReadmeURL != "" {
-				return entry.ReadmeURL, true, nil
+				return entry.ReadmeURL, repositoryImageBaseURL(entry.Source), nil
 			}
-			if _, ok := releases.GitHubRepository(entry.Source); !ok {
-				return "", false, fmt.Errorf("package %q has no README URL", id)
-			}
-			return entry.Source, false, nil
+			return "", "", fmt.Errorf("package %q has no README URL", id)
 		}
 	}
-	return "", false, fmt.Errorf("package %q not found", id)
+	return "", "", fmt.Errorf("package %q not found", id)
+}
+
+func repositoryImageBaseURL(source string) string {
+	if repository, ok := releases.GitHubRepository(source); ok {
+		return "https://github.com/" + repository + "/raw/HEAD/"
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return ""
+	}
+	return strings.TrimRight(source, "/") + "/"
 }
 
 func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id string) {
@@ -722,22 +730,21 @@ func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id 
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	readmeURL, hosted, err := s.packageReadmeURL(id)
+	readmeURL, imageBaseURL, err := s.packageReadmeMetadata(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	var readme string
-	if hosted {
-		readme, err = releases.FetchReadme(readmeURL)
-	} else {
-		readme, err = releases.FetchGitHubReadme(readmeURL)
-	}
+	document, err := releases.FetchReadmeDocument(readmeURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"readme": readme})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"readme":                document.Readme,
+		"readme_base_url":       document.BaseURL,
+		"readme_image_base_url": imageBaseURL,
+	})
 }
 
 func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, id string) {
