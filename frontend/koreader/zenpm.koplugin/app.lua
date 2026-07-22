@@ -1044,7 +1044,7 @@ function App:quit()
 end
 
 function App:restart_koreader()
-    self:close()
+    Modals.status(_("Restarting..."))
     UIManager:nextTick(function()
         UIManager:broadcastEvent(Event:new("Restart"))
     end)
@@ -2269,7 +2269,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         or package_title(pkg, id)
     self.busy = true
     Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
-        .. display_name .. "\n\n" .. _("Downloading... Please wait."))
+        .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
     local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
     if not ok then
         self.busy = false

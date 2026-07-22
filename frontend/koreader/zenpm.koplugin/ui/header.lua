@@ -80,16 +80,22 @@ function Header.draw_actions(view, bb, x, y)
     return s
 end
 
+local function icon_button_width(label, icon)
+    local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
+    return Theme.scale(10) + icon + Theme.scale(6) + label_size.w + Theme.scale(14), label_size
+end
+
 function Header.draw_sort_button(view, bb, x, y, kind)
     local s = Theme.scale(42)
-    local icon = Theme.scale(32)
-    P.box(bb, x, y, s, s, { border = false })
+    local icon = Theme.scale(24)
+    local label = _("Sort")
+    local w, label_size = icon_button_width(label, icon)
+    P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
     local icon_y = y + math.floor((s - icon) / 2)
-    if not P.image(bb, Images.asset("sort.svg"), x + math.floor((s - icon) / 2), icon_y, icon, icon, { is_icon = true }) then
-        P.center_text_box(bb, "Sort", x, y, s, s, "small", { bold = true })
-    end
-    P.hit(view, x, y, s, s, function() view.app:prompt_sort(kind) end, "sort:" .. tostring(kind))
-    return s
+    P.image(bb, Images.asset("sort.svg"), x + Theme.scale(10), icon_y, icon, icon, { is_icon = true, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
+    P.hit(view, x, y, w, s, function() view.app:prompt_sort(kind) end, "sort:" .. tostring(kind))
+    return w
 end
 
 function Header.draw_back(view, bb, x, y, callback)
@@ -114,13 +120,14 @@ end
 
 function Header.draw_search_button(view, bb, x, y, kind)
     local s = Theme.scale(42)
-    local icon = Theme.scale(28)
-    P.box(bb, x, y, s, s, { border = false })
-    if not P.image(bb, Images.asset("search.svg"), x + math.floor((s - icon) / 2), y + math.floor((s - icon) / 2), icon, icon, { is_icon = true }) then
-        P.center_text_box(bb, _("Search"), x, y, s, s, "small", { bold = true })
-    end
-    P.hit(view, x, y, s, s, function() view.app:prompt_filter(kind) end, "search:" .. kind)
-    return s
+    local icon = Theme.scale(24)
+    local label = _("Search")
+    local w, label_size = icon_button_width(label, icon)
+    P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
+    P.image(bb, Images.asset("search.svg"), x + Theme.scale(10), y + math.floor((s - icon) / 2), icon, icon, { is_icon = true, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
+    P.hit(view, x, y, w, s, function() view.app:prompt_filter(kind) end, "search:" .. kind)
+    return w
 end
 
 local function toolbar_y(y, h, control_h)
@@ -162,7 +169,11 @@ local function draw_queue_clear_button(view, bb, x, y)
     local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
     local w = Theme.scale(14) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
     local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
-    P.box(bb, x, y, w, h, { border = false, background = enabled and Theme.button_bg or Theme.bg })
+    P.box(bb, x, y, w, h, {
+        border = false,
+        background = enabled and Theme.button_bg or Theme.bg,
+        radius = math.floor(h / 2),
+    })
     P.image(bb, Images.asset("clear.svg"), x + Theme.scale(7), y + Theme.scale(7), icon, icon, { is_icon = true, invert = enabled })
     P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
@@ -203,7 +214,6 @@ local function draw_title_bar(view, bb, x, y, w)
     else
         P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
     end
-    P.rect(bb, x, y + h - Theme.scale(1), w, Theme.scale(1), Theme.soft)
     view.koreader_menu_zone = { x = x, y = y, w = w, h = h }
     return y + h
 end
@@ -244,7 +254,8 @@ function Header.draw(view, bb, x, y, w)
         control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
     end
     if filter_kind then
-        Header.draw_search_button(view, bb, x + w - pad - Theme.scale(42), button_y, filter_kind)
+        local search_w = icon_button_width(_("Search"), Theme.scale(24))
+        Header.draw_search_button(view, bb, x + w - pad - search_w, button_y, filter_kind)
     end
     if page == "queue" then
         local button_h = Theme.scale(42)
