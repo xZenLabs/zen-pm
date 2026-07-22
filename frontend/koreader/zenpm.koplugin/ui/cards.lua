@@ -91,7 +91,7 @@ local function package_version_repo_text(pkg)
     return table.concat(parts, " • ")
 end
 
-local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size)
+local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size, invert_icon)
     P.box(bb, x, y, w, h, { background = Theme.button_bg, border_size = 2, border_color = Theme.button_bg, radius = math.floor(h / 2) })
     if icon then
         icon_size = icon_size or Theme.font_scale(18)
@@ -100,7 +100,7 @@ local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size
         local content_w = icon_size + gap + text_size.w
         local content_x = x + math.max(0, math.floor((w - content_w) / 2))
         local icon_y = y + math.max(0, math.floor((h - icon_size) / 2))
-        if not P.image(bb, icon, content_x, icon_y, icon_size, icon_size, { is_icon = true }) then
+        if not P.image(bb, icon, content_x, icon_y, icon_size, icon_size, { is_icon = true, invert = invert_icon }) then
             P.center_text_box(bb, "↓", content_x, icon_y, icon_size, icon_size, "small", { bold = true, color = Theme.button_text })
         end
         P.text(bb, text, content_x + icon_size + gap, y + math.max(0, math.floor((h - text_size.h) / 2)), text_size.w, "small", { bold = true, color = Theme.button_text })
@@ -275,7 +275,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
-    end, action_icon, action_icon_size)
+    end, action_icon, action_icon_size, queued ~= nil)
     P.hit(view, x, y, action_x - x, h, function()
         view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
     end, "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))

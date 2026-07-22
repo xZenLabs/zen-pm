@@ -297,6 +297,9 @@ function P.image(bb, file, x, y, w, h, opts)
     if not ok or not widget then
         return false
     end
+    if opts.invert then
+        widget:getSize()
+    end
     if opts.invert and widget._bb then
         widget._bb:invert()
     end
