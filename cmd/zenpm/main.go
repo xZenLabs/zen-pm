@@ -66,7 +66,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "Usage: zenpm <command> [args]")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  repo    list|add|remove|refresh")
-	fmt.Fprintln(os.Stderr, "  list    [platform]")
+	fmt.Fprintln(os.Stderr, "  list    [platform|installed]")
 	fmt.Fprintln(os.Stderr, "  info    <id>")
 	fmt.Fprintln(os.Stderr, "  install <id>")
 	fmt.Fprintln(os.Stderr, "  uninstall <id> [patch-file]")
@@ -130,26 +130,36 @@ func runPackage(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, plat st
 	}
 	switch args[0] {
 	case "list":
+		if len(args) > 1 && args[1] == "installed" {
+			installed, err := st.ReadInstalled()
+			dieOnErr(err)
+			for _, e := range installed {
+				name := e.Name
+				if name == "" {
+					name = e.ID
+				}
+				fmt.Printf("%s | %s | %s\n", e.ID, name, e.Version)
+			}
+			return
+		}
 		targetPlat := plat
 		if len(args) > 1 {
 			targetPlat = args[1]
 		}
 		catalog, err := repos.ReadCatalog()
 		dieOnErr(err)
-		installed, _ := st.ReadInstalled()
-		installedSet := make(map[string]bool)
-		for _, e := range installed {
-			installedSet[e.ID] = true
+		if len(catalog) == 0 {
+			dieOnErr(repos.Refresh())
+			catalog, err = repos.ReadCatalog()
+			dieOnErr(err)
 		}
 		filtered := repo.FilterByPlatform(catalog, targetPlat)
-		fmt.Println("ID\tNAME\tVERSION\tPLATFORM\tREPO\tINSTALLED")
 		for _, e := range filtered {
-			inst := "no"
-			if installedSet[e.ID] {
-				inst = "yes"
+			name := e.Name
+			if name == "" {
+				name = e.ID
 			}
-			fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\n",
-				e.ID, e.Name, e.Version, strings.Join(e.Platforms, ","), e.Repo, inst)
+			fmt.Printf("%s | %s | %s\n", e.ID, name, e.Version)
 		}
 	case "info":
 		if len(args) < 2 {

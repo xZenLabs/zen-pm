@@ -9,6 +9,7 @@ local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 local ok_android, android = pcall(require, "android")
 
 local Daemon = {}
+local cli_wrapper_marker = "# Managed by ZenPM."
 
 function Daemon:new()
     local o = {
@@ -127,6 +128,18 @@ local function dirname(path)
         return dir
     end
     return "."
+end
+
+local function absolute_path(path, base)
+    path = tostring(path or "")
+    if path:sub(1, 1) == "/" then
+        return path
+    end
+    base = tostring(base or "")
+    if base == "" then
+        return path
+    end
+    return base:gsub("/+$", "") .. "/" .. path:gsub("^%./", "")
 end
 
 local function basename(path)
@@ -260,6 +273,100 @@ end
 
 function Daemon:standalone_backend()
     return self:standalone_backend_dir() .. "/zenpm"
+end
+
+function Daemon:cli_wrapper_path()
+    if self:detect_platform() == "kindle" then
+        return "/usr/local/bin/zenpm"
+    end
+    return self:koreader_data_dir() .. "/zenpm"
+end
+
+function Daemon:legacy_cli_wrapper_path()
+    return Constants.PLUGIN_DIR .. "/bin/zenpm"
+end
+
+function Daemon:cli_alias_path()
+    return dirname(self:cli_wrapper_path()) .. "/zpm"
+end
+
+function Daemon:log_cli(message)
+    Util.ensure_dir(self:state_home())
+    append_text(self:state_home() .. "/ZenPM.log", log_timestamp() .. "  ZenPM CLI: " .. message .. "\n")
+end
+
+function Daemon:write_cli_wrapper(path, script)
+    if read_all(path) == script then
+        self:log_cli("already installed at " .. path)
+        return true
+    end
+    self:log_cli("installing at " .. path)
+    local rootfs = dirname(path) == "/usr/local/bin"
+    if rootfs and os.execute("mntroot rw") ~= 0 then
+        self:log_cli("could not make the root filesystem writable")
+        return false
+    end
+    local ok = Util.ensure_dir(dirname(path)) and write_text(path, script)
+    if ok then
+        ok = os.execute("chmod +x " .. Util.sh_quote(path)) == 0
+    end
+    if rootfs then
+        os.execute("mntroot ro")
+    end
+    self:log_cli(ok and "installed at " .. path or "installation failed at " .. path)
+    return ok
+end
+
+function Daemon:remove_cli_wrapper(path)
+    if not read_all(path):find(cli_wrapper_marker, 1, true) then
+        return true
+    end
+    local rootfs = dirname(path) == "/usr/local/bin"
+    if rootfs and os.execute("mntroot rw") ~= 0 then
+        return false
+    end
+    os.remove(path)
+    os.remove(path .. ".tmp")
+    if rootfs then
+        os.execute("mntroot ro")
+    end
+    return true
+end
+
+function Daemon:install_cli_wrapper()
+    if self:is_android() then
+        return true
+    end
+    local wrapper = self:cli_wrapper_path()
+    if not self:remove_cli_wrapper(self:legacy_cli_wrapper_path()) then
+        return false
+    end
+    local data_dir = self:koreader_data_dir()
+    local state_home = absolute_path(self:state_home(), data_dir)
+    local script = table.concat({
+        "#!/bin/sh",
+        cli_wrapper_marker,
+        "export ZENPM_PLATFORM=" .. Util.sh_quote(self:package_platform_filter()),
+        "export ZENPM_HOME=" .. Util.sh_quote(state_home),
+        "export ZENPM_KOREADER_DIR=" .. Util.sh_quote(data_dir),
+        "export ZENPM_KOREADER_PLUGIN_DIR=" .. Util.sh_quote(self:koreader_plugin_dir()),
+        "export ZENPM_KOREADER_PATCH_DIR=" .. Util.sh_quote(self:koreader_patch_dir()),
+        "exec " .. Util.sh_quote(absolute_path(self:standalone_backend(), data_dir)) .. " \"$@\"",
+        "",
+    }, "\n")
+    if not self:write_cli_wrapper(wrapper, script) then
+        return false
+    end
+    return self:write_cli_wrapper(self:cli_alias_path(), script)
+end
+
+function Daemon:remove_all_settings()
+    self:stop_standalone_backend()
+    local cli_removed = self:remove_cli_wrapper(self:cli_wrapper_path())
+    local cli_alias_removed = self:remove_cli_wrapper(self:cli_alias_path())
+    local legacy_cli_removed = self:remove_cli_wrapper(self:legacy_cli_wrapper_path())
+    local settings_removed = os.execute("rm -rf " .. Util.sh_quote(self:state_home())) == 0
+    return cli_removed and cli_alias_removed and legacy_cli_removed and settings_removed
 end
 
 function Daemon:standalone_marker()
@@ -549,6 +656,9 @@ function Daemon:ensure_backend_files()
         for _, companion in ipairs(self:bundled_backend_companions(source)) do
             os.execute("chmod +x " .. Util.sh_quote(backend_dir .. "/" .. basename(companion)))
         end
+        if not self:install_cli_wrapper() then
+            return false, _("Could not install the ZenPM command-line wrapper.")
+        end
         self.backend_path = backend
         return false, nil
     end
@@ -570,6 +680,9 @@ function Daemon:ensure_backend_files()
     end
     write_text(self:standalone_backend_dir() .. "/VERSION", self:bundled_backend_version() .. "\n")
     write_text(self:standalone_marker(), marker)
+    if not self:install_cli_wrapper() then
+        return false, _("Could not install the ZenPM command-line wrapper.")
+    end
     self.backend_path = backend
     self:stop_standalone_backend()
     return true, nil

@@ -64,6 +64,35 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 }
 
+func TestHandlePackageUpdateStartsAllInstalledUpdates(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	rec := httptest.NewRecorder()
+
+	srv.handlePackageUpdate(rec, httptest.NewRequest(http.MethodPost, "/packages/update", nil))
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	var response struct {
+		OK      bool `json:"ok"`
+		Started bool `json:"started"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.OK || !response.Started {
+		t.Fatalf("response = %#v, want started update", response)
+	}
+}
+
 func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

@@ -6,6 +6,9 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
 local Launcher = require("launcher")
+local Constants = require("constants")
+local Daemon = require("daemon")
+local Client = dofile(Constants.PLUGIN_DIR .. "/client.lua")
 
 local function plugin_root()
     local source = debug.getinfo(1, "S").source or ""
@@ -48,13 +51,18 @@ local ZenPM = WidgetContainer:extend{
 }
 
 function ZenPM:onDispatcherRegisterActions()
-    local action = {
+    Dispatcher:registerAction("zenpm", {
         category = "none",
         event = "OpenZenPM",
         title = _("Open ZenPM"),
         general = true,
-    }
-    Dispatcher:registerAction("zenpm", action)
+    })
+    Dispatcher:registerAction("zenpm_update_all", {
+        category = "none",
+        event = "UpdateAllZenPMPlugins",
+        title = _("Update All"),
+        general = true,
+    })
 end
 
 function ZenPM:init()
@@ -62,13 +70,33 @@ function ZenPM:init()
     pcall(register_nerd_font)
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
-    pcall(function()
-        require("daemon"):new():ensure_backend_files()
-    end)
+    local daemon = Daemon:new()
+    daemon:log_cli("plugin loaded; ensuring CLI wrapper")
+    local ok, result, err = pcall(daemon.ensure_backend_files, daemon)
+    if not ok then
+        daemon:log_cli("CLI setup crashed: " .. tostring(result))
+    elseif err then
+        daemon:log_cli("CLI setup failed: " .. tostring(err))
+    end
 end
 
 function ZenPM:onOpenZenPM()
     return Launcher.open(self)
+end
+
+function ZenPM:onUpdateAllZenPMPlugins()
+    local daemon = Daemon:new()
+    local client = Client:new()
+    local ready, err = daemon:ensure(client)
+    if not ready then
+        daemon:log_cli("dispatcher update all failed to start backend: " .. tostring(err))
+        return false
+    end
+    local started, result = client:update_all_packages()
+    if not started then
+        daemon:log_cli("dispatcher update all failed: " .. tostring(result))
+    end
+    return started
 end
 
 function ZenPM:onZenPM()
@@ -94,6 +122,15 @@ end
 
 function ZenPM:onCloseWidget()
     I18n.uninstall()
+end
+
+-- KOReader calls this only after the user selects “Remove settings” while
+-- disabling or uninstalling the plugin.
+function ZenPM:deletePluginSettings()
+    local ok, removed = pcall(function()
+        return Daemon:new():remove_all_settings()
+    end)
+    return ok and removed
 end
 
 return ZenPM

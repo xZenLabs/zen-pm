@@ -257,6 +257,10 @@ function Client:package_action(id, action, asset, release)
     return self:request("POST", path, nil)
 end
 
+function Client:update_all_packages()
+    return self:request("POST", "/packages/update", nil)
+end
+
 function Client:get_package_assets(id)
     return self:request("GET", "/packages/" .. url_encode(id) .. "/assets", nil)
 end

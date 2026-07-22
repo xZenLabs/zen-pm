@@ -237,6 +237,25 @@ local function package_is_koreader_plugin(pkg)
     return false
 end
 
+local function zenpm_self_package(daemon)
+    local version = daemon:plugin_version()
+    return {
+        id = "zenpm-koreader",
+        name = _("ZenPM"),
+        version = version,
+        installed_version = version,
+        installed = true,
+        repo = Constants.REPO_ZENLABS_NAME,
+        repo_default = true,
+        platforms = { "koreader" },
+        plugin_module = "zenpm",
+        category = "utility",
+        icon = Constants.ASSET_DIR .. "/zenpm.svg",
+        description = _("Package manager for KOReader."),
+        zenpm_self = true,
+    }
+end
+
 local function action_installs_package(action)
     return action == "install" or action == "reinstall" or action == "update" or action == "downgrade"
 end
@@ -823,6 +842,7 @@ function App:refresh_queue_package_state()
     if not ok then return end
     self.state.packages = packages
     local installed = Models.installed_packages(packages)
+    table.insert(installed, 1, zenpm_self_package(self.daemon))
     self.state.installed_packages = installed
     self.state.visible_packages = self:sorted_packages("installed", Models.filter_packages(installed, self.state.filters.installed))
 end
@@ -1619,6 +1639,7 @@ function App:show_installed()
         return
     end
     local installed = Models.installed_packages(packages)
+    table.insert(installed, 1, zenpm_self_package(self.daemon))
     self.state.packages = packages
     self.state.installed_packages = installed
     self.state.visible_packages = self:sorted_packages("installed", Models.filter_packages(installed, self.state.filters.installed))
@@ -1928,6 +1949,10 @@ function App:perform_package_action(pkg, on_done)
         Modals.info(_("Another operation is in progress. Please wait."))
         return
     end
+    if pkg.zenpm_self then
+        self:confirm_uninstall_self()
+        return
+    end
     if Models.is_unmanaged_patch(pkg) then
         self:show_unmanaged_patch_modify(pkg, on_done)
         return
@@ -1968,6 +1993,52 @@ function App:perform_package_action(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
+end
+
+function App:confirm_uninstall_self()
+    Modals.confirm(
+        _("Uninstall ZenPM?"),
+        _("Uninstall"),
+        function()
+            Modals.plugin_settings_cleanup(
+                _("ZenPM will be uninstalled.\n\nRemove plugin settings?"),
+                function(remove_settings)
+                    self:uninstall_self(remove_settings)
+                end
+            )
+        end,
+        true
+    )
+end
+
+function App:uninstall_self(remove_settings)
+    if self.busy then return end
+    self.busy = true
+    Modals.status(_("Uninstalling ZenPM..."))
+    UIManager:nextTick(function()
+        if remove_settings then
+            local plugin = self.plugin
+            if plugin and type(plugin.deletePluginSettings) == "function" then
+                pcall(plugin.deletePluginSettings, plugin)
+            else
+                self.daemon:remove_all_settings()
+            end
+        else
+            self.daemon:stop_standalone_backend()
+        end
+        local removed = os.execute("rm -rf " .. Util.sh_quote(Constants.PLUGIN_DIR)) == 0
+        self.busy = false
+        Modals.close_status()
+        if not removed then
+            Modals.info_for(_("Could not remove the ZenPM plugin."), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+            return
+        end
+        self:close()
+        Modals.restart_koreader(
+            _("ZenPM uninstalled successfully.\n\nRestart KOReader to apply the change."),
+            function() self:restart_koreader() end
+        )
+    end)
 end
 
 function App:show_unmanaged_patch_modify(pkg, on_done)

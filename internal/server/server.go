@@ -83,6 +83,7 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/repo/refresh", s.wrap(s.handleRepoRefresh))
 	mux.HandleFunc("/koreader/plugins/scan", s.wrap(s.handleKOReaderPluginScan))
 	mux.HandleFunc("/packages", s.wrap(s.handlePackageList))
+	mux.HandleFunc("/packages/update", s.wrap(s.handlePackageUpdate))
 	mux.HandleFunc("/packages/", s.wrap(s.handlePackageAction))
 	mux.HandleFunc("/log", s.wrap(s.handleLog))
 	mux.HandleFunc("/log/client", s.wrap(s.handleClientLog))
@@ -679,6 +680,25 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+// handlePackageUpdate starts an update of every installed package. Like the
+// per-package action endpoint, it returns immediately while the backend works.
+func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.Info("Updating all installed packages")
+	go func() {
+		if err := s.pkgs.Update(""); err != nil {
+			log.Errorf("Update all packages failed: %v", err)
+			return
+		}
+		log.Info("Update all packages complete")
+	}()
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 

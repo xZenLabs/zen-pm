@@ -154,6 +154,17 @@ cp -r "$TMPDIR/ZenPM" "$PAYLOAD_DIR"
 cp "$PAYLOAD_DIR/backend/zenpm-$ABI" "$PAYLOAD_DIR/backend/zenpm"
 chmod +x "$PAYLOAD_DIR/backend/zenpm"
 
+CLI_DIR="$PAYLOAD_DIR/bin"
+mkdir -p "$CLI_DIR"
+for CLI_NAME in zenpm zpm; do
+cat > "$CLI_DIR/$CLI_NAME" <<EOF
+#!/bin/sh
+export ZENPM_PLATFORM=kindle
+exec "$PAYLOAD_DIR/backend/zenpm" "\$@"
+EOF
+chmod +x "$CLI_DIR/$CLI_NAME"
+done
+
 # Deploy updated WAF.
 MESQUITE_TARGET="/var/local/mesquite/ZenPM"
 rm -rf "$MESQUITE_TARGET"

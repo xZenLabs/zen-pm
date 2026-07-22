@@ -22,6 +22,15 @@ chmod +x "$BACKEND"
 
 mkdir -p "$BIN_DIR" "$LOG_DIR" "$NM_DIR"
 
+for CLI_NAME in zenpm zpm; do
+cat > "$BIN_DIR/$CLI_NAME" <<EOF
+#!/bin/sh
+export ZENPM_PLATFORM=kobo
+exec "$BACKEND" "\$@"
+EOF
+chmod +x "$BIN_DIR/$CLI_NAME"
+done
+
 if [ ! -f /usr/local/Kobo/imageformats/libnm.so ]; then
     NM_INSTALLER="$ZENPM_DIR/repos/default/packages/nickelmenu/scripts/install.sh"
     if [ -x "$NM_INSTALLER" ]; then
