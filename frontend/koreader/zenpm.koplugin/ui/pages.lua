@@ -273,7 +273,7 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_readme_images() end,
         },
         {
-            text = _("Advanced"),
+            text = _("Show all release builds"),
             toggle = true,
             value = function() return view.app.state.advanced end,
             callback = function()

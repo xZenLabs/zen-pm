@@ -339,7 +339,7 @@ function P.image_dimensions(file, max_width, max_height)
         if image then
             local image_width, image_height = image:getWidth(), image:getHeight()
             if image_width > 0 and image_height > 0 then
-                width = max_width
+                width = math.min(max_width, image_width)
                 height = math.max(1, math.floor(image_height * width / image_width + 0.5))
                 if max_height and height > max_height then
                     height = max_height
