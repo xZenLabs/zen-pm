@@ -249,9 +249,9 @@ h2 {
 }
 
 button {
-    border: 2px solid #111827;
-    background: #fff;
-    color: #111827;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
     border-radius: 10px;
     padding: 20px 28px;
     font-size: 0.9rem;
@@ -284,14 +284,15 @@ button:active {
 }
 
 button.primary {
-    background: var(--accent);
+    background: #000;
     color: #fff;
-    border-color: var(--accent);
+    border-color: #000;
 }
 
 button.danger {
-    border-color: var(--danger);
-    color: var(--danger);
+    border-color: #000;
+    background: #000;
+    color: #fff;
 }
 
 input {
@@ -448,9 +449,9 @@ input {
     padding: 0 18px;
     font-size: 1rem;
     border-radius: 999px;
-    border-color: #242220;
-    background: #fff;
-    color: #111827;
+    border-color: #000;
+    background: #000;
+    color: #fff;
     margin: -39px 0 0;
     white-space: nowrap;
 }
@@ -575,16 +576,17 @@ input {
 
 .package-action:focus,
 .package-action:active {
-    border-color: #242220;
-    background: #fff;
-    color: #111827;
+    border-color: #000;
+    background: #000;
+    color: #fff;
 }
 
 .package-action.danger,
 .package-action.danger:focus,
 .package-action.danger:active {
-    border-color: #242220;
-    color: #111827;
+    border-color: #000;
+    background: #000;
+    color: #fff;
 }
 
 .package-details-card .package-action {
@@ -946,9 +948,9 @@ body.sources-page-body {
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     border-radius: 999px;
-    border-color: #242220;
-    background: #ffffff;
-    color: #111827;
+    border-color: #000;
+    background: #000;
+    color: #fff;
     line-height: 1.2;
     white-space: nowrap;
     flex-shrink: 0;
@@ -956,9 +958,9 @@ body.sources-page-body {
 
 .add-source-btn:focus,
 .add-source-btn:active {
-    border-color: #242220;
-    background: #ffffff;
-    color: #111827;
+    border-color: #000;
+    background: #000;
+    color: #fff;
 }
 
 .sources-scroll {
@@ -1031,17 +1033,18 @@ body.sources-page-body {
     line-height: 82px;
     padding: 0 24px;
     border-radius: 999px;
-    background: #ffffff;
-    color: #111827;
-    border-color: #111827;
+    background: #000;
+    color: #fff;
+    border-color: #000;
     font-size: 0.9rem;
 }
 
 .repo-action.danger,
 .repo-action.danger:focus,
 .repo-action.danger:active {
-    color: var(--danger);
-    border-color: var(--danger);
+    background: #000;
+    color: #fff;
+    border-color: #000;
 }
 
 /* --- About modal --- */
@@ -1173,9 +1176,9 @@ body.sources-page-body {
     min-height: 78px;
     line-height: 1.2;
     padding: 18px 8px;
-    background: #ffffff;
-    color: #111827;
-    border-color: #111827;
+    background: #000;
+    color: #fff;
+    border-color: #000;
 }
 
 .modal-actions button + button {
@@ -1184,16 +1187,17 @@ body.sources-page-body {
 
 .modal-actions button.primary:focus,
 .modal-actions button.primary:active {
-    background: #ffffff;
-    color: #111827;
-    border-color: #111827;
+    background: #000;
+    color: #fff;
+    border-color: #000;
 }
 
 .modal-actions button.danger,
 .modal-actions button.danger:focus,
 .modal-actions button.danger:active {
-    color: var(--danger);
-    border-color: var(--danger);
+    background: #000;
+    color: #fff;
+    border-color: #000;
 }
 
 .confirm-modal-box {
@@ -1217,10 +1221,10 @@ body.sources-page-body {
     line-height: 1.2;
     padding: 24px 28px;
     margin: 0 0 12px;
-    border: 2px solid #111827;
+    border: 2px solid #000;
     border-radius: 8px;
-    background: #ffffff;
-    color: #111827;
+    background: #000;
+    color: #fff;
     text-align: left;
     font-size: 1rem;
 }
@@ -1228,8 +1232,9 @@ body.sources-page-body {
 .modify-option.danger,
 .modify-option.danger:focus,
 .modify-option.danger:active {
-    color: var(--danger);
-    border-color: var(--danger);
+    background: #000;
+    color: #fff;
+    border-color: #000;
 }
 
 .add-source-modal-overlay {
@@ -1269,17 +1274,17 @@ body.sources-page-body {
     min-height: 78px;
     padding: 18px 8px;
     line-height: 1.2;
-    background: #ffffff;
-    color: #111827;
-    border-color: #111827;
+    background: #000;
+    color: #fff;
+    border-color: #000;
     font-size: 1rem;
 }
 
 .add-source-actions .primary:focus,
 .add-source-actions .primary:active {
-    background: #ffffff;
-    color: #111827;
-    border-color: #111827;
+    background: #000;
+    color: #fff;
+    border-color: #000;
 }
 
 .modal-close-btn {

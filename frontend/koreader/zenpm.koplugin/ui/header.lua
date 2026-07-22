@@ -53,6 +53,8 @@ function Header.page_title(view)
         return Models.package_display_name(state.current_package or {}, _("Package Details"))
     elseif page == "queue" then
         return _("Queue") .. " (" .. tostring(view.app:queue_count()) .. ")"
+    elseif page == "settings" then
+        return _("Settings")
     elseif page == "debug" then
         return _("Debug")
     end
@@ -100,6 +102,16 @@ function Header.draw_back(view, bb, x, y, callback)
     return s
 end
 
+function Header.draw_close(view, bb, x, y)
+    local s = Theme.scale(46)
+    P.box(bb, x, y, s, s, { border = false })
+    if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(11), y + Theme.scale(11), s - Theme.scale(22), s - Theme.scale(22), { is_icon = true }) then
+        P.center_text(bb, "×", x, y + Theme.scale(10), s, "title", { bold = true })
+    end
+    P.hit(view, x, y, s, s, function() view.app:close_settings() end, "close-settings")
+    return s
+end
+
 function Header.draw_search_button(view, bb, x, y, kind)
     local s = Theme.scale(42)
     local icon = Theme.scale(28)
@@ -120,11 +132,11 @@ local function draw_title_button(view, bb, x, y, label, callback, hit_id, enable
     local label_size = P.text_size(label, Theme.scale(256), "small", { bold = true })
     local w = label_size.w + Theme.scale(28)
     P.box(bb, x, y, w, h, {
-        border_color = enabled and Theme.border or Theme.soft,
-        background = enabled and Theme.panel or Theme.bg,
+        border_color = enabled and Theme.button_bg or Theme.soft,
+        background = enabled and Theme.button_bg or Theme.bg,
         radius = math.floor(h / 2),
     })
-    P.center_text_box(bb, label, x, y, w, h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+    P.center_text_box(bb, label, x, y, w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
         P.hit(view, x, y, w, h, callback, hit_id)
     end
@@ -150,9 +162,9 @@ local function draw_queue_clear_button(view, bb, x, y)
     local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
     local w = Theme.scale(14) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
     local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
-    P.box(bb, x, y, w, h, { border = false, background = enabled and Theme.panel or Theme.bg })
-    P.image(bb, Images.asset("clear.svg"), x + Theme.scale(7), y + Theme.scale(7), icon, icon, { is_icon = true })
-    P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+    P.box(bb, x, y, w, h, { border = false, background = enabled and Theme.button_bg or Theme.bg })
+    P.image(bb, Images.asset("clear.svg"), x + Theme.scale(7), y + Theme.scale(7), icon, icon, { is_icon = true, invert = enabled })
+    P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
         P.hit(view, x, y, w, h, function() view.app:confirm_clear_queue() end, "clear-queue")
     end
@@ -170,10 +182,17 @@ local function draw_title_bar(view, bb, x, y, w)
     if back_callback then
         title_x = title_x + Header.draw_back(view, bb, title_x, toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
     end
-    local action_s = Theme.scale(42)
-    local action_x = title_right - action_s
-    Header.draw_actions(view, bb, action_x, toolbar_y(y, h, action_s))
-    title_right = action_x - Theme.scale(8)
+    if page == "settings" then
+        local close_s = Theme.scale(46)
+        local close_x = title_right - close_s
+        Header.draw_close(view, bb, close_x, toolbar_y(y, h, close_s))
+        title_right = close_x - Theme.scale(8)
+    else
+        local action_s = Theme.scale(42)
+        local action_x = title_right - action_s
+        Header.draw_actions(view, bb, action_x, toolbar_y(y, h, action_s))
+        title_right = action_x - Theme.scale(8)
+    end
     if page == "home" then
         local logo = Theme.scale(42)
         if not P.image(bb, Images.asset("zenpm.svg"), title_x, toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
@@ -235,11 +254,11 @@ function Header.draw(view, bb, x, y, w)
         local row_y = button_y
         draw_queue_clear_button(view, bb, control_x, row_y)
         P.box(bb, confirm_x, row_y, confirm_w, button_h, {
-            background = enabled and Theme.panel or Theme.bg,
-            border_color = enabled and Theme.border or Theme.soft,
+            background = enabled and Theme.button_bg or Theme.bg,
+            border_color = enabled and Theme.button_bg or Theme.soft,
             radius = math.floor(button_h / 2),
         })
-        P.center_text_box(bb, _("Confirm"), confirm_x, row_y, confirm_w, button_h, "small", { bold = true, color = enabled and Theme.ink or Theme.muted })
+        P.center_text_box(bb, _("Confirm"), confirm_x, row_y, confirm_w, button_h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
         if enabled then
             P.hit(view, confirm_x, row_y, confirm_w, button_h, function() view.app:prompt_queue_confirmation() end, "confirm-queue")
         end

@@ -91,9 +91,8 @@ local function package_version_repo_text(pkg)
     return table.concat(parts, " • ")
 end
 
-local function action_pill(view, bb, text, x, y, w, h, callback, icon, color, icon_size)
-    local ink = color or Theme.ink
-    P.box(bb, x, y, w, h, { background = Theme.bg, border_size = 2, border_color = ink, radius = math.floor(h / 2) })
+local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size)
+    P.box(bb, x, y, w, h, { background = Theme.button_bg, border_size = 2, border_color = Theme.button_bg, radius = math.floor(h / 2) })
     if icon then
         icon_size = icon_size or Theme.font_scale(18)
         local gap = Theme.font_scale(4)
@@ -102,11 +101,11 @@ local function action_pill(view, bb, text, x, y, w, h, callback, icon, color, ic
         local content_x = x + math.max(0, math.floor((w - content_w) / 2))
         local icon_y = y + math.max(0, math.floor((h - icon_size) / 2))
         if not P.image(bb, icon, content_x, icon_y, icon_size, icon_size, { is_icon = true }) then
-            P.center_text_box(bb, "↓", content_x, icon_y, icon_size, icon_size, "small", { bold = true, color = ink })
+            P.center_text_box(bb, "↓", content_x, icon_y, icon_size, icon_size, "small", { bold = true, color = Theme.button_text })
         end
-        P.text(bb, text, content_x + icon_size + gap, y + math.max(0, math.floor((h - text_size.h) / 2)), text_size.w, "small", { bold = true, color = ink })
+        P.text(bb, text, content_x + icon_size + gap, y + math.max(0, math.floor((h - text_size.h) / 2)), text_size.w, "small", { bold = true, color = Theme.button_text })
     else
-        P.center_text_box(bb, text, x, y, w, h, "small", { bold = true, color = ink })
+        P.center_text_box(bb, text, x, y, w, h, "small", { bold = true, color = Theme.button_text })
     end
     P.hit(view, x, y, w, h, callback, text)
 end
@@ -132,8 +131,9 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(10) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
+    local update_action = not queued and pkg.installed and pkg.update_available
     local action_icon = queued and Images.asset(queued_action_icon(queued))
-        or (pkg.installed and pkg.update_available and Images.asset("upgrade.svg") or nil)
+        or (update_action and Images.asset("upgrade-white.svg") or nil)
     local action_text_size = P.text_size(action_text, Theme.scale(256), "small", { bold = true })
     local action_w = math.max(opts.action_w or m.action_w, action_text_size.w + Theme.scale(24))
     local action_icon_size = (queued or (pkg.installed and pkg.update_available)) and Theme.font_scale(24) or Theme.font_scale(18)
@@ -275,7 +275,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
-    end, action_icon, nil, action_icon_size)
+    end, action_icon, action_icon_size)
     P.hit(view, x, y, action_x - x, h, function()
         view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
     end, "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))

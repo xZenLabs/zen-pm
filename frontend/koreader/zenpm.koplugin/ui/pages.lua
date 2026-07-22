@@ -72,15 +72,15 @@ function Pages.error(view, bb, x, y, w, h, message)
     if abi then
         P.text(bb, _("Detected ABI: ") .. abi, x + pad, button_y - Theme.scale(34), w - pad * 2, "small", { color = Theme.muted })
     end
-    P.box(bb, x + pad, button_y, button_w, button_h, { radius = math.floor(button_h / 2) })
-    P.center_text_box(bb, _("Retry"), x + pad, button_y, button_w, button_h, "small", { bold = true })
+    P.box(bb, x + pad, button_y, button_w, button_h, { background = Theme.button_bg, border_color = Theme.button_bg, radius = math.floor(button_h / 2) })
+    P.center_text_box(bb, _("Retry"), x + pad, button_y, button_w, button_h, "small", { bold = true, color = Theme.button_text })
     P.hit(view, x + pad, button_y, button_w, button_h, function()
         view.app:start_backend_then_reload()
     end, "retry-backend")
 
     local quit_x = x + pad + button_w + gap
-    P.box(bb, quit_x, button_y, button_w, button_h, { radius = math.floor(button_h / 2) })
-    P.center_text_box(bb, _("Quit"), quit_x, button_y, button_w, button_h, "small", { bold = true })
+    P.box(bb, quit_x, button_y, button_w, button_h, { background = Theme.button_bg, border_color = Theme.button_bg, radius = math.floor(button_h / 2) })
+    P.center_text_box(bb, _("Quit"), quit_x, button_y, button_w, button_h, "small", { bold = true, color = Theme.button_text })
     P.hit(view, quit_x, button_y, button_w, button_h, function()
         view.app:quit()
     end, "quit")
@@ -236,6 +236,83 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
     return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, { height = row_h })
+    end)
+end
+
+function Pages.settings(view, bb, x, y, w, h, scroll)
+    local m = Theme.metrics()
+    local pad = m.pad
+    local gap = m.card_gap
+    local row_h = math.max(m.touch_min, Theme.scale(58))
+    local rows = {
+        { text = _("Scan installed plugins"), callback = function() view.app:scan_installed_plugins() end },
+        {
+            text = _("Check for updates automatically"),
+            toggle = true,
+            value = function() return view.app.state.update_auto_check end,
+            callback = function()
+                view.app:toggle_automatic_update_checks()
+                view:refresh()
+            end,
+        },
+        {
+            text = _("Filter installable"),
+            toggle = true,
+            value = function() return view.app.state.filter_installable end,
+            callback = function() view.app:toggle_filter_installable() end,
+        },
+        {
+            text = _("Font size"),
+            value = function() return tostring(view.app.state.base_font_size) end,
+            callback = function() view.app:prompt_base_font_size() end,
+        },
+        {
+            text = _("Show README images"),
+            toggle = true,
+            value = function() return view.app.state.show_readme_images end,
+            callback = function() view.app:toggle_readme_images() end,
+        },
+        {
+            text = _("Advanced"),
+            toggle = true,
+            value = function() return view.app.state.advanced end,
+            callback = function()
+                view.app:toggle_advanced()
+                view:refresh()
+            end,
+        },
+        {
+            text = _("Beta updates"),
+            toggle = true,
+            value = function() return view.app.state.beta_updates end,
+            callback = function()
+                view.app:toggle_beta_updates()
+                view:refresh()
+            end,
+        },
+    }
+    local list_y = y + Theme.scale(8)
+    local list_h = h - Theme.scale(16)
+    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable)
+        local gutter = scrollable and Theme.scale(14) or 0
+        local row_x = x + pad
+        local row_w = w - pad * 2 - gutter
+        P.box(bb, row_x, row_y, row_w, row_h)
+        local value = row.value and row.value() or nil
+        local checkbox = row.toggle
+        local right = checkbox and nil or (value == nil and "›" or value)
+        local toggle_w = Theme.scale(56)
+        local toggle_h = Theme.scale(28)
+        local right_size = checkbox and { w = toggle_w } or P.text_size(right, Theme.scale(96), "small", { bold = true })
+        local text_w = row_w - pad * 2 - right_size.w - Theme.scale(12)
+        P.vcenter_text(bb, row.text, row_x + pad, row_y, text_w, row_h, "small", { bold = true })
+        local right_x = row_x + row_w - pad - right_size.w
+        if checkbox then
+            P.zen_toggle(bb, right_x, row_y + math.floor((row_h - toggle_h) / 2), toggle_w, toggle_h, value == true)
+        else
+            P.vcenter_text(bb, right, right_x, row_y, right_size.w, row_h, "small", { bold = true, color = Theme.ink })
+        end
+        P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
     end)
 end
 

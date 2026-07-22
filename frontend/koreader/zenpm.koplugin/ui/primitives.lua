@@ -79,6 +79,46 @@ function P.box(bb, x, y, w, h, opts)
     end
 end
 
+local function paint_zen_pill(bb, x, y, w, h, color)
+    local radius = math.min(w, h) / 2
+    for row = 0, h - 1 do
+        local offset = (row + 0.5) - h * 0.5
+        local inset = 0
+        if math.abs(offset) < radius then
+            inset = math.ceil(radius - math.sqrt(radius * radius - offset * offset))
+        end
+        local row_w = w - inset * 2
+        if row_w > 0 then
+            bb:paintRect(x + inset, y + row, row_w, 1, color)
+        end
+    end
+end
+
+local function paint_zen_circle(bb, x, y, radius, color)
+    for row = -radius, radius do
+        local half = math.floor(math.sqrt(radius * radius - row * row) + 0.5)
+        if half > 0 then
+            bb:paintRect(x - half, y + row, half * 2, 1, color)
+        end
+    end
+end
+
+-- Matches Zen UI's high-contrast pill toggle without requiring Zen UI itself.
+function P.zen_toggle(bb, x, y, w, h, enabled)
+    local border = Theme.scale(2)
+    local pad = Theme.scale(3)
+    local knob_radius = math.max(1, math.floor(h / 2) - pad)
+    local center_y = y + math.floor(h / 2)
+    if enabled then
+        paint_zen_pill(bb, x, y, w, h, Theme.ink)
+        paint_zen_circle(bb, x + w - pad - knob_radius, center_y, knob_radius, Theme.panel)
+    else
+        paint_zen_pill(bb, x, y, w, h, Theme.ink)
+        paint_zen_pill(bb, x + border, y + border, w - border * 2, h - border * 2, Theme.panel)
+        paint_zen_circle(bb, x + border + pad + knob_radius, center_y, knob_radius, Theme.ink)
+    end
+end
+
 function P.text(bb, text, x, y, width, role, opts)
     opts = opts or {}
     local widget = TextWidget:new{
@@ -257,9 +297,15 @@ function P.image(bb, file, x, y, w, h, opts)
     if not ok or not widget then
         return false
     end
+    if opts.invert and widget._bb then
+        widget._bb:invert()
+    end
     local painted = pcall(function()
         widget:paintTo(bb, x, y)
     end)
+    if opts.invert and widget._bb then
+        widget._bb:invert()
+    end
     if widget.free then
         widget:free()
     end

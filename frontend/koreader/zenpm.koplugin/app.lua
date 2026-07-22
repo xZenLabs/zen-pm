@@ -2495,7 +2495,12 @@ function App:scan_installed_plugins()
 
     self.state.packages = {}
     self:load_packages(false, true)
-    self:reload_current_page()
+    if self.state.page == "settings" then
+        self.settings_requires_reload = true
+        self:refresh()
+    else
+        self:reload_current_page()
+    end
     Modals.info_for(string.format(_("Found %d installed plugins"), tonumber(data.matched) or 0), Constants.PACKAGE_NOTICE_SECONDS)
 end
 
@@ -2503,6 +2508,11 @@ function App:toggle_filter_installable()
     self.state.filter_installable = not self.state.filter_installable
     App.save_setting("filter_installable", self.state.filter_installable)
     self.state.packages = {}
+    if self.state.page == "settings" then
+        self.settings_requires_reload = true
+        self:refresh()
+        return
+    end
     self:reload_current_page()
 end
 
@@ -2558,75 +2568,20 @@ function App:show_actions(anchor)
             callback = function() self:show_about() end,
         },
         {
-            text = _("Report a Bug"),
-            callback = function() BugReporter:show(self) end,
-        },
-        {
-            text = _("Refresh"),
-            callback = function()
-                self:refresh_repos()
-            end,
-        },
-        {
-            text = _("Scan installed plugins"),
-            callback = function()
-                self:scan_installed_plugins()
-            end,
-        },
-        {
             text = self.state.update_available and "\239\128\155  " .. _("Update") or _("Update"),
             callback = function() self:start_update() end,
         },
         {
-            text = _("Check for updates automatically"),
-            checked_func = function()
-                return self.state.update_auto_check
-            end,
-            callback = function()
-                self:toggle_automatic_update_checks()
-            end,
+            text = _("Refresh"),
+            callback = function() self:refresh_repos() end,
         },
         {
-            text = _("Filter installable"),
-            checked_func = function()
-                return self.state.filter_installable
-            end,
-            callback = function()
-                self:toggle_filter_installable()
-            end,
+            text = _("Report a Bug"),
+            callback = function() BugReporter:show(self) end,
         },
         {
-            text = _("Font size: ") .. tostring(self.state.base_font_size),
-            callback = function()
-                self:prompt_base_font_size()
-            end,
-        },
-        {
-            text = _("Show README images"),
-            checked_func = function()
-                return self.state.show_readme_images
-            end,
-            callback = function()
-                self:toggle_readme_images()
-            end,
-        },
-        {
-            text = _("Advanced"),
-            checked_func = function()
-                return self.state.advanced
-            end,
-            callback = function()
-                self:toggle_advanced()
-            end,
-        },
-        {
-            text = _("Beta updates"),
-            checked_func = function()
-                return self.state.beta_updates
-            end,
-            callback = function()
-                self:toggle_beta_updates()
-            end,
+            text = _("Settings"),
+            callback = function() self:show_settings() end,
         },
         {
             text = _("Quit"),
@@ -2641,6 +2596,32 @@ function App:show_actions(anchor)
         show_cancel = false,
         title_icon = Images.asset("zenpm.svg"),
     })
+end
+
+function App:show_settings()
+    self.settings_origin = {
+        page = self.state.page,
+        active_tab = self.state.active_tab,
+    }
+    self.settings_requires_reload = false
+    self.state.page = "settings"
+    self:reset_scroll("settings")
+    self:clear_status()
+    self:refresh()
+end
+
+function App:close_settings()
+    local origin = self.settings_origin or {}
+    local reload = self.settings_requires_reload
+    self.settings_origin = nil
+    self.settings_requires_reload = nil
+    self.state.page = origin.page or "home"
+    self.state.active_tab = origin.active_tab or self.state.page
+    if reload then
+        self:reload_current_page()
+        return
+    end
+    self:refresh()
 end
 
 function App:show_about()

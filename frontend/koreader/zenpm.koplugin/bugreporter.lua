@@ -1,4 +1,5 @@
 local Device = require("device")
+local Modals = require("ui/modals")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 
@@ -136,16 +137,17 @@ end
 
 function Reporter:show(app)
     if not check_network() then
-        return require("ui/modals").info(_("No network connection. Please connect to Wi-Fi and try again."))
+        return Modals.info(_("No network connection. Please connect to Wi-Fi and try again."))
     end
     local ConfirmBox = require("ui/widget/confirmbox")
-    UIManager:show(ConfirmBox:new{
+    local dialog = ConfirmBox:new{
         text = _("ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths.") .. "\n\n" .. _("Continue?"),
         ok_text = _("Continue"),
         ok_callback = function()
             self:ask_title(app)
         end,
-    })
+    }
+    UIManager:show(dialog)
 end
 
 function Reporter:ask_title(app)
@@ -228,7 +230,6 @@ function Reporter:ask_username(app, title, description)
 end
 
 function Reporter:submit(app, title, description, username)
-    local Modals = require("ui/modals")
     Modals.status(_("Submitting report…"))
     UIManager:nextTick(function()
         local crash_log = koreader_crash_log(app)
@@ -268,11 +269,12 @@ function Reporter:submit(app, title, description, username)
         if submitted then
             local url = log_url(response) or "https://github.com/AnthonyGress/ZenPackageManager/issues"
             local ConfirmBox = require("ui/widget/confirmbox")
-            UIManager:show(ConfirmBox:new{
+            local dialog = ConfirmBox:new{
                 text = _("Bug report submitted!") .. "\n\n" .. url,
                 no_ok_button = true,
                 cancel_text = _("OK"),
-            })
+            }
+            UIManager:show(dialog)
         else
             Modals.info(_("Failed to submit report: ") .. tostring(response or code or "unknown error"))
         end

@@ -13,6 +13,8 @@ local Theme = {
     border = Blitbuffer.COLOR_BLACK,
     panel = Blitbuffer.COLOR_WHITE,
     soft = Blitbuffer.COLOR_LIGHT_GRAY or Blitbuffer.COLOR_GRAY or Blitbuffer.COLOR_WHITE,
+    button_bg = Blitbuffer.COLOR_BLACK,
+    button_text = Blitbuffer.COLOR_WHITE,
 }
 
 Theme.MIN_BASE_FONT_SIZE = 8
