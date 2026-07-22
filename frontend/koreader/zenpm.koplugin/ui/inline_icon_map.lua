@@ -11,10 +11,11 @@ local nerd_icons = {
     info = "\u{F02FD}", -- details
     update = "\u{F0CE2}",
     disable = "\u{F04DB}",
-    downgrade = "\u{F0CDC}",
+    downgrade = "\u{F062C}",
     uninstall = "\u{F0156}",
     enable = "\u{F040A}",
     remove = "\u{F0374}",
+    remove_queue = "\u{F0A7A}",
 }
 
 function M.icon(name)

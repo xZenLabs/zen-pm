@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/maintenance"
 	"github.com/xZenLabs/zen-pm/internal/pkg"
+	"github.com/xZenLabs/zen-pm/internal/platform"
 	"github.com/xZenLabs/zen-pm/internal/releases"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
@@ -90,6 +92,7 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/dialog", s.wrap(s.handleDialog))
 	mux.HandleFunc("/foreground", s.wrap(s.handleForeground))
 	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
+	mux.HandleFunc("/uninstall", s.wrap(s.handleUninstall))
 
 	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
 	state.StartupTrace("HTTP server: reading catalog state.")
@@ -777,7 +780,7 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	items, err := releases.FetchGitHubReleases(source, 15)
+	items, err := releases.FetchGitHubReleases(source, 100)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -935,28 +938,39 @@ func (s *Server) foreground() {
 	log.Info("Foreground requested")
 }
 
-// handleUpdate spawns the self-update script. The script kills and restarts the
-// daemon, so we fire-and-forget and return immediately.
+// handleUpdate starts a detached Go helper because the update replaces this
+// process's payload and restarts the daemon.
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-
-	script := "/mnt/us/ZenPM/installers/kindle/update.sh"
-	if _, err := os.Stat(script); err != nil {
-		log.Warnf("Update script not found: %s", script)
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "update script not found"})
+	if platform.Detect() != platform.Kindle {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "self-update is only available on Kindle"})
 		return
 	}
-
 	log.Info("Starting self-update")
-	cmd := exec.Command("/bin/sh", script)
-	// Detach — the script will kill and restart this process.
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
+	if err := maintenance.Start("update", false); err != nil {
 		log.Errorf("Failed to start update: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
+}
+
+// handleUninstall starts a detached helper that removes the running Kindle app.
+func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	if platform.Detect() != platform.Kindle {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "self-uninstall is only available on Kindle"})
+		return
+	}
+	removeSettings := r.URL.Query().Get("remove_settings") == "1" || r.URL.Query().Get("remove_settings") == "true"
+	if err := maintenance.Start("uninstall", removeSettings); err != nil {
+		log.Errorf("Failed to start uninstall: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}

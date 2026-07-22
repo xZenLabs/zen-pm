@@ -4,11 +4,39 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
+
+func TestCacheInstalledUninstallScriptsSkipsNativeKOReaderPackages(t *testing.T) {
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "reader-plugin"}); err != nil {
+		t.Fatal(err)
+	}
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Write([]byte("#!/bin/sh\n"))
+	}))
+	defer srv.Close()
+
+	New(st).CacheInstalledUninstallScripts([]*CatalogEntry{{
+		ID: "reader-plugin", Platforms: []string{"kindle", "koreader"}, UninstallURL: srv.URL,
+	}})
+
+	if requests.Load() != 0 {
+		t.Fatalf("uninstall script requests = %d, want 0", requests.Load())
+	}
+	if _, err := os.Stat(st.CachedUninstallScriptPath("reader-plugin")); !os.IsNotExist(err) {
+		t.Fatalf("cached uninstall script exists or could not be checked: %v", err)
+	}
+}
 
 func TestFilterByPlatformRequiresAllEntryPlatforms(t *testing.T) {
 	entries := []*CatalogEntry{

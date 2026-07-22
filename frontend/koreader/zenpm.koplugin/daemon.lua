@@ -297,7 +297,6 @@ end
 
 function Daemon:write_cli_wrapper(path, script)
     if read_all(path) == script then
-        self:log_cli("already installed at " .. path)
         return true
     end
     self:log_cli("installing at " .. path)
@@ -366,7 +365,13 @@ function Daemon:remove_all_settings()
     local cli_alias_removed = self:remove_cli_wrapper(self:cli_alias_path())
     local legacy_cli_removed = self:remove_cli_wrapper(self:legacy_cli_wrapper_path())
     local settings_removed = os.execute("rm -rf " .. Util.sh_quote(self:state_home())) == 0
-    return cli_removed and cli_alias_removed and legacy_cli_removed and settings_removed
+    local standalone_removed = true
+    if self:detect_platform() == "kindle" then
+        standalone_removed = os.execute("rm -rf " .. Util.sh_quote("/mnt/us/ZenPM")) == 0
+            and os.execute("rm -rf " .. Util.sh_quote("/mnt/us/.ZenPM")) == 0
+            and (os.remove("/mnt/us/documents/ZenPM.sh") or not path_exists("/mnt/us/documents/ZenPM.sh"))
+    end
+    return cli_removed and cli_alias_removed and legacy_cli_removed and settings_removed and standalone_removed
 end
 
 function Daemon:standalone_marker()
@@ -724,10 +729,14 @@ function Daemon:find_backend()
     return nil
 end
 
-function Daemon:start()
-    local changed, err = self:ensure_backend_files()
-    if err then
-        return false, err
+function Daemon:start(prepared)
+    local changed = false
+    if not prepared then
+        local err
+        changed, err = self:ensure_backend_files()
+        if err then
+            return false, err
+        end
     end
     if ok_android then
         local root = self:koreader_root()

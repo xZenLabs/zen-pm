@@ -28,4 +28,24 @@ local wrapper = assert(wrappers["/usr/local/bin/zenpm"])
 assert(wrapper:find("export ZENPM_HOME='/mnt/us/koreader/settings/ZenPM'", 1, true))
 assert(wrapper:find("exec '/mnt/us/koreader/settings/ZenPM/backend/zenpm' \"$@\"", 1, true))
 
+local commands = {}
+local original_execute = os.execute
+local original_remove = os.remove
+os.execute = function(command)
+    table.insert(commands, command)
+    return 0
+end
+os.remove = function(path)
+    table.insert(commands, "remove " .. path)
+    return true
+end
+daemon.stop_standalone_backend = function() end
+assert(daemon:remove_all_settings())
+os.execute = original_execute
+os.remove = original_remove
+
+assert(table.concat(commands, "\n"):find("rm %-rf '/mnt/us/ZenPM'"))
+assert(table.concat(commands, "\n"):find("rm %-rf '/mnt/us/%.ZenPM'"))
+assert(table.concat(commands, "\n"):find("remove /mnt/us/documents/ZenPM.sh", 1, true))
+
 print("daemon tests passed")

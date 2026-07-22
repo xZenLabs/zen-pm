@@ -19,8 +19,10 @@ const githubResponseLimit = 4 * 1024 * 1024
 var githubAPIBaseURL = "https://api.github.com"
 
 type ReleaseAsset struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Size   int64  `json:"size,omitempty"`
+	Digest string `json:"digest,omitempty"`
 }
 
 type Release struct {
@@ -133,8 +135,8 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 	if limit < 1 {
 		limit = 10
 	}
-	if limit > 30 {
-		limit = 30
+	if limit > 100 {
+		limit = 100
 	}
 	path := fmt.Sprintf("/repos/%s/releases?per_page=%d", repository, limit)
 	data, err := githubRequest(path, "application/vnd.github+json")
@@ -147,8 +149,10 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 		Draft      bool   `json:"draft"`
 		Prerelease bool   `json:"prerelease"`
 		Assets     []struct {
-			Name string `json:"name"`
-			URL  string `json:"browser_download_url"`
+			Name   string `json:"name"`
+			URL    string `json:"browser_download_url"`
+			Size   int64  `json:"size"`
+			Digest string `json:"digest"`
 		} `json:"assets"`
 	}
 	if err := json.Unmarshal(data, &response); err != nil {
@@ -167,7 +171,7 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 		}
 		for _, asset := range item.Assets {
 			if strings.HasSuffix(strings.ToLower(asset.Name), ".zip") && asset.URL != "" {
-				release.Assets = append(release.Assets, ReleaseAsset{Name: asset.Name, URL: asset.URL})
+				release.Assets = append(release.Assets, ReleaseAsset{Name: asset.Name, URL: asset.URL, Size: asset.Size, Digest: asset.Digest})
 			}
 		}
 		if len(release.Assets) > 0 {

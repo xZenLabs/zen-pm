@@ -76,6 +76,11 @@ while pgrep -f 'zenpm serve' >/dev/null 2>&1; do
 done
 nohup "$PAYLOAD_DIR/backend/zenpm" serve --port 8080 >>"$ZENPM_LOG" 2>&1 &
 
+if [ "${ZENPM_NO_LAUNCH:-}" = "1" ]; then
+    echo "ZenPM installed."
+    exit 0
+fi
+
 echo "ZenPM installed. Launching..."
 
 # Stop any running instance so mesquite reloads files from disk on next start.

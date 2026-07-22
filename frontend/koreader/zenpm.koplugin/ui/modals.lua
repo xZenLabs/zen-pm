@@ -167,7 +167,7 @@ function Modals.package_modify(pkg, callbacks)
         })
     end
     if callbacks.remove_queue then
-        add_button("remove", _("Remove from queue"), callbacks.remove_queue)
+        add_button("remove_queue", _("Remove from queue"), callbacks.remove_queue)
     end
     if callbacks.info then
         add_button("info", _("Details"), callbacks.info)
@@ -176,7 +176,7 @@ function Modals.package_modify(pkg, callbacks)
         add_button("update", _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""), callbacks.update)
     end
     if not callbacks.manage_only and callbacks.downgrade then
-        add_button("downgrade", _("Downgrade"), callbacks.downgrade)
+        add_button("downgrade", _("Change version"), callbacks.downgrade)
     end
     if callbacks.enable_disable then
         add_button(callbacks.disabled and "enable" or "disable", callbacks.disabled and _("Enable") or _("Disable"), callbacks.enable_disable)

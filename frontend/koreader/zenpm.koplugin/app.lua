@@ -727,7 +727,11 @@ end
 function App:clear_queue()
     if self.state.queue_running then return end
     self.state.queue = {}
-    self:refresh()
+    if self.state.page == "queue" then
+        self:close_queue()
+    else
+        self:refresh()
+    end
 end
 
 function App:confirm_clear_queue()
@@ -764,9 +768,10 @@ function App:remove_queue_entry(entry)
     for index, queued in ipairs(self.state.queue) do
         if queued == entry then
             table.remove(self.state.queue, index)
-            return
+            return #self.state.queue == 0
         end
     end
+    return false
 end
 
 function App:confirm_remove_queue_entry(entry)
@@ -775,8 +780,11 @@ function App:confirm_remove_queue_entry(entry)
         string.format(_("Remove %s from queue?"), entry.name or _("Package")),
         _("Remove"),
         function()
-            self:remove_queue_entry(entry)
-            self:refresh()
+            if self:remove_queue_entry(entry) and self.state.page == "queue" then
+                self:close_queue()
+            else
+                self:refresh()
+            end
         end
     )
 end
@@ -1196,7 +1204,7 @@ function App:start_backend_then_reload()
         end
 
         self:set_loading(_("Loading packages, please wait"))
-        local started, err = self.daemon:start()
+        local started, err = self.daemon:start(true)
         if not started then
             self:backend_failed(err)
             return
@@ -2573,6 +2581,42 @@ function App:scan_installed_plugins()
         self:reload_current_page()
     end
     Modals.info_for(string.format(_("Found %d installed plugins"), tonumber(data.matched) or 0), Constants.PACKAGE_NOTICE_SECONDS)
+end
+
+function App:install_to_kindle_homepage()
+    if self.busy then return end
+    Modals.confirm(
+        _("Download and install the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"),
+        _("Install"),
+        function() self:apply_kindle_homepage_install() end,
+        true
+    )
+end
+
+function App:apply_kindle_homepage_install()
+    if self.busy then return end
+    self.busy = true
+    local status = Modals.status(_("Installing ZenPM to Kindle homepage..."))
+    UIManager:forceRePaint()
+    self:run_update_task(function()
+        return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates)
+    end, status, function(completed, called, ok, result)
+        self.busy = false
+        Modals.close_status()
+        if not completed then
+            Modals.info(_("Kindle homepage installation was cancelled."))
+            return
+        end
+        if not called then
+            Modals.info(_("Kindle homepage installation failed: ") .. tostring(ok))
+            return
+        end
+        if not ok then
+            Modals.info(_("Kindle homepage installation failed: ") .. tostring(result))
+            return
+        end
+        Modals.info(_("ZenPM v") .. tostring(result) .. _(" was installed to the Kindle homepage."))
+    end)
 end
 
 function App:toggle_filter_installable()

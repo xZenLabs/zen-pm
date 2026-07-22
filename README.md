@@ -246,7 +246,7 @@ State databases (`/mnt/us/.ZenPM/`) are preserved across updates.
 The update can also be triggered manually:
 
 ```sh
-sh /mnt/us/ZenPM/installers/kindle/update.sh
+sh /mnt/us/ZenPM/update.sh
 ```
 
 Or via the API:

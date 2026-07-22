@@ -94,7 +94,7 @@ function Pages.featured(view, bb, x, y, w, h, scroll)
     local list_y = y + Theme.scale(8)
     local list_h = h - Theme.scale(8)
     if #list == 0 then
-        P.text(bb, _("Featured packages coming soon."), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
+        P.text(bb, _("Loading packages, please wait"), x + pad, list_y, w - pad * 2, "default", { color = Theme.muted })
         Scroll.set_list_bounds(view, x, list_y, w, list_h, m.featured_h + m.card_gap)
         return 0
     end
@@ -291,6 +291,12 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             end,
         },
     }
+    if view.app.daemon:detect_platform() == "kindle" then
+        table.insert(rows, 2, {
+            text = _("Install to Kindle homepage"),
+            callback = function() view.app:install_to_kindle_homepage() end,
+        })
+    end
     local list_y = y + Theme.scale(8)
     local list_h = h - Theme.scale(16)
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable)

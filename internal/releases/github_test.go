@@ -83,6 +83,29 @@ func TestFetchGitHubMetadata(t *testing.T) {
 	}
 }
 
+func TestFetchGitHubReleasesCapsLimitAtGitHubMaximum(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/repos/owner/repo/releases?per_page=100" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `[{"tag_name":"v2.0","assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/plugin.zip"}]}]`)
+	}))
+	defer srv.Close()
+
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	got, err := FetchGitHubReleases("https://github.com/owner/repo", 101)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].TagName != "v2.0" {
+		t.Fatalf("releases = %#v", got)
+	}
+}
+
 func TestGitHubReleaseURL(t *testing.T) {
 	got, err := GitHubReleaseURL("https://github.com/owner/repo", "v1.2.0")
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
@@ -135,7 +136,7 @@ func (m *Manager) CacheInstalledUninstallScripts(catalog []*CatalogEntry) {
 		installedSet[e.ID] = true
 	}
 	for _, e := range catalog {
-		if !installedSet[e.ID] || e.UninstallURL == "" {
+		if !installedSet[e.ID] || e.UninstallURL == "" || isNativeKOReaderPackage(e) {
 			continue
 		}
 		path := m.st.CachedUninstallScriptPath(e.ID)
@@ -155,6 +156,15 @@ func (m *Manager) CacheInstalledUninstallScripts(catalog []*CatalogEntry) {
 			log.Warnf("Could not write uninstall script cache for %s: %v", e.ID, err)
 		}
 	}
+}
+
+func isNativeKOReaderPackage(entry *CatalogEntry) bool {
+	for _, platform := range entry.Platforms {
+		if strings.EqualFold(strings.TrimSpace(platform), "koreader") {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) ReadCatalog() ([]*CatalogEntry, error) {

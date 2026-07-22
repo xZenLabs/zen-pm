@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/maintenance"
 	"github.com/xZenLabs/zen-pm/internal/pkg"
 	"github.com/xZenLabs/zen-pm/internal/platform"
 	"github.com/xZenLabs/zen-pm/internal/repo"
@@ -43,6 +44,8 @@ func main() {
 	pkgs := pkg.New(st, repos, plat)
 
 	switch os.Args[1] {
+	case "maintenance":
+		runMaintenance(os.Args[2:])
 	case "repo":
 		runRepo(repos, os.Args[2:])
 	case "list", "info", "install", "uninstall", "update":
@@ -74,6 +77,31 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  doctor")
 	fmt.Fprintln(os.Stderr, "  logs    [--tail N]")
 	fmt.Fprintln(os.Stderr, "  serve   [--port PORT]")
+	fmt.Fprintln(os.Stderr, "  maintenance update|uninstall [--parent-pid PID] [--remove-settings]")
+}
+
+func runMaintenance(args []string) {
+	if len(args) == 0 {
+		die("Usage: zenpm maintenance <update|uninstall> [--parent-pid PID] [--remove-settings]")
+	}
+	parentPID := 0
+	removeSettings := false
+	for _, arg := range args[1:] {
+		switch {
+		case arg == "--remove-settings":
+			removeSettings = true
+		case strings.HasPrefix(arg, "--parent-pid="):
+			value := strings.TrimPrefix(arg, "--parent-pid=")
+			var err error
+			parentPID, err = strconv.Atoi(value)
+			if err != nil || parentPID < 1 {
+				die("--parent-pid must be a positive integer")
+			}
+		default:
+			die("Unknown maintenance option: " + arg)
+		}
+	}
+	dieOnErr(maintenance.Run(args[0], parentPID, removeSettings))
 }
 
 func runRepo(repos *repo.Manager, args []string) {
