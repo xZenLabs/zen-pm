@@ -10,6 +10,10 @@ VERSION_FILE="$ROOT_DIR/VERSION"
 KOREADER_META_FILE="$ROOT_DIR/frontend/koreader/zenpm.koplugin/_meta.lua"
 DEV_MODE=false
 DEV_PID_FILE="$ROOT_DIR/.dev-kodev.pid"
+KOREADER_PLUGIN_DIR="$ROOT_DIR/frontend/koreader/zenpm.koplugin"
+NERD_FONT_SOURCE="$KOREADER_PLUGIN_DIR/fonts/SymbolsNerdFont-Regular.ttf"
+NERD_FONT_NAME="ZenPMSymbolsNerdFont-Regular.ttf"
+INLINE_ICON_MAP="$KOREADER_PLUGIN_DIR/ui/inline_icon_map.lua"
 
 usage() {
     echo "Usage: $0 [--dev]"
@@ -54,6 +58,24 @@ normalize_version() {
         v*) printf '%s\n' "${raw#v}" ;;
         *) printf '%s\n' "$raw" ;;
     esac
+}
+
+subset_koreader_nerd_font() {
+    plugin_dir="$1"
+    unicode_list=$(mktemp "${TMPDIR:-/tmp}/zenpm-nerd-font-unicodes.XXXXXX")
+    sed -n '/^local nerd_icons = {$/,/^}/s/.*\\u{\([0-9A-Fa-f][0-9A-Fa-f]*\)}.*/U+\1/p' "$INLINE_ICON_MAP" > "$unicode_list"
+    if [ ! -s "$unicode_list" ]; then
+        echo "No Nerd Font codepoints found in $INLINE_ICON_MAP" >&2
+        rm -f "$unicode_list"
+        exit 1
+    fi
+    pyftsubset "$NERD_FONT_SOURCE" \
+        --unicodes-file="$unicode_list" \
+        --output-file="$plugin_dir/fonts/$NERD_FONT_NAME" \
+        --drop-tables+=PfEd \
+        --name-IDs='*' \
+        --name-languages='*'
+    rm -f "$unicode_list" "$plugin_dir/fonts/SymbolsNerdFont-Regular.ttf"
 }
 
 validate_semver() {
@@ -127,6 +149,7 @@ run_dev() {
     DEV_PLUGIN_DIR="$KOREADER_DIR/plugins/zenpm.koplugin"
     mkdir -p "$DEV_PLUGIN_DIR"
     rsync -a --delete --exclude 'backend/' --exclude 'VERSION' "$ROOT_DIR/frontend/koreader/zenpm.koplugin/" "$DEV_PLUGIN_DIR/"
+    subset_koreader_nerd_font "$DEV_PLUGIN_DIR"
     rm -rf "$DEV_PLUGIN_DIR/backend"
     mkdir -p "$DEV_PLUGIN_DIR/backend"
     cp "$VERSION_FILE" "$DEV_PLUGIN_DIR/VERSION"
@@ -207,8 +230,17 @@ run_dev() {
 }
 
 if [ "$DEV_MODE" = true ]; then
+    if ! command -v pyftsubset >/dev/null 2>&1; then
+        echo "pyftsubset is required to subset ZenPM's Nerd Font icons (install fonttools)" >&2
+        exit 1
+    fi
     run_dev
     exit 0
+fi
+
+if ! command -v pyftsubset >/dev/null 2>&1; then
+    echo "pyftsubset is required to subset ZenPM's Nerd Font icons (install fonttools)" >&2
+    exit 1
 fi
 
 VERSION=$(normalize_version "$(read_version_file)")
@@ -357,7 +389,8 @@ stage_kindle "$KINDLE_STAGE"
 # stage_kobo hf "$KOBO_HF_STAGE"
 # stage_kobo sf "$KOBO_SF_STAGE"
 
-copy_tree "$ROOT_DIR/frontend/koreader/zenpm.koplugin" "$KOREADER_PLUGIN_BASE_STAGE"
+copy_tree "$KOREADER_PLUGIN_DIR" "$KOREADER_PLUGIN_BASE_STAGE"
+subset_koreader_nerd_font "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin"
 cp "$ROOT_DIR/VERSION" "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/VERSION"
 set_koreader_meta_version "$KOREADER_PLUGIN_BASE_STAGE/zenpm.koplugin/_meta.lua" "$VERSION"
 

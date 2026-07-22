@@ -1,6 +1,7 @@
 -- Shared title bar and per-page toolbar rendering for AppView.
 
 local Images = require("ui/images")
+local InlineIcons = require("ui/inline_icon_map")
 local Models = require("models")
 
 local Geom = require("ui/geometry")
@@ -91,8 +92,7 @@ function Header.draw_sort_button(view, bb, x, y, kind)
     local label = _("Sort")
     local w, label_size = icon_button_width(label, icon)
     P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
-    local icon_y = y + math.floor((s - icon) / 2)
-    P.image(bb, Images.asset("sort.svg"), x + Theme.scale(10), icon_y, icon, icon, { is_icon = true, invert = true })
+    P.center_text_box(bb, InlineIcons.icon("sort"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
     P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
     P.hit(view, x, y, w, s, function() view.app:prompt_sort(kind) end, "sort:" .. tostring(kind))
     return w
@@ -124,7 +124,7 @@ function Header.draw_search_button(view, bb, x, y, kind)
     local label = _("Search")
     local w, label_size = icon_button_width(label, icon)
     P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
-    P.image(bb, Images.asset("search.svg"), x + Theme.scale(10), y + math.floor((s - icon) / 2), icon, icon, { is_icon = true, invert = true })
+    P.center_text_box(bb, InlineIcons.icon("search"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
     P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
     P.hit(view, x, y, w, s, function() view.app:prompt_filter(kind) end, "search:" .. kind)
     return w
@@ -174,7 +174,7 @@ local function draw_queue_clear_button(view, bb, x, y)
         background = enabled and Theme.button_bg or Theme.bg,
         radius = math.floor(h / 2),
     })
-    P.image(bb, Images.asset("clear.svg"), x + Theme.scale(7), y + Theme.scale(7), icon, icon, { is_icon = true, invert = enabled })
+    P.center_text_box(bb, InlineIcons.icon("clear"), x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
         P.hit(view, x, y, w, h, function() view.app:confirm_clear_queue() end, "clear-queue")

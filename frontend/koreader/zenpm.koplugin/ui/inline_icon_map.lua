@@ -3,10 +3,11 @@ local TextWidget = require("ui/widget/textwidget")
 
 local M = {}
 
--- These are the matching Zen UI inline icon map values. Zen UI registers its
--- Symbols Nerd Font as a Font fallback when it is active.
+-- Rendered via ZenPM's bundled Symbols Nerd Font subset.
 local nerd_icons = {
     search = "\u{F0349}",
+    sort = "\u{F04BA}",
+    clear = "\u{F1147}",
     info = "\u{F02FD}", -- details
     update = "\u{F0CE2}",
     disable = "\u{F04DB}",
@@ -16,31 +17,8 @@ local nerd_icons = {
     remove = "\u{F0374}",
 }
 
-local fa_icons = {
-    search = "\u{F002}",
-    info = "\u{F129}",
-    update = "\u{F01B}",
-    disable = "\u{F04D}",
-    downgrade = "\u{F01A}",
-    uninstall = "\u{F1F8}",
-    enable = "\u{F04B}",
-    remove = "\u{F068}",
-}
-
-local function can_render_nerd_icons()
-    for _i, font in ipairs(Font.fallbacks or {}) do
-        -- Zen UI registers this bundled font. KOReader's own Symbols font is
-        -- present even without Zen UI, so it must use the Font Awesome map.
-        if font == "SymbolsNerdFont-Regular.ttf" then
-            return true
-        end
-    end
-    return false
-end
-
 function M.icon(name)
-    local icons = can_render_nerd_icons() and nerd_icons or fa_icons
-    return icons[name]
+    return nerd_icons[name]
 end
 
 local spacers = { "\u{2003}", "\u{2002}", " ", "\u{2009}", "\u{200A}" }
@@ -85,9 +63,8 @@ local function padded_icon(icon, icons)
 end
 
 function M.label(name, text)
-    local icons = can_render_nerd_icons() and nerd_icons or fa_icons
-    local icon = icons[name]
-    return icon and (padded_icon(icon, icons) .. text) or text
+    local icon = nerd_icons[name]
+    return icon and (padded_icon(icon, nerd_icons) .. text) or text
 end
 
 return M

@@ -5,7 +5,7 @@ Package manager for jailbroken Kindle devices, with Kobo support. Browse and ins
 ## How it works
 
 - A Go binary (`zenpm`) runs as a local HTTP daemon on `127.0.0.1:8080`.
-- The Kindle WAF frontend connects to it via XHR — no LIPC, no `utild`.
+- The Kindle WAF frontend connects to it via HTTP.
 - Package operations (install/uninstall) execute on the device via the binary.
 - Kobo uses NickelMenu entries that invoke the binary directly from the shell.
 
@@ -31,7 +31,7 @@ docs/api/           OpenAPI reference for the local daemon
 
 ## Build
 
-Requires Go 1.22+. Set the version in `VERSION` (SemVer):
+Requires Go 1.22+ and FontTools (`pyftsubset`). Set the version in `VERSION` (SemVer):
 
 ```sh
 ./build.sh
