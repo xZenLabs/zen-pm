@@ -116,9 +116,9 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle -p android assembleRelease
 
-      - name: Install UPX
+      - name: Install release build tools
         if: steps.version_check.outputs.skip == 'false'
-        run: brew install upx
+        run: brew install upx fonttools
 
       - name: Build release assets
         if: steps.version_check.outputs.skip == 'false'
