@@ -92,7 +92,7 @@
         return fetchJSON("GET", "/repos", null).then(function (repos) {
             var repoURL = findRepoURL(Array.isArray(repos) ? repos : [], pkg.repo);
             if (!repoURL) throw new Error("repo URL not found for " + pkg.repo);
-            return fetch(repoURL.replace(/\/+$/, "") + "/manifest.json").then(function (resp) {
+            return fetch(ZenUtils.cacheBustPackageImage(repoURL.replace(/\/+$/, "") + "/manifest.json")).then(function (resp) {
                 postLog("[details] repo manifest " + repoURL + "/manifest.json status=" + resp.status);
                 if (!resp.ok) throw new Error("repo manifest unavailable");
                 return resp.json();
@@ -216,7 +216,7 @@
         var img = document.createElement("img");
         img.className = "details-image";
         img.alt = "";
-        img.src = url;
+        img.src = ZenUtils.cacheBustPackageImage(url);
         img.onerror = function () {
             if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
         };
@@ -228,7 +228,7 @@
     function renderFeaturedImage(url) {
         var wrap = document.createElement("div");
         wrap.className = "details-featured-image-wrap";
-        wrap.style.backgroundImage = "url(\"" + url.replace(/"/g, "%22") + "\")";
+        wrap.style.backgroundImage = "url(\"" + ZenUtils.cacheBustPackageImage(url).replace(/"/g, "%22") + "\")";
         return wrap;
     }
 

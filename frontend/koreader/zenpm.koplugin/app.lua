@@ -2607,6 +2607,8 @@ function App:refresh_repos()
     local ok, data = self.client:refresh_repos()
     Modals.close_status()
     if ok then
+        self.image_files = {}
+        Images.invalidate_cache()
         local found, packages = self:load_packages(false, true)
         self:load_repos(true)
         self:reload_current_page()

@@ -7,6 +7,7 @@ var ZenUtils = (function () {
     var REPO_ZENLABS_URL = "https://repo.zen-labs.org";
     var REPO_KINDLEFORGE_NAME = "KindleForge";
     var REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz";
+    var packageImageRefreshToken = "";
 
     function getKindle() {
         try { return window.kindle || top.kindle; } catch (_e) { return window.kindle; }
@@ -21,6 +22,14 @@ var ZenUtils = (function () {
                 body: JSON.stringify({ message: msg })
             });
         } catch (_e) {}
+    }
+
+    function cacheBustPackageImage(url) {
+        if (!packageImageRefreshToken || !url) return url;
+        var hashIndex = url.indexOf("#");
+        var fragment = hashIndex === -1 ? "" : url.substring(hashIndex);
+        var base = hashIndex === -1 ? url : url.substring(0, hashIndex);
+        return base + (base.indexOf("?") === -1 ? "?" : "&") + "zenpm_refresh=" + packageImageRefreshToken + fragment;
     }
 
     // Returns a Promise that resolves with parsed JSON (or raw text on parse error).
@@ -173,6 +182,7 @@ var ZenUtils = (function () {
     function refreshSources(refreshHandler) {
         postLog("[utils] refreshSources: refreshing repositories");
         return fetchJSON("POST", "/repo/refresh", null).then(function () {
+            packageImageRefreshToken = String(new Date().getTime());
             postLog("[utils] refreshSources: repositories refreshed");
             if (refreshHandler) return refreshHandler();
             return null;
@@ -546,7 +556,7 @@ var ZenUtils = (function () {
             if (!triedPrimary && fallback && img.src !== fallback) {
                 triedPrimary = true;
                 postLog("[image] falling back to " + fallback);
-                img.src = fallback;
+                img.src = cacheBustPackageImage(fallback);
                 return;
             }
             if (!triedIco && img.src && img.src.indexOf('/favicon.svg') !== -1) {
@@ -555,7 +565,7 @@ var ZenUtils = (function () {
                 img.src = img.src.replace('/favicon.svg', '/favicon.ico');
             }
         };
-        img.src = primary || fallback || "";
+        img.src = cacheBustPackageImage(primary || fallback || "");
     }
 
     function packageVersionRepoText(pkg) {
@@ -969,6 +979,7 @@ var ZenUtils = (function () {
         showAboutModal:  showAboutModal,
         setupPageChrome: setupPageChrome,
         setupCardScroll: setupCardScroll,
+        cacheBustPackageImage: cacheBustPackageImage,
         packageDetailsURL: packageDetailsURL
     };
 })();

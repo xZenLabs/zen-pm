@@ -199,6 +199,11 @@ function Images.cached_file(value)
     return nil
 end
 
+function Images.invalidate_cache()
+    Images.cached = {}
+    Images.failed = {}
+end
+
 function Images.is_failed(value)
     return Images.failed[tostring(value or "")] == true
 end
