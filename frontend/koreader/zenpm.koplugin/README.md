@@ -12,9 +12,8 @@ Open **ZenPM** from the KOReader menu.
 Release zips are platform-specific:
 
 - `ZenPM-koreader-ereader-<version>.zip` for 32-bit Kindle/Kobo e-readers; it includes both ARM hard-float and soft-float backends
-- `ZenPM-koreader-ereader-arm64-<version>.zip` for ARM64 Kobo e-readers, including the Kobo Libra Colour
+- `ZenPM-koreader-linux-<version>.zip` for ARM64 Kobo e-readers, including the Kobo Libra Colour, and Linux desktop
 - `ZenPM-koreader-macos-<version>.zip` for macOS
-- `ZenPM-koreader-linux-<version>.zip` for Linux desktop
 
 On Kobo, check the CPU architecture first:
 
@@ -22,7 +21,7 @@ On Kobo, check the CPU architecture first:
 uname -m
 ```
 
-Use the ARM64 package when this prints `aarch64` or `arm64`. Otherwise, use the
+Use the Linux package when this prints `aarch64` or `arm64`. Otherwise, use the
 combined 32-bit e-reader package; ZenPM detects the ABI on the device.
 
 On KOReader startup, the plugin prepares a backend path for the device and runs

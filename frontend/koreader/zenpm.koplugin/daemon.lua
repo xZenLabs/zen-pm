@@ -410,8 +410,8 @@ function Daemon:expected_plugin_asset()
     end
     local platform = self:detect_platform()
     if platform == "kindle" or platform == "kobo" then
-        if self:ereader_backend_suffix() == "arm64" then
-            return "ZenPM-koreader-ereader-arm64-" .. version .. ".zip"
+        if platform == "kobo" and self:ereader_backend_suffix() == "arm64" then
+            return "ZenPM-koreader-linux-" .. version .. ".zip"
         end
         return "ZenPM-koreader-ereader-" .. version .. ".zip"
     end
@@ -508,6 +508,9 @@ function Daemon:bundled_backend_candidates()
     local platform = self:detect_platform()
     local ereader_suffix = self:ereader_backend_suffix()
     if platform == "kobo" or platform == "kindle" then
+        if platform == "kobo" and ereader_suffix == "arm64" then
+            return { dir .. "/zenpm-linux" }
+        end
         return { dir .. "/zenpm-" .. ereader_suffix }
     end
     local host_platform = self:host_backend_platform()

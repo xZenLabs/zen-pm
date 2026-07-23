@@ -28,6 +28,14 @@ local wrapper = assert(wrappers["/usr/local/bin/zenpm"])
 assert(wrapper:find("export ZENPM_HOME='/mnt/us/koreader/settings/ZenPM'", 1, true))
 assert(wrapper:find("exec '/mnt/us/koreader/settings/ZenPM/backend/zenpm' \"$@\"", 1, true))
 
+local arm64_kobo = Daemon:new()
+arm64_kobo.detect_platform = function() return "kobo" end
+arm64_kobo.uname_machine = function() return "aarch64" end
+arm64_kobo.plugin_version = function() return "1.2.3" end
+
+assert(arm64_kobo:expected_plugin_asset() == "ZenPM-koreader-linux-1.2.3.zip")
+assert(arm64_kobo:bundled_backend_candidates()[1] == "/mnt/us/koreader/plugins/zenpm.koplugin/backend/zenpm-linux")
+
 local commands = {}
 local original_execute = os.execute
 local original_remove = os.remove

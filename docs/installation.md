@@ -17,11 +17,11 @@ This install requires a jailbroken Kindle with `sqlite3` and a script launcher s
 2. Extract it and copy `zenpm.koplugin/` to KOReader's `plugins/` directory.
 3. Restart KOReader and open **ZenPM** from its menu.
 
-The plugin detects the compatible ARM hard-float or soft-float backend. On ARM64 devices, use the ARM64 package below when `uname -m` reports `aarch64` or `arm64`.
+The plugin detects the compatible ARM hard-float or soft-float backend. On ARM64 devices, use the Linux package below when `uname -m` reports `aarch64` or `arm64`.
 
 ## KOReader on ARM64 Kobo (Libre Color)
 
-1. Download `ZenPM-koreader-ereader-arm64-<version>.zip`.
+1. Download `ZenPM-koreader-linux-<version>.zip`.
 2. Extract it and copy `zenpm.koplugin/` to KOReader's `plugins/` directory.
 3. Restart KOReader and open **ZenPM** from its menu.
 

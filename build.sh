@@ -258,7 +258,6 @@ KOBO_HF_STAGE="$BUILD_DIR/kobo-hf"
 KOBO_SF_STAGE="$BUILD_DIR/kobo-sf"
 KOREADER_PLUGIN_BASE_STAGE="$BUILD_DIR/koreader-plugin-base"
 KOREADER_EREADER_STAGE="$BUILD_DIR/koreader-ereader"
-KOREADER_EREADER_ARM64_STAGE="$BUILD_DIR/koreader-ereader-arm64"
 KOREADER_ANDROID_STAGE="$BUILD_DIR/koreader-android"
 KOREADER_MACOS_STAGE="$BUILD_DIR/koreader-macos"
 KOREADER_LINUX_STAGE="$BUILD_DIR/koreader-linux"
@@ -412,10 +411,6 @@ cp "$BUILD_DIR/zenpm-hf" "$KOREADER_EREADER_STAGE/zenpm.koplugin/backend/zenpm-h
 cp "$BUILD_DIR/zenpm-sf" "$KOREADER_EREADER_STAGE/zenpm.koplugin/backend/zenpm-sf"
 ensure_exec "$KOREADER_EREADER_STAGE/zenpm.koplugin"
 
-stage_koreader_plugin "$KOREADER_EREADER_ARM64_STAGE"
-cp "$BUILD_DIR/zenpm-linux-arm64" "$KOREADER_EREADER_ARM64_STAGE/zenpm.koplugin/backend/zenpm-arm64"
-ensure_exec "$KOREADER_EREADER_ARM64_STAGE/zenpm.koplugin"
-
 stage_koreader_plugin "$KOREADER_ANDROID_STAGE"
 ensure_exec "$KOREADER_ANDROID_STAGE/zenpm.koplugin"
 
@@ -435,7 +430,6 @@ KOBO_HF_ZIP="$DIST_DIR/ZenPM-kobo-hf-$VERSION.zip"
 # shellcheck disable=SC2034
 KOBO_SF_ZIP="$DIST_DIR/ZenPM-kobo-sf-$VERSION.zip"
 KOREADER_EREADER_ZIP="$DIST_DIR/ZenPM-koreader-ereader-$VERSION.zip"
-KOREADER_EREADER_ARM64_ZIP="$DIST_DIR/ZenPM-koreader-ereader-arm64-$VERSION.zip"
 KOREADER_ANDROID_ZIP="$DIST_DIR/ZenPM-koreader-android-$VERSION.zip"
 KOREADER_MACOS_ZIP="$DIST_DIR/ZenPM-koreader-macos-$VERSION.zip"
 KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
@@ -461,11 +455,6 @@ KOREADER_LINUX_ZIP="$DIST_DIR/ZenPM-koreader-linux-$VERSION.zip"
 )
 
 (
-    cd "$KOREADER_EREADER_ARM64_STAGE"
-    zip -qr "$KOREADER_EREADER_ARM64_ZIP" zenpm.koplugin
-)
-
-(
     cd "$KOREADER_ANDROID_STAGE"
     zip -qr "$KOREADER_ANDROID_ZIP" zenpm.koplugin
 )
@@ -486,7 +475,6 @@ echo "Kindle standalone package:  $KINDLE_ZIP"
 # echo "Kobo ARMhf package:         $KOBO_HF_ZIP"
 # echo "Kobo ARMsf package:         $KOBO_SF_ZIP"
 echo "KOReader e-reader 32-bit:   $KOREADER_EREADER_ZIP"
-echo "KOReader e-reader ARM64:    $KOREADER_EREADER_ARM64_ZIP"
 echo "KOReader Android plugin:     $KOREADER_ANDROID_ZIP"
 echo "KOReader macOS plugin:      $KOREADER_MACOS_ZIP"
 echo "KOReader Linux plugin:      $KOREADER_LINUX_ZIP"
