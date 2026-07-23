@@ -8,6 +8,7 @@ const rakuyomiAssets = `[
   {"arch":"any","asset":"rakuyomi-desktop.zip"},
   {"arch":"any","asset":"rakuyomi-macos.zip"},
   {"arch":"kindle","asset":"rakuyomi-kindle.zip"},
+  {"arch":"kindle","asset":"rakuyomi-kindlesf.zip"},
   {"arch":"kindle","asset":"rakuyomi-kindlea9.zip"},
   {"arch":"kindle","asset":"rakuyomi-kindlehf.zip"}
 ]`
@@ -21,8 +22,8 @@ func TestSelectKindleHardFloat(t *testing.T) {
 
 func TestSelectKindleSoftFloat(t *testing.T) {
 	r := Select(rakuyomiAssets, Device{Platform: "kindle"})
-	if r.NeedsChoice || r.Auto != "rakuyomi-kindle.zip" {
-		t.Fatalf("got %+v, want auto rakuyomi-kindle.zip", r)
+	if r.NeedsChoice || r.Auto != "rakuyomi-kindlesf.zip" {
+		t.Fatalf("got %+v, want auto rakuyomi-kindlesf.zip", r)
 	}
 }
 

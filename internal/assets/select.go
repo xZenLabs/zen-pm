@@ -79,7 +79,12 @@ func isPlainKindle(n string) bool {
 	return strings.Contains(n, "kindle") &&
 		!strings.Contains(n, "a9") &&
 		!strings.Contains(n, "hf") &&
+		!strings.Contains(n, "sf") &&
 		!strings.Contains(n, "android")
+}
+
+func isSoftFloatKindle(n string) bool {
+	return strings.Contains(n, "kindlesf")
 }
 
 // Select picks the best asset for dev, or flags that the user must choose.
@@ -119,6 +124,9 @@ func Select(raw string, dev Device) Result {
 		}
 		if pick == "" && dev.KindleHF {
 			pick = find(func(n string) bool { return strings.Contains(n, "hf") })
+		}
+		if pick == "" && !dev.KindleHF {
+			pick = find(isSoftFloatKindle)
 		}
 		if pick == "" {
 			pick = find(isPlainKindle)
