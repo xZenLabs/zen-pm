@@ -268,16 +268,15 @@ function Models.select_featured(packages)
     for index, item in ipairs(featured) do
         featured[index] = item.pkg
     end
-    if #featured >= 4 then
-        return { featured[1], featured[2], featured[3], featured[4] }
-    end
-    for _, id in ipairs(Constants.FEATURED_IDS) do
-        local pkg = Models.find_package(packages, id)
-        if pkg then
-            table.insert(featured, pkg)
-        end
-        if #featured >= 4 then
-            break
+    if #featured < 4 then
+        for _, id in ipairs(Constants.FEATURED_IDS) do
+            local pkg = Models.find_package(packages, id)
+            if pkg then
+                table.insert(featured, pkg)
+            end
+            if #featured >= 4 then
+                break
+            end
         end
     end
     return featured

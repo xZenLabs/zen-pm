@@ -112,7 +112,7 @@
                             }
                         }
                     }
-                    return sortFeatured(featured).slice(0, 4);
+                    return sortFeatured(featured);
                 }).catch(function (err) {
                     ZenUtils.postLog("[home] ZenLabs featured source fallback: " + String(err));
                     return selectZenLabsFeatured(all);
@@ -126,7 +126,7 @@
                         featured.push(all[i]);
                     }
                 }
-                return sortFeatured(featured).slice(0, 4);
+                return sortFeatured(featured);
             }
 
             function sortFeatured(packages) {
