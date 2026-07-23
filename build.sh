@@ -268,6 +268,8 @@ copy_tree() {
     dst="$2"
     mkdir -p "$dst"
     cp -R "$src" "$dst"
+    find "$dst" -type d \( -name '__pycache__' -o -name 'test' -o -name 'tests' \) -prune -exec rm -rf {} +
+    find "$dst" -type f \( -name '*.py' -o -name '*.pyc' -o -name '*.pyo' \) -delete
 }
 
 ensure_exec() {
@@ -353,7 +355,8 @@ stage_kindle() {
     cp "$BUILD_DIR/zenpm-hf" "$stage/ZenPM/backend/zenpm-hf"
     cp "$BUILD_DIR/zenpm-sf" "$stage/ZenPM/backend/zenpm-sf"
     cp "$VERSION_FILE" "$stage/ZenPM/VERSION"
-    copy_tree "$ROOT_DIR/frontend" "$stage/ZenPM"
+    mkdir -p "$stage/ZenPM/frontend"
+    copy_tree "$ROOT_DIR/frontend/kindle" "$stage/ZenPM/frontend"
     cp "$ROOT_DIR/installers/kindle/ZenPM.sh" "$stage/documents/ZenPM.sh"
     cp "$ROOT_DIR/installers/kindle/update.sh" "$stage/ZenPM/update.sh"
 
