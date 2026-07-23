@@ -54,6 +54,7 @@ type pkgJSON struct {
 	InstalledAssets       []string        `json:"installed_assets,omitempty"`
 	UnmanagedPatch        bool            `json:"unmanaged_patch,omitempty"`
 	LatestVersion         string          `json:"latest_version,omitempty"`
+	LatestRelease         string          `json:"latest_release,omitempty"`
 	UpdateAvail           bool            `json:"update_available,omitempty"`
 	IconURL               string          `json:"icon_url,omitempty"`
 	RepoIconURL           string          `json:"repo_icon_url,omitempty"`
@@ -63,6 +64,7 @@ type pkgJSON struct {
 	FeaturedImage         string          `json:"featured_image,omitempty"`
 	FeaturedOrder         *int            `json:"featured_order,omitempty"`
 	Source                string          `json:"source,omitempty"`
+	SourceAsset           string          `json:"source_asset,omitempty"`
 	SourceType            string          `json:"source_type,omitempty"`
 	SourceURL             string          `json:"source_url,omitempty"`
 	ReadmeURL             string          `json:"readme_url,omitempty"`
@@ -468,6 +470,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	}
 	plat := r.URL.Query().Get("platform")
 	checkUpdates := r.URL.Query().Get("check_updates") == "1" || r.URL.Query().Get("check_updates") == "true"
+	allowPrerelease := r.URL.Query().Get("beta") == "1" || r.URL.Query().Get("beta") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		// Catalog doesn't exist yet — return empty list so WAF can show "no packages" instead of error.
@@ -524,6 +527,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			FeaturedImage:         e.FeaturedImage,
 			FeaturedOrder:         e.FeaturedOrder,
 			Source:                e.Source,
+			SourceAsset:           e.SourceAsset,
 			SourceType:            e.SourceType,
 			SourceURL:             e.SourceURL,
 			ReadmeURL:             e.ReadmeURL,
@@ -539,7 +543,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
 			if checkUpdates {
-				applyUpdateInfo(&item)
+				applyUpdateInfo(&item, allowPrerelease)
 			}
 		}
 		result = append(result, item)
@@ -590,11 +594,20 @@ func platformValues(platform string) []string {
 	return out
 }
 
-func applyUpdateInfo(item *pkgJSON) {
+func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
 	if item == nil {
 		return
 	}
 	latest := item.Version // catalog (repo) version
+	if _, ok := releases.GitHubRepository(item.Source); ok && item.SourceAsset != "" {
+		release, _, err := releases.LatestGitHubRelease(item.Source, item.SourceAsset, allowPrerelease)
+		if err != nil {
+			log.Warnf("Could not check GitHub updates for %s: %v", item.ID, err)
+		} else {
+			latest = release.TagName
+			item.LatestRelease = release.TagName
+		}
+	}
 	if latest == "" || !hasKnownVersion(item.InstalledVer) {
 		return
 	}

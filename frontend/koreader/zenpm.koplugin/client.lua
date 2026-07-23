@@ -227,7 +227,7 @@ function Client:scan_installed_plugins()
     return self:request("POST", "/koreader/plugins/scan", nil)
 end
 
-function Client:list_packages(platform, check_updates)
+function Client:list_packages(platform, check_updates, allow_prerelease)
     local path = "/packages"
     local query = {}
     if platform and platform ~= "" then
@@ -235,6 +235,9 @@ function Client:list_packages(platform, check_updates)
     end
     if check_updates then
         table.insert(query, "check_updates=1")
+        if allow_prerelease then
+            table.insert(query, "beta=1")
+        end
     end
     if #query > 0 then
         path = path .. "?" .. table.concat(query, "&")

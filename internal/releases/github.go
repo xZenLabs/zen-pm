@@ -217,6 +217,41 @@ func ResolveGitHubReleaseAsset(source, tag, asset string) (Release, ReleaseAsset
 	return Release{}, ReleaseAsset{}, fmt.Errorf("no GitHub release asset matching %q", asset)
 }
 
+// LatestGitHubRelease returns the highest-version release containing asset.
+// Prereleases are considered only when allowPrerelease is true.
+func LatestGitHubRelease(source, asset string, allowPrerelease bool) (Release, ReleaseAsset, error) {
+	asset = strings.TrimSpace(asset)
+	if asset == "" {
+		return Release{}, ReleaseAsset{}, fmt.Errorf("release asset name is required")
+	}
+
+	items, err := FetchGitHubReleases(source, 100)
+	if err != nil {
+		return Release{}, ReleaseAsset{}, err
+	}
+
+	var latest Release
+	var latestAsset ReleaseAsset
+	for _, release := range items {
+		if release.Prerelease && !allowPrerelease {
+			continue
+		}
+		for _, candidate := range release.Assets {
+			if candidate.Name != asset && !(strings.HasPrefix(asset, ".") && strings.HasSuffix(candidate.Name, asset)) {
+				continue
+			}
+			if latest.TagName == "" || releaseGreater(release, latest) {
+				latest, latestAsset = release, candidate
+			}
+			break
+		}
+	}
+	if latest.TagName == "" {
+		return Release{}, ReleaseAsset{}, fmt.Errorf("no compatible GitHub release asset matching %q", asset)
+	}
+	return latest, latestAsset, nil
+}
+
 func githubRequest(path, accept string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(githubAPIBaseURL, "/")+path, nil)
 	if err != nil {
@@ -281,6 +316,23 @@ func VersionGreater(a, b string) bool {
 		return false
 	}
 	return strings.Compare(a, b) > 0
+}
+
+func versionBase(value string) string {
+	value = NormalizeVersion(value)
+	if index := strings.IndexByte(value, '-'); index >= 0 {
+		return value[:index]
+	}
+	return value
+}
+
+func releaseGreater(left, right Release) bool {
+	if versionBase(left.TagName) == versionBase(right.TagName) {
+		if left.Prerelease != right.Prerelease {
+			return !left.Prerelease
+		}
+	}
+	return VersionGreater(left.TagName, right.TagName)
 }
 
 func versionNumbers(value string) []int {

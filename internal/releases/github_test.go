@@ -167,3 +167,37 @@ func TestResolveGitHubReleaseAssetSpecificTag(t *testing.T) {
 		t.Fatalf("resolved = %#v / %#v, want v1.4.3 localsend asset", release, asset)
 	}
 }
+
+func TestLatestGitHubReleaseRespectsPrereleaseSetting(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/repos/owner/repo/releases?per_page=100" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `[
+			{"tag_name":"v2.5.3-beta3","prerelease":true,"assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/beta.zip"}]},
+			{"tag_name":"v2.5.2","assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/stable.zip"}]}
+		]`)
+	}))
+	defer srv.Close()
+
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	stable, _, err := LatestGitHubRelease("https://github.com/owner/repo", "plugin.zip", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stable.TagName != "v2.5.2" {
+		t.Fatalf("stable tag = %q, want v2.5.2", stable.TagName)
+	}
+
+	beta, _, err := LatestGitHubRelease("https://github.com/owner/repo", "plugin.zip", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if beta.TagName != "v2.5.3-beta3" {
+		t.Fatalf("beta tag = %q, want v2.5.3-beta3", beta.TagName)
+	}
+}

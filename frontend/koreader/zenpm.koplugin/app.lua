@@ -582,7 +582,10 @@ function App:queue_all_updates()
                 if ok and type(info) == "table" and info.auto and info.auto ~= "" then
                     asset = info.auto
                 end
-                if self:queue_package_action(pkg, "update", asset, { silent = true }) then
+                if self:queue_package_action(pkg, "update", asset, {
+                    silent = true,
+                    release = pkg.latest_release,
+                }) then
                     added = added + 1
                 end
                 queued[key] = true
@@ -1515,7 +1518,7 @@ function App:load_packages(check_updates, force)
         return true, self.state.packages
     end
     if not self.state.filter_installable then
-        local ok, data = self.client:list_packages(nil, check_updates)
+        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates)
         if not ok then
             return false, {}, data
         end
@@ -1525,7 +1528,7 @@ function App:load_packages(check_updates, force)
     end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
-    local ok, data = self.client:list_packages(filter, check_updates)
+    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates)
     if not ok then
         return false, {}, data
     end
@@ -1537,7 +1540,7 @@ function App:load_packages(check_updates, force)
         return true, packages
     end
     for _, platform in ipairs(capabilities) do
-        ok, data = self.client:list_packages(platform, check_updates)
+        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates)
         if not ok then
             return false, {}, data
         end
@@ -2289,13 +2292,18 @@ function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
 end
 
 function App:confirm_package_action(pkg, action, on_done)
-    self:start_package_action(pkg, action, on_done, nil)
+    local opts = action == "update" and pkg.latest_release and { release = pkg.latest_release } or nil
+    self:start_package_action(pkg, action, on_done, opts)
 end
 
 function App:start_package_action(pkg, action, on_done, opts)
     local id = pkg.id or pkg.name
     if not id then
         Modals.info(_("Package has no id."))
+        return
+    end
+    if action_installs_package(action) and opts and opts.release then
+        self:queue_package_action(pkg, action, nil, opts)
         return
     end
     if action_installs_package(action) then
