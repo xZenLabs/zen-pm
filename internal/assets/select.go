@@ -17,6 +17,7 @@ type Asset struct {
 // Device describes the running hardware used to pick an asset.
 type Device struct {
 	Platform string // "kindle", "kobo", "pocketbook", "remarkable", "android", "host", ...
+	OS       string // host OS, for example "darwin" (only meaningful on host)
 	KindleHF bool   // hard-float linker present (only meaningful on kindle)
 	CortexA9 bool   // ARM Cortex-A9 CPU (needs A9-optimized build)
 }
@@ -49,19 +50,26 @@ func Parse(raw string) []Asset {
 
 func name(a Asset) string { return strings.ToLower(strings.TrimSpace(a.Asset)) }
 
-// excluded filters assets that never apply to an e-reader KOReader plugin.
-func excluded(plat string, a Asset) bool {
+func isMacOS(n string) bool {
+	return strings.Contains(n, "macos") || strings.Contains(n, "darwin")
+}
+
+// excluded filters assets that do not apply to the current device.
+func excluded(dev Device, a Asset) bool {
 	n := name(a)
-	for _, bad := range []string{".apk", ".exe", ".dmg", "windows", "macos", "darwin"} {
+	for _, bad := range []string{".apk", ".exe", ".dmg", "windows"} {
 		if strings.Contains(n, bad) {
 			return true
 		}
 	}
-	if plat != "host" && (strings.Contains(n, "desktop") || strings.Contains(n, "linux-x86")) {
+	if dev.OS != "darwin" && isMacOS(n) {
+		return true
+	}
+	if dev.Platform != "host" && (strings.Contains(n, "desktop") || strings.Contains(n, "linux-x86")) {
 		return true
 	}
 	// Only Android devices want the android build.
-	if plat != "android" && strings.Contains(n, "android") {
+	if dev.Platform != "android" && strings.Contains(n, "android") {
 		return true
 	}
 	return false
@@ -83,7 +91,7 @@ func Select(raw string, dev Device) Result {
 
 	var cands []Asset
 	for _, a := range all {
-		if !excluded(dev.Platform, a) {
+		if !excluded(dev, a) {
 			cands = append(cands, a)
 		}
 	}
@@ -118,7 +126,12 @@ func Select(raw string, dev Device) Result {
 	case "android":
 		pick = find(func(n string) bool { return strings.Contains(n, "android") })
 	case "host":
-		pick = find(func(n string) bool { return strings.Contains(n, "desktop") })
+		if dev.OS == "darwin" {
+			pick = find(isMacOS)
+		}
+		if pick == "" {
+			pick = find(func(n string) bool { return strings.Contains(n, "desktop") })
+		}
 	default:
 		// Kobo, PocketBook, reMarkable and other ARM e-readers use the plain Kindle build.
 		pick = find(isPlainKindle)

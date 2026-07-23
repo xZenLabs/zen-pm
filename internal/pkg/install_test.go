@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -738,6 +739,12 @@ func TestSelectAssetUsesAndroidDeviceForAndroidKOReaderCapabilities(t *testing.T
 	}
 	if result.NeedsChoice || result.Auto != "reader-android.zip" {
 		t.Fatalf("SelectAsset = %+v, want Android asset", result)
+	}
+}
+
+func TestManagerDeviceIncludesHostOS(t *testing.T) {
+	if got := (&Manager{plat: "host"}).device().OS; got != runtime.GOOS {
+		t.Fatalf("device OS = %q, want %q", got, runtime.GOOS)
 	}
 }
 

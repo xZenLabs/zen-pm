@@ -6,6 +6,7 @@ const rakuyomiAssets = `[
   {"arch":"arm64","asset":"rakuyomi-aarch64.zip"},
   {"arch":"any","asset":"rakuyomi-android.zip"},
   {"arch":"any","asset":"rakuyomi-desktop.zip"},
+  {"arch":"any","asset":"rakuyomi-macos.zip"},
   {"arch":"kindle","asset":"rakuyomi-kindle.zip"},
   {"arch":"kindle","asset":"rakuyomi-kindlea9.zip"},
   {"arch":"kindle","asset":"rakuyomi-kindlehf.zip"}
@@ -43,6 +44,13 @@ func TestSelectAndroidGetsAndroidZip(t *testing.T) {
 	r := Select(rakuyomiAssets, Device{Platform: "android"})
 	if r.NeedsChoice || r.Auto != "rakuyomi-android.zip" {
 		t.Fatalf("got %+v, want auto rakuyomi-android.zip", r)
+	}
+}
+
+func TestSelectMacHostGetsMacOSZip(t *testing.T) {
+	r := Select(rakuyomiAssets, Device{Platform: "host", OS: "darwin"})
+	if r.NeedsChoice || r.Auto != "rakuyomi-macos.zip" {
+		t.Fatalf("got %+v, want auto rakuyomi-macos.zip", r)
 	}
 }
 

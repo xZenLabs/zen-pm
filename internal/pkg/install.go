@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/xZenLabs/zen-pm/internal/assets"
@@ -332,7 +333,7 @@ func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
 
 func (m *Manager) device() assets.Device {
 	devicePlatform := strings.SplitN(m.plat, ",", 2)[0]
-	dev := assets.Device{Platform: devicePlatform}
+	dev := assets.Device{Platform: devicePlatform, OS: runtime.GOOS}
 	if devicePlatform == platform.Kindle {
 		dev.KindleHF = platform.KindleABI() == "hf"
 		dev.CortexA9 = platform.KindleIsCortexA9()
