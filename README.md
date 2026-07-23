@@ -135,6 +135,7 @@ installed-plugin scan.
 
 The zenpm binary can also be used through SSH, an on-device terminal, or the
 terminal that launches the KOReader emulator.
+The `zpm` alias is also available and accepts the same commands.
 
 ~~~sh
 # Check the device and inspect logs.
@@ -158,6 +159,12 @@ zenpm install <package-id>
 zenpm uninstall <package-id> [patch-file]
 zenpm update
 zenpm update <package-id>
+~~~
+OR using `zpm` command
+~~~sh
+# All the same commands for zenpm work
+zpm doctor
+zpm list
 ~~~
 
 The first launch seeds the ZenLabs and KindleForge repositories. User-added
