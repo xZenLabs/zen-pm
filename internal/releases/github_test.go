@@ -57,7 +57,7 @@ func TestFetchGitHubMetadata(t *testing.T) {
 		case "/repos/owner/repo/releases?per_page=2":
 			fmt.Fprint(w, `[
 				{"tag_name":"v2.0","name":"Two","draft":false,"assets":[
-					{"name":"plugin.zip","browser_download_url":"https://example.test/plugin.zip"},
+					{"name":"plugin.zip","browser_download_url":"https://example.test/plugin.zip","size":42,"digest":"sha256:abcd"},
 					{"name":"notes.txt","browser_download_url":"https://example.test/notes.txt"}
 				]},
 				{"tag_name":"v1.0","name":"One","draft":true,"assets":[
@@ -78,7 +78,7 @@ func TestFetchGitHubMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].TagName != "v2.0" || len(got[0].Assets) != 1 || got[0].Assets[0].Name != "plugin.zip" {
+	if len(got) != 1 || got[0].TagName != "v2.0" || len(got[0].Assets) != 1 || got[0].Assets[0].Name != "plugin.zip" || got[0].Assets[0].Size != 42 || got[0].Assets[0].Digest != "sha256:abcd" {
 		t.Fatalf("releases = %#v", got)
 	}
 }

@@ -1,0 +1,172 @@
+name: Release Beta
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: |
+          set -eu
+          find installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          echo build.sh >> /tmp/zenpm-shell-files.txt
+          xargs shellcheck -x < /tmp/zenpm-shell-files.txt
+
+  shell-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: |
+          set -eu
+          find installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          echo build.sh >> /tmp/zenpm-shell-files.txt
+          while IFS= read -r file; do sh -n "$file"; done < /tmp/zenpm-shell-files.txt
+
+  release:
+    name: Build & Release
+    needs: [shellcheck, shell-syntax]
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.6'
+
+      - name: Read and verify release version
+        id: version
+        run: |
+          set -eu
+          VERSION=$(sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p;}' VERSION)
+          META_VERSION=$(sed -n 's/^[[:space:]]*version = "\([^"]*\)".*/\1/p' frontend/koreader/zenpm.koplugin/_meta.lua)
+          test -n "$VERSION"
+          if [ "$VERSION" != "$META_VERSION" ]; then
+            echo "VERSION ($VERSION) must match the KOReader plugin metadata version ($META_VERSION)." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve beta tag
+        id: version_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          BASE_VERSION=$(printf '%s\n' "${{ steps.version.outputs.version }}" | sed 's/-beta[0-9][0-9]*$//')
+          BASE="v$BASE_VERSION"
+          LATEST=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName \
+            --jq '.[0].tagName' 2>/dev/null | sed 's/^v//' | sed 's/-beta[0-9]*$//')
+
+          if [ -n "$LATEST" ]; then
+            LOWER=$(python3 -c 'import sys; print(min(sys.argv[1:], key=lambda value: tuple(int(part) for part in value.split("."))))' "$BASE_VERSION" "$LATEST")
+            if [ "$LOWER" = "$BASE_VERSION" ] && [ "$BASE_VERSION" != "$LATEST" ]; then
+              echo "Version $BASE_VERSION is lower than current release $LATEST. Skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          N=1
+          while gh release view "${BASE}-beta${N}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; do
+            N=$((N + 1))
+          done
+          BETA_VERSION="${BASE_VERSION}-beta${N}"
+          echo "tag=v$BETA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$BETA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp beta version
+        if: steps.version_check.outputs.skip == 'false'
+        run: |
+          set -eu
+          BETA_VERSION="${{ steps.version_check.outputs.version }}"
+          printf '%s\n' "$BETA_VERSION" > VERSION
+          sed -E "s/version = \"[^\"]*\"/version = \"$BETA_VERSION\"/" frontend/koreader/zenpm.koplugin/_meta.lua > frontend/koreader/zenpm.koplugin/_meta.lua.tmp
+          mv frontend/koreader/zenpm.koplugin/_meta.lua.tmp frontend/koreader/zenpm.koplugin/_meta.lua
+
+      - name: Install Android SDK and NDK
+        if: steps.version_check.outputs.skip == 'false'
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+
+      - name: Restore Android release signing key
+        if: steps.version_check.outputs.skip == 'false'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/zenpm-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -eu
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -D > "$ANDROID_KEYSTORE_PATH"
+          test -s "$ANDROID_KEYSTORE_PATH"
+
+      - name: Build Android companion APK
+        if: steps.version_check.outputs.skip == 'false'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/zenpm-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle -p android assembleRelease
+
+      - name: Install release build tools
+        if: steps.version_check.outputs.skip == 'false'
+        run: brew install upx fonttools
+
+      - name: Build release assets
+        if: steps.version_check.outputs.skip == 'false'
+        run: sh build.sh
+
+      - name: Add Android companion APK to release assets
+        if: steps.version_check.outputs.skip == 'false'
+        run: cp android/app/build/outputs/apk/release/app-release.apk "dist/ZenPM-android-${{ steps.version_check.outputs.version }}.apk"
+
+      - name: Build release notes
+        if: steps.version_check.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          VERSION=$(printf '%s\n' "$VERSION" | sed 's/-beta[0-9][0-9]*$//')
+          python3 .github/scripts/build_release_notes.py "$VERSION" > release_notes.md
+
+      - name: Create prerelease and upload assets
+        if: steps.version_check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version_check.outputs.tag }}" \
+            dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.sha }}" \
+            --title "ZenPM ${{ steps.version_check.outputs.tag }}" \
+            --notes-file release_notes.md \
+            --prerelease

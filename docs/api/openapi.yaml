@@ -467,26 +467,49 @@ paths:
         - Maintenance
       summary: Start Kindle self-update
       description: |
-        Starts `/mnt/us/ZenPM/installers/kindle/update.sh` asynchronously. The
-        updater may stop and restart the daemon.
+        Starts a detached backend maintenance process. The updater may stop and
+        restart the daemon.
       operationId: startUpdate
       responses:
         "202":
-          description: Update script was started.
+          description: Update started.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OkResponse"
               example:
                 ok: true
-        "404":
-          description: Update script is not present on the device.
+        "400":
+          $ref: "#/components/responses/JsonError"
+        "405":
+          $ref: "#/components/responses/TextError"
+        "500":
+          $ref: "#/components/responses/JsonError"
+  /uninstall:
+    post:
+      tags:
+        - Maintenance
+      summary: Uninstall ZenPM from Kindle
+      description: |
+        Starts a detached backend maintenance process that removes the Kindle
+        app and payload. Set `remove_settings=true` to also remove persistent state.
+      operationId: uninstallZenPM
+      parameters:
+        - name: remove_settings
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "202":
+          description: Uninstall started.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/OkResponse"
               example:
-                error: update script not found
+                ok: true
+        "400":
+          $ref: "#/components/responses/JsonError"
         "405":
           $ref: "#/components/responses/TextError"
         "500":

@@ -301,6 +301,21 @@ func prepareBackend() error {
 	if err := os.WriteFile(backend, data, 0755); err != nil {
 		return fmt.Errorf("write backend: %w", err)
 	}
+	return writeCLIWrappers(kindlePayloadDir)
+}
+
+func writeCLIWrappers(payloadDir string) error {
+	cliDir := filepath.Join(payloadDir, "bin")
+	if err := os.MkdirAll(cliDir, 0755); err != nil {
+		return fmt.Errorf("create CLI directory: %w", err)
+	}
+	for _, name := range []string{"zenpm", "zpm"} {
+		path := filepath.Join(cliDir, name)
+		contents := "#!/bin/sh\nexport ZENPM_PLATFORM=kindle\nexec \"" + filepath.Join(payloadDir, "backend", "zenpm") + "\" \"$@\"\n"
+		if err := os.WriteFile(path, []byte(contents), 0755); err != nil {
+			return fmt.Errorf("write %s CLI wrapper: %w", name, err)
+		}
+	}
 	return nil
 }
 

@@ -649,14 +649,9 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease)
     os.execute("chmod +x " .. Util.sh_quote(script_path))
     remove_tree(stage_dir)
 
-    standalone_log(daemon, "configuring Kindle standalone installation")
-    local installer_log = daemon and daemon:state_home() .. "/ZenPM.log" or "/tmp/ZenPM-standalone.log"
-    if os.execute("ZENPM_NO_LAUNCH=1 sh " .. Util.sh_quote(script_path) .. " >>" .. Util.sh_quote(installer_log) .. " 2>&1") ~= 0 then
-        return standalone_failure(daemon, "The standalone payload was installed, but its Kindle setup script failed. See " .. installer_log .. " or run " .. script_path .. " from KUAL to retry.")
-    end
     remove_tree(payload_backup)
     os.remove(script_backup)
-    standalone_log(daemon, "installed v" .. release.version)
+    standalone_log(daemon, "copied v" .. release.version .. " to Kindle homepage")
     return true, release.version
 end
 

@@ -352,9 +352,9 @@ stage_kindle() {
     mkdir -p "$stage/documents" "$stage/ZenPM/backend"
     cp "$BUILD_DIR/zenpm-hf" "$stage/ZenPM/backend/zenpm-hf"
     cp "$BUILD_DIR/zenpm-sf" "$stage/ZenPM/backend/zenpm-sf"
+    cp "$VERSION_FILE" "$stage/ZenPM/VERSION"
     copy_tree "$ROOT_DIR/frontend" "$stage/ZenPM"
     cp "$ROOT_DIR/installers/kindle/ZenPM.sh" "$stage/documents/ZenPM.sh"
-    cp "$ROOT_DIR/installers/kindle/update.sh" "$stage/ZenPM/update.sh"
 
     find "$stage/ZenPM/frontend/kindle/pages" -name '*.html' | while IFS= read -r f; do
         sed -E \
@@ -378,7 +378,6 @@ stage_kobo() {
     # Kobo package layout: unzip to Kobo root, then run .adds/ZenPM/installers/kobo/ZenPM.sh
     mkdir -p "$stage/.adds/ZenPM/backend"
     cp "$BUILD_DIR/zenpm-$abi" "$stage/.adds/ZenPM/backend/zenpm-$abi"
-    copy_tree "$ROOT_DIR/docs" "$stage/.adds/ZenPM"
     copy_tree "$ROOT_DIR/installers" "$stage/.adds/ZenPM"
 
     ensure_exec "$stage/.adds/ZenPM"

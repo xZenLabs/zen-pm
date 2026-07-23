@@ -256,7 +256,7 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             end,
         },
         {
-            text = _("Filter installable"),
+            text = _("Only show installable packages"),
             toggle = true,
             value = function() return view.app.state.filter_installable end,
             callback = function() view.app:toggle_filter_installable() end,

@@ -231,7 +231,7 @@ track the installed plugin.
 
 ## Updating ZenPM (Kindle)
 
-ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Update**. The updater:
+ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Update**. The backend:
 
 1. Reads the current version from `/mnt/us/ZenPM/VERSION`
 2. Queries the GitHub Releases API for the latest tag
@@ -243,17 +243,14 @@ ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Upd
 
 State databases (`/mnt/us/.ZenPM/`) are preserved across updates.
 
-The update can also be triggered manually:
-
-```sh
-sh /mnt/us/ZenPM/update.sh
-```
-
-Or via the API:
+The update can also be triggered via the API:
 
 ```sh
 curl -s -X POST http://127.0.0.1:8080/update
 ```
+
+To remove ZenPM from a Kindle, call `POST /uninstall`. Add
+`?remove_settings=true` to remove `/mnt/us/.ZenPM/` as well.
 
 ## Logs
 

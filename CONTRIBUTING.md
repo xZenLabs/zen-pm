@@ -135,21 +135,21 @@ The project config is in `.luacheckrc` and is aligned with KOReader's baseline (
 
 ### Extracting translatable strings
 
-If you have Python 3 available, you can scan all Lua files for translatable strings and print any that are missing from `locales/en.po`:
+From `frontend/koreader/zenpm.koplugin`, use the bundled utility to inspect missing strings:
 
-```python
-import re, pathlib
-
-strings = set()
-pattern = re.compile(r'_\("([^"]+)"\)')
-for f in pathlib.Path(".").rglob("*.lua"):
-    strings.update(pattern.findall(f.read_text(errors="ignore")))
-
-existing = pathlib.Path("locales/en.po").read_text(errors="ignore")
-for s in sorted(strings):
-    if f'msgid "{s}"' not in existing:
-        print(f'msgid "{s}"\nmsgstr ""\n')
+```sh
+python3 translation_utils.py --list-missing
 ```
+
+To add missing strings to a catalog without translating them, run:
+
+```sh
+python3 translation_utils.py --update-po --locale en
+```
+
+`--sync` removes obsolete strings, adds new ones, translates empty entries with
+Google Translate, and alphabetizes the catalog. It only contacts Google when
+you explicitly run that command.
 
 ### Code style
 

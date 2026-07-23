@@ -130,14 +130,22 @@ local function is_sdl_wayland_desktop()
 end
 
 function App:run_update_task(task, trap_widget, on_done)
+    local function finish(...)
+        -- Trapper attaches this callback to let a tap cancel the subprocess.
+        -- Once it returns, closing the progress modal must not resume the
+        -- already-running coroutine again.
+        if trap_widget then trap_widget.dismiss_callback = nil end
+        on_done(...)
+    end
+
     -- Forking with live EGL state aborts KOReader on SDL/Wayland desktop.
     if is_sdl_wayland_desktop() then
         UIManager:nextTick(function()
             local invoked, called, ok, result = pcall(task)
             if invoked then
-                on_done(true, called, ok, result)
+                finish(true, called, ok, result)
             else
-                on_done(true, false, called)
+                finish(true, false, called)
             end
         end)
         return
@@ -148,16 +156,16 @@ function App:run_update_task(task, trap_widget, on_done)
         UIManager:nextTick(function()
             local invoked, called, ok, result = pcall(task)
             if invoked then
-                on_done(true, called, ok, result)
+                finish(true, called, ok, result)
             else
-                on_done(true, false, called)
+                finish(true, false, called)
             end
         end)
         return
     end
     Trapper:wrap(function()
         local completed, called, ok, result = Trapper:dismissableRunInSubprocess(task, trap_widget)
-        on_done(completed, called, ok, result)
+        finish(completed, called, ok, result)
     end)
 end
 
@@ -2586,7 +2594,7 @@ end
 function App:install_to_kindle_homepage()
     if self.busy then return end
     Modals.confirm(
-        _("Download and install the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"),
+        _("Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"),
         _("Install"),
         function() self:apply_kindle_homepage_install() end,
         true
@@ -2596,7 +2604,7 @@ end
 function App:apply_kindle_homepage_install()
     if self.busy then return end
     self.busy = true
-    local status = Modals.status(_("Installing ZenPM to Kindle homepage..."))
+    local status = Modals.status(_("Copying ZenPM to Kindle homepage..."), 30)
     UIManager:forceRePaint()
     self:run_update_task(function()
         return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates)
@@ -2615,7 +2623,7 @@ function App:apply_kindle_homepage_install()
             Modals.info(_("Kindle homepage installation failed: ") .. tostring(result))
             return
         end
-        Modals.info(_("ZenPM v") .. tostring(result) .. _(" was installed to the Kindle homepage."))
+        Modals.info(_("ZenPM v") .. tostring(result) .. _(" was copied to the Kindle homepage."))
     end)
 end
 

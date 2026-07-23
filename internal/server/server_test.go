@@ -93,6 +93,31 @@ func TestHandlePackageUpdateStartsAllInstalledUpdates(t *testing.T) {
 	}
 }
 
+func TestKindleMaintenanceEndpointsRejectOtherPlatforms(t *testing.T) {
+	t.Setenv("ZENPM_PLATFORM", "host")
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+
+	for _, path := range []string{"/update", "/uninstall"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		if path == "/update" {
+			srv.handleUpdate(rec, req)
+		} else {
+			srv.handleUninstall(rec, req)
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d, want %d", path, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
 func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

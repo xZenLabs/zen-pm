@@ -19,6 +19,7 @@ local _ = require("gettext")
 
 local Modals = {}
 local status_modal = nil
+local status_timeout = nil
 local ok_android = pcall(require, "android")
 
 local function show_input_dialog(dialog)
@@ -40,7 +41,7 @@ function Modals.info_for(text, seconds)
     end)
 end
 
-function Modals.status(text)
+function Modals.status(text, timeout_seconds)
     Modals.close_status()
     status_modal = InfoMessage:new{
         text = text,
@@ -48,10 +49,26 @@ function Modals.status(text)
         flush_events_on_show = true,
     }
     UIManager:show(status_modal)
+    if timeout_seconds then
+        local modal = status_modal
+        status_timeout = function()
+            status_timeout = nil
+            if status_modal ~= modal then return end
+            -- Keep the subprocess running after hiding its progress notice.
+            modal.dismiss_callback = nil
+            UIManager:close(modal)
+            status_modal = nil
+        end
+        UIManager:scheduleIn(timeout_seconds, status_timeout)
+    end
     return status_modal
 end
 
 function Modals.close_status()
+    if status_timeout then
+        UIManager:unschedule(status_timeout)
+        status_timeout = nil
+    end
     if status_modal then
         UIManager:close(status_modal)
         status_modal = nil
