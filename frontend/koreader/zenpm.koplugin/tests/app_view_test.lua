@@ -28,8 +28,7 @@ local AppView = require("ui/app_view")
 local closed = 0
 local view = { app = { close = function() closed = closed + 1 end } }
 
-assert(AppView.onExit(view) == true)
 assert(AppView.onClose(view) == true)
-assert(closed == 2)
+assert(closed == 1)
 
 print("app view tests passed")

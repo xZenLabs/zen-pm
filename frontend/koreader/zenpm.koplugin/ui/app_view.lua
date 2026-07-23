@@ -304,14 +304,6 @@ function AppView:onCloseWidget()
     UIManager:setDirty("all", "flashui", self.dimen)
 end
 
--- Exit and platform-close events are broadcast to every top-level widget.
--- Without this, KOReader closes its main UI but ZenPM remains on the window
--- stack and prevents the process from quitting.
-function AppView:onExit()
-    self.app:close()
-    return true
-end
-
 function AppView:onClose()
     self.app:close()
     return true

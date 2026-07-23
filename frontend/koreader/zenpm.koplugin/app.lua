@@ -1017,6 +1017,7 @@ function App:show()
     if not self.view then
         self.view = AppView:new{ app = self }
     end
+    self:intercept_koreader_exit()
     UIManager:show(self.view)
     self:schedule_automatic_update_check()
     self.scan_plugins_on_open = true
@@ -1028,6 +1029,30 @@ function App:show()
         self:set_loading(_("Loading packages, please wait"))
         self:start_backend_then_reload()
     end
+end
+
+function App:intercept_koreader_exit()
+    if self.exit_hook then return end
+    local menu = self.plugin and self.plugin.ui and self.plugin.ui.menu
+    if not menu or type(menu.exitOrRestart) ~= "function" then return end
+
+    local original = menu.exitOrRestart
+    self.exit_menu = menu
+    self.exit_original = original
+    self.exit_hook = function(menu_self, ...)
+        self:close()
+        return original(menu_self, ...)
+    end
+    menu.exitOrRestart = self.exit_hook
+end
+
+function App:restore_koreader_exit()
+    if self.exit_menu and self.exit_menu.exitOrRestart == self.exit_hook then
+        self.exit_menu.exitOrRestart = self.exit_original
+    end
+    self.exit_menu = nil
+    self.exit_original = nil
+    self.exit_hook = nil
 end
 
 function App:set_update_available(available)
@@ -1064,6 +1089,7 @@ function App:schedule_automatic_update_check()
 end
 
 function App:close()
+    self:restore_koreader_exit()
     if self.view then
         local view = self.view
         local dimen = view.dimen
