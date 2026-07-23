@@ -45,6 +45,20 @@ local function register_nerd_font()
     table.insert(Font.fallbacks, font_name)
 end
 
+local function use_zen_confirmation_icon()
+    local IconWidget = require("ui/widget/iconwidget")
+    if IconWidget.__zenpm_confirmation_icon_patched then return end
+    IconWidget.__zenpm_confirmation_icon_patched = true
+
+    local init = IconWidget.init
+    function IconWidget:init()
+        init(self)
+        if self.icon == "notice-question" then
+            self.file = Constants.ASSET_DIR .. "/zen.svg"
+        end
+    end
+end
+
 local ZenPM = WidgetContainer:extend{
     name = "zenpm",
     is_doc_only = false,
@@ -68,6 +82,7 @@ end
 function ZenPM:init()
     I18n.install()
     pcall(register_nerd_font)
+    use_zen_confirmation_icon()
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
     local daemon = Daemon:new()

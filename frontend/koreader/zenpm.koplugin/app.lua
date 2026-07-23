@@ -245,6 +245,29 @@ local function package_is_koreader_plugin(pkg)
     return false
 end
 
+local function package_is_kindle_only(pkg)
+    if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    local kindle = false
+    for _, platform in ipairs(pkg.platforms) do
+        platform = Util.trim(tostring(platform or "")):lower()
+        if platform == "koreader" then
+            return false
+        end
+        kindle = kindle or platform == "kindle" or platform == "kindleforge"
+    end
+    return kindle
+end
+
+local function queue_notice(pkg)
+    local text = _("Added to Queue")
+    if package_is_kindle_only(pkg) then
+        text = text .. "\n" .. _([[This will install as a "book" on the Kindle homescreen.]])
+    end
+    return text
+end
+
 local function zenpm_self_package(daemon)
     local version = daemon:plugin_version()
     return {
@@ -543,13 +566,18 @@ function App:queue_all_updates()
     if self.state.queue_running then return end
     local queued = {}
     local added = 0
+    local kindle_only_added = false
     for _, entry in ipairs(self.state.queue) do
         queued[entry.key] = true
     end
     local packages = self.state.packages or {}
     local function finish()
         if added > 0 then
-            Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+            local notice = _("Added to Queue")
+            if kindle_only_added then
+                notice = notice .. "\n" .. _([[This will install as a "book" on the Kindle homescreen.]])
+            end
+            Modals.info_for(notice, Constants.PACKAGE_NOTICE_SECONDS)
         end
         self:refresh()
     end
@@ -571,7 +599,10 @@ function App:queue_all_updates()
                     self:choose_package_asset(pkg, "update", candidates, nil, {
                         silent = true,
                         on_queued = function(was_added)
-                            if was_added then added = added + 1 end
+                            if was_added then
+                                added = added + 1
+                                kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
+                            end
                             queued[key] = true
                             add_next(index + 1)
                         end,
@@ -587,6 +618,7 @@ function App:queue_all_updates()
                     release = pkg.latest_release,
                 }) then
                     added = added + 1
+                    kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
                 end
                 queued[key] = true
             end
@@ -665,7 +697,7 @@ function App:queue_package_action(pkg, action, asset, opts)
         if queued.key == entry.key then
             self.state.queue[index] = entry
             if not opts.silent then
-                Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+                Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
             end
             self:refresh()
             return true
@@ -673,7 +705,7 @@ function App:queue_package_action(pkg, action, asset, opts)
     end
     table.insert(self.state.queue, entry)
     if not opts.silent then
-        Modals.info_for(_("Added to Queue"), Constants.PACKAGE_NOTICE_SECONDS)
+        Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
     end
     self:refresh()
     return true
@@ -890,7 +922,10 @@ function App:finish_queue_batch(batch)
                 self:close_queue()
             end or nil)
         else
-            if queue_completed then self:close_queue() end
+            if queue_completed then
+                self:close_queue()
+                self:reload_current_page()
+            end
             Modals.info_for(result, #batch.failed > 0 and Constants.PACKAGE_ERROR_NOTICE_SECONDS or Constants.PACKAGE_NOTICE_SECONDS)
         end
     end
