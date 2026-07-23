@@ -355,6 +355,7 @@ stage_kindle() {
     cp "$VERSION_FILE" "$stage/ZenPM/VERSION"
     copy_tree "$ROOT_DIR/frontend" "$stage/ZenPM"
     cp "$ROOT_DIR/installers/kindle/ZenPM.sh" "$stage/documents/ZenPM.sh"
+    cp "$ROOT_DIR/installers/kindle/update.sh" "$stage/ZenPM/update.sh"
 
     find "$stage/ZenPM/frontend/kindle/pages" -name '*.html' | while IFS= read -r f; do
         sed -E \

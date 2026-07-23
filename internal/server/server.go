@@ -938,8 +938,8 @@ func (s *Server) foreground() {
 	log.Info("Foreground requested")
 }
 
-// handleUpdate starts a detached Go helper because the update replaces this
-// process's payload and restarts the daemon.
+// handleUpdate starts the standalone updater script. It performs the payload
+// replacement from outside the running daemon and restarts the WAF afterward.
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -950,7 +950,10 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Info("Starting self-update")
-	if err := maintenance.Start("update", false); err != nil {
+	cmd := exec.Command("sh", "/mnt/us/ZenPM/update.sh")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
 		log.Errorf("Failed to start update: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

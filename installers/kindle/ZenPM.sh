@@ -81,11 +81,13 @@ if [ "${ZENPM_NO_LAUNCH:-}" = "1" ]; then
     exit 0
 fi
 
-# Stop any running instance so its next launch reads the updated files. Starting
-# ZenPM while this Kindle scriptlet is still active can make appmgrd report an
-# application error, so let the user reopen it from the Home screen instead.
+echo "ZenPM installed. Launching..."
+
+# Stop any running instance so Mesquite reloads files from disk on next start.
+# Without this, `start` just foregrounds the cached in-memory app.
 lipc-set-prop com.lab126.appmgrd stop app://$APP_ID 2>/dev/null || true
 sleep 1
+pkill -f "mesquite.*$APP_ID" 2>/dev/null || true
+sleep 2
 
-lipc-set-prop com.lab126.pillow pillowAlert '{ "clientParams":{ "alertId":"appAlert1", "show":true, "customStrings":[ { "matchStr":"alertTitle", "replaceStr":"ZenPM updated" }, { "matchStr":"alertText", "replaceStr":"ZenPM is ready. Return to Home, then open ZenPM again." } ] } }'
-echo "ZenPM installed. Open ZenPM from the Kindle Home screen."
+nohup lipc-set-prop com.lab126.appmgrd start app://$APP_ID >/dev/null 2>&1 &
