@@ -2630,7 +2630,7 @@ end
 function App:apply_kindle_homepage_install()
     if self.busy then return end
     self.busy = true
-    local status = Modals.status(_("Copying ZenPM to Kindle homepage..."), 30)
+    local status = Modals.status(_("Copying ZenPM to Kindle homepage..."))
     UIManager:forceRePaint()
     self:run_update_task(function()
         return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates)

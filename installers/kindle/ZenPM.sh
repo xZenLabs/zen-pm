@@ -59,6 +59,11 @@ EOF
 
 sync
 
+if [ "${ZENPM_NO_LAUNCH:-}" = "1" ]; then
+    echo "ZenPM installed."
+    exit 0
+fi
+
 # Always stop any existing daemon so the new binary (with log redirect) takes over.
 # An old daemon started without log redirect would leave no log file.
 ZENPM_LOG="$PAYLOAD_DIR/ZenPM.log"
@@ -75,11 +80,6 @@ while pgrep -f 'zenpm serve' >/dev/null 2>&1; do
     sleep 1
 done
 nohup "$PAYLOAD_DIR/backend/zenpm" serve --port 8080 >>"$ZENPM_LOG" 2>&1 &
-
-if [ "${ZENPM_NO_LAUNCH:-}" = "1" ]; then
-    echo "ZenPM installed."
-    exit 0
-fi
 
 echo "ZenPM installed. Launching..."
 
