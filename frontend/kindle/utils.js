@@ -97,7 +97,7 @@ var ZenUtils = (function () {
         var beta = betaUpdatesEnabled();
         postLog("[utils] startUpdate: triggering update beta=" + beta);
         fetchJSON("POST", "/update" + (beta ? "?beta=1" : ""), null).then(function () {
-            postLog("[utils] update accepted, daemon restarting");
+            postLog("[utils] update accepted; ZenPM remains open until manually restarted");
         }).catch(function (err) {
             postLog("[utils] update failed: " + (err && err.message));
         });

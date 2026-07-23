@@ -238,8 +238,8 @@ ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Upd
 3. If the latest version is ≤ current, shows "up to date" and exits
 4. Downloads the latest `ZenPM-kindle-standalone-<version>.zip`
 5. Validates the download (size + SHA256 digest from the GitHub API release metadata)
-6. Stops the daemon and WAF, replaces the payload
-7. Restarts the daemon and relaunches ZenPM
+6. Replaces the payload and restarts the daemon without closing the WAF
+7. Leaves ZenPM open; exit and reopen it manually when ready to load the new frontend
 
 State databases (`/mnt/us/.ZenPM/`) are preserved across updates.
 

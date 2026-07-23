@@ -138,42 +138,32 @@ if [ ! -d "$TMPDIR/ZenPM" ]; then
 fi
 
 alert "Updating ZenPM..." "Installing v$latest_version..."
-pkill -f 'zenpm serve' 2>/dev/null || true
-lipc-set-prop com.lab126.appmgrd stop "app://$APP_ID" 2>/dev/null || true
-pkill -f "mesquite.*$APP_ID" 2>/dev/null || true
-sleep 2
-
-rm -rf "$PAYLOAD_DIR"
-cp -r "$TMPDIR/ZenPM" "$PAYLOAD_DIR"
+new_payload="$TMPDIR/ZenPM"
 if [ -f /lib/ld-linux-armhf.so.3 ]; then ABI=hf; else ABI=sf; fi
-cp "$PAYLOAD_DIR/backend/zenpm-$ABI" "$PAYLOAD_DIR/backend/zenpm"
-chmod +x "$PAYLOAD_DIR/backend/zenpm"
-mkdir -p "$PAYLOAD_DIR/bin"
+[ -f "$new_payload/backend/zenpm-$ABI" ] || {
+    alert "Update Failed!" "Binary missing: zenpm-$ABI"
+    exit 1
+}
+cp "$new_payload/backend/zenpm-$ABI" "$new_payload/backend/zenpm"
+chmod +x "$new_payload/backend/zenpm"
+mkdir -p "$new_payload/bin"
 for cli_name in zenpm zpm; do
-    cat > "$PAYLOAD_DIR/bin/$cli_name" <<EOF
+    cat > "$new_payload/bin/$cli_name" <<EOF
 #!/bin/sh
 export ZENPM_PLATFORM=kindle
 exec "$PAYLOAD_DIR/backend/zenpm" "\$@"
 EOF
-    chmod +x "$PAYLOAD_DIR/bin/$cli_name"
+    chmod +x "$new_payload/bin/$cli_name"
 done
 
 mesquite_target="/var/local/mesquite/ZenPM"
-rm -rf "$mesquite_target"
-mkdir -p "$mesquite_target"
-cp -R "$PAYLOAD_DIR/frontend/kindle"/. "$mesquite_target"/
-sqlite3 /var/local/appreg.db <<EOF
-INSERT OR IGNORE INTO interfaces(interface) VALUES('application');
-INSERT OR IGNORE INTO handlerIds(handlerId) VALUES('$APP_ID');
-INSERT OR REPLACE INTO properties(handlerId,name,value) VALUES('$APP_ID','command','/usr/bin/mesquite -l $APP_ID -c file://$mesquite_target/');
-EOF
+cp -R "$new_payload/frontend/kindle"/. "$mesquite_target"/
 
+pkill -f 'zenpm serve' 2>/dev/null || true
+sleep 2
+mv "$PAYLOAD_DIR" "$TMPDIR/ZenPM.previous"
+mv "$new_payload" "$PAYLOAD_DIR"
 sync
 nohup "$PAYLOAD_DIR/backend/zenpm" serve --port 8080 >>"$PAYLOAD_DIR/ZenPM.log" 2>&1 &
 sleep 2
-lipc-set-prop com.lab126.appmgrd start app://com.lab126.booklet.home
-sleep 2
-killall mesquite || true
-sleep 2
-nohup lipc-set-prop com.lab126.appmgrd start "app://$APP_ID" >/dev/null 2>&1 &
-alert "Update Complete!" "Updated to v$latest_version!\nYou may now use ZenPM."
+alert "Update Complete!" "Updated to v$latest_version!\nExit and reopen ZenPM to load the new interface."

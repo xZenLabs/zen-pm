@@ -951,8 +951,8 @@ func (s *Server) foreground() {
 	log.Info("Foreground requested")
 }
 
-// handleUpdate starts the standalone updater script. It performs the payload
-// replacement from outside the running daemon and restarts the WAF afterward.
+// handleUpdate starts the standalone updater script. It replaces the payload
+// outside the running daemon while keeping the WAF open for a manual restart.
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
