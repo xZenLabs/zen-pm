@@ -15,6 +15,7 @@ local Client = {}
 local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
 local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
+local PACKAGE_LIST_TIMEOUT = { block = 5, total = 20 }
 
 local function url_encode(value)
     value = tostring(value or "")
@@ -242,7 +243,7 @@ function Client:list_packages(platform, check_updates, allow_prerelease)
     if #query > 0 then
         path = path .. "?" .. table.concat(query, "&")
     end
-    return self:request("GET", path, nil)
+    return self:request("GET", path, nil, PACKAGE_LIST_TIMEOUT)
 end
 
 function Client:package_action(id, action, asset, release)
