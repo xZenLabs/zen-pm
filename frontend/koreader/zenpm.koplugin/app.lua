@@ -1157,6 +1157,21 @@ end
 
 function App:scan_plugins_after_open(attempt)
     if not self.scan_plugins_on_open then return end
+    if #(self.state.packages or {}) == 0 then
+        local catalog_ready, packages = self:load_packages(false, true)
+        if not catalog_ready or #packages == 0 then
+            if attempt < Constants.MAX_POLL_RETRIES then
+                UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
+                    if not self.view then return end
+                    self:scan_plugins_after_open(attempt + 1)
+                end)
+            else
+                self.scan_plugins_on_open = false
+            end
+            return
+        end
+        self.state.packages = packages
+    end
     local ok, data = self.client:scan_installed_plugins()
     if ok then
         self.scan_plugins_on_open = false
@@ -1678,7 +1693,7 @@ function App:show_installed()
     self.state.active_tab = "installed"
     if not self:ensure_backend() then return end
     self:set_loading(_("Loading installed packages..."))
-    local ok, packages, err = self:load_packages(true)
+    local ok, packages, err = self:load_packages()
     if not ok then
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
