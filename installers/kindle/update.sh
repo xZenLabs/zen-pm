@@ -75,16 +75,16 @@ fi
 
 latest_tag=""
 if [ "$allow_beta" = true ]; then
-    while IFS= read -r release; do
-        tag=$(printf '%s\n' "$release" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-        [ -n "$tag" ] || continue
+    tags_file="$TMPDIR/tags"
+    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$api_json" > "$tags_file"
+    while IFS= read -r tag; do
         version=$(printf '%s' "$tag" | sed 's/^v//')
         asset="ZenPM-kindle-standalone-$version.zip"
         if grep -q '"name"[[:space:]]*:[[:space:]]*"'"$asset"'"' "$api_json"; then
             latest_tag="$tag"
             break
         fi
-    done < "$api_json"
+    done < "$tags_file"
 else
     latest_tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$api_json" | head -1)
 fi
