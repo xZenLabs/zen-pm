@@ -7,7 +7,12 @@ TMPDIR="/mnt/us/ZPM-Update-Temp"
 PAYLOAD_DIR="/mnt/us/ZenPM"
 VERSION_FILE="$PAYLOAD_DIR/VERSION"
 REPO="xZenLabs/zen-pm"
-API_URL="https://api.github.com/repos/$REPO/releases/latest"
+API_URL="https://api.github.com/repos/$REPO/releases?per_page=30"
+
+allow_beta=false
+if [ "${1:-}" = "--beta" ]; then
+    allow_beta=true
+fi
 
 alert() {
     title="$1"
@@ -26,12 +31,15 @@ trap cleanup EXIT
 semver_cmp() {
     a=$(printf '%s' "$1" | sed 's/^v//')
     b=$(printf '%s' "$2" | sed 's/^v//')
+    a_main=${a%%-*}; b_main=${b%%-*}
+    case "$a" in *-*) a_pre=${a#*-} ;; *) a_pre="" ;; esac
+    case "$b" in *-*) b_pre=${b#*-} ;; *) b_pre="" ;; esac
     old_ifs="$IFS"
     IFS='.'
     # shellcheck disable=SC2086
-    set -- $a; a1=${1:-0}; a2=${2:-0}; a3=${3:-0}
+    set -- $a_main; a1=${1:-0}; a2=${2:-0}; a3=${3:-0}
     # shellcheck disable=SC2086
-    set -- $b; b1=${1:-0}; b2=${2:-0}; b3=${3:-0}
+    set -- $b_main; b1=${1:-0}; b2=${2:-0}; b3=${3:-0}
     IFS="$old_ifs"
     if [ "$a1" -gt "$b1" ]; then echo 1; return; fi
     if [ "$a1" -lt "$b1" ]; then echo -1; return; fi
@@ -39,6 +47,13 @@ semver_cmp() {
     if [ "$a2" -lt "$b2" ]; then echo -1; return; fi
     if [ "$a3" -gt "$b3" ]; then echo 1; return; fi
     if [ "$a3" -lt "$b3" ]; then echo -1; return; fi
+    if [ -z "$a_pre" ] && [ -n "$b_pre" ]; then echo 1; return; fi
+    if [ -n "$a_pre" ] && [ -z "$b_pre" ]; then echo -1; return; fi
+    a_pre_num=$(printf '%s' "$a_pre" | sed 's/[^0-9]//g')
+    b_pre_num=$(printf '%s' "$b_pre" | sed 's/[^0-9]//g')
+    a_pre_num=${a_pre_num:-0}; b_pre_num=${b_pre_num:-0}
+    if [ "$a_pre_num" -gt "$b_pre_num" ]; then echo 1; return; fi
+    if [ "$a_pre_num" -lt "$b_pre_num" ]; then echo -1; return; fi
     echo 0
 }
 
@@ -52,11 +67,27 @@ alert "Checking for Updates..." "Current: v$current_version"
 rm -rf "$TMPDIR"
 mkdir -p "$TMPDIR"
 api_json="$TMPDIR/release.json"
-curl -fSL -o "$api_json" "$API_URL"
+if [ "$allow_beta" = true ]; then
+    curl -fSL -o "$api_json" "$API_URL"
+else
+    curl -fSL -o "$api_json" "https://api.github.com/repos/$REPO/releases/latest"
+fi
 
-latest_tag=$(grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' "$api_json" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+latest_tag=""
+if [ "$allow_beta" = true ]; then
+    for tag in $(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$api_json"); do
+        version=$(printf '%s' "$tag" | sed 's/^v//')
+        asset="ZenPM-kindle-standalone-$version.zip"
+        if grep -q '"name"[[:space:]]*:[[:space:]]*"'"$asset"'"' "$api_json"; then
+            latest_tag="$tag"
+            break
+        fi
+    done
+else
+    latest_tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$api_json" | head -1)
+fi
 if [ -z "$latest_tag" ]; then
-    alert "Update Failed!" "Could not determine latest version."
+    alert "Update Failed!" "Could not find a Kindle standalone release."
     exit 1
 fi
 latest_version=$(printf '%s' "$latest_tag" | sed 's/^v//')

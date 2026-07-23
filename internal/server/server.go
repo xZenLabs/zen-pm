@@ -950,7 +950,11 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Info("Starting self-update")
-	cmd := exec.Command("sh", "/mnt/us/ZenPM/update.sh")
+	args := []string{"/mnt/us/ZenPM/update.sh"}
+	if r.URL.Query().Get("beta") == "1" || r.URL.Query().Get("beta") == "true" {
+		args = append(args, "--beta")
+	}
+	cmd := exec.Command("sh", args...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

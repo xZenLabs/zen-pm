@@ -243,6 +243,9 @@ ZenPM can update itself from the WAF. Tap the system menu (⋮) and select **Upd
 
 State databases (`/mnt/us/.ZenPM/`) are preserved across updates.
 
+Beta releases are off by default. Enable **Allow beta updates** from the
+three-dot menu before selecting **Update** to install them.
+
 The update can also be triggered manually:
 
 ```sh

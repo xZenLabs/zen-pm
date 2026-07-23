@@ -80,10 +80,23 @@ var ZenUtils = (function () {
         return "ZenPM daemon not reachable. Re-run ZenPM.sh if it is not running. If Airplane Mode is on, Kindle WAF may block local HTTP.";
     }
 
+    function betaUpdatesEnabled() {
+        try { return window.localStorage.getItem("zenpm-beta-updates") === "1"; } catch (e) { return false; }
+    }
+
+    function toggleBetaUpdates() {
+        try {
+            window.localStorage.setItem("zenpm-beta-updates", betaUpdatesEnabled() ? "0" : "1");
+        } catch (e) {
+            postLog("[utils] could not save beta update preference: " + String(e));
+        }
+    }
+
     // Trigger self-update via POST /update. The update script handles native alerts.
     function startUpdate() {
-        postLog("[utils] startUpdate: triggering update");
-        fetchJSON("POST", "/update", null).then(function () {
+        var beta = betaUpdatesEnabled();
+        postLog("[utils] startUpdate: triggering update beta=" + beta);
+        fetchJSON("POST", "/update" + (beta ? "?beta=1" : ""), null).then(function () {
             postLog("[utils] update accepted, daemon restarting");
         }).catch(function (err) {
             postLog("[utils] update failed: " + (err && err.message));
@@ -182,7 +195,8 @@ var ZenUtils = (function () {
                     "items": [
                         { "id": "ZEN_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 },
                         { "id": "ZEN_UPDATE",  "state": "enabled", "handling": "notifyApp", "label": "Update",  "position": 1 },
-                        { "id": "ZEN_ABOUT",   "state": "enabled", "handling": "notifyApp", "label": "About",   "position": 2 }
+                        { "id": "ZEN_BETA_UPDATES", "state": "enabled", "handling": "notifyApp", "label": "Allow beta updates: " + (betaUpdatesEnabled() ? "On" : "Off"), "position": 2 },
+                        { "id": "ZEN_ABOUT",   "state": "enabled", "handling": "notifyApp", "label": "About",   "position": 3 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -193,6 +207,10 @@ var ZenUtils = (function () {
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
             if (data === "ZEN_REFRESH") refreshSources(refreshHandler);
             if (data === "ZEN_UPDATE") startUpdate();
+            if (data === "ZEN_BETA_UPDATES") {
+                toggleBetaUpdates();
+                setupPageChrome(title, refreshHandler);
+            }
             if (data === "ZEN_ABOUT") showAboutModal();
         });
 
@@ -543,14 +561,14 @@ var ZenUtils = (function () {
     function packageVersionRepoText(pkg) {
         var repoDisplay = repoDisplayName(pkg.repo || "?");
         if (pkg.version && pkg.version !== "0.0.0") {
-            return "v" + pkg.version + " \u2022 " + repoDisplay;
+            return "v" + String(pkg.version).replace(/^v/i, "") + " \u2022 " + repoDisplay;
         }
         return repoDisplay;
     }
 
     function packageVersionPrefixText(pkg) {
         if (pkg.version && pkg.version !== "0.0.0") {
-            return "v" + pkg.version + " \u2022 ";
+            return "v" + String(pkg.version).replace(/^v/i, "") + " \u2022 ";
         }
         return "";
     }
