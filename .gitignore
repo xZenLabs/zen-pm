@@ -13,6 +13,7 @@
 .dev-kodev.pid
 AGENTS.md
 .codex
+README.current-reference.md
 
 # Logs / temp
 *.log
@@ -23,3 +24,4 @@ dist/
 .env
 .dev-kodev.pid
 __pycache__
+reference.md

@@ -4,7 +4,21 @@ Download the required files from the [ZenPM releases page](https://github.com/xZ
 
 ## Kindle standalone
 
-This install requires a jailbroken Kindle with `sqlite3` and a script launcher such as KUAL.
+This install requires a jailbroken Kindle with the latest hotfix
+
+### Hotfix update/reinstall
+Reinstallation steps:
+
+1. Turn on airplane mode
+2. Restore OTAs
+3. Download latest hotfix from [wiki](https://kindlemodding.org/jailbreaking/post-jailbreak/setting-up-a-hotfix/), copy to kindle root
+4. Update your kindle
+5. Run the hotfix
+6. Rename OTAs
+7. You can use WiFi once more
+
+### Install ZenPM
+> Make sure you have the latest hotfix installed (see above)
 
 1. Download `ZenPM-kindle-standalone-<version>.zip`.
 2. Extract the ZIP to the Kindle USB-storage root. It creates `documents/ZenPM.sh` and `ZenPM/`.
