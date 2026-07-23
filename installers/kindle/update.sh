@@ -2,7 +2,6 @@
 # ZenPM self-update. This runs outside the daemon that it replaces.
 set -eu
 
-APP_ID="com.zenlabs.zenpm"
 TMPDIR="/mnt/us/ZPM-Update-Temp"
 PAYLOAD_DIR="/mnt/us/ZenPM"
 VERSION_FILE="$PAYLOAD_DIR/VERSION"
