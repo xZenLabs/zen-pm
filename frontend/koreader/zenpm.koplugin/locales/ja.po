@@ -48,6 +48,9 @@ msgstr "ソースを追加"
 msgid "Added to Queue"
 msgstr "キューに追加されました"
 
+msgid "Always manually pick version"
+msgstr "常に手動でバージョンを選択する"
+
 msgid "Another operation is in progress. Please wait."
 msgstr "別の操作が進行中です。お待ちください。"
 
@@ -201,19 +204,19 @@ msgstr "検出された ABI:"
 msgid "Detecting repo..."
 msgstr "リポジトリを検出中..."
 
-msgid "Disable"
+msgid "disable"
 msgstr "無効にする"
 
-msgid "disable"
+msgid "Disable"
 msgstr "無効にする"
 
 msgid "disabled"
 msgstr "無効"
 
-msgid "Downgrade"
+msgid "downgrade"
 msgstr "ダウングレード"
 
-msgid "downgrade"
+msgid "Downgrade"
 msgstr "ダウングレード"
 
 msgid "downgraded"
@@ -231,10 +234,10 @@ msgstr "ダウンロードに失敗しました"
 msgid "Download this asset: "
 msgstr "このアセットをダウンロードします。"
 
-msgid "enable"
+msgid "Enable"
 msgstr "有効にする"
 
-msgid "Enable"
+msgid "enable"
 msgstr "有効にする"
 
 msgid "enabled"
@@ -525,10 +528,10 @@ msgstr "更新に失敗しました: "
 msgid "Refreshing repositories..."
 msgstr "リポジトリを更新中..."
 
-msgid "Reinstall"
+msgid "reinstall"
 msgstr "再インストール"
 
-msgid "reinstall"
+msgid "Reinstall"
 msgstr "再インストール"
 
 msgid "reinstalled"
@@ -618,8 +621,8 @@ msgstr "バージョンを選択してください"
 msgid "Settings"
 msgstr "設定"
 
-msgid "Show all release builds"
-msgstr "すべてのリリース ビルドを表示"
+msgid "Show all builds"
+msgstr "すべてのビルドを表示"
 
 msgid "Show more"
 msgstr "もっと見る"
@@ -666,10 +669,10 @@ msgstr "これは Kindle ホーム画面に「書籍」としてインストー�
 msgid "to"
 msgstr "に"
 
-msgid "uninstall"
+msgid "Uninstall"
 msgstr "アンインストール"
 
-msgid "Uninstall"
+msgid "uninstall"
 msgstr "アンインストール"
 
 msgid "Uninstall ZenPM?"
@@ -687,11 +690,11 @@ msgstr "ZenPM をアンインストールしています..."
 msgid "Unknown package"
 msgstr "不明なパッケージ"
 
-msgid "update"
-msgstr "アップデート"
-
 msgid "Update"
 msgstr "更新"
+
+msgid "update"
+msgstr "アップデート"
 
 msgid "Update All"
 msgstr "すべて更新"

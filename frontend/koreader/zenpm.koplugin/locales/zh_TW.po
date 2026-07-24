@@ -48,6 +48,9 @@ msgstr "新增來源"
 msgid "Added to Queue"
 msgstr "已新增至佇列"
 
+msgid "Always manually pick version"
+msgstr "始終手動選擇版本"
+
 msgid "Another operation is in progress. Please wait."
 msgstr "另一個操作正在進行。請稍候。"
 
@@ -201,19 +204,19 @@ msgstr "偵測到的 ABI："
 msgid "Detecting repo..."
 msgstr "正在偵測儲存庫..."
 
-msgid "Disable"
+msgid "disable"
 msgstr "停用"
 
-msgid "disable"
+msgid "Disable"
 msgstr "停用"
 
 msgid "disabled"
 msgstr "殘障人士"
 
-msgid "Downgrade"
+msgid "downgrade"
 msgstr "降級"
 
-msgid "downgrade"
+msgid "Downgrade"
 msgstr "降級"
 
 msgid "downgraded"
@@ -231,10 +234,10 @@ msgstr "download failed"
 msgid "Download this asset: "
 msgstr "下載該資源："
 
-msgid "enable"
+msgid "Enable"
 msgstr "使能夠"
 
-msgid "Enable"
+msgid "enable"
 msgstr "使能夠"
 
 msgid "enabled"
@@ -525,10 +528,10 @@ msgstr "Refresh failed: "
 msgid "Refreshing repositories..."
 msgstr "正在重新整理儲存庫..."
 
-msgid "Reinstall"
+msgid "reinstall"
 msgstr "重新安裝"
 
-msgid "reinstall"
+msgid "Reinstall"
 msgstr "重新安裝"
 
 msgid "reinstalled"
@@ -618,8 +621,8 @@ msgstr "選擇版本"
 msgid "Settings"
 msgstr "設定"
 
-msgid "Show all release builds"
-msgstr "顯示所有發布版本"
+msgid "Show all builds"
+msgstr "顯示所有版本"
 
 msgid "Show more"
 msgstr "顯示更多"
@@ -666,10 +669,10 @@ msgstr "這將作為一本「書」安裝在 Kindle 主螢幕上。"
 msgid "to"
 msgstr "到"
 
-msgid "uninstall"
+msgid "Uninstall"
 msgstr "解除安裝"
 
-msgid "Uninstall"
+msgid "uninstall"
 msgstr "解除安裝"
 
 msgid "Uninstall ZenPM?"
@@ -687,10 +690,10 @@ msgstr "正在卸載 ZenPM..."
 msgid "Unknown package"
 msgstr "未知套件"
 
-msgid "update"
+msgid "Update"
 msgstr "更新"
 
-msgid "Update"
+msgid "update"
 msgstr "更新"
 
 msgid "Update All"

@@ -5,3 +5,777 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: uk\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid " is available. Update now?"
+msgstr "є в наявності. Оновити зараз?"
+
+msgid " returned HTTP "
+msgstr "повернуто HTTP"
+
+msgid " successfully."
+msgstr "успішно."
+
+msgid " was copied to the Kindle homepage."
+msgstr "було скопійовано на домашню сторінку Kindle."
+
+msgid "%d packages queued"
+msgstr "Пакунки %d у черзі"
+
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s конфліктує з %s. Їх не слід використовувати разом. Усе одно встановити?"
+
+msgid "(installed)"
+msgstr "(встановлено)"
+
+msgid "... Please wait."
+msgstr "... Будь ласка, зачекайте."
+
+msgid "1 package queued"
+msgstr "1 пакет у черзі"
+
+msgid "A short summary of what went wrong"
+msgstr "Короткий опис того, що пішло не так"
+
+msgid "About"
+msgstr "про"
+
+msgid "Add"
+msgstr "додати"
+
+msgid "Add Source"
+msgstr "Додати джерело"
+
+msgid "Added to Queue"
+msgstr "Додано до черги"
+
+msgid "Always manually pick version"
+msgstr "Завжди вибирайте версію вручну"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Ще одна операція триває. Будь ласка, зачекайте."
+
+msgid "Are you sure you want to "
+msgstr "Ви впевнені, що хочете"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Ви впевнені, що бажаєте очистити чергу?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Ви впевнені, що бажаєте виконати всі дії в черзі?"
+
+msgid "Are you sure you want to remove "
+msgstr "Ви впевнені, що хочете видалити"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Автор: Ентоні Гресс (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Бета-оновлення"
+
+msgid "Brief description of the bug"
+msgstr "Короткий опис помилки"
+
+msgid "Bug description (optional)"
+msgstr "Опис помилки (необов'язково)"
+
+msgid "Bug report submitted!"
+msgstr "Звіт про помилку надіслано!"
+
+msgid "Bug report title"
+msgstr "Назва звіту про помилку"
+
+msgid "By "
+msgstr "за"
+
+msgid "Cancel"
+msgstr "Скасувати"
+
+msgid "Categories"
+msgstr "Категорії"
+
+msgid "Category"
+msgstr "Категорія"
+
+msgid "Category not found."
+msgstr "Категорія не знайдена."
+
+msgid "Change version"
+msgstr "Змінити версію"
+
+msgid "Check for updates automatically"
+msgstr "Автоматично перевіряти наявність оновлень"
+
+msgid "Check the debug log for details."
+msgstr "Перегляньте подробиці в журналі налагодження."
+
+msgid "Checking for update..."
+msgstr "Перевірка наявності оновлень..."
+
+msgid "Choose a build for "
+msgstr "Виберіть збірку для"
+
+msgid "Choose a patch for "
+msgstr "Виберіть патч для"
+
+msgid "Clear"
+msgstr "ясно"
+
+msgid "Companion update failed to start: "
+msgstr "Не вдалося запустити супутнє оновлення:"
+
+msgid "Confirm"
+msgstr "Підтвердити"
+
+msgid "Continue"
+msgstr "Продовжити"
+
+msgid "Continue?"
+msgstr "Продовжити?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "Копіювання ZenPM на домашню сторінку Kindle..."
+
+msgid "Could not "
+msgstr "Не міг"
+
+msgid "Could not add source: "
+msgstr "Не вдалося додати джерело:"
+
+msgid "Could not connect to "
+msgstr "Не вдалося підключитися до"
+
+msgid "Could not connect to GitHub: "
+msgstr "Не вдалося підключитися до GitHub:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Не вдалося підключитися до GitHub: підтримка HTTPS недоступна в цій збірці KOReader."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Не вдалося створити каталог ZenPM:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Не вдалося створити каталог налаштувань ZenPM:"
+
+msgid "Could not detect repo format."
+msgstr "Не вдалося визначити формат репо."
+
+msgid "Could not determine which build to install: "
+msgstr "Не вдалося визначити, яку збірку встановити:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Не вдалося встановити пакетний сервер ZenPM для:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Не вдалося встановити оболонку командного рядка ZenPM."
+
+msgid "Could not load GitHub releases: "
+msgstr "Не вдалося завантажити випуски GitHub:"
+
+msgid "Could not read log: "
+msgstr "Не вдалося прочитати журнал:"
+
+msgid "Could not remove patch: "
+msgstr "Не вдалося видалити патч:"
+
+msgid "Could not remove source: "
+msgstr "Не вдалося видалити джерело:"
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Не вдалося видалити плагін ZenPM."
+
+msgid "Could not resolve patch file."
+msgstr "Не вдалося вирішити файл виправлення."
+
+msgid "Could not resolve plugin name."
+msgstr "Не вдалося розпізнати назву плагіна."
+
+msgid "Debug"
+msgstr "Налагодження"
+
+msgid "Description"
+msgstr "опис"
+
+msgid "Details"
+msgstr "Подробиці"
+
+msgid "Detected ABI: "
+msgstr "Виявлений ABI:"
+
+msgid "Detecting repo..."
+msgstr "Виявлення репо..."
+
+msgid "disable"
+msgstr "відключити"
+
+msgid "Disable"
+msgstr "Вимкнути"
+
+msgid "disabled"
+msgstr "вимкнено"
+
+msgid "downgrade"
+msgstr "пониження версії"
+
+msgid "Downgrade"
+msgstr "Понизити"
+
+msgid "downgraded"
+msgstr "знижено"
+
+msgid "Downgrading"
+msgstr "Пониження"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Завантажити та скопіювати останній окремий випуск ZenPM на домашню сторінку Kindle? Це додає сценарій (книгу) ZenPM до домашньої сторінки/бібліотеки Kindle"
+
+msgid "download failed"
+msgstr "не вдалося завантажити"
+
+msgid "Download this asset: "
+msgstr "Завантажити цей ресурс:"
+
+msgid "Enable"
+msgstr "Увімкнути"
+
+msgid "enable"
+msgstr "включити"
+
+msgid "enabled"
+msgstr "включено"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Введіть своє ім’я користувача GitHub, щоб вас позначили у випуску"
+
+msgid "Failed to load package: "
+msgstr "Не вдалося завантажити пакет:"
+
+msgid "Failed to load packages: "
+msgstr "Не вдалося завантажити пакети:"
+
+msgid "Failed to load source: "
+msgstr "Не вдалося завантажити джерело:"
+
+msgid "Failed to load sources: "
+msgstr "Не вдалося завантажити джерела:"
+
+msgid "Failed to start package action: "
+msgstr "Не вдалося розпочати дію пакета:"
+
+msgid "Failed to submit report: "
+msgstr "Не вдалося подати звіт:"
+
+msgid "Featured"
+msgstr "Рекомендовані"
+
+msgid "Font preview"
+msgstr "Попередній перегляд шрифту"
+
+msgid "Font size"
+msgstr "Розмір шрифту"
+
+msgid "Found %d installed plugins"
+msgstr "Знайдено встановлені плагіни %d"
+
+msgid "Get"
+msgstr "отримати"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "Завантаження GitHub перенаправлялося забагато разів."
+
+msgid "GitHub download returned HTTP "
+msgstr "Завантаження GitHub повернуло HTTP"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub надав недійсне переспрямування завантаження."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub надав ненадійну URL-адресу для завантаження."
+
+msgid "GitHub username (optional)"
+msgstr "Ім'я користувача GitHub (необов'язково)"
+
+msgid "HTTPS support is unavailable in this KOReader build."
+msgstr "Підтримка HTTPS недоступна в цій збірці KOReader."
+
+msgid "install"
+msgstr "встановити"
+
+msgid "Install"
+msgstr "встановити"
+
+msgid "Install anyway"
+msgstr "Все одно встановіть"
+
+msgid "Install anyway?"
+msgstr "Усе одно встановити?"
+
+msgid "Install to Kindle homepage"
+msgstr "Встановити на домашню сторінку Kindle"
+
+msgid "Installed"
+msgstr "встановлено"
+
+msgid "installed"
+msgstr "встановлено"
+
+msgid "Installing"
+msgstr "Встановлення"
+
+msgid "Keep settings"
+msgstr "Зберегти налаштування"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Помилка встановлення домашньої сторінки Kindle:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "Встановлення домашньої сторінки Kindle скасовано."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Мережа Kobo не готова. Будь ласка, зачекайте трохи і спробуйте ще раз."
+
+msgid "KOReader settings are unavailable."
+msgstr "Налаштування KOReader недоступні."
+
+msgid "Latest"
+msgstr "Останній"
+
+msgid "Loading categories..."
+msgstr "Завантаження категорій..."
+
+msgid "Loading category..."
+msgstr "Завантаження категорії..."
+
+msgid "Loading featured packages..."
+msgstr "Завантаження рекомендованих пакетів..."
+
+msgid "Loading GitHub releases..."
+msgstr "Завантаження випусків GitHub..."
+
+msgid "Loading installed packages..."
+msgstr "Завантаження встановлених пакетів..."
+
+msgid "Loading log..."
+msgstr "Завантаження журналу..."
+
+msgid "Loading packages, please wait"
+msgstr "Завантаження пакетів, зачекайте"
+
+msgid "Loading packages..."
+msgstr "Завантаження пакетів..."
+
+msgid "Loading source..."
+msgstr "Завантаження джерела..."
+
+msgid "Loading sources..."
+msgstr "Завантаження джерел..."
+
+msgid "Log is empty."
+msgstr "Журнал порожній."
+
+msgid "Modify"
+msgstr "Змінити"
+
+msgid "Name"
+msgstr "Ім'я"
+
+msgid "network error"
+msgstr "помилка мережі"
+
+msgid "Next"
+msgstr "Далі"
+
+msgid "No categories found."
+msgstr "Категорії не знайдено."
+
+msgid "No categories match the filter."
+msgstr "Жодна категорія не відповідає фільтру."
+
+msgid "No description"
+msgstr "Без опису"
+
+msgid "No description available."
+msgstr "Немає опису."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Не знайдено випусків GitHub із ресурсами ZIP."
+
+msgid "No installed packages match the filter."
+msgstr "Жоден встановлений пакет не відповідає фільтру."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Немає підключення до мережі. Підключіться до Wi-Fi і повторіть спробу."
+
+msgid "No packages found for this category."
+msgstr "Пакунки для цієї категорії не знайдено."
+
+msgid "No packages found for this source."
+msgstr "Для цього джерела не знайдено пакетів."
+
+msgid "No packages found. Try Refresh."
+msgstr "Пакунки не знайдено. Спробуйте «Оновити»."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Пакунки не встановлено. Перегляньте Пошук, щоб знайти пакети."
+
+msgid "No packages match the filter."
+msgstr "Жоден пакет не відповідає фільтру."
+
+msgid "No queued operations."
+msgstr "Жодних операцій у черзі."
+
+msgid "No README available."
+msgstr "README недоступний."
+
+msgid "No repositories configured."
+msgstr "Немає налаштованих репозиторіїв."
+
+msgid "None"
+msgstr "Жодного"
+
+msgid "of"
+msgstr "з"
+
+msgid "OK"
+msgstr "добре"
+
+msgid "Only show installable packages"
+msgstr "Показувати лише пакети, які можна встановити"
+
+msgid "Open ZenPM"
+msgstr "Відкрийте ZenPM"
+
+msgid "Package"
+msgstr "Пакет"
+
+msgid "Package Details"
+msgstr "Деталі пакета"
+
+msgid "Package has no id."
+msgstr "Пакет не має ідентифікатора."
+
+msgid "Package manager for KOReader."
+msgstr "Менеджер пакетів для KOReader."
+
+msgid "Package not found."
+msgstr "Пакет не знайдено."
+
+msgid "Package operation status could not be checked. See Debug log."
+msgstr "Не вдалося перевірити стан роботи пакета. Перегляньте журнал налагодження."
+
+msgid "packages"
+msgstr "пакети"
+
+msgid "Packages updated"
+msgstr "Пакети оновлено"
+
+msgid "patch"
+msgstr "патч"
+
+msgid "Patch file not found."
+msgstr "Файл виправлення не знайдено."
+
+msgid "Patch has no file name."
+msgstr "Патч не має імені файлу."
+
+msgid "Patches"
+msgstr "патчі"
+
+msgid "Platform: "
+msgstr "Платформа:"
+
+msgid "Please enter a URL."
+msgstr "Будь ласка, введіть URL."
+
+msgid "Plugin scan failed: "
+msgstr "Помилка сканування плагіна:"
+
+msgid "prerelease"
+msgstr "попередній випуск"
+
+msgid "Queue"
+msgstr "Черга"
+
+msgid "Queue %d/%d: "
+msgstr "Черга %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Черга завершена: %d вдалося, %d не вдалося."
+
+msgid "Queue completed: %d succeeded."
+msgstr "Черга завершена: %d завершено."
+
+msgid "Queue is running. Please wait."
+msgstr "Черга працює. Будь ласка, зачекайте."
+
+msgid "Queued"
+msgstr "У черзі"
+
+msgid "Quit"
+msgstr "Вийти"
+
+msgid "README"
+msgstr "README"
+
+msgid "Refresh"
+msgstr "Оновити"
+
+msgid "Refresh failed: "
+msgstr "Не вдалося оновити:"
+
+msgid "Refreshing repositories..."
+msgstr "Оновлення сховищ..."
+
+msgid "reinstall"
+msgstr "перевстановити"
+
+msgid "Reinstall"
+msgstr "Перевстановити"
+
+msgid "reinstalled"
+msgstr "перевстановити"
+
+msgid "Reinstalling"
+msgstr "Перевстановлення"
+
+msgid "remote server"
+msgstr "віддалений сервер"
+
+msgid "Remove"
+msgstr "видалити"
+
+msgid "Remove %s from queue?"
+msgstr "Видалити %s з черги?"
+
+msgid "Remove from queue"
+msgstr "Видалити з черги"
+
+msgid "Remove settings"
+msgstr "Видалити налаштування"
+
+msgid "Remove source "
+msgstr "Видалити джерело"
+
+msgid "rename failed"
+msgstr "перейменувати не вдалося"
+
+msgid "Report a Bug"
+msgstr "Повідомити про помилку"
+
+msgid "request failed"
+msgstr "запит не вдалося"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Перезапустіть KOReader, щоб застосувати зміни."
+
+msgid "Restart later"
+msgstr "Перезапустіть пізніше"
+
+msgid "Restart now"
+msgstr "Перезапустіть зараз"
+
+msgid "Restarting..."
+msgstr "Перезапуск..."
+
+msgid "Retry"
+msgstr "Повторіть спробу"
+
+msgid "Scan installed plugins"
+msgstr "Сканувати встановлені плагіни"
+
+msgid "Scanning installed plugins..."
+msgstr "Сканування встановлених плагінів..."
+
+msgid "Search"
+msgstr "Пошук"
+
+msgid "Search categories"
+msgstr "Категорії пошуку"
+
+msgid "Search categories..."
+msgstr "Пошук категорій..."
+
+msgid "Search category"
+msgstr "Категорія пошуку"
+
+msgid "Search category..."
+msgstr "Категорія пошуку..."
+
+msgid "Search installed packages"
+msgstr "Пошук встановлених пакетів"
+
+msgid "Search installed..."
+msgstr "Пошук встановлено..."
+
+msgid "Search packages"
+msgstr "Пошук пакетів"
+
+msgid "Search..."
+msgstr "пошук..."
+
+msgid "Select version for "
+msgstr "Виберіть версію для"
+
+msgid "Settings"
+msgstr "Налаштування"
+
+msgid "Show all builds"
+msgstr "Показати всі збірки"
+
+msgid "Show more"
+msgstr "Показати більше"
+
+msgid "Show README images"
+msgstr "Показати зображення README"
+
+msgid "Skip"
+msgstr "Пропустити"
+
+msgid "Sort"
+msgstr "Сортувати"
+
+msgid "Sort packages"
+msgstr "Сортувати пакети"
+
+msgid "Source"
+msgstr "Джерело"
+
+msgid "Source not found."
+msgstr "Джерело не знайдено."
+
+msgid "Sources"
+msgstr "Джерела"
+
+msgid "Stars"
+msgstr "Зірки"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Кроки для відтворення, очікувана проти фактичної поведінки"
+
+msgid "Submit"
+msgstr "Надіслати"
+
+msgid "Submitting report…"
+msgstr "Подання звіту…"
+
+msgid "This release has no ZIP assets."
+msgstr "Цей випуск не має ресурсів ZIP."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "Це буде встановлено як «книгу» на головному екрані Kindle."
+
+msgid "to"
+msgstr "до"
+
+msgid "Uninstall"
+msgstr "Видалити"
+
+msgid "uninstall"
+msgstr "видалити"
+
+msgid "Uninstall ZenPM?"
+msgstr "Видалити ZenPM?"
+
+msgid "uninstalled"
+msgstr "видалено"
+
+msgid "Uninstalling"
+msgstr "Видалення"
+
+msgid "Uninstalling ZenPM..."
+msgstr "Видалення ZenPM..."
+
+msgid "Unknown package"
+msgstr "Невідомий пакет"
+
+msgid "Update"
+msgstr "оновлення"
+
+msgid "update"
+msgstr "оновлення"
+
+msgid "Update All"
+msgstr "Оновити все"
+
+msgid "Update check was cancelled."
+msgstr "Перевірку оновлень скасовано."
+
+msgid "Update failed: "
+msgstr "Помилка оновлення:"
+
+msgid "Update was cancelled."
+msgstr "Оновлення скасовано."
+
+msgid "updated"
+msgstr "оновлено"
+
+msgid "Updated: %d packages"
+msgstr "Оновлено: пакети %d"
+
+msgid "Updating"
+msgstr "Оновлення"
+
+msgid "Updating ZenPM..."
+msgstr "Оновлення ZenPM..."
+
+msgid "username"
+msgstr "ім'я користувача"
+
+msgid "Version: "
+msgstr "Версія:"
+
+msgid "Welcome"
+msgstr "Ласкаво просимо"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Інтерфейс Zen Package Manager для KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Zen UI встановлено. Більшість патчів не слід використовувати з Zen UI."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "Компанії ZenPM Android не вдалося запустити програму оновлення."
+
+msgid "ZenPM Android companion is not available."
+msgstr "Супутник ZenPM Android недоступний."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "Супутник ZenPM Android не встановлено або не може запуститися. див"
+
+msgid "ZenPM backend"
+msgstr "Сервер ZenPM"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "Сервер ZenPM не запустився. Переконайтеся, що ви використовували правильну версію ZenPM для цього пристрою."
+
+msgid "ZenPM bug reporter"
+msgstr "Репортер помилок ZenPM"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion перевіряє наявність оновлень."
+
+msgid "ZenPM companion update failed."
+msgstr "Помилка оновлення допоміжної програми ZenPM."
+
+msgid "ZenPM font size"
+msgstr "Розмір шрифту ZenPM"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM оновлений."
+
+msgid "ZenPM update v"
+msgstr "Оновлення ZenPM v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM оновлено до v"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log і crash.log KOReader (якщо є) будуть додані до публічної проблеми GitHub. Вони можуть містити назви пакетів, URL-адреси сховищ і шляхи до файлів."

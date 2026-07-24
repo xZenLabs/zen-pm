@@ -48,6 +48,9 @@ msgstr "Adicionar fonte"
 msgid "Added to Queue"
 msgstr "Adicionado à fila"
 
+msgid "Always manually pick version"
+msgstr "Escolha sempre a versão manualmente"
+
 msgid "Another operation is in progress. Please wait."
 msgstr "Outra operação está em curso. Aguarde."
 
@@ -201,20 +204,20 @@ msgstr "ABI detectada:"
 msgid "Detecting repo..."
 msgstr "A detectar repositório..."
 
-msgid "Disable"
-msgstr "Desativar"
-
 msgid "disable"
 msgstr "desativar"
+
+msgid "Disable"
+msgstr "Desativar"
 
 msgid "disabled"
 msgstr "desativado"
 
-msgid "Downgrade"
-msgstr "Downgrade"
-
 msgid "downgrade"
 msgstr "rebaixar"
+
+msgid "Downgrade"
+msgstr "Downgrade"
 
 msgid "downgraded"
 msgstr "rebaixado"
@@ -231,11 +234,11 @@ msgstr "download failed"
 msgid "Download this asset: "
 msgstr "Descarregue este ativo:"
 
-msgid "enable"
-msgstr "ativar"
-
 msgid "Enable"
 msgstr "Ativar"
+
+msgid "enable"
+msgstr "ativar"
 
 msgid "enabled"
 msgstr "habilitado"
@@ -525,11 +528,11 @@ msgstr "Refresh failed: "
 msgid "Refreshing repositories..."
 msgstr "A actualizar repositórios..."
 
-msgid "Reinstall"
-msgstr "Reinstalar"
-
 msgid "reinstall"
 msgstr "reinstalação"
+
+msgid "Reinstall"
+msgstr "Reinstalar"
 
 msgid "reinstalled"
 msgstr "reinstalado"
@@ -618,8 +621,8 @@ msgstr "Selecione a versão para"
 msgid "Settings"
 msgstr "Configurações"
 
-msgid "Show all release builds"
-msgstr "Mostrar todas as compilações de lançamento"
+msgid "Show all builds"
+msgstr "Mostrar todas as compilações"
 
 msgid "Show more"
 msgstr "Mostrar mais"
@@ -666,11 +669,11 @@ msgstr "Este será instalado como um “livro” no ecrã inicial do Kindle."
 msgid "to"
 msgstr "para"
 
-msgid "uninstall"
-msgstr "desinstalação"
-
 msgid "Uninstall"
 msgstr "Desinstalar"
+
+msgid "uninstall"
+msgstr "desinstalação"
 
 msgid "Uninstall ZenPM?"
 msgstr "Desinstalar o ZenPM?"
@@ -687,11 +690,11 @@ msgstr "Desinstalar o ZenPM..."
 msgid "Unknown package"
 msgstr "Pacote desconhecido"
 
-msgid "update"
-msgstr "atualização"
-
 msgid "Update"
 msgstr "Atualizar"
+
+msgid "update"
+msgstr "atualização"
 
 msgid "Update All"
 msgstr "Atualizar tudo"

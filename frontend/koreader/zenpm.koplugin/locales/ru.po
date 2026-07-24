@@ -48,6 +48,9 @@ msgstr "Добавить источник"
 msgid "Added to Queue"
 msgstr "Добавлено в очередь"
 
+msgid "Always manually pick version"
+msgstr "Всегда выбирать версию вручную"
+
 msgid "Another operation is in progress. Please wait."
 msgstr "Другая операция уже выполняется. Подождите."
 
@@ -201,20 +204,20 @@ msgstr "Обнаруженный ABI:"
 msgid "Detecting repo..."
 msgstr "Определение репозитория..."
 
-msgid "Disable"
-msgstr "Запрещать"
-
 msgid "disable"
 msgstr "запрещать"
+
+msgid "Disable"
+msgstr "Запрещать"
 
 msgid "disabled"
 msgstr "неполноценный"
 
-msgid "Downgrade"
-msgstr "Понизить версию"
-
 msgid "downgrade"
 msgstr "понизить рейтинг"
+
+msgid "Downgrade"
+msgstr "Понизить версию"
 
 msgid "downgraded"
 msgstr "понижен в рейтинге"
@@ -231,11 +234,11 @@ msgstr "download failed"
 msgid "Download this asset: "
 msgstr "Загрузите этот ресурс:"
 
-msgid "enable"
-msgstr "давать возможность"
-
 msgid "Enable"
 msgstr "Давать возможность"
+
+msgid "enable"
+msgstr "давать возможность"
 
 msgid "enabled"
 msgstr "включено"
@@ -525,11 +528,11 @@ msgstr "Refresh failed: "
 msgid "Refreshing repositories..."
 msgstr "Обновление репозиториев..."
 
-msgid "Reinstall"
-msgstr "Переустановить"
-
 msgid "reinstall"
 msgstr "переустановка"
+
+msgid "Reinstall"
+msgstr "Переустановить"
 
 msgid "reinstalled"
 msgstr "переустановлен"
@@ -618,8 +621,8 @@ msgstr "Выберите версию для"
 msgid "Settings"
 msgstr "Настройки"
 
-msgid "Show all release builds"
-msgstr "Показать все сборки релизов"
+msgid "Show all builds"
+msgstr "Показать все сборки"
 
 msgid "Show more"
 msgstr "Показать больше"
@@ -666,11 +669,11 @@ msgstr "Это будет установлено как «книга» на гл
 msgid "to"
 msgstr "к"
 
-msgid "uninstall"
-msgstr "удаление"
-
 msgid "Uninstall"
 msgstr "Удалить"
+
+msgid "uninstall"
+msgstr "удаление"
 
 msgid "Uninstall ZenPM?"
 msgstr "Удалить ZenPM?"
@@ -687,11 +690,11 @@ msgstr "Удаление ZenPM..."
 msgid "Unknown package"
 msgstr "Неизвестный пакет"
 
-msgid "update"
-msgstr "обновлять"
-
 msgid "Update"
 msgstr "Обновить"
+
+msgid "update"
+msgstr "обновлять"
 
 msgid "Update All"
 msgstr "Обновить все"

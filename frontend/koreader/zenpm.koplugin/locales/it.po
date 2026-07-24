@@ -48,6 +48,9 @@ msgstr "Aggiungi sorgente"
 msgid "Added to Queue"
 msgstr "Aggiunto alla coda"
 
+msgid "Always manually pick version"
+msgstr "Scegli sempre manualmente la versione"
+
 msgid "Another operation is in progress. Please wait."
 msgstr "Un altra operazione e in corso. Attendi."
 
@@ -201,20 +204,20 @@ msgstr "ABI rilevato:"
 msgid "Detecting repo..."
 msgstr "Rilevamento repository..."
 
-msgid "Disable"
-msgstr "Disabilita"
-
 msgid "disable"
 msgstr "disabilitare"
+
+msgid "Disable"
+msgstr "Disabilita"
 
 msgid "disabled"
 msgstr "disabilitato"
 
-msgid "Downgrade"
-msgstr "Downgrade"
-
 msgid "downgrade"
 msgstr "downgrade"
+
+msgid "Downgrade"
+msgstr "Downgrade"
 
 msgid "downgraded"
 msgstr "declassato"
@@ -231,11 +234,11 @@ msgstr "download non riuscito"
 msgid "Download this asset: "
 msgstr "Scarica questa risorsa:"
 
-msgid "enable"
-msgstr "abilitare"
-
 msgid "Enable"
 msgstr "Abilitare"
+
+msgid "enable"
+msgstr "abilitare"
 
 msgid "enabled"
 msgstr "abilitato"
@@ -525,11 +528,11 @@ msgstr "Aggiornamento non riuscito: "
 msgid "Refreshing repositories..."
 msgstr "Aggiornamento repository..."
 
-msgid "Reinstall"
-msgstr "Reinstalla"
-
 msgid "reinstall"
 msgstr "reinstallazione"
+
+msgid "Reinstall"
+msgstr "Reinstalla"
 
 msgid "reinstalled"
 msgstr "reinstallato"
@@ -618,8 +621,8 @@ msgstr "Seleziona la versione per"
 msgid "Settings"
 msgstr "Impostazioni"
 
-msgid "Show all release builds"
-msgstr "Mostra tutte le build di rilascio"
+msgid "Show all builds"
+msgstr "Mostra tutte le build"
 
 msgid "Show more"
 msgstr "Mostra di più"
@@ -666,11 +669,11 @@ msgstr "Questo verrà installato come un \"libro\" sulla schermata iniziale di K
 msgid "to"
 msgstr "A"
 
-msgid "uninstall"
-msgstr "disinstallazione"
-
 msgid "Uninstall"
 msgstr "Disinstalla"
+
+msgid "uninstall"
+msgstr "disinstallazione"
 
 msgid "Uninstall ZenPM?"
 msgstr "Disinstallare ZenPM?"
@@ -687,11 +690,11 @@ msgstr "Disinstallazione di ZenPM in corso..."
 msgid "Unknown package"
 msgstr "Pacchetto sconosciuto"
 
-msgid "update"
-msgstr "aggiornamento"
-
 msgid "Update"
 msgstr "Aggiorna"
+
+msgid "update"
+msgstr "aggiornamento"
 
 msgid "Update All"
 msgstr "Aggiorna tutto"
