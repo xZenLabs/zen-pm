@@ -267,7 +267,7 @@ var ZenUtils = (function () {
             { id: 'sources',   label: 'Sources',    icon: bp + '/assets/sources.svg',   href: bp + '/pages/sources/index.html' },
             { id: 'installed', label: 'Installed',  icon: bp + '/assets/packages.svg',  href: bp + '/pages/installed/index.html' },
             { id: 'debug',     label: 'Debug',      icon: bp + '/assets/debug.svg',     href: bp + '/pages/debug/index.html' },
-            { id: 'search',    label: 'Search',     icon: bp + '/assets/search.svg',    href: bp + '/pages/search/index.html' }
+            { id: 'search',    label: 'Discover',   icon: bp + '/assets/discover.svg',  href: bp + '/pages/search/index.html' }
         ];
 
         var nav = document.createElement('nav');

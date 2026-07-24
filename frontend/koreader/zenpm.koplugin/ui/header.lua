@@ -35,7 +35,7 @@ function Header.page_title(view)
     if page == "home" then
         return _("Featured") .. " (" .. tostring(#(state.featured_packages or {})) .. ")"
     elseif page == "search" then
-        return _("Search") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
+        return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
     elseif page == "categories" then
         return _("Categories") .. " (" .. filtered_count(state.visible_categories, state.categories, state.filters.categories) .. ")"
     elseif page == "category_details" then
@@ -134,10 +134,13 @@ local function toolbar_y(y, h, control_h)
     return y + math.floor((h - control_h) / 2)
 end
 
+local function title_button_width(label)
+    return P.text_size(label, Theme.scale(256), "small", { bold = true }).w + Theme.scale(28)
+end
+
 local function draw_title_button(view, bb, x, y, label, callback, hit_id, enabled)
     local h = Theme.scale(42)
-    local label_size = P.text_size(label, Theme.scale(256), "small", { bold = true })
-    local w = label_size.w + Theme.scale(28)
+    local w = title_button_width(label)
     P.box(bb, x, y, w, h, {
         border_color = enabled and Theme.button_bg or Theme.soft,
         background = enabled and Theme.button_bg or Theme.bg,
@@ -231,31 +234,38 @@ function Header.draw(view, bb, x, y, w)
     local filter_kind = ({
         search = "search",
         category_details = "category",
-        installed = "installed",
     })[page]
     local sort_kind = ({
         search = "search",
         category_details = "category",
+        installed = "installed",
         source_details = "source",
     })[page]
     if page == "sources" then
-        draw_title_button(view, bb, control_x, button_y, "+ " .. _("Add Source"), function()
+        local label = "+ " .. _("Add Source")
+        local add_source_x = x + w - pad - title_button_width(label)
+        draw_title_button(view, bb, add_source_x, button_y, label, function()
             view.app:prompt_add_source()
         end, "add-source", true)
         return y + toolbar_h
-    elseif page == "installed" then
-        local updates = view.app:installed_update_count()
-        local enabled = updates > 0 and not view.app.state.queue_running
-        control_x = control_x + draw_title_button(view, bb, control_x, button_y, _("Update All") .. " (" .. tostring(updates) .. ")", function()
-            view.app:queue_all_updates()
-        end, "upgrade-all", enabled) + gap
     end
     if sort_kind then
         control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
     end
+    local right_x = x + w - pad
+    if page == "installed" then
+        local updates = view.app:installed_update_count()
+        local label = _("Update All") .. " (" .. tostring(updates) .. ")"
+        local enabled = updates > 0 and not view.app.state.queue_running
+        right_x = right_x - title_button_width(label)
+        draw_title_button(view, bb, right_x, button_y, label, function()
+            view.app:queue_all_updates()
+        end, "upgrade-all", enabled)
+    end
     if filter_kind then
         local search_w = icon_button_width(_("Search"), Theme.scale(24))
-        Header.draw_search_button(view, bb, x + w - pad - search_w, button_y, filter_kind)
+        right_x = right_x - search_w
+        Header.draw_search_button(view, bb, right_x, button_y, filter_kind)
     end
     if page == "queue" then
         local button_h = Theme.scale(42)

@@ -25,20 +25,20 @@ return {
 
     TABS = {
         { id = "home", label = "Featured" },
-        { id = "categories", label = "Categories" },
         { id = "sources", label = "Sources" },
+        { id = "categories", label = "Categories" },
         { id = "installed", label = "Installed" },
         -- { id = "debug", label = "Debug" },
-        { id = "search", label = "Search" },
+        { id = "search", label = "Discover" },
     },
 
     CATEGORIES = {
-        { id = "media", label = "Media", icon = "media.svg" },
-        { id = "utility", label = "Utility", icon = "utility.svg" },
-        { id = "productivity", label = "Productivity", icon = "productivity.svg" },
-        { id = "games", label = "Games", icon = "games.svg" },
-        { id = "theme", label = "Theme", icon = "theme.svg" },
-        { id = "koreader-patches", label = "Patches", icon = "patch.svg" },
         { id = "fonts", label = "Fonts", icon = "fonts.svg" },
+        { id = "games", label = "Games", icon = "games.svg" },
+        { id = "media", label = "Media", icon = "media.svg" },
+        { id = "koreader-patches", label = "Patches", icon = "patch.svg" },
+        { id = "productivity", label = "Productivity", icon = "productivity.svg" },
+        { id = "theme", label = "Theme", icon = "theme.svg" },
+        { id = "utility", label = "Utility", icon = "utility.svg" },
     },
 }

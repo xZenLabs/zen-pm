@@ -54,6 +54,38 @@ function App.save_setting(key, value)
     settings:flush()
 end
 
+function App:defer_font_uninstall(pkg, asset)
+    local pending = App.load_setting("pending_font_uninstalls", {})
+    if type(pending) ~= "table" then pending = {} end
+    local id = pkg and pkg.id
+    for _, item in ipairs(pending) do
+        if type(item) == "table" and item.id == id then
+            self:restart_koreader()
+            return
+        end
+    end
+    table.insert(pending, { id = id, asset = asset })
+    App.save_setting("pending_font_uninstalls", pending)
+    self:restart_koreader()
+end
+
+function App:finish_deferred_font_uninstalls()
+    if not self.backend_ready then return end
+    local pending = App.load_setting("pending_font_uninstalls", {})
+    if type(pending) ~= "table" or #pending == 0 then return end
+
+    local remaining = {}
+    for _, item in ipairs(pending) do
+        if type(item) ~= "table" or type(item.id) ~= "string" or item.id == "" then
+            -- Discard malformed state rather than retrying it forever.
+        else
+            local ok = self.client:package_action(item.id, "uninstall", item.asset, nil)
+            if not ok then table.insert(remaining, item) end
+        end
+    end
+    App.save_setting("pending_font_uninstalls", remaining)
+end
+
 function App:new(plugin)
     local o = {
         plugin = plugin,
@@ -79,8 +111,8 @@ function App:new(plugin)
             show_readme_images = App.load_setting("show_readme_images", true),
             update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
-            filters = { search = "", installed = "", categories = "", category = "" },
-            sorts = { search = "stars", installed = "stars", category = "stars", source = "stars" },
+            filters = { search = "", categories = "", category = "" },
+            sorts = { search = "stars", installed = "name_asc", category = "stars", source = "stars" },
             scroll = {},
             packages = {},
             visible_packages = {},
@@ -339,6 +371,96 @@ local function plugin_has_delete_settings(inst)
         and type(inst.deletePluginSettings) == "function"
 end
 
+local function font_directory_for_package(pkg)
+    local id = type(pkg) == "table" and pkg.id or nil
+    if type(id) ~= "string" then return nil end
+    local directory = id:gsub("^font[_-]+", ""):lower()
+    return directory ~= "" and directory or nil
+end
+
+local function references_font_directory(value, directory)
+    if type(value) ~= "string" or not directory then return false end
+    local path = value:gsub("\\", "/"):lower()
+    return path:find("fonts/" .. directory .. "/", 1, true) ~= nil
+end
+
+local function reset_font_references(value, directory, seen)
+    if type(value) == "string" then
+        if references_font_directory(value, directory) then
+            return "NotoSans-Regular.ttf", true
+        end
+        return value, false
+    end
+    if type(value) ~= "table" then return value, false end
+    seen = seen or {}
+    if seen[value] then return value, false end
+    seen[value] = true
+    local changed = false
+    for key, item in pairs(value) do
+        local replacement, item_changed = reset_font_references(item, directory, seen)
+        if item_changed then
+            value[key] = replacement
+            changed = true
+        end
+    end
+    return value, changed
+end
+
+local function reset_settings_font_references(settings, directory)
+    if type(settings) ~= "table" or type(settings.readSetting) ~= "function"
+            or type(settings.saveSetting) ~= "function" then
+        return false
+    end
+    local changed = false
+    for _, key in ipairs({
+        "cre_font", "fallback_font", "monospace_font", "header_font",
+        "cre_font_family_fonts", "font_ui_fallbacks", "footer",
+    }) do
+        local value = settings:readSetting(key)
+        local replacement, value_changed = reset_font_references(value, directory)
+        if value_changed then
+            settings:saveSetting(key, replacement)
+            changed = true
+        end
+    end
+    if changed and type(settings.flush) == "function" then settings:flush() end
+    return changed
+end
+
+-- A deleted font may still be selected by the active reader or by Zen UI's
+-- library-wide font setting. Reset the persisted references first; removal is
+-- deferred until the next ZenPM session, after KOReader restarts with defaults.
+local function reset_active_font_before_uninstall(pkg)
+    local directory = font_directory_for_package(pkg)
+    if not directory then return false end
+    local changed = false
+
+    if reset_settings_font_references(rawget(_G, "G_reader_settings"), directory) then
+        changed = true
+    end
+
+    local zen_ui = koreader_plugin_instance({ id = "zen_ui", plugin_module = "zen_ui" })
+    if zen_ui and type(zen_ui.config) == "table" then
+        local _, config_changed = reset_font_references(zen_ui.config, directory)
+        if config_changed then
+            if type(zen_ui.config.library_font) == "table" then
+                zen_ui.config.library_font.font_face = "default"
+            end
+            _G.__ZEN_UI_LIBRARY_FONT_CFG = zen_ui.config.library_font
+            if type(zen_ui.saveConfig) == "function" then zen_ui:saveConfig() end
+            changed = true
+        end
+    end
+
+    local ok_reader, ReaderUI = pcall(require, "apps/reader/readerui")
+    local reader = ok_reader and ReaderUI and ReaderUI.instance or nil
+    if reader and reset_settings_font_references(reader.doc_settings, directory) then
+        changed = true
+    end
+
+    return changed
+end
+
 -- Locate a package's .koplugin directory on disk, even if the plugin is not
 -- loaded (disabled, or only active in the other UI). Uses PluginLoader's own
 -- discovery so we honour DEFAULT_PLUGIN_PATH and extra_plugin_paths.
@@ -566,11 +688,20 @@ function App:queue_all_updates()
         if pkg.installed and pkg.update_available then
             local key = queue_key(pkg.id or pkg.name, nil)
             if not queued[key] then
+                if Models.is_font_package(pkg) then
+                    if self:queue_package_action(pkg, "update", nil, { silent = true }) then
+                        added = added + 1
+                        kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
+                    end
+                    queued[key] = true
+                    add_next(index + 1)
+                    return
+                end
                 local asset = nil
                 local ok, info = self.client:get_package_assets(pkg.id or pkg.name)
                 local candidates = ok and type(info) == "table" and info.needs_choice
                     and type(info.candidates) == "table" and info.candidates or nil
-                if candidates and #candidates > 0 then
+                if candidates and #candidates > 0 and not Models.is_font_package(pkg) then
                     self:choose_package_asset(pkg, "update", candidates, nil, {
                         silent = true,
                         on_queued = function(was_added)
@@ -872,7 +1003,7 @@ function App:refresh_queue_package_state()
     local installed = Models.installed_packages(packages)
     table.insert(installed, 1, zenpm_self_package(self.daemon))
     self.state.installed_packages = installed
-    self.state.visible_packages = self:sorted_packages("installed", Models.filter_packages(installed, self.state.filters.installed))
+    self.state.visible_packages = self:sorted_packages("installed", installed)
 end
 
 function App:finish_queue_batch(batch)
@@ -1039,6 +1170,7 @@ function App:show()
     self:schedule_automatic_update_check()
     self.scan_plugins_on_open = true
     if self.backend_ready then
+        self:finish_deferred_font_uninstalls()
         self:navigate(self.state.active_tab or "home")
         self:schedule_plugin_scan_after_open()
     else
@@ -1213,6 +1345,7 @@ function App:backend_started(data, on_ready)
         self:log_timing("backend ready (open -> health ok)", self.t_open)
     end
     self:clear_status()
+    self:finish_deferred_font_uninstalls()
     if on_ready then
         on_ready()
     else
@@ -1716,7 +1849,7 @@ function App:show_installed()
     table.insert(installed, 1, zenpm_self_package(self.daemon))
     self.state.packages = packages
     self.state.installed_packages = installed
-    self.state.visible_packages = self:sorted_packages("installed", Models.filter_packages(installed, self.state.filters.installed))
+    self.state.visible_packages = self:sorted_packages("installed", installed)
     self:clear_status()
     self:refresh()
 end
@@ -1885,18 +2018,14 @@ end
 
 function App:set_filter(kind, value)
     self.state.filters[kind] = value or ""
-    if kind == "installed" then
-        self:reset_scroll("installed")
-    elseif kind == "categories" then
+    if kind == "categories" then
         self:reset_scroll("categories")
     elseif kind == "category" and self.state.current_category then
         self:reset_scroll("category:" .. tostring(self.state.current_category.id))
     else
         self:reset_scroll("search")
     end
-    if kind == "installed" then
-        self:show_installed()
-    elseif kind == "categories" then
+    if kind == "categories" then
         self:show_categories()
     elseif kind == "category" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
@@ -1927,6 +2056,21 @@ function App:prompt_sort(kind)
         end
         return text
     end
+    if kind == "installed" then
+        Modals.actions(_("Sort packages"), {
+            {
+                icon = "sort_asc",
+                text = label("name_asc", _("Ascending")),
+                callback = function() self:set_sort(kind, "name_asc") end,
+            },
+            {
+                icon = "sort_desc",
+                text = label("name_desc", _("Descending")),
+                callback = function() self:set_sort(kind, "name_desc") end,
+            },
+        })
+        return
+    end
     Modals.actions(_("Sort packages"), {
         {
             text = label("stars", _("Stars")),
@@ -1946,10 +2090,7 @@ end
 function App:prompt_filter(kind)
     local title = _("Search packages")
     local hint = _("Search...")
-    if kind == "installed" then
-        title = _("Search installed packages")
-        hint = _("Search installed...")
-    elseif kind == "categories" then
+    if kind == "categories" then
         title = _("Search categories")
         hint = _("Search categories...")
     elseif kind == "category" then
@@ -2055,14 +2196,14 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:confirm_toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = Models.has_github_source(pkg) and function()
+            downgrade = Models.has_github_source(pkg) and not Models.is_font_package(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif Models.has_github_source(pkg) then
+    elseif Models.has_github_source(pkg) and not Models.is_font_package(pkg) then
         self:prompt_default_package_version(pkg, on_done, "install")
     else
         self:confirm_package_action(pkg, "install", on_done)
@@ -2351,7 +2492,8 @@ function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
 end
 
 function App:confirm_package_action(pkg, action, on_done)
-    local opts = action == "update" and pkg.latest_release and { release = pkg.latest_release } or nil
+    local opts = action == "update" and pkg.latest_release and not Models.is_font_package(pkg)
+        and { release = pkg.latest_release } or nil
     self:start_package_action(pkg, action, on_done, opts)
 end
 
@@ -2366,6 +2508,12 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action_installs_package(action) then
+        -- Fonts use the catalog's explicit ZIP URL. GitHub release assets do
+        -- not describe installable font builds, so never invoke either chooser.
+        if Models.is_font_package(pkg) then
+            self:queue_package_action(pkg, action, nil, opts)
+            return
+        end
         local ok, info = self.client:get_package_assets(id)
         local has_candidates = type(info) == "table" and info.needs_choice
             and type(info.candidates) == "table" and #info.candidates > 0
@@ -2444,6 +2592,12 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         action = action,
     })
     local is_patch = Models.is_patch_package(pkg)
+    local font_reset = action == "uninstall" and Models.is_font_package(pkg)
+        and reset_active_font_before_uninstall(pkg)
+    if font_reset then
+        self:defer_font_uninstall(pkg, asset)
+        return
+    end
     local display_name = is_patch and asset and asset ~= ""
         and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
@@ -2470,7 +2624,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         patch_was_installed = is_patch and Models.patch_file_installed(pkg, asset) or false,
         was_installed = pkg.installed and true or false,
         target_version = opts and opts.release or pkg.latest_version,
-        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
+        prompt_restart = font_reset or (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
@@ -2783,26 +2937,32 @@ function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
         {
             text = _("About"),
+            icon = "details",
             callback = function() self:show_about() end,
         },
         {
-            text = self.state.update_available and "\239\128\155  " .. _("Update") or _("Update"),
+            text = _("Update"),
+            icon = "upgrade",
             callback = function() self:start_update() end,
         },
         {
             text = _("Refresh"),
+            icon = "refresh",
             callback = function() self:refresh_repos() end,
         },
         {
             text = _("Report a Bug"),
+            icon = "settings_bug",
             callback = function() BugReporter:show(self) end,
         },
         {
             text = _("Settings"),
+            icon = "settings",
             callback = function() self:show_settings() end,
         },
         {
             text = _("Quit"),
+            icon = "uninstall",
             callback = function() self:quit() end,
         },
     }, {

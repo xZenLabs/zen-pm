@@ -252,7 +252,7 @@ function Modals.actions(title, rows, options)
     for _, row in ipairs(rows or {}) do
         table.insert(buttons, {
             {
-                text = row.text,
+                text = row.icon and InlineIcons.label(row.icon, row.text) or row.text,
                 align = row.align or options.align,
                 checked_func = row.checked_func,
                 callback = function()

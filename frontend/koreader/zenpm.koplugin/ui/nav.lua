@@ -22,7 +22,7 @@ local function tab_label(tab_id)
     elseif tab_id == "debug" then
         return _("Debug")
     elseif tab_id == "search" then
-        return _("Search")
+        return _("Discover")
     end
     return tostring(tab_id or "")
 end
@@ -33,7 +33,7 @@ local ICONS = {
     sources = "sources.svg",
     installed = "packages.svg",
     debug = "debug.svg",
-    search = "search.svg",
+    search = "discover.svg",
 }
 
 function Nav.draw(view, bb, x, y, w, h)

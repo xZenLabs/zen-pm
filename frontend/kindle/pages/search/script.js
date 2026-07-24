@@ -188,7 +188,7 @@
         var visible = query
             ? state.packages.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; })
             : state.packages;
-        el.packagesHeading.textContent = "Search (" + visible.length + (query ? "/" + state.packages.length : "") + ")";
+        el.packagesHeading.textContent = "Discover (" + visible.length + (query ? "/" + state.packages.length : "") + ")";
         if (!visible.length) {
             el.hint.textContent = query ? "No packages match \"" + query + "\"." : "No packages found. Try Refresh Packages.";
             ZenUtils.reconcilePackageCards(el.packages, [], performPackageAction, showPackageDetails);
@@ -201,7 +201,7 @@
     }
 
     function setupChrome() {
-        ZenUtils.setupPageChrome('ZenPM - Search', loadPackages);
+        ZenUtils.setupPageChrome('ZenPM - Discover', loadPackages);
     }
 
     function bindEvents() {

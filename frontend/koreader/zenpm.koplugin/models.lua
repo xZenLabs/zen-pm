@@ -189,8 +189,10 @@ function Models.sort_packages(packages, sort_key)
     end
     sort_key = sort_key or "stars"
     table.sort(out, function(a, b)
-        if sort_key == "name" then
+        if sort_key == "name" or sort_key == "name_asc" then
             return compare_text(a, b)
+        elseif sort_key == "name_desc" then
+            return compare_text(b, a)
         elseif sort_key == "repo" then
             local ar, br = package_repo(a), package_repo(b)
             if ar ~= br then

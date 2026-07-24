@@ -76,7 +76,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			override = assetOverride
 		}
 		installEntry := entry
-		if pkgID == id && releaseTag != "" {
+		if pkgID == id && releaseTag != "" && !isFontPackage(entry) {
 			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
 			if err != nil {
 				j.Abort("release failed: " + err.Error())

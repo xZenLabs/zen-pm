@@ -128,7 +128,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     P.box(bb, x, y, w, h, { border = opts.border })
     local pad = opts.pad or Theme.scale(10)
     local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(72), h - pad * 2)
-    local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(10) or 0)
+    local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
     local update_action = not queued and pkg.installed and pkg.update_available
@@ -184,7 +184,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local title_y = y + vpad
     local max_bottom = y + h - vpad
     -- Meta row reserves room for the verification icon, so wrap it tighter.
-    local verify_size = Theme.font_scale(16)
+    local verify_size = Theme.font_scale(20)
     local verify_gap = Theme.font_scale(5)
     local meta_w = text_w - verify_size - verify_gap
 
@@ -249,7 +249,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     end
 
     if pkg.installed then
-        local check = status_icon_size
+        local check = Theme.font_scale(20)
         local cx = x + w - check - Theme.scale(6)
         local cy = y + Theme.scale(5)
         if not P.image(bb, Images.asset("checkmark.svg"), cx, cy, check, check, { is_icon = true }) then
@@ -259,14 +259,14 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
             P.dim(bb, cx, cy, check, check)
         end
     elseif should_show_stars(view, pkg) then
-        local star = status_icon_size
+        local star = Theme.font_scale(20)
         local sx = x + w - star - Theme.scale(6)
         local sy = y + Theme.scale(5)
         local stars = package_stars(pkg)
         local gap = Theme.font_scale(4)
         local number_size = P.text_size(stars, Theme.scale(72), "small", { bold = true })
         P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true })
-        if not P.image(bb, Images.asset("star.svg"), sx, sy, star, star, { is_icon = true }) then
+        if not P.image(bb, Images.asset("star.filled.svg"), sx, sy, star, star, { is_icon = true }) then
             P.center_text(bb, "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
         end
     end
@@ -364,7 +364,7 @@ function Cards.compact(view, bb, x, y, w, opts)
         P.center_text(bb, opts.icon_fallback or "?", ix, iy + Theme.scale(14), icon, "small", { bold = true })
     end
 
-    local text_x = x + pad + icon + Theme.scale(10)
+    local text_x = x + pad + icon + Theme.scale(12)
     local right_icon = opts.right_icon and math.min(Theme.scale(30), h - Theme.scale(16)) or 0
     local text_w = w - (text_x - x) - pad - right_icon - (right_icon > 0 and Theme.scale(12) or 0)
     local compact = h < m.category_h

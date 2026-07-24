@@ -66,7 +66,14 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, releaseTag string) (string, string, []byte, error) {
 	assetName := m.installAssetName(entry, override)
 	assetURL := ""
-	if releaseTag == "" {
+	if isFontPackage(entry) {
+		selected, selectedOK := selectedAsset(entry.Assets, assetName)
+		if selectedOK && strings.TrimSpace(selected.URL) != "" {
+			assetURL = strings.TrimSpace(selected.URL)
+		} else {
+			return "", "", nil, fmt.Errorf("font package %q requires an explicit ZIP asset URL", entry.ID)
+		}
+	} else if releaseTag == "" {
 		selected, selectedOK := selectedAsset(entry.Assets, assetName)
 		if selectedOK {
 			assetURL = strings.TrimSpace(selected.URL)

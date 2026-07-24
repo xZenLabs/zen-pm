@@ -174,8 +174,11 @@ func TestInstallGenericFontNatively(t *testing.T) {
 	}
 
 	manager := New(st, repo.New(st), "host")
-	if err := manager.Install("font-cartisse"); err != nil {
+	if err := manager.InstallRelease("font-cartisse", "v999.0", "font-cartisse.zip"); err != nil {
 		t.Fatal(err)
+	}
+	if installed, version := st.IsInstalled("font-cartisse"); !installed || version != "4.1" {
+		t.Fatalf("installed font = %t %q, want true 4.1", installed, version)
 	}
 	for _, name := range []string{"Cartisse-Regular.ttf", "Cartisse-Bold.otf"} {
 		if _, err := os.Stat(filepath.Join(koRoot, "fonts", "Cartisse", name)); err != nil {
@@ -206,6 +209,20 @@ func TestDownloadInstallAssetResolvesRequestedReleaseBeforeCatalogURL(t *testing
 	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "plugin.koplugin.zip", "v1.4.3")
 	if err == nil || !strings.Contains(err.Error(), "source is not a GitHub repository") {
 		t.Fatalf("download error = %v, want GitHub release resolution error", err)
+	}
+}
+
+func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
+	entry := &repo.CatalogEntry{
+		ID:       "font-cartisse",
+		Category: "fonts",
+		Source:   "https://github.com/example/cartisse-fonts",
+		Assets:   `[{"asset":"font-cartisse.zip"}]`,
+	}
+
+	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "font-cartisse.zip", "v4.1")
+	if err == nil || !strings.Contains(err.Error(), "requires an explicit ZIP asset URL") {
+		t.Fatalf("download error = %v, want explicit font ZIP URL error", err)
 	}
 }
 
