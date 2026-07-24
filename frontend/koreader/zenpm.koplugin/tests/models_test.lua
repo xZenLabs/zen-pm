@@ -39,6 +39,14 @@ assert(newest[1].id == "third" and newest[2].id == "second" and newest[3].id == 
 local oldest = Models.sort_packages(installed, "installed_at_asc")
 assert(oldest[1].id == "first" and oldest[2].id == "second" and oldest[3].id == "third")
 
+local published = {
+    { id = "first", name = "First", published_at = "2026-07-21T10:00:00Z" },
+    { id = "second", name = "Second", published_at = "2026-07-22T10:00:00Z" },
+    { id = "third", name = "Third", published_at = "2026-07-23T10:00:00Z" },
+}
+local recent = Models.sort_packages(published, "published_at_desc")
+assert(recent[1].id == "third" and recent[2].id == "second" and recent[3].id == "first")
+
 local patch = Models.installed_patch_item({
     id = "patch", installed_asset_dates = { ["patch.lua"] = "2026-07-23T10:00:00Z" },
 }, "patch.lua")

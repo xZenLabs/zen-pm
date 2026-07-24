@@ -32,4 +32,5 @@ type CatalogEntry struct {
 	Constraints           string
 	PluginModule          string
 	ReadmeURL             string
+	PublishedAt           string
 }

@@ -24,7 +24,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at
 type CatalogEntry struct {
 	Repo                  string
 	Priority              int
@@ -57,6 +57,7 @@ type CatalogEntry struct {
 	Constraints           string
 	PluginModule          string
 	ReadmeURL             string
+	PublishedAt           string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -109,6 +110,7 @@ func (e *CatalogEntry) serialize() string {
 		e.PluginModule,
 		optionalIntField(e.FeaturedOrder),
 		e.ReadmeURL,
+		e.PublishedAt,
 	}, "|")
 }
 
@@ -215,6 +217,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 		if len(parts) >= 29 {
 			e.ReadmeURL = parts[28]
 		}
+	}
+	if len(parts) >= 32 {
+		e.PublishedAt = parts[31]
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -339,6 +344,7 @@ type manifestJSON struct {
 		SourceType            string          `json:"source_type,omitempty"`
 		SourceURL             string          `json:"source_url,omitempty"`
 		ReadmeURL             string          `json:"readme_url,omitempty"`
+		PublishedAt           string          `json:"published_at,omitempty"`
 		Stars                 string          `json:"stars,omitempty"`
 		Assets                json.RawMessage `json:"assets,omitempty"`
 		Constraints           json.RawMessage `json:"constraints,omitempty"`
@@ -452,6 +458,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			SourceType:            p.SourceType,
 			SourceURL:             resolveURL(repoURL, p.SourceURL),
 			ReadmeURL:             resolveURL(repoURL, p.ReadmeURL),
+			PublishedAt:           strings.TrimSpace(p.PublishedAt),
 			Stars:                 strings.TrimSpace(p.Stars),
 			Assets:                resolveAssetURLs(repoURL, p.Assets),
 			Constraints:           compactJSONField(p.Constraints),

@@ -777,6 +777,10 @@ components:
             type: string
             format: date-time
           description: UTC install timestamps by installed patch-file asset.
+        published_at:
+          type: string
+          format: date-time
+          description: Package publication timestamp supplied by the repository.
         latest_version:
           type: string
           description: Latest GitHub release tag when update checks are requested.

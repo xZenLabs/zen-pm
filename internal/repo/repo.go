@@ -96,6 +96,9 @@ func (m *Manager) Refresh() error {
 	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
 		return fmt.Errorf("write merged catalog: %w", err)
 	}
+	if err := m.st.WriteValue(state.CatalogPublishedAtRefreshKey, ""); err != nil {
+		log.Warnf("Could not clear catalog publication-date refresh marker: %v", err)
+	}
 	m.CacheInstalledUninstallScripts(merged)
 	m.touchRefreshMarker()
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
@@ -221,7 +224,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
-			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL,
+			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, PublishedAt: e.PublishedAt,
 		})
 	}
 	return out
@@ -237,7 +240,7 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
-			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL,
+			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, PublishedAt: e.PublishedAt,
 		})
 	}
 	return out

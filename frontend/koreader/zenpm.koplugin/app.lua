@@ -87,6 +87,8 @@ function App:finish_deferred_font_uninstalls()
 end
 
 function App:new(plugin)
+    local saved_sorts = App.load_setting("sorts", {})
+    if type(saved_sorts) ~= "table" then saved_sorts = {} end
     local o = {
         plugin = plugin,
         client = Client:new(),
@@ -112,7 +114,13 @@ function App:new(plugin)
             update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", categories = "", category = "" },
-            sorts = { search = "stars", installed = "name_asc", sources = "name_asc", category = "stars", source = "stars" },
+            sorts = {
+                search = saved_sorts.search or "stars",
+                installed = saved_sorts.installed or "name_asc",
+                sources = saved_sorts.sources or "name_asc",
+                category = saved_sorts.category or "stars",
+                source = saved_sorts.source or "stars",
+            },
             scroll = {},
             packages = {},
             visible_packages = {},
@@ -2040,6 +2048,7 @@ end
 
 function App:set_sort(kind, value)
     self.state.sorts[kind] = value or "stars"
+    App.save_setting("sorts", self.state.sorts)
     self:reset_scroll(self:scroll_key())
     if kind == "installed" then
         self:show_installed()
@@ -2090,7 +2099,7 @@ function App:prompt_sort(kind)
         Modals.actions(title, rows)
         return
     end
-    Modals.actions(title, {
+    local rows = {
         {
             text = _("Stars"),
             checked_func = selected("stars"),
@@ -2106,7 +2115,15 @@ function App:prompt_sort(kind)
             checked_func = selected("repo"),
             callback = function() self:set_sort(kind, "repo") end,
         },
-    })
+    }
+    if kind == "search" then
+        table.insert(rows, 2, {
+            text = _("Published date (newest first)"),
+            checked_func = selected("published_at_desc"),
+            callback = function() self:set_sort(kind, "published_at_desc") end,
+        })
+    end
+    Modals.actions(title, rows)
 end
 
 function App:prompt_filter(kind)

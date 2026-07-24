@@ -10,14 +10,15 @@ import (
 )
 
 const (
-	defaultKindleHome          = "/mnt/us/ZenPM"
-	defaultKoboHome            = "/mnt/onboard/.adds/ZenPM"
-	kindlePersistDir           = "/mnt/us/.ZenPM"
-	koboPersistDir             = "/mnt/onboard/.adds/.ZenPM"
-	DefaultZenLabsRepoName     = "ZenLabs"
-	DefaultZenLabsRepoURL      = "https://repo.zen-labs.org"
-	DefaultKindleForgeRepoName = "KindleForge"
-	DefaultKindleForgeRepoURL  = "https://kf.penguins184.xyz"
+	defaultKindleHome            = "/mnt/us/ZenPM"
+	defaultKoboHome              = "/mnt/onboard/.adds/ZenPM"
+	kindlePersistDir             = "/mnt/us/.ZenPM"
+	koboPersistDir               = "/mnt/onboard/.adds/.ZenPM"
+	DefaultZenLabsRepoName       = "ZenLabs"
+	DefaultZenLabsRepoURL        = "https://repo.zen-labs.org"
+	DefaultKindleForgeRepoName   = "KindleForge"
+	DefaultKindleForgeRepoURL    = "https://kf.penguins184.xyz"
+	CatalogPublishedAtRefreshKey = "catalog_published_at_refresh_required"
 )
 
 // State holds all resolved paths for ZenPM's working directories.

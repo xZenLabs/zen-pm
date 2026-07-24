@@ -70,6 +70,7 @@ type pkgJSON struct {
 	SourceType            string            `json:"source_type,omitempty"`
 	SourceURL             string            `json:"source_url,omitempty"`
 	ReadmeURL             string            `json:"readme_url,omitempty"`
+	PublishedAt           string            `json:"published_at,omitempty"`
 	Stars                 string            `json:"stars,omitempty"`
 	PluginModule          string            `json:"plugin_module,omitempty"`
 	Assets                json.RawMessage   `json:"assets,omitempty"`
@@ -188,6 +189,10 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 	if len(catalog) == 0 {
 		log.Info("Catalog is empty — running initial repo refresh")
 		return nil, true
+	}
+	if refreshRequired, _ := s.st.ReadValue(state.CatalogPublishedAtRefreshKey); refreshRequired == "1" {
+		log.Info("Catalog needs publication-date refresh")
+		return catalog, true
 	}
 	if age := s.repos.CatalogAge(); age >= catalogMaxAge {
 		log.Infof("Catalog is %s old — running repo refresh", age.Round(time.Hour))
@@ -540,6 +545,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			SourceType:            e.SourceType,
 			SourceURL:             e.SourceURL,
 			ReadmeURL:             e.ReadmeURL,
+			PublishedAt:           e.PublishedAt,
 			Stars:                 e.Stars,
 			PluginModule:          e.PluginModule,
 			Assets:                rawJSON(e.Assets),

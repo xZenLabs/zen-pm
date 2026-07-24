@@ -36,6 +36,7 @@ Example:
       "featured": true,
       "featured_order": 10,
       "featured_image": "packages/koreader-kindle/featured.png",
+      "published_at": "2026-03-01T12:00:00Z",
       "source": "https://github.com/koreader/koreader",
       "readme_url": "packages/koreader-kindle/README.md",
       "dependencies": ["kual"],
@@ -57,6 +58,9 @@ present on the device.
 
 `conflicts` lists package IDs that should not be used together. Clients must
 warn before installation but may allow the user to continue.
+
+`published_at` is an optional UTC ISO-8601 timestamp used to sort newly
+published packages on the Discover page.
 
 ## Merge and precedence behavior
 

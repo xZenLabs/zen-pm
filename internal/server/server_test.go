@@ -64,6 +64,31 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 }
 
+func TestInitialCatalogStateRefreshesCatalogMissingPublicationDates(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteValue(state.CatalogPublishedAtRefreshKey, "1"); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+
+	catalog, needsRefresh := srv.initialCatalogState()
+	if !needsRefresh || len(catalog) != 1 {
+		t.Fatalf("catalog = %#v, needsRefresh = %t", catalog, needsRefresh)
+	}
+}
+
 func TestHandlePackageUpdateStartsAllInstalledUpdates(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -130,7 +155,7 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	if err := st.WriteCatalog([]state.CatalogEntry{{
 		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
 		Platforms: []string{"host"}, Featured: true, FeaturedOrder: &featuredOrder,
-		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md",
+		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md", PublishedAt: "2026-07-24T12:00:00Z",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +174,9 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 	if packages[0].ReadmeURL != "https://repo.zen-labs.org/packages/host/pkg/README.md" {
 		t.Fatalf("ReadmeURL = %q", packages[0].ReadmeURL)
+	}
+	if packages[0].PublishedAt != "2026-07-24T12:00:00Z" {
+		t.Fatalf("PublishedAt = %q", packages[0].PublishedAt)
 	}
 }
 

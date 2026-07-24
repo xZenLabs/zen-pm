@@ -209,6 +209,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"source_type": "source",
 				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
 				"readme_url": "packages/koreader/koreader-rsvp-plugin/README.md",
+				"published_at": "2026-07-24T12:00:00Z",
 				"featured_order": 10,
 				"stars": "31",
 				"assets": [{"arch":"arm","asset":"plugin.zip","url":"packages/koreader/plugin.zip","size":"12"}],
@@ -251,6 +252,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].ReadmeURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/README.md" {
 		t.Fatalf("ReadmeURL = %q", entries[0].ReadmeURL)
+	}
+	if entries[0].PublishedAt != "2026-07-24T12:00:00Z" {
+		t.Fatalf("PublishedAt = %q", entries[0].PublishedAt)
 	}
 	if entries[0].UninstallURL != "https://example.invalid/repo/packages/koreader/uninstall-plugin.sh" {
 		t.Fatalf("UninstallURL = %q", entries[0].UninstallURL)

@@ -174,6 +174,10 @@ local function package_installed_at(pkg)
     return tostring(pkg and pkg.installed_at or "")
 end
 
+local function package_published_at(pkg)
+    return tostring(pkg and pkg.published_at or "")
+end
+
 local function compare_text(a, b)
     local an, bn = package_name(a), package_name(b)
     if an ~= bn then
@@ -210,6 +214,12 @@ function Models.sort_packages(packages, sort_key)
                     return aa > ba
                 end
                 return aa < ba
+            end
+            return compare_text(a, b)
+        elseif sort_key == "published_at_desc" then
+            local aa, ba = package_published_at(a), package_published_at(b)
+            if aa ~= ba then
+                return aa > ba
             end
             return compare_text(a, b)
         end
