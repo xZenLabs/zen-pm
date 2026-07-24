@@ -35,20 +35,24 @@ directory.
 <p align="center">
   <img src="docs/images/zenpm_featured.png" alt="ZenPM featured packages" width="31%">
   <img src="docs/images/zenpm_categories.png" alt="ZenPM package categories" width="31%">
-  <img src="docs/images/zenpm_sources.png" alt="ZenPM package sources" width="31%">
-</p>
-<p align="center">
-  <img src="docs/images/zenpm_installed.png" alt="ZenPM installed packages" width="31%">
-  <img src="docs/images/zenpm_search.png" alt="ZenPM package search" width="31%">
   <img src="docs/images/zenpm_details.png" alt="ZenPM package details" width="31%">
 </p>
 <p align="center">
-  <img src="docs/images/zenpm_queue.png" alt="ZenPM package queue" width="31%">
   <img src="docs/images/zenpm_version.png" alt="ZenPM version information" width="31%">
+  <img src="docs/images/zenpm_source.png" alt="ZenPM package source" width="31%">
+  <img src="docs/images/zenpm_discover.png" alt="ZenPM package discover" width="31%">
+</p>
+<p align="center">
+  <img src="docs/images/zenpm_installed.png" alt="ZenPM installed packages" width="31%">
+  <img src="docs/images/zenpm_queue.png" alt="ZenPM package queue" width="31%">
   <img src="docs/images/zenpm_kindle.png" alt="ZenPM Kindle app" width="31%">
 </p>
 
 ## Install
+
+If you have Zen UI, install ZenPM from **Extras > Install ZenPM**.
+
+Otherwise:
 
 Download files from the [latest release](https://github.com/xZenLabs/ZenPM/releases).
 Use files from the same release. Beta releases are prereleases; enable **Beta
