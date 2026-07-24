@@ -18,6 +18,7 @@ import (
 const (
 	genericPluginInstaller = "plugin"
 	genericPatchInstaller  = "patch"
+	genericFontInstaller   = "font"
 )
 
 func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
@@ -26,6 +27,9 @@ func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
 	}
 	if isPatchPackage(entry) {
 		return genericPatchInstaller
+	}
+	if isFontPackage(entry) {
+		return genericFontInstaller
 	}
 	return genericPluginInstaller
 }
@@ -52,6 +56,8 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 		return m.installKOReaderPlugin(entry, root, assetName, data)
 	case genericPatchInstaller:
 		return "", m.installKOReaderPatch(entry, root, assetName, assetURL, data)
+	case genericFontInstaller:
+		return "", m.installKOReaderFont(entry, root, assetName, data)
 	default:
 		return "", fmt.Errorf("unknown generic KOReader installer %q", kind)
 	}
@@ -205,6 +211,43 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 	})
 }
 
+func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName string, data []byte) error {
+	if !strings.HasSuffix(strings.ToLower(assetName), ".zip") {
+		return fmt.Errorf("font asset %q must be a ZIP archive", assetName)
+	}
+	if filepath.Base(entry.ID) != entry.ID {
+		return fmt.Errorf("invalid font package %q", entry.ID)
+	}
+	fontsDir := filepath.Join(root, "fonts")
+	if err := os.MkdirAll(fontsDir, 0755); err != nil {
+		return fmt.Errorf("create KOReader fonts directory: %w", err)
+	}
+	stage, sourceDir, err := m.extractArchive(data)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+
+	directory := filepath.Base(sourceDir)
+	if sourceDir == stage {
+		directory = entry.ID
+	}
+	if directory == "." || directory == "" || filepath.Base(directory) != directory {
+		return fmt.Errorf("invalid font directory %q", directory)
+	}
+	destination := filepath.Join(fontsDir, directory)
+	if !pathWithinRoot(root, destination) {
+		return fmt.Errorf("invalid KOReader font path %q", destination)
+	}
+	if err := replaceTree(sourceDir, destination); err != nil {
+		return fmt.Errorf("install font directory: %w", err)
+	}
+	_ = os.RemoveAll(filepath.Join(destination, "__MACOSX"))
+	return writeTrackingFile(filepath.Join(root, ".zenpm-fonts", entry.ID), []string{
+		"font_dir=" + destination,
+	})
+}
+
 func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind string) error {
 	root, err := m.koreaderRoot()
 	if err != nil {
@@ -215,9 +258,35 @@ func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind
 		return removeKOReaderPlugin(root, pluginTrackingName(entry, asset))
 	case genericPatchInstaller:
 		return removeKOReaderPatch(root, entry.ID, asset)
+	case genericFontInstaller:
+		return removeKOReaderFont(root, entry.ID)
 	default:
 		return fmt.Errorf("unknown generic KOReader installer %q", kind)
 	}
+}
+
+func removeKOReaderFont(root, id string) error {
+	tracking := filepath.Join(root, ".zenpm-fonts", filepath.Base(id))
+	if filepath.Base(id) != id || !pathWithinRoot(root, tracking) {
+		return fmt.Errorf("invalid KOReader font package %q", id)
+	}
+	fontDir, err := trackingValue(tracking, "font_dir")
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if fontDir != "" {
+		fontsDir := filepath.Join(root, "fonts")
+		if filepath.Dir(filepath.Clean(fontDir)) != fontsDir || !pathWithinRoot(fontsDir, fontDir) {
+			return fmt.Errorf("invalid tracked KOReader font directory %q", fontDir)
+		}
+		if err := os.RemoveAll(fontDir); err != nil {
+			return fmt.Errorf("remove KOReader font directory %s: %w", fontDir, err)
+		}
+	}
+	if err := os.Remove(tracking); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return removeEmptyDir(filepath.Dir(tracking))
 }
 
 func removeKOReaderPlugin(root, name string) error {

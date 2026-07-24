@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: cs\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "je k dispozici. Aktualizovat nyní?"
 
-msgid "Open ZenPM"
-msgstr "Otevřít ZenPM"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "Rozhraní Zen Package Manageru pro KOReader."
-
-msgid "Featured"
-msgstr "Doporučené"
-
-msgid "Sources"
-msgstr "Zdroje"
-
-msgid "Installed"
-msgstr "Nainstalované"
-
-msgid "Debug"
-msgstr "Ladění"
-
-msgid "Search"
-msgstr "Hledat"
-
-msgid "Welcome"
-msgstr "Vítejte"
-
-msgid "Add Source"
-msgstr "Přidat zdroj"
-
-msgid "Add"
-msgstr "Přidat"
-
-msgid "Search..."
-msgstr "Hledat..."
-
-msgid "Filter installed..."
-msgstr "Filtrovat nainstalované..."
-
-msgid "Packages"
-msgstr "Balíčky"
-
-msgid "Source Details"
-msgstr "Podrobnosti zdroje"
-
-msgid "Package Details"
-msgstr "Podrobnosti balíčku"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - Ladění"
-
-msgid "Featured packages coming soon."
-msgstr "Doporučené balíčky budou brzy."
-
-msgid "No packages found. Try Refresh."
-msgstr "Nebyly nalezeny žádné balíčky. Zkuste Obnovit."
-
-msgid "No installed packages match the filter."
-msgstr "Filtru neodpovídají žádné nainstalované balíčky."
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "Nejsou nainstalované žádné balíčky. Balíčky najdete v Hledání."
-
-msgid "No packages match the filter."
-msgstr "Filtru neodpovídají žádné balíčky."
-
-msgid "No repositories configured."
-msgstr "Nejsou nastavena žádná úložiště."
-
-msgid "No packages found for this source."
-msgstr "Pro tento zdroj nebyly nalezeny žádné balíčky."
-
-msgid "By "
-msgstr "Autor: "
-
-msgid "Description"
-msgstr "Popis"
-
-msgid "No description available."
-msgstr "Popis není k dispozici."
-
-msgid "Unknown package"
-msgstr "Neznámý balíček"
-
-msgid "No description"
-msgstr "Bez popisu"
-
-msgid "Source"
-msgstr "Zdroj"
-
-msgid "Remove"
-msgstr "Odebrat"
-
-msgid "Modify"
-msgstr "Upravit"
-
-msgid "Get"
-msgstr "Získat"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "Zrušit"
-
-msgid "Clear"
-msgstr "Vymazat"
-
-msgid "Info"
-msgstr "Info"
-
-msgid "Reinstall"
-msgstr "Přeinstalovat"
-
-msgid "Uninstall"
-msgstr "Odinstalovat"
-
-msgid "Refresh"
-msgstr "Obnovit"
-
-msgid "About"
-msgstr "O aplikaci"
-
-msgid "Update"
-msgstr "Aktualizovat"
-
-msgid "Quit"
-msgstr "Ukončit"
-
-msgid "Filter installed packages"
-msgstr "Filtrovat nainstalované balíčky"
-
-msgid "Search packages"
-msgstr "Hledat balíčky"
-
-msgid "Please enter a URL."
-msgstr "Zadejte URL."
-
-msgid "Detecting repo..."
-msgstr "Zjišťuji úložiště..."
-
-msgid "Could not detect repo format."
-msgstr "Nepodařilo se zjistit formát úložiště."
-
-msgid "Another operation is in progress. Please wait."
-msgstr "Probíhá jiná operace. Počkejte prosím."
-
-msgid "Package has no id."
-msgstr "Balíček nemá id."
-
-msgid "Downloading... Please wait."
-msgstr "Stahování... Počkejte prosím."
-
-msgid "Refreshing repositories..."
-msgstr "Obnovuji úložiště..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "Zkontrolovat a spustit aktualizaci ZenPM?"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "Aktualizace přijata. Démon se může restartovat."
-
-msgid "None"
-msgstr "Žádné"
-
-msgid "Version: "
-msgstr "Verze: "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "Autor: Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " did not complete.\n\nCheck the debug log for details."
+msgid " returned HTTP "
+msgstr "vrátil HTTP"
 
 msgid " successfully."
 msgstr " úspěšně."
 
-msgid "Are you sure you want to download "
-msgstr "Opravdu chcete stáhnout "
+msgid " was copied to the Kindle homepage."
+msgstr "byl zkopírován na domovskou stránku Kindle."
 
-msgid "Are you sure you want to reinstall "
-msgstr "Opravdu chcete přeinstalovat "
+msgid "%d packages queued"
+msgstr "%d balíčky ve frontě"
 
-msgid "Are you sure you want to uninstall "
-msgstr "Opravdu chcete odinstalovat "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s je v konfliktu s %s. Neměly by se používat společně. Přesto nainstalovat?"
 
-msgid "Loading packages, please wait"
-msgstr "Načítání balíčků, počkejte prosím"
+msgid "(installed)"
+msgstr "(instalováno)"
+
+msgid "... Please wait."
+msgstr "... Čekejte prosím."
+
+msgid "1 package queued"
+msgstr "1 balíček ve frontě"
+
+msgid "A short summary of what went wrong"
+msgstr "Krátké shrnutí toho, co se pokazilo"
+
+msgid "About"
+msgstr "O aplikaci"
+
+msgid "Add"
+msgstr "Přidat"
+
+msgid "Add Source"
+msgstr "Přidat zdroj"
+
+msgid "Added to Queue"
+msgstr "Přidáno do fronty"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Probíhá jiná operace. Počkejte prosím."
+
+msgid "Are you sure you want to "
+msgstr "Jste si jistý, že chcete?"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Opravdu chcete vymazat frontu?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Opravdu chcete provést všechny akce ve frontě?"
+
+msgid "Are you sure you want to remove "
+msgstr "Opravdu chcete odstranit?"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Autor: Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Beta aktualizace"
+
+msgid "Brief description of the bug"
+msgstr "Stručný popis chyby"
+
+msgid "Bug description (optional)"
+msgstr "Popis chyby (volitelné)"
+
+msgid "Bug report submitted!"
+msgstr "Zpráva o chybě odeslána!"
+
+msgid "Bug report title"
+msgstr "Název hlášení chyby"
+
+msgid "By "
+msgstr "Autor: "
+
+msgid "Cancel"
+msgstr "Zrušit"
+
+msgid "Categories"
+msgstr "Kategorie"
+
+msgid "Category"
+msgstr "Kategorie"
+
+msgid "Category not found."
+msgstr "Kategorie nenalezena."
+
+msgid "Change version"
+msgstr "Změnit verzi"
+
+msgid "Check for updates automatically"
+msgstr "Automaticky kontrolovat aktualizace"
+
+msgid "Check the debug log for details."
+msgstr "Podrobnosti najdete v protokolu ladění."
+
+msgid "Checking for update..."
+msgstr "Kontrola aktualizace..."
+
+msgid "Choose a build for "
+msgstr "Vyberte sestavení pro"
+
+msgid "Choose a patch for "
+msgstr "Vyberte náplast pro"
+
+msgid "Clear"
+msgstr "Vymazat"
+
+msgid "Companion update failed to start: "
+msgstr "Aktualizaci doprovodné aplikace se nepodařilo spustit:"
+
+msgid "Confirm"
+msgstr "Potvrdit"
+
+msgid "Continue"
+msgstr "Pokračovat"
+
+msgid "Continue?"
+msgstr "Pokračovat?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "Kopírování ZenPM na domovskou stránku Kindle..."
+
+msgid "Could not "
+msgstr "Nemohl"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "
 
+msgid "Could not connect to "
+msgstr "Nelze se připojit k"
+
+msgid "Could not connect to GitHub: "
+msgstr "Nelze se připojit ke GitHubu:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Nelze se připojit ke GitHubu: Podpora HTTPS není v tomto sestavení KOReader k dispozici."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Nelze vytvořit adresář ZenPM:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Nelze vytvořit adresář nastavení ZenPM:"
+
+msgid "Could not detect repo format."
+msgstr "Nepodařilo se zjistit formát úložiště."
+
+msgid "Could not determine which build to install: "
+msgstr "Nelze určit, které sestavení se má nainstalovat:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Nelze nainstalovat přibalený backend ZenPM do:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Nelze nainstalovat obálku příkazového řádku ZenPM."
+
+msgid "Could not load GitHub releases: "
+msgstr "Nelze načíst vydání GitHubu:"
+
 msgid "Could not read log: "
 msgstr "Could not read log: "
 
+msgid "Could not remove patch: "
+msgstr "Opravu nelze odstranit:"
+
 msgid "Could not remove source: "
 msgstr "Could not remove source: "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Plugin ZenPM nelze odebrat."
+
+msgid "Could not resolve patch file."
+msgstr "Opravný soubor nelze vyřešit."
+
+msgid "Could not resolve plugin name."
+msgstr "Název pluginu nelze rozpoznat."
+
+msgid "Debug"
+msgstr "Ladění"
+
+msgid "Description"
+msgstr "Popis"
+
+msgid "Details"
+msgstr "Podrobnosti"
+
+msgid "Detected ABI: "
+msgstr "Zjištěno ABI:"
+
+msgid "Detecting repo..."
+msgstr "Zjišťuji úložiště..."
+
+msgid "Disable"
+msgstr "Zakázat"
+
+msgid "disable"
+msgstr "zakázat"
+
+msgid "disabled"
+msgstr "zakázáno"
+
+msgid "Downgrade"
+msgstr "Přejít na nižší verzi"
+
+msgid "downgrade"
+msgstr "downgrade"
+
+msgid "downgraded"
+msgstr "snížené hodnocení"
+
+msgid "Downgrading"
+msgstr "Downgrade"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Stáhnout a zkopírovat nejnovější samostatnou verzi ZenPM na domovskou stránku Kindle? To přidá skriptlet (knihu) ZenPM do Kindle Home/Library"
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "Download this asset: "
+msgstr "Stáhnout toto dílo:"
+
+msgid "enable"
+msgstr "umožnit"
+
+msgid "Enable"
+msgstr "Umožnit"
+
+msgid "enabled"
+msgstr "povoleno"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Zadejte své uživatelské jméno na GitHubu, abyste byli označeni v problému"
 
 msgid "Failed to load package: "
 msgstr "Failed to load package: "
@@ -217,14 +258,98 @@ msgstr "Failed to load sources: "
 msgid "Failed to start package action: "
 msgstr "Failed to start package action: "
 
+msgid "Failed to submit report: "
+msgstr "Hlášení se nepodařilo odeslat:"
+
+msgid "Featured"
+msgstr "Doporučené"
+
+msgid "Font preview"
+msgstr "Náhled písma"
+
+msgid "Font size"
+msgstr "Velikost písma"
+
+msgid "Found %d installed plugins"
+msgstr "Nalezeny %d nainstalované pluginy"
+
+msgid "Get"
+msgstr "Získat"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "Stahování GitHubu bylo příliš mnohokrát přesměrováno."
+
+msgid "GitHub download returned HTTP "
+msgstr "Stažení GitHubu vrátilo HTTP"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub poskytl neplatné přesměrování stahování."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub poskytl nedůvěryhodnou adresu URL ke stažení."
+
+msgid "GitHub username (optional)"
+msgstr "Uživatelské jméno GitHub (volitelné)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "install"
+msgstr "instalace"
+
+msgid "Install"
+msgstr "Instalovat"
+
+msgid "Install anyway"
+msgstr "Každopádně nainstalovat"
+
+msgid "Install anyway?"
+msgstr "Přesto nainstalovat?"
+
+msgid "Install to Kindle homepage"
+msgstr "Nainstalujte na domovskou stránku Kindle"
+
+msgid "Installed"
+msgstr "Nainstalované"
+
+msgid "installed"
+msgstr "nainstalováno"
 
 msgid "Installing"
 msgstr "Instalace"
 
+msgid "Keep settings"
+msgstr "Ponechat nastavení"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Instalace domovské stránky Kindle se nezdařila:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "Instalace domovské stránky Kindle byla zrušena."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Síť Kobo není připravena. Chvíli počkejte a zkuste to znovu."
+
+msgid "KOReader settings are unavailable."
+msgstr "Nastavení KOReader nejsou k dispozici."
+
+msgid "Latest"
+msgstr "Nejnovější"
+
+msgid "Loading categories..."
+msgstr "Načítání kategorií..."
+
+msgid "Loading category..."
+msgstr "Načítání kategorie..."
+
 msgid "Loading featured packages..."
 msgstr "Načítání doporučených balíčků..."
+
+msgid "Loading GitHub releases..."
+msgstr "Načítání vydání GitHubu..."
 
 msgid "Loading installed packages..."
 msgstr "Načítání nainstalovaných balíčků..."
@@ -232,8 +357,8 @@ msgstr "Načítání nainstalovaných balíčků..."
 msgid "Loading log..."
 msgstr "Načítání protokolu..."
 
-msgid "Loading package..."
-msgstr "Načítání balíčku..."
+msgid "Loading packages, please wait"
+msgstr "Načítání balíčků, počkejte prosím"
 
 msgid "Loading packages..."
 msgstr "Načítání balíčků..."
@@ -247,8 +372,89 @@ msgstr "Načítání zdrojů..."
 msgid "Log is empty."
 msgstr "Protokol je prázdný."
 
+msgid "Modify"
+msgstr "Upravit"
+
+msgid "Name"
+msgstr "Jméno"
+
+msgid "network error"
+msgstr "chyba sítě"
+
+msgid "Next"
+msgstr "Další"
+
+msgid "No categories found."
+msgstr "Nebyly nalezeny žádné kategorie."
+
+msgid "No categories match the filter."
+msgstr "Filtru neodpovídají žádné kategorie."
+
+msgid "No description"
+msgstr "Bez popisu"
+
+msgid "No description available."
+msgstr "Popis není k dispozici."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Nebyla nalezena žádná vydání GitHubu s aktivy ZIP."
+
+msgid "No installed packages match the filter."
+msgstr "Filtru neodpovídají žádné nainstalované balíčky."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Žádné síťové připojení. Připojte se k síti Wi-Fi a zkuste to znovu."
+
+msgid "No packages found for this category."
+msgstr "Pro tuto kategorii nebyly nalezeny žádné balíčky."
+
+msgid "No packages found for this source."
+msgstr "Pro tento zdroj nebyly nalezeny žádné balíčky."
+
+msgid "No packages found. Try Refresh."
+msgstr "Nebyly nalezeny žádné balíčky. Zkuste Obnovit."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Nejsou nainstalované žádné balíčky. Balíčky najdete v Hledání."
+
+msgid "No packages match the filter."
+msgstr "Filtru neodpovídají žádné balíčky."
+
+msgid "No queued operations."
+msgstr "Žádné operace ve frontě."
+
+msgid "No README available."
+msgstr "Není k dispozici žádný soubor README."
+
+msgid "No repositories configured."
+msgstr "Nejsou nastavena žádná úložiště."
+
+msgid "None"
+msgstr "Žádné"
+
+msgid "of"
+msgstr "z"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "Zobrazit pouze instalovatelné balíčky"
+
+msgid "Open ZenPM"
+msgstr "Otevřít ZenPM"
+
 msgid "Package"
 msgstr "Balíček"
+
+msgid "Package Details"
+msgstr "Podrobnosti balíčku"
+
+msgid "Package has no id."
+msgstr "Balíček nemá id."
+
+msgid "Package manager for KOReader."
+msgstr "Správce balíčků pro KOReader."
 
 msgid "Package not found."
 msgstr "Balíček nebyl nalezen."
@@ -256,47 +462,71 @@ msgstr "Balíček nebyl nalezen."
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "Package operation status could not be checked. See Debug log."
 
+msgid "packages"
+msgstr "balíčky"
+
+msgid "Packages updated"
+msgstr "Balíčky aktualizovány"
+
+msgid "patch"
+msgstr "náplast"
+
+msgid "Patch file not found."
+msgstr "Opravný soubor nenalezen."
+
+msgid "Patch has no file name."
+msgstr "Patch nemá název souboru."
+
+msgid "Patches"
+msgstr "Náplasti"
+
+msgid "Platform: "
+msgstr "Platforma:"
+
+msgid "Please enter a URL."
+msgstr "Zadejte URL."
+
+msgid "Plugin scan failed: "
+msgstr "Kontrola pluginu se nezdařila:"
+
+msgid "prerelease"
+msgstr "předběžné vydání"
+
+msgid "Queue"
+msgstr "Fronta"
+
+msgid "Queue %d/%d: "
+msgstr "Fronta %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Fronta dokončena: %d úspěšné, %d neúspěšné."
+
+msgid "Queue completed: %d succeeded."
+msgstr "Fronta dokončena: %d bylo úspěšné."
+
+msgid "Queue is running. Please wait."
+msgstr "Fronta běží. Čekejte prosím."
+
+msgid "Queued"
+msgstr "Ve frontě"
+
+msgid "Quit"
+msgstr "Ukončit"
+
+msgid "README"
+msgstr "README"
+
+msgid "Refresh"
+msgstr "Obnovit"
+
 msgid "Refresh failed: "
 msgstr "Refresh failed: "
 
-msgid "Reinstalling"
-msgstr "Přeinstalace"
+msgid "Refreshing repositories..."
+msgstr "Obnovuji úložiště..."
 
-msgid "Remove source "
-msgstr "Odebrat zdroj "
-
-msgid "Source not found."
-msgstr "Zdroj nebyl nalezen."
-
-msgid "Uninstalling"
-msgstr "Odinstalace"
-
-msgid "Update failed: "
-msgstr "Update failed: "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "ZenPM backend not found. Expected "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-
-msgid "download failed"
-msgstr "download failed"
-
-msgid "install"
-msgstr "instalace"
-
-msgid "installed"
-msgstr "nainstalováno"
-
-msgid "network error"
-msgstr "chyba sítě"
-
-msgid "of"
-msgstr "z"
-
-msgid "or"
-msgstr "nebo"
+msgid "Reinstall"
+msgstr "Přeinstalovat"
 
 msgid "reinstall"
 msgstr "přeinstalace"
@@ -304,11 +534,245 @@ msgstr "přeinstalace"
 msgid "reinstalled"
 msgstr "přeinstalováno"
 
+msgid "Reinstalling"
+msgstr "Přeinstalace"
+
+msgid "remote server"
+msgstr "vzdálený server"
+
+msgid "Remove"
+msgstr "Odebrat"
+
+msgid "Remove %s from queue?"
+msgstr "Odebrat %s z fronty?"
+
+msgid "Remove from queue"
+msgstr "Odebrat z fronty"
+
+msgid "Remove settings"
+msgstr "Odebrat nastavení"
+
+msgid "Remove source "
+msgstr "Odebrat zdroj "
+
+msgid "rename failed"
+msgstr "přejmenování se nezdařilo"
+
+msgid "Report a Bug"
+msgstr "Nahlásit chybu"
+
 msgid "request failed"
 msgstr "request failed"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Pro použití změn restartujte KOReader."
+
+msgid "Restart later"
+msgstr "Restartujte později"
+
+msgid "Restart now"
+msgstr "Restartujte nyní"
+
+msgid "Restarting..."
+msgstr "Restartování..."
+
+msgid "Retry"
+msgstr "Zkuste to znovu"
+
+msgid "Scan installed plugins"
+msgstr "Prohledejte nainstalované pluginy"
+
+msgid "Scanning installed plugins..."
+msgstr "Skenování nainstalovaných pluginů..."
+
+msgid "Search"
+msgstr "Hledat"
+
+msgid "Search categories"
+msgstr "Vyhledávání kategorií"
+
+msgid "Search categories..."
+msgstr "Hledat kategorie..."
+
+msgid "Search category"
+msgstr "Hledat kategorii"
+
+msgid "Search category..."
+msgstr "Hledat kategorii..."
+
+msgid "Search installed packages"
+msgstr "Vyhledejte nainstalované balíčky"
+
+msgid "Search installed..."
+msgstr "Hledání nainstalováno..."
+
+msgid "Search packages"
+msgstr "Hledat balíčky"
+
+msgid "Search..."
+msgstr "Hledat..."
+
+msgid "Select version for "
+msgstr "Vyberte verzi pro"
+
+msgid "Settings"
+msgstr "Nastavení"
+
+msgid "Show all release builds"
+msgstr "Zobrazit všechna sestavení vydání"
+
+msgid "Show more"
+msgstr "Zobrazit více"
+
+msgid "Show README images"
+msgstr "Zobrazit obrázky README"
+
+msgid "Skip"
+msgstr "Přeskočit"
+
+msgid "Sort"
+msgstr "Seřadit"
+
+msgid "Sort packages"
+msgstr "Třídit balíčky"
+
+msgid "Source"
+msgstr "Zdroj"
+
+msgid "Source not found."
+msgstr "Zdroj nebyl nalezen."
+
+msgid "Sources"
+msgstr "Zdroje"
+
+msgid "Stars"
+msgstr "hvězdy"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Kroky k reprodukci, očekávané vs. skutečné chování"
+
+msgid "Submit"
+msgstr "Předložit"
+
+msgid "Submitting report…"
+msgstr "Odesílání hlášení…"
+
+msgid "This release has no ZIP assets."
+msgstr "Tato verze neobsahuje žádné zdroje ZIP."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "To se nainstaluje jako \"kniha\" na domovskou obrazovku Kindle."
+
+msgid "to"
+msgstr "na"
 
 msgid "uninstall"
 msgstr "odinstalace"
 
+msgid "Uninstall"
+msgstr "Odinstalovat"
+
+msgid "Uninstall ZenPM?"
+msgstr "Odinstalovat ZenPM?"
+
 msgid "uninstalled"
 msgstr "odinstalováno"
+
+msgid "Uninstalling"
+msgstr "Odinstalace"
+
+msgid "Uninstalling ZenPM..."
+msgstr "Odinstalování ZenPM..."
+
+msgid "Unknown package"
+msgstr "Neznámý balíček"
+
+msgid "update"
+msgstr "aktualizovat"
+
+msgid "Update"
+msgstr "Aktualizovat"
+
+msgid "Update All"
+msgstr "Aktualizovat vše"
+
+msgid "Update check was cancelled."
+msgstr "Kontrola aktualizací byla zrušena."
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "Update was cancelled."
+msgstr "Aktualizace byla zrušena."
+
+msgid "updated"
+msgstr "aktualizováno"
+
+msgid "Updated: %d packages"
+msgstr "Aktualizováno: %d balíčky"
+
+msgid "Updating"
+msgstr "Aktualizace"
+
+msgid "Updating ZenPM..."
+msgstr "Aktualizace ZenPM..."
+
+msgid "username"
+msgstr "uživatelské jméno"
+
+msgid "Version: "
+msgstr "Verze: "
+
+msgid "Welcome"
+msgstr "Vítejte"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Rozhraní Zen Package Manageru pro KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Je nainstalováno uživatelské rozhraní Zen. Většina oprav by se neměla používat s uživatelským rozhraním Zen."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "Společník ZenPM Android nemohl spustit svůj aktualizátor."
+
+msgid "ZenPM Android companion is not available."
+msgstr "ZenPM Android společník není k dispozici."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "ZenPM Android společník není nainstalován nebo nelze spustit. Vidět"
+
+msgid "ZenPM backend"
+msgstr "Backend ZenPM"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "Backend ZenPM se nespustil. Ujistěte se, že jste pro toto zařízení použili správnou verzi ZenPM."
+
+msgid "ZenPM bug reporter"
+msgstr "Reportér chyb ZenPM"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion hledá aktualizaci."
+
+msgid "ZenPM companion update failed."
+msgstr "Aktualizace doprovodného programu ZenPM se nezdařila."
+
+msgid "ZenPM font size"
+msgstr "Velikost písma ZenPM"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM je aktuální."
+
+msgid "ZenPM update v"
+msgstr "Aktualizace ZenPM v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM aktualizován na v"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log a crash.log KOReader (pokud existuje) budou připojeny k veřejnému vydání GitHubu. Mohou obsahovat názvy balíčků, adresy URL úložiště a cesty k souborům."

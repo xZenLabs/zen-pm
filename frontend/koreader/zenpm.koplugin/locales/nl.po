@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: nl\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "is beschikbaar. Nu bijwerken?"
 
-msgid "Open ZenPM"
-msgstr "ZenPM openen"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "Frontend van Zen Package Manager voor KOReader."
-
-msgid "Featured"
-msgstr "Uitgelicht"
-
-msgid "Sources"
-msgstr "Bronnen"
-
-msgid "Installed"
-msgstr "Geinstalleerd"
-
-msgid "Debug"
-msgstr "Debug"
-
-msgid "Search"
-msgstr "Zoeken"
-
-msgid "Welcome"
-msgstr "Welkom"
-
-msgid "Add Source"
-msgstr "Bron toevoegen"
-
-msgid "Add"
-msgstr "Toevoegen"
-
-msgid "Search..."
-msgstr "Zoeken..."
-
-msgid "Filter installed..."
-msgstr "Geinstalleerde filteren..."
-
-msgid "Packages"
-msgstr "Pakketten"
-
-msgid "Source Details"
-msgstr "Brondetails"
-
-msgid "Package Details"
-msgstr "Pakketdetails"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - Debug"
-
-msgid "Featured packages coming soon."
-msgstr "Uitgelichte pakketten komen binnenkort."
-
-msgid "No packages found. Try Refresh."
-msgstr "Geen pakketten gevonden. Probeer Vernieuwen."
-
-msgid "No installed packages match the filter."
-msgstr "Geen geinstalleerde pakketten passen bij het filter."
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "Geen pakketten geinstalleerd. Gebruik Zoeken om pakketten te vinden."
-
-msgid "No packages match the filter."
-msgstr "Geen pakketten passen bij het filter."
-
-msgid "No repositories configured."
-msgstr "Geen repositories geconfigureerd."
-
-msgid "No packages found for this source."
-msgstr "Geen pakketten gevonden voor deze bron."
-
-msgid "By "
-msgstr "Door "
-
-msgid "Description"
-msgstr "Beschrijving"
-
-msgid "No description available."
-msgstr "Geen beschrijving beschikbaar."
-
-msgid "Unknown package"
-msgstr "Onbekend pakket"
-
-msgid "No description"
-msgstr "Geen beschrijving"
-
-msgid "Source"
-msgstr "Bron"
-
-msgid "Remove"
-msgstr "Verwijderen"
-
-msgid "Modify"
-msgstr "Wijzigen"
-
-msgid "Get"
-msgstr "Ophalen"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "Annuleren"
-
-msgid "Clear"
-msgstr "Wissen"
-
-msgid "Info"
-msgstr "Info"
-
-msgid "Reinstall"
-msgstr "Opnieuw installeren"
-
-msgid "Uninstall"
-msgstr "Verwijderen"
-
-msgid "Refresh"
-msgstr "Vernieuwen"
-
-msgid "About"
-msgstr "Over"
-
-msgid "Update"
-msgstr "Bijwerken"
-
-msgid "Quit"
-msgstr "Afsluiten"
-
-msgid "Filter installed packages"
-msgstr "Geinstalleerde pakketten filteren"
-
-msgid "Search packages"
-msgstr "Pakketten zoeken"
-
-msgid "Please enter a URL."
-msgstr "Voer een URL in."
-
-msgid "Detecting repo..."
-msgstr "Repository detecteren..."
-
-msgid "Could not detect repo format."
-msgstr "Kon repositoryformaat niet detecteren."
-
-msgid "Another operation is in progress. Please wait."
-msgstr "Er is een andere bewerking bezig. Wacht even."
-
-msgid "Package has no id."
-msgstr "Pakket heeft geen id."
-
-msgid "Downloading... Please wait."
-msgstr "Downloaden... Wacht even."
-
-msgid "Refreshing repositories..."
-msgstr "Repositories vernieuwen..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "Controleren op en starten van een ZenPM-update?"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "Update geaccepteerd. De daemon kan opnieuw starten."
-
-msgid "None"
-msgstr "Geen"
-
-msgid "Version: "
-msgstr "Versie: "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "Auteur: Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " did not complete.\n\nCheck the debug log for details."
+msgid " returned HTTP "
+msgstr "HTTP geretourneerd"
 
 msgid " successfully."
 msgstr " gelukt."
 
-msgid "Are you sure you want to download "
-msgstr "Weet je zeker dat je wilt downloaden: "
+msgid " was copied to the Kindle homepage."
+msgstr "is gekopieerd naar de Kindle-startpagina."
 
-msgid "Are you sure you want to reinstall "
-msgstr "Weet je zeker dat je opnieuw wilt installeren: "
+msgid "%d packages queued"
+msgstr "%d-pakketten in de wachtrij"
 
-msgid "Are you sure you want to uninstall "
-msgstr "Weet je zeker dat je wilt verwijderen: "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s conflicteert met %s. Ze mogen niet samen worden gebruikt. Toch installeren?"
 
-msgid "Loading packages, please wait"
-msgstr "Pakketten laden, even geduld"
+msgid "(installed)"
+msgstr "(geïnstalleerd)"
+
+msgid "... Please wait."
+msgstr "... Even geduld alstublieft."
+
+msgid "1 package queued"
+msgstr "1 pakket in de wachtrij"
+
+msgid "A short summary of what went wrong"
+msgstr "Een korte samenvatting van wat er mis ging"
+
+msgid "About"
+msgstr "Over"
+
+msgid "Add"
+msgstr "Toevoegen"
+
+msgid "Add Source"
+msgstr "Bron toevoegen"
+
+msgid "Added to Queue"
+msgstr "Toegevoegd aan wachtrij"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Er is een andere bewerking bezig. Wacht even."
+
+msgid "Are you sure you want to "
+msgstr "Weet je zeker dat je dat wilt"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Weet u zeker dat u de wachtrij wilt wissen?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Weet u zeker dat u alle acties in de wachtrij wilt uitvoeren?"
+
+msgid "Are you sure you want to remove "
+msgstr "Weet u zeker dat u wilt verwijderen"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Auteur: Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Bèta-updates"
+
+msgid "Brief description of the bug"
+msgstr "Korte beschrijving van de bug"
+
+msgid "Bug description (optional)"
+msgstr "Bugbeschrijving (optioneel)"
+
+msgid "Bug report submitted!"
+msgstr "Bugrapport ingediend!"
+
+msgid "Bug report title"
+msgstr "Titel van bugrapport"
+
+msgid "By "
+msgstr "Door "
+
+msgid "Cancel"
+msgstr "Annuleren"
+
+msgid "Categories"
+msgstr "Categorieën"
+
+msgid "Category"
+msgstr "Categorie"
+
+msgid "Category not found."
+msgstr "Categorie niet gevonden."
+
+msgid "Change version"
+msgstr "Versie wijzigen"
+
+msgid "Check for updates automatically"
+msgstr "Automatisch controleren op updates"
+
+msgid "Check the debug log for details."
+msgstr "Controleer het foutopsporingslogboek voor meer informatie."
+
+msgid "Checking for update..."
+msgstr "Controleren op updates..."
+
+msgid "Choose a build for "
+msgstr "Kies een build voor"
+
+msgid "Choose a patch for "
+msgstr "Kies een patch voor"
+
+msgid "Clear"
+msgstr "Wissen"
+
+msgid "Companion update failed to start: "
+msgstr "Companion-update kan niet worden gestart:"
+
+msgid "Confirm"
+msgstr "Bevestigen"
+
+msgid "Continue"
+msgstr "Doorgaan"
+
+msgid "Continue?"
+msgstr "Doorgaan?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "ZenPM kopiëren naar de Kindle-startpagina..."
+
+msgid "Could not "
+msgstr "Kon niet"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "
 
+msgid "Could not connect to "
+msgstr "Kan geen verbinding maken"
+
+msgid "Could not connect to GitHub: "
+msgstr "Kan geen verbinding maken met GitHub:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Kan geen verbinding maken met GitHub: HTTPS-ondersteuning is niet beschikbaar in deze KOReader-build."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Kon de ZenPM-map niet maken:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Kan de ZenPM-instellingenmap niet maken:"
+
+msgid "Could not detect repo format."
+msgstr "Kon repositoryformaat niet detecteren."
+
+msgid "Could not determine which build to install: "
+msgstr "Kan niet bepalen welke build moet worden geïnstalleerd:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Kon de gebundelde ZenPM-backend niet installeren op:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Kon de ZenPM-opdrachtregelwrapper niet installeren."
+
+msgid "Could not load GitHub releases: "
+msgstr "Kan GitHub-releases niet laden:"
+
 msgid "Could not read log: "
 msgstr "Could not read log: "
 
+msgid "Could not remove patch: "
+msgstr "Kan patch niet verwijderen:"
+
 msgid "Could not remove source: "
 msgstr "Could not remove source: "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Kan de ZenPM-plug-in niet verwijderen."
+
+msgid "Could not resolve patch file."
+msgstr "Kan het patchbestand niet oplossen."
+
+msgid "Could not resolve plugin name."
+msgstr "Kan de naam van de plug-in niet omzetten."
+
+msgid "Debug"
+msgstr "Debug"
+
+msgid "Description"
+msgstr "Beschrijving"
+
+msgid "Details"
+msgstr "Details"
+
+msgid "Detected ABI: "
+msgstr "Gedetecteerde ABI:"
+
+msgid "Detecting repo..."
+msgstr "Repository detecteren..."
+
+msgid "Disable"
+msgstr "Uitzetten"
+
+msgid "disable"
+msgstr "uitzetten"
+
+msgid "disabled"
+msgstr "gehandicapt"
+
+msgid "Downgrade"
+msgstr "Downgraden"
+
+msgid "downgrade"
+msgstr "downgraden"
+
+msgid "downgraded"
+msgstr "gedegradeerd"
+
+msgid "Downgrading"
+msgstr "Downgraden"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Download en kopieer de nieuwste zelfstandige ZenPM-release naar de Kindle-startpagina? Hiermee wordt een ZenPM-scriptlet (boek) toegevoegd aan de Kindle Home/Bibliotheek"
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "Download this asset: "
+msgstr "Download dit item:"
+
+msgid "enable"
+msgstr "inschakelen"
+
+msgid "Enable"
+msgstr "Inschakelen"
+
+msgid "enabled"
+msgstr "ingeschakeld"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Voer uw GitHub-gebruikersnaam in die in het probleem moet worden getagd"
 
 msgid "Failed to load package: "
 msgstr "Failed to load package: "
@@ -217,14 +258,98 @@ msgstr "Failed to load sources: "
 msgid "Failed to start package action: "
 msgstr "Failed to start package action: "
 
+msgid "Failed to submit report: "
+msgstr "Kan rapport niet indienen:"
+
+msgid "Featured"
+msgstr "Uitgelicht"
+
+msgid "Font preview"
+msgstr "Voorbeeld van lettertype"
+
+msgid "Font size"
+msgstr "Lettergrootte"
+
+msgid "Found %d installed plugins"
+msgstr "%d geïnstalleerde plug-ins gevonden"
+
+msgid "Get"
+msgstr "Ophalen"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "GitHub-download is te vaak omgeleid."
+
+msgid "GitHub download returned HTTP "
+msgstr "GitHub-download heeft HTTP geretourneerd"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub heeft een ongeldige downloadomleiding opgegeven."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub heeft een niet-vertrouwde download-URL geleverd."
+
+msgid "GitHub username (optional)"
+msgstr "GitHub-gebruikersnaam (optioneel)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "install"
+msgstr "installeren"
+
+msgid "Install"
+msgstr "Installeren"
+
+msgid "Install anyway"
+msgstr "Hoe dan ook installeren"
+
+msgid "Install anyway?"
+msgstr "Toch installeren?"
+
+msgid "Install to Kindle homepage"
+msgstr "Installeer op de Kindle-startpagina"
+
+msgid "Installed"
+msgstr "Geinstalleerd"
+
+msgid "installed"
+msgstr "geinstalleerd"
 
 msgid "Installing"
 msgstr "Installeren"
 
+msgid "Keep settings"
+msgstr "Instellingen behouden"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Installatie van de Kindle-startpagina is mislukt:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "De installatie van de Kindle-startpagina is geannuleerd."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Het Kobo-netwerk is niet gereed. Wacht even en probeer het opnieuw."
+
+msgid "KOReader settings are unavailable."
+msgstr "KOEreader-instellingen zijn niet beschikbaar."
+
+msgid "Latest"
+msgstr "Nieuwste"
+
+msgid "Loading categories..."
+msgstr "Categorieën laden..."
+
+msgid "Loading category..."
+msgstr "Categorie laden..."
+
 msgid "Loading featured packages..."
 msgstr "Uitgelichte pakketten laden..."
+
+msgid "Loading GitHub releases..."
+msgstr "GitHub-releases laden..."
 
 msgid "Loading installed packages..."
 msgstr "Geinstalleerde pakketten laden..."
@@ -232,8 +357,8 @@ msgstr "Geinstalleerde pakketten laden..."
 msgid "Loading log..."
 msgstr "Log laden..."
 
-msgid "Loading package..."
-msgstr "Pakket laden..."
+msgid "Loading packages, please wait"
+msgstr "Pakketten laden, even geduld"
 
 msgid "Loading packages..."
 msgstr "Pakketten laden..."
@@ -247,8 +372,89 @@ msgstr "Bronnen laden..."
 msgid "Log is empty."
 msgstr "Log is leeg."
 
+msgid "Modify"
+msgstr "Wijzigen"
+
+msgid "Name"
+msgstr "Naam"
+
+msgid "network error"
+msgstr "netwerkfout"
+
+msgid "Next"
+msgstr "Volgende"
+
+msgid "No categories found."
+msgstr "Geen categorieën gevonden."
+
+msgid "No categories match the filter."
+msgstr "Er zijn geen categorieën die overeenkomen met het filter."
+
+msgid "No description"
+msgstr "Geen beschrijving"
+
+msgid "No description available."
+msgstr "Geen beschrijving beschikbaar."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Er zijn geen GitHub-releases met ZIP-items gevonden."
+
+msgid "No installed packages match the filter."
+msgstr "Geen geinstalleerde pakketten passen bij het filter."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Geen netwerkverbinding. Maak verbinding met wifi en probeer het opnieuw."
+
+msgid "No packages found for this category."
+msgstr "Er zijn geen pakketten gevonden voor deze categorie."
+
+msgid "No packages found for this source."
+msgstr "Geen pakketten gevonden voor deze bron."
+
+msgid "No packages found. Try Refresh."
+msgstr "Geen pakketten gevonden. Probeer Vernieuwen."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Geen pakketten geinstalleerd. Gebruik Zoeken om pakketten te vinden."
+
+msgid "No packages match the filter."
+msgstr "Geen pakketten passen bij het filter."
+
+msgid "No queued operations."
+msgstr "Geen bewerkingen in de wachtrij."
+
+msgid "No README available."
+msgstr "Geen README beschikbaar."
+
+msgid "No repositories configured."
+msgstr "Geen repositories geconfigureerd."
+
+msgid "None"
+msgstr "Geen"
+
+msgid "of"
+msgstr "van"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "Toon alleen installeerbare pakketten"
+
+msgid "Open ZenPM"
+msgstr "ZenPM openen"
+
 msgid "Package"
 msgstr "Pakket"
+
+msgid "Package Details"
+msgstr "Pakketdetails"
+
+msgid "Package has no id."
+msgstr "Pakket heeft geen id."
+
+msgid "Package manager for KOReader."
+msgstr "Pakketbeheerder voor KOReader."
 
 msgid "Package not found."
 msgstr "Pakket niet gevonden."
@@ -256,47 +462,71 @@ msgstr "Pakket niet gevonden."
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "Package operation status could not be checked. See Debug log."
 
+msgid "packages"
+msgstr "pakketten"
+
+msgid "Packages updated"
+msgstr "Pakketten bijgewerkt"
+
+msgid "patch"
+msgstr "lapje"
+
+msgid "Patch file not found."
+msgstr "Patchbestand niet gevonden."
+
+msgid "Patch has no file name."
+msgstr "Patch heeft geen bestandsnaam."
+
+msgid "Patches"
+msgstr "Patches"
+
+msgid "Platform: "
+msgstr "Platform:"
+
+msgid "Please enter a URL."
+msgstr "Voer een URL in."
+
+msgid "Plugin scan failed: "
+msgstr "Plug-inscan mislukt:"
+
+msgid "prerelease"
+msgstr "vooruitgave"
+
+msgid "Queue"
+msgstr "Wachtrij"
+
+msgid "Queue %d/%d: "
+msgstr "Wachtrij %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Wachtrij voltooid: %d geslaagd, %d mislukt."
+
+msgid "Queue completed: %d succeeded."
+msgstr "Wachtrij voltooid: %d geslaagd."
+
+msgid "Queue is running. Please wait."
+msgstr "Wachtrij loopt. Wacht alstublieft."
+
+msgid "Queued"
+msgstr "In de wachtrij"
+
+msgid "Quit"
+msgstr "Afsluiten"
+
+msgid "README"
+msgstr "LEESMIJ"
+
+msgid "Refresh"
+msgstr "Vernieuwen"
+
 msgid "Refresh failed: "
 msgstr "Refresh failed: "
 
-msgid "Reinstalling"
+msgid "Refreshing repositories..."
+msgstr "Repositories vernieuwen..."
+
+msgid "Reinstall"
 msgstr "Opnieuw installeren"
-
-msgid "Remove source "
-msgstr "Bron verwijderen "
-
-msgid "Source not found."
-msgstr "Bron niet gevonden."
-
-msgid "Uninstalling"
-msgstr "Verwijderen"
-
-msgid "Update failed: "
-msgstr "Update failed: "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "ZenPM backend not found. Expected "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-
-msgid "download failed"
-msgstr "download failed"
-
-msgid "install"
-msgstr "installeren"
-
-msgid "installed"
-msgstr "geinstalleerd"
-
-msgid "network error"
-msgstr "netwerkfout"
-
-msgid "of"
-msgstr "van"
-
-msgid "or"
-msgstr "of"
 
 msgid "reinstall"
 msgstr "opnieuw installeren"
@@ -304,11 +534,245 @@ msgstr "opnieuw installeren"
 msgid "reinstalled"
 msgstr "opnieuw geinstalleerd"
 
+msgid "Reinstalling"
+msgstr "Opnieuw installeren"
+
+msgid "remote server"
+msgstr "externe server"
+
+msgid "Remove"
+msgstr "Verwijderen"
+
+msgid "Remove %s from queue?"
+msgstr "%s uit wachtrij verwijderen?"
+
+msgid "Remove from queue"
+msgstr "Verwijderen uit wachtrij"
+
+msgid "Remove settings"
+msgstr "Instellingen verwijderen"
+
+msgid "Remove source "
+msgstr "Bron verwijderen "
+
+msgid "rename failed"
+msgstr "hernoemen is mislukt"
+
+msgid "Report a Bug"
+msgstr "Rapporteer een bug"
+
 msgid "request failed"
 msgstr "request failed"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Start KOReader opnieuw om de wijzigingen toe te passen."
+
+msgid "Restart later"
+msgstr "Begin later opnieuw"
+
+msgid "Restart now"
+msgstr "Start nu opnieuw op"
+
+msgid "Restarting..."
+msgstr "Opnieuw opstarten..."
+
+msgid "Retry"
+msgstr "Opnieuw proberen"
+
+msgid "Scan installed plugins"
+msgstr "Geïnstalleerde plug-ins scannen"
+
+msgid "Scanning installed plugins..."
+msgstr "Geïnstalleerde plug-ins scannen..."
+
+msgid "Search"
+msgstr "Zoeken"
+
+msgid "Search categories"
+msgstr "Zoek categorieën"
+
+msgid "Search categories..."
+msgstr "Categorieën zoeken..."
+
+msgid "Search category"
+msgstr "Categorie zoeken"
+
+msgid "Search category..."
+msgstr "Categorie zoeken..."
+
+msgid "Search installed packages"
+msgstr "Zoek naar geïnstalleerde pakketten"
+
+msgid "Search installed..."
+msgstr "Zoeken geïnstalleerd..."
+
+msgid "Search packages"
+msgstr "Pakketten zoeken"
+
+msgid "Search..."
+msgstr "Zoeken..."
+
+msgid "Select version for "
+msgstr "Selecteer versie voor"
+
+msgid "Settings"
+msgstr "Instellingen"
+
+msgid "Show all release builds"
+msgstr "Toon alle releasebuilds"
+
+msgid "Show more"
+msgstr "Laat meer zien"
+
+msgid "Show README images"
+msgstr "Toon README-afbeeldingen"
+
+msgid "Skip"
+msgstr "Overslaan"
+
+msgid "Sort"
+msgstr "Soort"
+
+msgid "Sort packages"
+msgstr "Sorteer pakketten"
+
+msgid "Source"
+msgstr "Bron"
+
+msgid "Source not found."
+msgstr "Bron niet gevonden."
+
+msgid "Sources"
+msgstr "Bronnen"
+
+msgid "Stars"
+msgstr "Sterren"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Stappen om te reproduceren, verwacht versus feitelijk gedrag"
+
+msgid "Submit"
+msgstr "Indienen"
+
+msgid "Submitting report…"
+msgstr "Rapport indienen…"
+
+msgid "This release has no ZIP assets."
+msgstr "Deze release bevat geen ZIP-items."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "Dit wordt als een \"boek\" op het Kindle-startscherm geïnstalleerd."
+
+msgid "to"
+msgstr "naar"
 
 msgid "uninstall"
 msgstr "verwijderen"
 
+msgid "Uninstall"
+msgstr "Verwijderen"
+
+msgid "Uninstall ZenPM?"
+msgstr "ZenPM verwijderen?"
+
 msgid "uninstalled"
 msgstr "verwijderd"
+
+msgid "Uninstalling"
+msgstr "Verwijderen"
+
+msgid "Uninstalling ZenPM..."
+msgstr "ZenPM verwijderen..."
+
+msgid "Unknown package"
+msgstr "Onbekend pakket"
+
+msgid "update"
+msgstr "update"
+
+msgid "Update"
+msgstr "Bijwerken"
+
+msgid "Update All"
+msgstr "Alles bijwerken"
+
+msgid "Update check was cancelled."
+msgstr "Updatecontrole is geannuleerd."
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "Update was cancelled."
+msgstr "Update is geannuleerd."
+
+msgid "updated"
+msgstr "bijgewerkt"
+
+msgid "Updated: %d packages"
+msgstr "Bijgewerkt: %d-pakketten"
+
+msgid "Updating"
+msgstr "Updaten"
+
+msgid "Updating ZenPM..."
+msgstr "ZenPM bijwerken..."
+
+msgid "username"
+msgstr "gebruikersnaam"
+
+msgid "Version: "
+msgstr "Versie: "
+
+msgid "Welcome"
+msgstr "Welkom"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Frontend van Zen Package Manager voor KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Zen UI is geïnstalleerd. De meeste patches mogen niet worden gebruikt met Zen UI."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "ZenPM Android Companion kon de updater niet starten."
+
+msgid "ZenPM Android companion is not available."
+msgstr "ZenPM Android-metgezel is niet beschikbaar."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "ZenPM Android Companion is niet geïnstalleerd of kon niet starten. Zien"
+
+msgid "ZenPM backend"
+msgstr "ZenPM-backend"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "ZenPM-backend is niet gestart. Zorg ervoor dat u de juiste ZenPM-versie voor dit apparaat hebt gebruikt."
+
+msgid "ZenPM bug reporter"
+msgstr "ZenPM-bugreporter"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion controleert op een update."
+
+msgid "ZenPM companion update failed."
+msgstr "ZenPM begeleidende update mislukt."
+
+msgid "ZenPM font size"
+msgstr "ZenPM-lettergrootte"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM is up-to-date."
+
+msgid "ZenPM update v"
+msgstr "ZenPM-update v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM bijgewerkt naar v"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log en KOReader's crash.log (indien aanwezig) zullen worden toegevoegd aan een openbaar GitHub-probleem. Ze kunnen pakketnamen, repository-URL's en bestandspaden bevatten."

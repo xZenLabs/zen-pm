@@ -629,6 +629,17 @@ func isPatchPackage(entry *repo.CatalogEntry) bool {
 	return patchPackageReason(entry) != ""
 }
 
+func isFontPackage(entry *repo.CatalogEntry) bool {
+	if entry == nil {
+		return false
+	}
+	category := strings.ToLower(strings.TrimSpace(entry.Category))
+	category = strings.ReplaceAll(category, "-", "")
+	category = strings.ReplaceAll(category, "_", "")
+	category = strings.ReplaceAll(category, " ", "")
+	return category == "font" || category == "fonts"
+}
+
 func patchPackageReason(entry *repo.CatalogEntry) string {
 	if entry == nil {
 		return ""

@@ -136,6 +136,64 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 }
 
+func TestInstallGenericFontNatively(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/font-cartisse.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write(zipContents(t, map[string]string{
+			"Cartisse/Cartisse-Regular.ttf": "regular",
+			"Cartisse/Cartisse-Bold.otf":    "bold",
+			"Cartisse/LICENSE":              "license",
+		}))
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "font-cartisse", Name: "Cartisse", Version: "4.1", Repo: "ZenLabs",
+		Category: "fonts", Platforms: []string{"koreader"},
+		Assets: `[{
+			"arch":"any","asset":"font-cartisse.zip","url":"` + srv.URL + `/font-cartisse.zip"
+		}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	if err := manager.Install("font-cartisse"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Cartisse-Regular.ttf", "Cartisse-Bold.otf"} {
+		if _, err := os.Stat(filepath.Join(koRoot, "fonts", "Cartisse", name)); err != nil {
+			t.Fatalf("font %s was not installed: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, "fonts", "Cartisse", "LICENSE")); err != nil {
+		t.Fatalf("font package contents were not preserved: %v", err)
+	}
+
+	if err := manager.Uninstall("font-cartisse", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, "fonts", "Cartisse")); !os.IsNotExist(err) {
+		t.Fatalf("font directory remains after uninstall: %v", err)
+	}
+}
+
 func TestDownloadInstallAssetResolvesRequestedReleaseBeforeCatalogURL(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		Source: "https://example.invalid/plugin",

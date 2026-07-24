@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "est disponible. Mettre à jour maintenant ?"
 
-msgid "Open ZenPM"
-msgstr "Ouvrir ZenPM"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "Interface de Zen Package Manager pour KOReader."
-
-msgid "Featured"
-msgstr "En vedette"
-
-msgid "Sources"
-msgstr "Sources"
-
-msgid "Installed"
-msgstr "Installes"
-
-msgid "Debug"
-msgstr "Debogage"
-
-msgid "Search"
-msgstr "Rechercher"
-
-msgid "Welcome"
-msgstr "Bienvenue"
-
-msgid "Add Source"
-msgstr "Ajouter une source"
-
-msgid "Add"
-msgstr "Ajouter"
-
-msgid "Search..."
-msgstr "Rechercher..."
-
-msgid "Filter installed..."
-msgstr "Filtrer installes..."
-
-msgid "Packages"
-msgstr "Paquets"
-
-msgid "Source Details"
-msgstr "Details de la source"
-
-msgid "Package Details"
-msgstr "Details du paquet"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - Debogage"
-
-msgid "Featured packages coming soon."
-msgstr "Paquets en vedette bientot disponibles."
-
-msgid "No packages found. Try Refresh."
-msgstr "Aucun paquet trouve. Essayez Actualiser."
-
-msgid "No installed packages match the filter."
-msgstr "Aucun paquet installe ne correspond au filtre."
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "Aucun paquet installe. Utilisez Rechercher pour trouver des paquets."
-
-msgid "No packages match the filter."
-msgstr "Aucun paquet ne correspond au filtre."
-
-msgid "No repositories configured."
-msgstr "Aucun depot configure."
-
-msgid "No packages found for this source."
-msgstr "Aucun paquet trouve pour cette source."
-
-msgid "By "
-msgstr "Par "
-
-msgid "Description"
-msgstr "Description"
-
-msgid "No description available."
-msgstr "Aucune description disponible."
-
-msgid "Unknown package"
-msgstr "Paquet inconnu"
-
-msgid "No description"
-msgstr "Aucune description"
-
-msgid "Source"
-msgstr "Source"
-
-msgid "Remove"
-msgstr "Supprimer"
-
-msgid "Modify"
-msgstr "Modifier"
-
-msgid "Get"
-msgstr "Obtenir"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "Annuler"
-
-msgid "Clear"
-msgstr "Effacer"
-
-msgid "Info"
-msgstr "Info"
-
-msgid "Reinstall"
-msgstr "Reinstaller"
-
-msgid "Uninstall"
-msgstr "Desinstaller"
-
-msgid "Refresh"
-msgstr "Actualiser"
-
-msgid "About"
-msgstr "A propos"
-
-msgid "Update"
-msgstr "Mettre a jour"
-
-msgid "Quit"
-msgstr "Quitter"
-
-msgid "Filter installed packages"
-msgstr "Filtrer les paquets installes"
-
-msgid "Search packages"
-msgstr "Rechercher des paquets"
-
-msgid "Please enter a URL."
-msgstr "Veuillez saisir une URL."
-
-msgid "Detecting repo..."
-msgstr "Detection du depot..."
-
-msgid "Could not detect repo format."
-msgstr "Impossible de detecter le format du depot."
-
-msgid "Another operation is in progress. Please wait."
-msgstr "Une autre operation est en cours. Veuillez patienter."
-
-msgid "Package has no id."
-msgstr "Le paquet n a pas d id."
-
-msgid "Downloading... Please wait."
-msgstr "Telechargement... Veuillez patienter."
-
-msgid "Refreshing repositories..."
-msgstr "Actualisation des depots..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "Verifier et lancer une mise a jour de ZenPM ?"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "Mise a jour acceptee. Le demon peut redemarrer."
-
-msgid "None"
-msgstr "Aucun"
-
-msgid "Version: "
-msgstr "Version : "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "Auteur : Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " ne s est pas terminee.\n\nConsultez le journal de debogage pour les details."
+msgid " returned HTTP "
+msgstr "HTTP renvoyé"
 
 msgid " successfully."
 msgstr " avec succes."
 
-msgid "Are you sure you want to download "
-msgstr "Voulez-vous vraiment telecharger "
+msgid " was copied to the Kindle homepage."
+msgstr "a été copié sur la page d'accueil du Kindle."
 
-msgid "Are you sure you want to reinstall "
-msgstr "Voulez-vous vraiment reinstaller "
+msgid "%d packages queued"
+msgstr "Paquets %d en file d'attente"
 
-msgid "Are you sure you want to uninstall "
-msgstr "Voulez-vous vraiment desinstaller "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s est en conflit avec %s. Ils ne doivent pas être utilisés ensemble. Installer quand même ?"
 
-msgid "Loading packages, please wait"
-msgstr "Chargement des paquets, veuillez patienter"
+msgid "(installed)"
+msgstr "(installé)"
+
+msgid "... Please wait."
+msgstr "... S'il vous plaît, attendez."
+
+msgid "1 package queued"
+msgstr "1 colis en file d'attente"
+
+msgid "A short summary of what went wrong"
+msgstr "Un bref résumé de ce qui n'a pas fonctionné"
+
+msgid "About"
+msgstr "A propos"
+
+msgid "Add"
+msgstr "Ajouter"
+
+msgid "Add Source"
+msgstr "Ajouter une source"
+
+msgid "Added to Queue"
+msgstr "Ajouté à la file d'attente"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Une autre operation est en cours. Veuillez patienter."
+
+msgid "Are you sure you want to "
+msgstr "Etes-vous sûr de vouloir"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Êtes-vous sûr de vouloir vider la file d'attente ?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Êtes-vous sûr de vouloir effectuer toutes les actions en file d'attente ?"
+
+msgid "Are you sure you want to remove "
+msgstr "Etes-vous sûr de vouloir supprimer"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Auteur : Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Mises à jour bêta"
+
+msgid "Brief description of the bug"
+msgstr "Brève description du bug"
+
+msgid "Bug description (optional)"
+msgstr "Description du bug (facultatif)"
+
+msgid "Bug report submitted!"
+msgstr "Rapport de bug soumis !"
+
+msgid "Bug report title"
+msgstr "Titre du rapport de bug"
+
+msgid "By "
+msgstr "Par "
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Categories"
+msgstr "Catégories"
+
+msgid "Category"
+msgstr "Catégorie"
+
+msgid "Category not found."
+msgstr "Catégorie introuvable."
+
+msgid "Change version"
+msgstr "Changer de version"
+
+msgid "Check for updates automatically"
+msgstr "Rechercher automatiquement les mises à jour"
+
+msgid "Check the debug log for details."
+msgstr "Consultez le journal de débogage pour plus de détails."
+
+msgid "Checking for update..."
+msgstr "Vérification de la mise à jour..."
+
+msgid "Choose a build for "
+msgstr "Choisissez une version pour"
+
+msgid "Choose a patch for "
+msgstr "Choisissez un patch pour"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Companion update failed to start: "
+msgstr "La mise à jour complémentaire n'a pas pu démarrer :"
+
+msgid "Confirm"
+msgstr "Confirmer"
+
+msgid "Continue"
+msgstr "Continuer"
+
+msgid "Continue?"
+msgstr "Continuer?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "Copie de ZenPM sur la page d'accueil Kindle..."
+
+msgid "Could not "
+msgstr "Je n'ai pas pu"
 
 msgid "Could not add source: "
 msgstr "Impossible d ajouter la source : "
 
+msgid "Could not connect to "
+msgstr "Impossible de se connecter à"
+
+msgid "Could not connect to GitHub: "
+msgstr "Impossible de se connecter à GitHub :"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Impossible de se connecter à GitHub : la prise en charge HTTPS n'est pas disponible dans cette version de KOReader."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Impossible de créer le répertoire ZenPM :"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Impossible de créer le répertoire des paramètres ZenPM :"
+
+msgid "Could not detect repo format."
+msgstr "Impossible de detecter le format du depot."
+
+msgid "Could not determine which build to install: "
+msgstr "Impossible de déterminer quelle version installer :"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Impossible d'installer le backend ZenPM fourni sur :"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Impossible d'installer le wrapper de ligne de commande ZenPM."
+
+msgid "Could not load GitHub releases: "
+msgstr "Impossible de charger les versions de GitHub :"
+
 msgid "Could not read log: "
 msgstr "Impossible de lire le journal : "
 
+msgid "Could not remove patch: "
+msgstr "Impossible de supprimer le correctif :"
+
 msgid "Could not remove source: "
 msgstr "Impossible de supprimer la source : "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Impossible de supprimer le plugin ZenPM."
+
+msgid "Could not resolve patch file."
+msgstr "Impossible de résoudre le fichier de correctif."
+
+msgid "Could not resolve plugin name."
+msgstr "Impossible de résoudre le nom du plugin."
+
+msgid "Debug"
+msgstr "Debogage"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Details"
+msgstr "Détails"
+
+msgid "Detected ABI: "
+msgstr "ABI détecté :"
+
+msgid "Detecting repo..."
+msgstr "Detection du depot..."
+
+msgid "Disable"
+msgstr "Désactiver"
+
+msgid "disable"
+msgstr "désactiver"
+
+msgid "disabled"
+msgstr "désactivé"
+
+msgid "Downgrade"
+msgstr "Rétrograder"
+
+msgid "downgrade"
+msgstr "rétrograder"
+
+msgid "downgraded"
+msgstr "déclassé"
+
+msgid "Downgrading"
+msgstr "Déclassement"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Télécharger et copier la dernière version autonome de ZenPM sur la page d'accueil Kindle ? Cela ajoute un scriptlet ZenPM (livre) à la Kindle Home/Bibliothèque"
+
+msgid "download failed"
+msgstr "telechargement echoue"
+
+msgid "Download this asset: "
+msgstr "Téléchargez cet actif :"
+
+msgid "enable"
+msgstr "activer"
+
+msgid "Enable"
+msgstr "Activer"
+
+msgid "enabled"
+msgstr "activé"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Entrez votre nom d'utilisateur GitHub pour être tagué dans le problème"
 
 msgid "Failed to load package: "
 msgstr "Echec du chargement du paquet : "
@@ -217,14 +258,98 @@ msgstr "Echec du chargement des sources : "
 msgid "Failed to start package action: "
 msgstr "Impossible de demarrer l action du paquet : "
 
+msgid "Failed to submit report: "
+msgstr "Échec de l'envoi du rapport :"
+
+msgid "Featured"
+msgstr "En vedette"
+
+msgid "Font preview"
+msgstr "Aperçu de la police"
+
+msgid "Font size"
+msgstr "Taille de la police"
+
+msgid "Found %d installed plugins"
+msgstr "Plugins installés %d trouvés"
+
+msgid "Get"
+msgstr "Obtenir"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "Téléchargement GitHub redirigé trop souvent."
+
+msgid "GitHub download returned HTTP "
+msgstr "Le téléchargement GitHub a renvoyé HTTP"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub a fourni une redirection de téléchargement non valide."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub a fourni une URL de téléchargement non fiable."
+
+msgid "GitHub username (optional)"
+msgstr "Nom d'utilisateur GitHub (facultatif)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "La prise en charge HTTPS n est pas disponible dans cette version de KOReader."
+
+msgid "install"
+msgstr "installation"
+
+msgid "Install"
+msgstr "Installer"
+
+msgid "Install anyway"
+msgstr "Installer quand même"
+
+msgid "Install anyway?"
+msgstr "Installer quand même ?"
+
+msgid "Install to Kindle homepage"
+msgstr "Installer sur la page d'accueil du Kindle"
+
+msgid "Installed"
+msgstr "Installes"
+
+msgid "installed"
+msgstr "installe"
 
 msgid "Installing"
 msgstr "Installation"
 
+msgid "Keep settings"
+msgstr "Conserver les paramètres"
+
+msgid "Kindle homepage installation failed: "
+msgstr "L'installation de la page d'accueil du Kindle a échoué :"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "L'installation de la page d'accueil du Kindle a été annulée."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Le réseau Kobo n'est pas prêt. Veuillez patienter un moment et réessayer."
+
+msgid "KOReader settings are unavailable."
+msgstr "Les paramètres de KOReader ne sont pas disponibles."
+
+msgid "Latest"
+msgstr "Dernier"
+
+msgid "Loading categories..."
+msgstr "Chargement des catégories..."
+
+msgid "Loading category..."
+msgstr "Chargement de la catégorie..."
+
 msgid "Loading featured packages..."
 msgstr "Chargement des paquets en vedette..."
+
+msgid "Loading GitHub releases..."
+msgstr "Chargement des versions de GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Chargement des paquets installes..."
@@ -232,8 +357,8 @@ msgstr "Chargement des paquets installes..."
 msgid "Loading log..."
 msgstr "Chargement du journal..."
 
-msgid "Loading package..."
-msgstr "Chargement du paquet..."
+msgid "Loading packages, please wait"
+msgstr "Chargement des paquets, veuillez patienter"
 
 msgid "Loading packages..."
 msgstr "Chargement des paquets..."
@@ -247,8 +372,89 @@ msgstr "Chargement des sources..."
 msgid "Log is empty."
 msgstr "Le journal est vide."
 
+msgid "Modify"
+msgstr "Modifier"
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "network error"
+msgstr "erreur reseau"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "No categories found."
+msgstr "Aucune catégorie trouvée."
+
+msgid "No categories match the filter."
+msgstr "Aucune catégorie ne correspond au filtre."
+
+msgid "No description"
+msgstr "Aucune description"
+
+msgid "No description available."
+msgstr "Aucune description disponible."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Aucune version de GitHub avec des ressources ZIP n'a été trouvée."
+
+msgid "No installed packages match the filter."
+msgstr "Aucun paquet installe ne correspond au filtre."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Aucune connexion réseau. Veuillez vous connecter au Wi-Fi et réessayer."
+
+msgid "No packages found for this category."
+msgstr "Aucun package trouvé pour cette catégorie."
+
+msgid "No packages found for this source."
+msgstr "Aucun paquet trouve pour cette source."
+
+msgid "No packages found. Try Refresh."
+msgstr "Aucun paquet trouve. Essayez Actualiser."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Aucun paquet installe. Utilisez Rechercher pour trouver des paquets."
+
+msgid "No packages match the filter."
+msgstr "Aucun paquet ne correspond au filtre."
+
+msgid "No queued operations."
+msgstr "Aucune opération en file d’attente."
+
+msgid "No README available."
+msgstr "Aucun README disponible."
+
+msgid "No repositories configured."
+msgstr "Aucun depot configure."
+
+msgid "None"
+msgstr "Aucun"
+
+msgid "of"
+msgstr "de"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "Afficher uniquement les packages installables"
+
+msgid "Open ZenPM"
+msgstr "Ouvrir ZenPM"
+
 msgid "Package"
 msgstr "Paquet"
+
+msgid "Package Details"
+msgstr "Details du paquet"
+
+msgid "Package has no id."
+msgstr "Le paquet n a pas d id."
+
+msgid "Package manager for KOReader."
+msgstr "Gestionnaire de packages pour KOReader."
 
 msgid "Package not found."
 msgstr "Paquet introuvable."
@@ -256,47 +462,71 @@ msgstr "Paquet introuvable."
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "Impossible de verifier l etat de l operation. Consultez le journal de debogage."
 
+msgid "packages"
+msgstr "forfaits"
+
+msgid "Packages updated"
+msgstr "Forfaits mis à jour"
+
+msgid "patch"
+msgstr "correctif"
+
+msgid "Patch file not found."
+msgstr "Fichier de correctif introuvable."
+
+msgid "Patch has no file name."
+msgstr "Le patch n'a pas de nom de fichier."
+
+msgid "Patches"
+msgstr "Correctifs"
+
+msgid "Platform: "
+msgstr "Plate-forme:"
+
+msgid "Please enter a URL."
+msgstr "Veuillez saisir une URL."
+
+msgid "Plugin scan failed: "
+msgstr "L'analyse du plugin a échoué :"
+
+msgid "prerelease"
+msgstr "avant-première"
+
+msgid "Queue"
+msgstr "File d'attente"
+
+msgid "Queue %d/%d: "
+msgstr "File d'attente %d/%d :"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "File d'attente terminée : %d a réussi, %d a échoué."
+
+msgid "Queue completed: %d succeeded."
+msgstr "File d'attente terminée : %d a réussi."
+
+msgid "Queue is running. Please wait."
+msgstr "La file d'attente est en cours d'exécution. S'il vous plaît, attendez."
+
+msgid "Queued"
+msgstr "En file d'attente"
+
+msgid "Quit"
+msgstr "Quitter"
+
+msgid "README"
+msgstr "LISEZMOI"
+
+msgid "Refresh"
+msgstr "Actualiser"
+
 msgid "Refresh failed: "
 msgstr "Echec de l actualisation : "
 
-msgid "Reinstalling"
-msgstr "Reinstallation"
+msgid "Refreshing repositories..."
+msgstr "Actualisation des depots..."
 
-msgid "Remove source "
-msgstr "Supprimer la source "
-
-msgid "Source not found."
-msgstr "Source introuvable."
-
-msgid "Uninstalling"
-msgstr "Desinstallation"
-
-msgid "Update failed: "
-msgstr "Echec de la mise a jour : "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "Backend ZenPM introuvable. Attendu "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "Le demon ZenPM est injoignable. Relancez l installateur ZenPM s il ne fonctionne pas."
-
-msgid "download failed"
-msgstr "telechargement echoue"
-
-msgid "install"
-msgstr "installation"
-
-msgid "installed"
-msgstr "installe"
-
-msgid "network error"
-msgstr "erreur reseau"
-
-msgid "of"
-msgstr "de"
-
-msgid "or"
-msgstr "ou"
+msgid "Reinstall"
+msgstr "Reinstaller"
 
 msgid "reinstall"
 msgstr "reinstallation"
@@ -304,11 +534,245 @@ msgstr "reinstallation"
 msgid "reinstalled"
 msgstr "reinstalle"
 
+msgid "Reinstalling"
+msgstr "Reinstallation"
+
+msgid "remote server"
+msgstr "serveur distant"
+
+msgid "Remove"
+msgstr "Supprimer"
+
+msgid "Remove %s from queue?"
+msgstr "Supprimer %s de la file d'attente ?"
+
+msgid "Remove from queue"
+msgstr "Supprimer de la file d'attente"
+
+msgid "Remove settings"
+msgstr "Supprimer les paramètres"
+
+msgid "Remove source "
+msgstr "Supprimer la source "
+
+msgid "rename failed"
+msgstr "échec du changement de nom"
+
+msgid "Report a Bug"
+msgstr "Signaler un bug"
+
 msgid "request failed"
 msgstr "requete echouee"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Redémarrez KOReader pour appliquer les modifications."
+
+msgid "Restart later"
+msgstr "Redémarrer plus tard"
+
+msgid "Restart now"
+msgstr "Redémarrer maintenant"
+
+msgid "Restarting..."
+msgstr "Redémarrage..."
+
+msgid "Retry"
+msgstr "Réessayer"
+
+msgid "Scan installed plugins"
+msgstr "Analyser les plugins installés"
+
+msgid "Scanning installed plugins..."
+msgstr "Analyse des plugins installés..."
+
+msgid "Search"
+msgstr "Rechercher"
+
+msgid "Search categories"
+msgstr "Catégories de recherche"
+
+msgid "Search categories..."
+msgstr "Catégories de recherche..."
+
+msgid "Search category"
+msgstr "Catégorie de recherche"
+
+msgid "Search category..."
+msgstr "Catégorie de recherche..."
+
+msgid "Search installed packages"
+msgstr "Rechercher les packages installés"
+
+msgid "Search installed..."
+msgstr "Recherche installée..."
+
+msgid "Search packages"
+msgstr "Rechercher des paquets"
+
+msgid "Search..."
+msgstr "Rechercher..."
+
+msgid "Select version for "
+msgstr "Sélectionnez la version pour"
+
+msgid "Settings"
+msgstr "Paramètres"
+
+msgid "Show all release builds"
+msgstr "Afficher toutes les versions"
+
+msgid "Show more"
+msgstr "Afficher plus"
+
+msgid "Show README images"
+msgstr "Afficher les images README"
+
+msgid "Skip"
+msgstr "Sauter"
+
+msgid "Sort"
+msgstr "Trier"
+
+msgid "Sort packages"
+msgstr "Trier les colis"
+
+msgid "Source"
+msgstr "Source"
+
+msgid "Source not found."
+msgstr "Source introuvable."
+
+msgid "Sources"
+msgstr "Sources"
+
+msgid "Stars"
+msgstr "Étoiles"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Étapes pour reproduire, comportement attendu par rapport au comportement réel"
+
+msgid "Submit"
+msgstr "Soumettre"
+
+msgid "Submitting report…"
+msgstr "Soumission du rapport…"
+
+msgid "This release has no ZIP assets."
+msgstr "Cette version ne contient aucune ressource ZIP."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "Cela s'installera comme un « livre » sur l'écran d'accueil du Kindle."
+
+msgid "to"
+msgstr "à"
 
 msgid "uninstall"
 msgstr "desinstallation"
 
+msgid "Uninstall"
+msgstr "Desinstaller"
+
+msgid "Uninstall ZenPM?"
+msgstr "Désinstaller ZenPM ?"
+
 msgid "uninstalled"
 msgstr "desinstalle"
+
+msgid "Uninstalling"
+msgstr "Desinstallation"
+
+msgid "Uninstalling ZenPM..."
+msgstr "Désinstallation de ZenPM..."
+
+msgid "Unknown package"
+msgstr "Paquet inconnu"
+
+msgid "update"
+msgstr "mise à jour"
+
+msgid "Update"
+msgstr "Mettre a jour"
+
+msgid "Update All"
+msgstr "Tout mettre à jour"
+
+msgid "Update check was cancelled."
+msgstr "La vérification de la mise à jour a été annulée."
+
+msgid "Update failed: "
+msgstr "Echec de la mise a jour : "
+
+msgid "Update was cancelled."
+msgstr "La mise à jour a été annulée."
+
+msgid "updated"
+msgstr "mis à jour"
+
+msgid "Updated: %d packages"
+msgstr "Mise à jour : paquets %d"
+
+msgid "Updating"
+msgstr "Mise à jour"
+
+msgid "Updating ZenPM..."
+msgstr "Mise à jour de ZenPM..."
+
+msgid "username"
+msgstr "nom d'utilisateur"
+
+msgid "Version: "
+msgstr "Version : "
+
+msgid "Welcome"
+msgstr "Bienvenue"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Interface de Zen Package Manager pour KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Zen UI est installé. La plupart des correctifs ne doivent pas être utilisés avec Zen UI."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "Le compagnon ZenPM Android n'a pas pu démarrer son programme de mise à jour."
+
+msgid "ZenPM Android companion is not available."
+msgstr "Le compagnon ZenPM Android n’est pas disponible."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "Le compagnon ZenPM Android n’est pas installé ou n’a pas pu démarrer. Voir"
+
+msgid "ZenPM backend"
+msgstr "Back-end ZenPM"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "Le backend ZenPM n'a pas démarré. Assurez-vous d'avoir utilisé la bonne version de ZenPM pour cet appareil."
+
+msgid "ZenPM bug reporter"
+msgstr "Journaliste de bugs ZenPM"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion recherche une mise à jour."
+
+msgid "ZenPM companion update failed."
+msgstr "La mise à jour du compagnon ZenPM a échoué."
+
+msgid "ZenPM font size"
+msgstr "Taille de la police ZenPM"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM est à jour."
+
+msgid "ZenPM update v"
+msgstr "Mise à jour ZenPM v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM mis à jour vers v"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log et crash.log de KOReader (le cas échéant) seront joints à un problème public GitHub. Ils peuvent contenir des noms de packages, des URL de référentiel et des chemins de fichiers."

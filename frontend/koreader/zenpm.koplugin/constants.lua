@@ -39,5 +39,6 @@ return {
         { id = "games", label = "Games", icon = "games.svg" },
         { id = "theme", label = "Theme", icon = "theme.svg" },
         { id = "koreader-patches", label = "Patches", icon = "patch.svg" },
+        { id = "fonts", label = "Fonts", icon = "fonts.svg" },
     },
 }

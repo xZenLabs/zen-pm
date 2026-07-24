@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: vi\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "có sẵn. Cập nhật ngay bây giờ?"
 
-msgid "Open ZenPM"
-msgstr "Mở ZenPM"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "Giao diện Zen Package Manager cho KOReader."
-
-msgid "Featured"
-msgstr "Nổi bật"
-
-msgid "Sources"
-msgstr "Nguồn"
-
-msgid "Installed"
-msgstr "Đã cài"
-
-msgid "Debug"
-msgstr "Gỡ lỗi"
-
-msgid "Search"
-msgstr "Tìm kiếm"
-
-msgid "Welcome"
-msgstr "Chào mừng"
-
-msgid "Add Source"
-msgstr "Thêm nguồn"
-
-msgid "Add"
-msgstr "Thêm"
-
-msgid "Search..."
-msgstr "Tìm kiếm..."
-
-msgid "Filter installed..."
-msgstr "Lọc đã cài..."
-
-msgid "Packages"
-msgstr "Gói"
-
-msgid "Source Details"
-msgstr "Chi tiết nguồn"
-
-msgid "Package Details"
-msgstr "Chi tiết gói"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - Gỡ lỗi"
-
-msgid "Featured packages coming soon."
-msgstr "Các gói nổi bật sẽ sớm có."
-
-msgid "No packages found. Try Refresh."
-msgstr "Không tìm thấy gói. Hãy thử làm mới."
-
-msgid "No installed packages match the filter."
-msgstr "Không có gói đã cài nào khớp với bộ lọc."
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "Chưa cài gói nào. Dùng Tìm kiếm để tìm gói."
-
-msgid "No packages match the filter."
-msgstr "Không có gói nào khớp với bộ lọc."
-
-msgid "No repositories configured."
-msgstr "Chưa cấu hình kho nào."
-
-msgid "No packages found for this source."
-msgstr "Không tìm thấy gói cho nguồn này."
-
-msgid "By "
-msgstr "Bởi "
-
-msgid "Description"
-msgstr "Mô tả"
-
-msgid "No description available."
-msgstr "Không có mô tả."
-
-msgid "Unknown package"
-msgstr "Gói không xác định"
-
-msgid "No description"
-msgstr "Không có mô tả"
-
-msgid "Source"
-msgstr "Nguồn"
-
-msgid "Remove"
-msgstr "Xóa"
-
-msgid "Modify"
-msgstr "Sửa"
-
-msgid "Get"
-msgstr "Tải"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "Hủy"
-
-msgid "Clear"
-msgstr "Xóa"
-
-msgid "Info"
-msgstr "Thông tin"
-
-msgid "Reinstall"
-msgstr "Cài lại"
-
-msgid "Uninstall"
-msgstr "Gỡ cài đặt"
-
-msgid "Refresh"
-msgstr "Làm mới"
-
-msgid "About"
-msgstr "Giới thiệu"
-
-msgid "Update"
-msgstr "Cập nhật"
-
-msgid "Quit"
-msgstr "Thoát"
-
-msgid "Filter installed packages"
-msgstr "Lọc gói đã cài"
-
-msgid "Search packages"
-msgstr "Tìm gói"
-
-msgid "Please enter a URL."
-msgstr "Vui lòng nhập URL."
-
-msgid "Detecting repo..."
-msgstr "Đang phát hiện kho..."
-
-msgid "Could not detect repo format."
-msgstr "Không thể phát hiện định dạng kho."
-
-msgid "Another operation is in progress. Please wait."
-msgstr "Một thao tác khác đang chạy. Vui lòng chờ."
-
-msgid "Package has no id."
-msgstr "Gói không có id."
-
-msgid "Downloading... Please wait."
-msgstr "Đang tải xuống... Vui lòng chờ."
-
-msgid "Refreshing repositories..."
-msgstr "Đang làm mới kho..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "Kiểm tra và bắt đầu cập nhật ZenPM?"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "Đã chấp nhận cập nhật. Tiến trình nền có thể khởi động lại."
-
-msgid "None"
-msgstr "Không có"
-
-msgid "Version: "
-msgstr "Phiên bản: "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "Tác giả: Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " chưa hoàn tất.\n\nKiểm tra nhật ký gỡ lỗi để biết chi tiết."
+msgid " returned HTTP "
+msgstr "trả về HTTP"
 
 msgid " successfully."
 msgstr " thành công."
 
-msgid "Are you sure you want to download "
-msgstr "Bạn có chắc muốn tải xuống "
+msgid " was copied to the Kindle homepage."
+msgstr "đã được sao chép vào trang chủ Kindle."
 
-msgid "Are you sure you want to reinstall "
-msgstr "Bạn có chắc muốn cài lại "
+msgid "%d packages queued"
+msgstr "Các gói %d đã được xếp hàng đợi"
 
-msgid "Are you sure you want to uninstall "
-msgstr "Bạn có chắc muốn gỡ cài đặt "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s xung đột với %s. Chúng không nên được sử dụng cùng nhau. Vẫn cài đặt?"
 
-msgid "Loading packages, please wait"
-msgstr "Đang tải các gói, vui lòng đợi"
+msgid "(installed)"
+msgstr "(đã cài đặt)"
+
+msgid "... Please wait."
+msgstr "... Vui lòng chờ."
+
+msgid "1 package queued"
+msgstr "1 gói hàng đang xếp hàng"
+
+msgid "A short summary of what went wrong"
+msgstr "Một bản tóm tắt ngắn gọn về những gì đã xảy ra"
+
+msgid "About"
+msgstr "Giới thiệu"
+
+msgid "Add"
+msgstr "Thêm"
+
+msgid "Add Source"
+msgstr "Thêm nguồn"
+
+msgid "Added to Queue"
+msgstr "Đã thêm vào hàng đợi"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Một thao tác khác đang chạy. Vui lòng chờ."
+
+msgid "Are you sure you want to "
+msgstr "Bạn có chắc chắn muốn"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Bạn có chắc chắn muốn xóa hàng đợi không?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Bạn có chắc chắn muốn thực hiện tất cả các hành động được xếp hàng đợi không?"
+
+msgid "Are you sure you want to remove "
+msgstr "Bạn có chắc chắn muốn xóa"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Tác giả: Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Cập nhật thử nghiệm"
+
+msgid "Brief description of the bug"
+msgstr "Mô tả ngắn gọn về lỗi"
+
+msgid "Bug description (optional)"
+msgstr "Mô tả lỗi (tùy chọn)"
+
+msgid "Bug report submitted!"
+msgstr "Đã gửi báo cáo lỗi!"
+
+msgid "Bug report title"
+msgstr "Tiêu đề báo cáo lỗi"
+
+msgid "By "
+msgstr "Bởi "
+
+msgid "Cancel"
+msgstr "Hủy"
+
+msgid "Categories"
+msgstr "Thể loại"
+
+msgid "Category"
+msgstr "Loại"
+
+msgid "Category not found."
+msgstr "Không tìm thấy danh mục."
+
+msgid "Change version"
+msgstr "Thay đổi phiên bản"
+
+msgid "Check for updates automatically"
+msgstr "Kiểm tra cập nhật tự động"
+
+msgid "Check the debug log for details."
+msgstr "Kiểm tra nhật ký gỡ lỗi để biết chi tiết."
+
+msgid "Checking for update..."
+msgstr "Đang kiểm tra cập nhật..."
+
+msgid "Choose a build for "
+msgstr "Chọn bản dựng cho"
+
+msgid "Choose a patch for "
+msgstr "Chọn một bản vá cho"
+
+msgid "Clear"
+msgstr "Xóa"
+
+msgid "Companion update failed to start: "
+msgstr "Cập nhật đồng hành không bắt đầu được:"
+
+msgid "Confirm"
+msgstr "Xác nhận"
+
+msgid "Continue"
+msgstr "Tiếp tục"
+
+msgid "Continue?"
+msgstr "Tiếp tục?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "Đang sao chép ZenPM sang trang chủ Kindle..."
+
+msgid "Could not "
+msgstr "không thể"
 
 msgid "Could not add source: "
 msgstr "Không thể thêm nguồn: "
 
+msgid "Could not connect to "
+msgstr "Không thể kết nối với"
+
+msgid "Could not connect to GitHub: "
+msgstr "Không thể kết nối với GitHub:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Không thể kết nối với GitHub: Hỗ trợ HTTPS không khả dụng trong bản dựng KOReader này."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Không thể tạo thư mục ZenPM:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Không thể tạo thư mục cài đặt ZenPM:"
+
+msgid "Could not detect repo format."
+msgstr "Không thể phát hiện định dạng kho."
+
+msgid "Could not determine which build to install: "
+msgstr "Không thể xác định bản dựng nào sẽ cài đặt:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Không thể cài đặt phần phụ trợ ZenPM đi kèm vào:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Không thể cài đặt trình bao bọc dòng lệnh ZenPM."
+
+msgid "Could not load GitHub releases: "
+msgstr "Không thể tải bản phát hành GitHub:"
+
 msgid "Could not read log: "
 msgstr "Không thể đọc nhật ký: "
 
+msgid "Could not remove patch: "
+msgstr "Không thể xóa bản vá:"
+
 msgid "Could not remove source: "
 msgstr "Không thể xóa nguồn: "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Không thể xóa plugin ZenPM."
+
+msgid "Could not resolve patch file."
+msgstr "Không thể giải quyết tập tin vá."
+
+msgid "Could not resolve plugin name."
+msgstr "Không thể giải quyết tên plugin."
+
+msgid "Debug"
+msgstr "Gỡ lỗi"
+
+msgid "Description"
+msgstr "Mô tả"
+
+msgid "Details"
+msgstr "Chi tiết"
+
+msgid "Detected ABI: "
+msgstr "Đã phát hiện ABI:"
+
+msgid "Detecting repo..."
+msgstr "Đang phát hiện kho..."
+
+msgid "Disable"
+msgstr "Vô hiệu hóa"
+
+msgid "disable"
+msgstr "vô hiệu hóa"
+
+msgid "disabled"
+msgstr "tàn tật"
+
+msgid "Downgrade"
+msgstr "Hạ cấp"
+
+msgid "downgrade"
+msgstr "hạ cấp"
+
+msgid "downgraded"
+msgstr "bị hạ cấp"
+
+msgid "Downgrading"
+msgstr "Hạ cấp"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Tải xuống và sao chép bản phát hành ZenPM độc lập mới nhất vào trang chủ Kindle? Điều này thêm tập lệnh (sách) ZenPM vào Trang chủ/Thư viện Kindle"
+
+msgid "download failed"
+msgstr "tải xuống thất bại"
+
+msgid "Download this asset: "
+msgstr "Tải xuống tài sản này:"
+
+msgid "enable"
+msgstr "cho phép"
+
+msgid "Enable"
+msgstr "Cho phép"
+
+msgid "enabled"
+msgstr "đã bật"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Nhập tên người dùng GitHub của bạn để được gắn thẻ trong vấn đề này"
 
 msgid "Failed to load package: "
 msgstr "Không tải được gói: "
@@ -217,14 +258,98 @@ msgstr "Không tải được các nguồn: "
 msgid "Failed to start package action: "
 msgstr "Không thể bắt đầu thao tác gói: "
 
+msgid "Failed to submit report: "
+msgstr "Không gửi được báo cáo:"
+
+msgid "Featured"
+msgstr "Nổi bật"
+
+msgid "Font preview"
+msgstr "Xem trước phông chữ"
+
+msgid "Font size"
+msgstr "Cỡ chữ"
+
+msgid "Found %d installed plugins"
+msgstr "Đã tìm thấy %d plugin đã cài đặt"
+
+msgid "Get"
+msgstr "Tải"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "Tải xuống GitHub được chuyển hướng quá nhiều lần."
+
+msgid "GitHub download returned HTTP "
+msgstr "Tải xuống GitHub trả về HTTP"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub đã cung cấp chuyển hướng tải xuống không hợp lệ."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub đã cung cấp URL tải xuống không đáng tin cậy."
+
+msgid "GitHub username (optional)"
+msgstr "Tên người dùng GitHub (tùy chọn)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "Bản KOReader này không hỗ trợ HTTPS."
+
+msgid "install"
+msgstr "cài đặt"
+
+msgid "Install"
+msgstr "Cài đặt"
+
+msgid "Install anyway"
+msgstr "Vẫn cài đặt"
+
+msgid "Install anyway?"
+msgstr "Vẫn cài đặt?"
+
+msgid "Install to Kindle homepage"
+msgstr "Cài đặt vào trang chủ Kindle"
+
+msgid "Installed"
+msgstr "Đã cài"
+
+msgid "installed"
+msgstr "đã cài"
 
 msgid "Installing"
 msgstr "Đang cài đặt"
 
+msgid "Keep settings"
+msgstr "Giữ cài đặt"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Cài đặt trang chủ Kindle không thành công:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "Quá trình cài đặt trang chủ Kindle đã bị hủy."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Mạng Kobo chưa sẵn sàng. Vui lòng đợi một lát và thử lại."
+
+msgid "KOReader settings are unavailable."
+msgstr "Cài đặt KOReader không khả dụng."
+
+msgid "Latest"
+msgstr "Mới nhất"
+
+msgid "Loading categories..."
+msgstr "Đang tải danh mục..."
+
+msgid "Loading category..."
+msgstr "Đang tải danh mục..."
+
 msgid "Loading featured packages..."
 msgstr "Đang tải gói nổi bật..."
+
+msgid "Loading GitHub releases..."
+msgstr "Đang tải bản phát hành GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Đang tải gói đã cài..."
@@ -232,8 +357,8 @@ msgstr "Đang tải gói đã cài..."
 msgid "Loading log..."
 msgstr "Đang tải nhật ký..."
 
-msgid "Loading package..."
-msgstr "Đang tải gói..."
+msgid "Loading packages, please wait"
+msgstr "Đang tải các gói, vui lòng đợi"
 
 msgid "Loading packages..."
 msgstr "Đang tải các gói..."
@@ -247,8 +372,89 @@ msgstr "Đang tải các nguồn..."
 msgid "Log is empty."
 msgstr "Nhật ký trống."
 
+msgid "Modify"
+msgstr "Sửa"
+
+msgid "Name"
+msgstr "Tên"
+
+msgid "network error"
+msgstr "lỗi mạng"
+
+msgid "Next"
+msgstr "Kế tiếp"
+
+msgid "No categories found."
+msgstr "Không tìm thấy danh mục nào."
+
+msgid "No categories match the filter."
+msgstr "Không có danh mục nào phù hợp với bộ lọc."
+
+msgid "No description"
+msgstr "Không có mô tả"
+
+msgid "No description available."
+msgstr "Không có mô tả."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Không tìm thấy bản phát hành GitHub nào có nội dung ZIP."
+
+msgid "No installed packages match the filter."
+msgstr "Không có gói đã cài nào khớp với bộ lọc."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Không có kết nối mạng. Vui lòng kết nối với Wi-Fi và thử lại."
+
+msgid "No packages found for this category."
+msgstr "Không tìm thấy gói nào cho danh mục này."
+
+msgid "No packages found for this source."
+msgstr "Không tìm thấy gói cho nguồn này."
+
+msgid "No packages found. Try Refresh."
+msgstr "Không tìm thấy gói. Hãy thử làm mới."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Chưa cài gói nào. Dùng Tìm kiếm để tìm gói."
+
+msgid "No packages match the filter."
+msgstr "Không có gói nào khớp với bộ lọc."
+
+msgid "No queued operations."
+msgstr "Không có hoạt động xếp hàng đợi."
+
+msgid "No README available."
+msgstr "Không có README."
+
+msgid "No repositories configured."
+msgstr "Chưa cấu hình kho nào."
+
+msgid "None"
+msgstr "Không có"
+
+msgid "of"
+msgstr "của"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "Chỉ hiển thị các gói có thể cài đặt"
+
+msgid "Open ZenPM"
+msgstr "Mở ZenPM"
+
 msgid "Package"
 msgstr "Gói"
+
+msgid "Package Details"
+msgstr "Chi tiết gói"
+
+msgid "Package has no id."
+msgstr "Gói không có id."
+
+msgid "Package manager for KOReader."
+msgstr "Trình quản lý gói cho KOReader."
 
 msgid "Package not found."
 msgstr "Không tìm thấy gói."
@@ -256,47 +462,71 @@ msgstr "Không tìm thấy gói."
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "Không thể kiểm tra trạng thái thao tác gói. Xem nhật ký gỡ lỗi."
 
+msgid "packages"
+msgstr "gói"
+
+msgid "Packages updated"
+msgstr "Đã cập nhật gói"
+
+msgid "patch"
+msgstr "vá"
+
+msgid "Patch file not found."
+msgstr "Không tìm thấy tập tin vá."
+
+msgid "Patch has no file name."
+msgstr "Bản vá không có tên tập tin."
+
+msgid "Patches"
+msgstr "Bản vá"
+
+msgid "Platform: "
+msgstr "Nền tảng:"
+
+msgid "Please enter a URL."
+msgstr "Vui lòng nhập URL."
+
+msgid "Plugin scan failed: "
+msgstr "Quét plugin không thành công:"
+
+msgid "prerelease"
+msgstr "phát hành trước"
+
+msgid "Queue"
+msgstr "Hàng đợi"
+
+msgid "Queue %d/%d: "
+msgstr "Xếp hàng %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Hàng đợi đã hoàn thành: %d đã thành công, %d không thành công."
+
+msgid "Queue completed: %d succeeded."
+msgstr "Hàng đợi đã hoàn thành: %d đã thành công."
+
+msgid "Queue is running. Please wait."
+msgstr "Hàng đợi đang chạy. Vui lòng chờ."
+
+msgid "Queued"
+msgstr "Đã xếp hàng"
+
+msgid "Quit"
+msgstr "Thoát"
+
+msgid "README"
+msgstr "ĐỌC TÔI"
+
+msgid "Refresh"
+msgstr "Làm mới"
+
 msgid "Refresh failed: "
 msgstr "Làm mới thất bại: "
 
-msgid "Reinstalling"
-msgstr "Đang cài lại"
+msgid "Refreshing repositories..."
+msgstr "Đang làm mới kho..."
 
-msgid "Remove source "
-msgstr "Xóa nguồn "
-
-msgid "Source not found."
-msgstr "Không tìm thấy nguồn."
-
-msgid "Uninstalling"
-msgstr "Đang gỡ cài đặt"
-
-msgid "Update failed: "
-msgstr "Cập nhật thất bại: "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "Không tìm thấy backend ZenPM. Dự kiến "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "Không thể kết nối tiến trình nền ZenPM. Chạy lại trình cài đặt ZenPM nếu nó chưa chạy."
-
-msgid "download failed"
-msgstr "tải xuống thất bại"
-
-msgid "install"
-msgstr "cài đặt"
-
-msgid "installed"
-msgstr "đã cài"
-
-msgid "network error"
-msgstr "lỗi mạng"
-
-msgid "of"
-msgstr "của"
-
-msgid "or"
-msgstr "hoặc"
+msgid "Reinstall"
+msgstr "Cài lại"
 
 msgid "reinstall"
 msgstr "cài lại"
@@ -304,11 +534,245 @@ msgstr "cài lại"
 msgid "reinstalled"
 msgstr "đã cài lại"
 
+msgid "Reinstalling"
+msgstr "Đang cài lại"
+
+msgid "remote server"
+msgstr "máy chủ từ xa"
+
+msgid "Remove"
+msgstr "Xóa"
+
+msgid "Remove %s from queue?"
+msgstr "Xóa %s khỏi hàng đợi?"
+
+msgid "Remove from queue"
+msgstr "Xóa khỏi hàng đợi"
+
+msgid "Remove settings"
+msgstr "Xóa cài đặt"
+
+msgid "Remove source "
+msgstr "Xóa nguồn "
+
+msgid "rename failed"
+msgstr "đổi tên không thành công"
+
+msgid "Report a Bug"
+msgstr "Báo cáo lỗi"
+
 msgid "request failed"
 msgstr "yêu cầu thất bại"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Khởi động lại KOReader để áp dụng các thay đổi."
+
+msgid "Restart later"
+msgstr "Khởi động lại sau"
+
+msgid "Restart now"
+msgstr "Khởi động lại ngay bây giờ"
+
+msgid "Restarting..."
+msgstr "Đang khởi động lại..."
+
+msgid "Retry"
+msgstr "Thử lại"
+
+msgid "Scan installed plugins"
+msgstr "Quét các plugin đã cài đặt"
+
+msgid "Scanning installed plugins..."
+msgstr "Đang quét các plugin đã cài đặt..."
+
+msgid "Search"
+msgstr "Tìm kiếm"
+
+msgid "Search categories"
+msgstr "Tìm kiếm danh mục"
+
+msgid "Search categories..."
+msgstr "Tìm kiếm danh mục..."
+
+msgid "Search category"
+msgstr "Tìm kiếm danh mục"
+
+msgid "Search category..."
+msgstr "Tìm kiếm danh mục..."
+
+msgid "Search installed packages"
+msgstr "Tìm kiếm các gói đã cài đặt"
+
+msgid "Search installed..."
+msgstr "Tìm kiếm đã cài đặt..."
+
+msgid "Search packages"
+msgstr "Tìm gói"
+
+msgid "Search..."
+msgstr "Tìm kiếm..."
+
+msgid "Select version for "
+msgstr "Chọn phiên bản cho"
+
+msgid "Settings"
+msgstr "Cài đặt"
+
+msgid "Show all release builds"
+msgstr "Hiển thị tất cả các bản phát hành"
+
+msgid "Show more"
+msgstr "Hiển thị thêm"
+
+msgid "Show README images"
+msgstr "Hiển thị hình ảnh README"
+
+msgid "Skip"
+msgstr "Nhảy"
+
+msgid "Sort"
+msgstr "Loại"
+
+msgid "Sort packages"
+msgstr "Sắp xếp gói"
+
+msgid "Source"
+msgstr "Nguồn"
+
+msgid "Source not found."
+msgstr "Không tìm thấy nguồn."
+
+msgid "Sources"
+msgstr "Nguồn"
+
+msgid "Stars"
+msgstr "Ngôi sao"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Các bước để tái tạo, hành vi mong đợi so với hành vi thực tế"
+
+msgid "Submit"
+msgstr "Nộp"
+
+msgid "Submitting report…"
+msgstr "Đang gửi báo cáo…"
+
+msgid "This release has no ZIP assets."
+msgstr "Bản phát hành này không có nội dung ZIP."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "Điều này sẽ cài đặt như một \"cuốn sách\" trên màn hình chính của Kindle."
+
+msgid "to"
+msgstr "ĐẾN"
 
 msgid "uninstall"
 msgstr "gỡ cài đặt"
 
+msgid "Uninstall"
+msgstr "Gỡ cài đặt"
+
+msgid "Uninstall ZenPM?"
+msgstr "Gỡ cài đặt ZenPM?"
+
 msgid "uninstalled"
 msgstr "đã gỡ cài đặt"
+
+msgid "Uninstalling"
+msgstr "Đang gỡ cài đặt"
+
+msgid "Uninstalling ZenPM..."
+msgstr "Đang gỡ cài đặt ZenPM..."
+
+msgid "Unknown package"
+msgstr "Gói không xác định"
+
+msgid "update"
+msgstr "cập nhật"
+
+msgid "Update"
+msgstr "Cập nhật"
+
+msgid "Update All"
+msgstr "Cập nhật tất cả"
+
+msgid "Update check was cancelled."
+msgstr "Kiểm tra cập nhật đã bị hủy."
+
+msgid "Update failed: "
+msgstr "Cập nhật thất bại: "
+
+msgid "Update was cancelled."
+msgstr "Cập nhật đã bị hủy."
+
+msgid "updated"
+msgstr "đã cập nhật"
+
+msgid "Updated: %d packages"
+msgstr "Đã cập nhật: gói %d"
+
+msgid "Updating"
+msgstr "Đang cập nhật"
+
+msgid "Updating ZenPM..."
+msgstr "Đang cập nhật ZenPM..."
+
+msgid "username"
+msgstr "tên người dùng"
+
+msgid "Version: "
+msgstr "Phiên bản: "
+
+msgid "Welcome"
+msgstr "Chào mừng"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Giao diện Zen Package Manager cho KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Zen UI đã được cài đặt. Hầu hết các bản vá không nên sử dụng với Zen UI."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "Người bạn đồng hành ZenPM Android không thể khởi động trình cập nhật của nó."
+
+msgid "ZenPM Android companion is not available."
+msgstr "Đồng hành ZenPM Android không có sẵn."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "Đồng hành ZenPM Android chưa được cài đặt hoặc không thể khởi động. Nhìn thấy"
+
+msgid "ZenPM backend"
+msgstr "Phần phụ trợ ZenPM"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "Chương trình phụ trợ ZenPM không khởi động. Đảm bảo bạn đã sử dụng đúng phiên bản ZenPM cho thiết bị này."
+
+msgid "ZenPM bug reporter"
+msgstr "Trình báo lỗi ZenPM"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion đang kiểm tra bản cập nhật."
+
+msgid "ZenPM companion update failed."
+msgstr "Cập nhật đồng hành ZenPM không thành công."
+
+msgid "ZenPM font size"
+msgstr "Cỡ chữ ZenPM"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM được cập nhật."
+
+msgid "ZenPM update v"
+msgstr "Bản cập nhật ZenPM v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM đã cập nhật lên v"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "Crash.log của ZenPM.log và KOReader (nếu có) sẽ được đính kèm vào một vấn đề công khai trên GitHub. Chúng có thể chứa tên gói, URL kho lưu trữ và đường dẫn tệp."

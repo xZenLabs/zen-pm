@@ -139,15 +139,13 @@ function Reporter:show(app)
     if not check_network() then
         return Modals.info(_("No network connection. Please connect to Wi-Fi and try again."))
     end
-    local ConfirmBox = require("ui/widget/confirmbox")
-    local dialog = ConfirmBox:new{
-        text = _("ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths.") .. "\n\n" .. _("Continue?"),
-        ok_text = _("Continue"),
-        ok_callback = function()
+    Modals.confirm(
+        _("ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths.") .. "\n\n" .. _("Continue?"),
+        _("Continue"),
+        function()
             self:ask_title(app)
-        end,
-    }
-    UIManager:show(dialog)
+        end
+    )
 end
 
 function Reporter:ask_title(app)
@@ -268,13 +266,7 @@ function Reporter:submit(app, title, description, username)
         Modals.close_status()
         if submitted then
             local url = log_url(response) or "https://github.com/AnthonyGress/ZenPackageManager/issues"
-            local ConfirmBox = require("ui/widget/confirmbox")
-            local dialog = ConfirmBox:new{
-                text = _("Bug report submitted!") .. "\n\n" .. url,
-                no_ok_button = true,
-                cancel_text = _("OK"),
-            }
-            UIManager:show(dialog)
+            Modals.notice(_("Bug report submitted!") .. "\n\n" .. url)
         else
             Modals.info(_("Failed to submit report: ") .. tostring(response or code or "unknown error"))
         end

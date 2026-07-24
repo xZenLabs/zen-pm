@@ -453,7 +453,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			SourceURL:             resolveURL(repoURL, p.SourceURL),
 			ReadmeURL:             resolveURL(repoURL, p.ReadmeURL),
 			Stars:                 strings.TrimSpace(p.Stars),
-			Assets:                compactJSONField(p.Assets),
+			Assets:                resolveAssetURLs(repoURL, p.Assets),
 			Constraints:           compactJSONField(p.Constraints),
 		}
 		entry.ensurePluginModule()
@@ -489,6 +489,27 @@ func compactJSONField(value json.RawMessage) string {
 		return string(trimmed)
 	}
 	return out.String()
+}
+
+func resolveAssetURLs(repoURL string, value json.RawMessage) string {
+	value = bytes.TrimSpace(value)
+	if len(value) == 0 || bytes.Equal(value, []byte("null")) {
+		return ""
+	}
+	var assets []map[string]interface{}
+	if err := json.Unmarshal(value, &assets); err != nil {
+		return compactJSONField(value)
+	}
+	for _, asset := range assets {
+		if url, ok := asset["url"].(string); ok && url != "" {
+			asset["url"] = resolveURL(repoURL, url)
+		}
+	}
+	encoded, err := json.Marshal(assets)
+	if err != nil {
+		return compactJSONField(value)
+	}
+	return string(encoded)
 }
 
 // parseKindleForgeCatalog converts the KindleForge registry.json flat array to CatalogEntry list.

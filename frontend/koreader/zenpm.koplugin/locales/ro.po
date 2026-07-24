@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: ro\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100>0 && n%100<20)) ? 1 : 2);\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "este disponibil. Actualizați acum?"
 
-msgid "Open ZenPM"
-msgstr "Deschide ZenPM"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "Interfață Zen Package Manager pentru KOReader."
-
-msgid "Featured"
-msgstr "Recomandate"
-
-msgid "Sources"
-msgstr "Surse"
-
-msgid "Installed"
-msgstr "Instalate"
-
-msgid "Debug"
-msgstr "Depanare"
-
-msgid "Search"
-msgstr "Căutare"
-
-msgid "Welcome"
-msgstr "Bun venit"
-
-msgid "Add Source"
-msgstr "Adaugă sursă"
-
-msgid "Add"
-msgstr "Adaugă"
-
-msgid "Search..."
-msgstr "Căutare..."
-
-msgid "Filter installed..."
-msgstr "Filtrează instalate..."
-
-msgid "Packages"
-msgstr "Pachete"
-
-msgid "Source Details"
-msgstr "Detalii sursă"
-
-msgid "Package Details"
-msgstr "Detalii pachet"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - Depanare"
-
-msgid "Featured packages coming soon."
-msgstr "Pachetele recomandate vor apărea curând."
-
-msgid "No packages found. Try Refresh."
-msgstr "Nu s-au găsit pachete. Încearcă Reîmprospătare."
-
-msgid "No installed packages match the filter."
-msgstr "Niciun pachet instalat nu corespunde filtrului."
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "Nu există pachete instalate. Folosește Căutare pentru a găsi pachete."
-
-msgid "No packages match the filter."
-msgstr "Niciun pachet nu corespunde filtrului."
-
-msgid "No repositories configured."
-msgstr "Nu există depozite configurate."
-
-msgid "No packages found for this source."
-msgstr "Nu s-au găsit pachete pentru această sursă."
-
-msgid "By "
-msgstr "De "
-
-msgid "Description"
-msgstr "Descriere"
-
-msgid "No description available."
-msgstr "Nu există descriere disponibilă."
-
-msgid "Unknown package"
-msgstr "Pachet necunoscut"
-
-msgid "No description"
-msgstr "Fără descriere"
-
-msgid "Source"
-msgstr "Sursă"
-
-msgid "Remove"
-msgstr "Elimină"
-
-msgid "Modify"
-msgstr "Modifică"
-
-msgid "Get"
-msgstr "Obține"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "Anulează"
-
-msgid "Clear"
-msgstr "Șterge"
-
-msgid "Info"
-msgstr "Info"
-
-msgid "Reinstall"
-msgstr "Reinstalează"
-
-msgid "Uninstall"
-msgstr "Dezinstalează"
-
-msgid "Refresh"
-msgstr "Reîmprospătează"
-
-msgid "About"
-msgstr "Despre"
-
-msgid "Update"
-msgstr "Actualizează"
-
-msgid "Quit"
-msgstr "Ieși"
-
-msgid "Filter installed packages"
-msgstr "Filtrează pachetele instalate"
-
-msgid "Search packages"
-msgstr "Caută pachete"
-
-msgid "Please enter a URL."
-msgstr "Introduceți un URL."
-
-msgid "Detecting repo..."
-msgstr "Se detectează depozitul..."
-
-msgid "Could not detect repo format."
-msgstr "Nu s-a putut detecta formatul depozitului."
-
-msgid "Another operation is in progress. Please wait."
-msgstr "O altă operație este în curs. Așteptați."
-
-msgid "Package has no id."
-msgstr "Pachetul nu are id."
-
-msgid "Downloading... Please wait."
-msgstr "Se descarcă... Așteptați."
-
-msgid "Refreshing repositories..."
-msgstr "Se reîmprospătează depozitele..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "Verifici și pornești o actualizare ZenPM?"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "Actualizarea a fost acceptată. Daemonul se poate reporni."
-
-msgid "None"
-msgstr "Niciunul"
-
-msgid "Version: "
-msgstr "Versiune: "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "Autor: Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " did not complete.\n\nCheck the debug log for details."
+msgid " returned HTTP "
+msgstr "a returnat HTTP"
 
 msgid " successfully."
 msgstr " cu succes."
 
-msgid "Are you sure you want to download "
-msgstr "Sigur doriți să descărcați "
+msgid " was copied to the Kindle homepage."
+msgstr "a fost copiat pe pagina de pornire Kindle."
 
-msgid "Are you sure you want to reinstall "
-msgstr "Sigur doriți să reinstalați "
+msgid "%d packages queued"
+msgstr "%d pachetele aflate în coadă"
 
-msgid "Are you sure you want to uninstall "
-msgstr "Sigur doriți să dezinstalați "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s intră în conflict cu %s. Ele nu trebuie folosite împreună. Instalați oricum?"
 
-msgid "Loading packages, please wait"
-msgstr "Se încarcă pachetele, vă rugăm așteptați"
+msgid "(installed)"
+msgstr "(instalat)"
+
+msgid "... Please wait."
+msgstr "... Va rugam asteptati."
+
+msgid "1 package queued"
+msgstr "1 pachet în coadă"
+
+msgid "A short summary of what went wrong"
+msgstr "Un scurt rezumat a ceea ce a mers prost"
+
+msgid "About"
+msgstr "Despre"
+
+msgid "Add"
+msgstr "Adaugă"
+
+msgid "Add Source"
+msgstr "Adaugă sursă"
+
+msgid "Added to Queue"
+msgstr "Adăugat la coadă"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "O altă operație este în curs. Așteptați."
+
+msgid "Are you sure you want to "
+msgstr "Ești sigur că vrei"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Sigur doriți să curățați coada?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Sigur doriți să efectuați toate acțiunile din coadă?"
+
+msgid "Are you sure you want to remove "
+msgstr "Sigur doriți să eliminați"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Autor: Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Actualizări beta"
+
+msgid "Brief description of the bug"
+msgstr "Scurtă descriere a bug-ului"
+
+msgid "Bug description (optional)"
+msgstr "Descrierea erorii (opțional)"
+
+msgid "Bug report submitted!"
+msgstr "Raport de eroare trimis!"
+
+msgid "Bug report title"
+msgstr "Titlul raportului de eroare"
+
+msgid "By "
+msgstr "De "
+
+msgid "Cancel"
+msgstr "Anulează"
+
+msgid "Categories"
+msgstr "Categorii"
+
+msgid "Category"
+msgstr "Categorie"
+
+msgid "Category not found."
+msgstr "Categoria nu a fost găsită."
+
+msgid "Change version"
+msgstr "Schimbați versiunea"
+
+msgid "Check for updates automatically"
+msgstr "Verificați automat actualizările"
+
+msgid "Check the debug log for details."
+msgstr "Verificați jurnalul de depanare pentru detalii."
+
+msgid "Checking for update..."
+msgstr "Se verifică actualizarea..."
+
+msgid "Choose a build for "
+msgstr "Alegeți o construcție pentru"
+
+msgid "Choose a patch for "
+msgstr "Alegeți un plasture pentru"
+
+msgid "Clear"
+msgstr "Șterge"
+
+msgid "Companion update failed to start: "
+msgstr "Actualizarea însoțitoare nu a pornit:"
+
+msgid "Confirm"
+msgstr "Confirma"
+
+msgid "Continue"
+msgstr "Continua"
+
+msgid "Continue?"
+msgstr "Continua?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "Se copiează ZenPM pe pagina de pornire Kindle..."
+
+msgid "Could not "
+msgstr "Nu a putut"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "
 
+msgid "Could not connect to "
+msgstr "Nu s-a putut conecta la"
+
+msgid "Could not connect to GitHub: "
+msgstr "Nu s-a putut conecta la GitHub:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Nu s-a putut conecta la GitHub: suportul HTTPS nu este disponibil în această versiune KOReader."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Nu s-a putut crea directorul ZenPM:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Nu s-a putut crea directorul de setări ZenPM:"
+
+msgid "Could not detect repo format."
+msgstr "Nu s-a putut detecta formatul depozitului."
+
+msgid "Could not determine which build to install: "
+msgstr "Nu s-a putut determina ce versiune să instaleze:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Nu s-a putut instala backend-ul ZenPM inclus la:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Nu s-a putut instala învelișul de linie de comandă ZenPM."
+
+msgid "Could not load GitHub releases: "
+msgstr "Nu s-au putut încărca versiunile GitHub:"
+
 msgid "Could not read log: "
 msgstr "Could not read log: "
 
+msgid "Could not remove patch: "
+msgstr "Nu s-a putut elimina patch-ul:"
+
 msgid "Could not remove source: "
 msgstr "Could not remove source: "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Nu s-a putut elimina pluginul ZenPM."
+
+msgid "Could not resolve patch file."
+msgstr "Nu s-a putut rezolva fișierul de corecție."
+
+msgid "Could not resolve plugin name."
+msgstr "Nu s-a putut rezolva numele pluginului."
+
+msgid "Debug"
+msgstr "Depanare"
+
+msgid "Description"
+msgstr "Descriere"
+
+msgid "Details"
+msgstr "Detalii"
+
+msgid "Detected ABI: "
+msgstr "ABI detectat:"
+
+msgid "Detecting repo..."
+msgstr "Se detectează depozitul..."
+
+msgid "Disable"
+msgstr "Dezactivați"
+
+msgid "disable"
+msgstr "dezactivați"
+
+msgid "disabled"
+msgstr "dezactivat"
+
+msgid "Downgrade"
+msgstr "Degradează"
+
+msgid "downgrade"
+msgstr "downgrade"
+
+msgid "downgraded"
+msgstr "retrogradat"
+
+msgid "Downgrading"
+msgstr "Degradarea"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Descărcați și copiați cea mai recentă versiune ZenPM autonomă pe pagina de pornire Kindle? Aceasta adaugă un scriptlet ZenPM (carte) la Kindle Home/Library"
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "Download this asset: "
+msgstr "Descărcați acest material:"
+
+msgid "enable"
+msgstr "permite"
+
+msgid "Enable"
+msgstr "Permite"
+
+msgid "enabled"
+msgstr "activat"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Introduceți numele de utilizator GitHub pentru a fi etichetat în problemă"
 
 msgid "Failed to load package: "
 msgstr "Failed to load package: "
@@ -217,14 +258,98 @@ msgstr "Failed to load sources: "
 msgid "Failed to start package action: "
 msgstr "Failed to start package action: "
 
+msgid "Failed to submit report: "
+msgstr "Nu s-a trimis raportul:"
+
+msgid "Featured"
+msgstr "Recomandate"
+
+msgid "Font preview"
+msgstr "Previzualizarea fontului"
+
+msgid "Font size"
+msgstr "Dimensiunea fontului"
+
+msgid "Found %d installed plugins"
+msgstr "S-au găsit pluginuri instalate %d"
+
+msgid "Get"
+msgstr "Obține"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "Descărcarea GitHub a fost redirecționată de prea multe ori."
+
+msgid "GitHub download returned HTTP "
+msgstr "Descărcarea GitHub a returnat HTTP"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub a furnizat o redirecționare de descărcare nevalidă."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub a furnizat o adresă URL de descărcare nesigură."
+
+msgid "GitHub username (optional)"
+msgstr "Nume de utilizator GitHub (opțional)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "install"
+msgstr "instalare"
+
+msgid "Install"
+msgstr "Instala"
+
+msgid "Install anyway"
+msgstr "Instalați oricum"
+
+msgid "Install anyway?"
+msgstr "Instalați oricum?"
+
+msgid "Install to Kindle homepage"
+msgstr "Instalați pe pagina de pornire Kindle"
+
+msgid "Installed"
+msgstr "Instalate"
+
+msgid "installed"
+msgstr "instalat"
 
 msgid "Installing"
 msgstr "Se instalează"
 
+msgid "Keep settings"
+msgstr "Păstrați setările"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Instalarea paginii de pornire Kindle a eșuat:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "Instalarea paginii de pornire Kindle a fost anulată."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Rețeaua Kobo nu este pregătită. Vă rugăm să așteptați un moment și să încercați din nou."
+
+msgid "KOReader settings are unavailable."
+msgstr "Setările KOReader nu sunt disponibile."
+
+msgid "Latest"
+msgstr "Mai recent"
+
+msgid "Loading categories..."
+msgstr "Se încarcă categoriile..."
+
+msgid "Loading category..."
+msgstr "Se încarcă categoria..."
+
 msgid "Loading featured packages..."
 msgstr "Se încarcă pachetele recomandate..."
+
+msgid "Loading GitHub releases..."
+msgstr "Se încarcă versiunile GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Se încarcă pachetele instalate..."
@@ -232,8 +357,8 @@ msgstr "Se încarcă pachetele instalate..."
 msgid "Loading log..."
 msgstr "Se încarcă jurnalul..."
 
-msgid "Loading package..."
-msgstr "Se încarcă pachetul..."
+msgid "Loading packages, please wait"
+msgstr "Se încarcă pachetele, vă rugăm așteptați"
 
 msgid "Loading packages..."
 msgstr "Se încarcă pachetele..."
@@ -247,8 +372,89 @@ msgstr "Se încarcă sursele..."
 msgid "Log is empty."
 msgstr "Jurnalul este gol."
 
+msgid "Modify"
+msgstr "Modifică"
+
+msgid "Name"
+msgstr "Nume"
+
+msgid "network error"
+msgstr "eroare de rețea"
+
+msgid "Next"
+msgstr "Următorul"
+
+msgid "No categories found."
+msgstr "Nu s-au găsit categorii."
+
+msgid "No categories match the filter."
+msgstr "Nicio categorie nu se potrivește cu filtrul."
+
+msgid "No description"
+msgstr "Fără descriere"
+
+msgid "No description available."
+msgstr "Nu există descriere disponibilă."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Nu au fost găsite versiuni GitHub cu elemente ZIP."
+
+msgid "No installed packages match the filter."
+msgstr "Niciun pachet instalat nu corespunde filtrului."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Fără conexiune la rețea. Conectați-vă la Wi-Fi și încercați din nou."
+
+msgid "No packages found for this category."
+msgstr "Nu s-au găsit pachete pentru această categorie."
+
+msgid "No packages found for this source."
+msgstr "Nu s-au găsit pachete pentru această sursă."
+
+msgid "No packages found. Try Refresh."
+msgstr "Nu s-au găsit pachete. Încearcă Reîmprospătare."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Nu există pachete instalate. Folosește Căutare pentru a găsi pachete."
+
+msgid "No packages match the filter."
+msgstr "Niciun pachet nu corespunde filtrului."
+
+msgid "No queued operations."
+msgstr "Fără operațiuni în coadă."
+
+msgid "No README available."
+msgstr "Nu există README disponibil."
+
+msgid "No repositories configured."
+msgstr "Nu există depozite configurate."
+
+msgid "None"
+msgstr "Niciunul"
+
+msgid "of"
+msgstr "de"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "Afișați numai pachetele instalabile"
+
+msgid "Open ZenPM"
+msgstr "Deschide ZenPM"
+
 msgid "Package"
 msgstr "Pachet"
+
+msgid "Package Details"
+msgstr "Detalii pachet"
+
+msgid "Package has no id."
+msgstr "Pachetul nu are id."
+
+msgid "Package manager for KOReader."
+msgstr "Manager de pachete pentru KOReader."
 
 msgid "Package not found."
 msgstr "Pachetul nu a fost găsit."
@@ -256,47 +462,71 @@ msgstr "Pachetul nu a fost găsit."
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "Package operation status could not be checked. See Debug log."
 
+msgid "packages"
+msgstr "pachete"
+
+msgid "Packages updated"
+msgstr "Pachetele actualizate"
+
+msgid "patch"
+msgstr "plasture"
+
+msgid "Patch file not found."
+msgstr "Fișierul de corecție nu a fost găsit."
+
+msgid "Patch has no file name."
+msgstr "Patch-ul nu are nume de fișier."
+
+msgid "Patches"
+msgstr "Petice"
+
+msgid "Platform: "
+msgstr "Platformă:"
+
+msgid "Please enter a URL."
+msgstr "Introduceți un URL."
+
+msgid "Plugin scan failed: "
+msgstr "Scanarea pluginului a eșuat:"
+
+msgid "prerelease"
+msgstr "prelansare"
+
+msgid "Queue"
+msgstr "Coadă"
+
+msgid "Queue %d/%d: "
+msgstr "Coada %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Coada finalizată: %d a reușit, %d a eșuat."
+
+msgid "Queue completed: %d succeeded."
+msgstr "Coada finalizată: %d a reușit."
+
+msgid "Queue is running. Please wait."
+msgstr "Coada rulează. Va rugam asteptati."
+
+msgid "Queued"
+msgstr "În coadă"
+
+msgid "Quit"
+msgstr "Ieși"
+
+msgid "README"
+msgstr "CITEȘTE-MĂ"
+
+msgid "Refresh"
+msgstr "Reîmprospătează"
+
 msgid "Refresh failed: "
 msgstr "Refresh failed: "
 
-msgid "Reinstalling"
-msgstr "Se reinstalează"
+msgid "Refreshing repositories..."
+msgstr "Se reîmprospătează depozitele..."
 
-msgid "Remove source "
-msgstr "Elimină sursa "
-
-msgid "Source not found."
-msgstr "Sursa nu a fost găsită."
-
-msgid "Uninstalling"
-msgstr "Se dezinstalează"
-
-msgid "Update failed: "
-msgstr "Update failed: "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "ZenPM backend not found. Expected "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-
-msgid "download failed"
-msgstr "download failed"
-
-msgid "install"
-msgstr "instalare"
-
-msgid "installed"
-msgstr "instalat"
-
-msgid "network error"
-msgstr "eroare de rețea"
-
-msgid "of"
-msgstr "de"
-
-msgid "or"
-msgstr "sau"
+msgid "Reinstall"
+msgstr "Reinstalează"
 
 msgid "reinstall"
 msgstr "reinstalare"
@@ -304,11 +534,245 @@ msgstr "reinstalare"
 msgid "reinstalled"
 msgstr "reinstalat"
 
+msgid "Reinstalling"
+msgstr "Se reinstalează"
+
+msgid "remote server"
+msgstr "server la distanță"
+
+msgid "Remove"
+msgstr "Elimină"
+
+msgid "Remove %s from queue?"
+msgstr "Eliminați %s din coadă?"
+
+msgid "Remove from queue"
+msgstr "Scoateți din coadă"
+
+msgid "Remove settings"
+msgstr "Eliminați setările"
+
+msgid "Remove source "
+msgstr "Elimină sursa "
+
+msgid "rename failed"
+msgstr "redenumirea a eșuat"
+
+msgid "Report a Bug"
+msgstr "Raportați o eroare"
+
 msgid "request failed"
 msgstr "request failed"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Reporniți KOReader pentru a aplica modificările."
+
+msgid "Restart later"
+msgstr "Reporniți mai târziu"
+
+msgid "Restart now"
+msgstr "Reporniți acum"
+
+msgid "Restarting..."
+msgstr "Se repornește..."
+
+msgid "Retry"
+msgstr "Reîncercați"
+
+msgid "Scan installed plugins"
+msgstr "Scanați pluginurile instalate"
+
+msgid "Scanning installed plugins..."
+msgstr "Se scanează pluginurile instalate..."
+
+msgid "Search"
+msgstr "Căutare"
+
+msgid "Search categories"
+msgstr "Caută categorii"
+
+msgid "Search categories..."
+msgstr "Caută categorii..."
+
+msgid "Search category"
+msgstr "Caută categorie"
+
+msgid "Search category..."
+msgstr "Caută categorie..."
+
+msgid "Search installed packages"
+msgstr "Căutați pachetele instalate"
+
+msgid "Search installed..."
+msgstr "Căutare instalată..."
+
+msgid "Search packages"
+msgstr "Caută pachete"
+
+msgid "Search..."
+msgstr "Căutare..."
+
+msgid "Select version for "
+msgstr "Selectați versiunea pentru"
+
+msgid "Settings"
+msgstr "Setări"
+
+msgid "Show all release builds"
+msgstr "Afișați toate versiunile"
+
+msgid "Show more"
+msgstr "Arată mai multe"
+
+msgid "Show README images"
+msgstr "Afișați imagini README"
+
+msgid "Skip"
+msgstr "Sari peste"
+
+msgid "Sort"
+msgstr "Sorta"
+
+msgid "Sort packages"
+msgstr "Sortați pachetele"
+
+msgid "Source"
+msgstr "Sursă"
+
+msgid "Source not found."
+msgstr "Sursa nu a fost găsită."
+
+msgid "Sources"
+msgstr "Surse"
+
+msgid "Stars"
+msgstr "Stele"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Pași pentru a reproduce, comportamentul așteptat versus comportamentul real"
+
+msgid "Submit"
+msgstr "Trimiteți"
+
+msgid "Submitting report…"
+msgstr "Se trimite raportul..."
+
+msgid "This release has no ZIP assets."
+msgstr "Această versiune nu are elemente ZIP."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "Aceasta se va instala ca „carte” pe ecranul de pornire al Kindle."
+
+msgid "to"
+msgstr "la"
 
 msgid "uninstall"
 msgstr "dezinstalare"
 
+msgid "Uninstall"
+msgstr "Dezinstalează"
+
+msgid "Uninstall ZenPM?"
+msgstr "Dezinstalați ZenPM?"
+
 msgid "uninstalled"
 msgstr "dezinstalat"
+
+msgid "Uninstalling"
+msgstr "Se dezinstalează"
+
+msgid "Uninstalling ZenPM..."
+msgstr "Se dezinstalează ZenPM..."
+
+msgid "Unknown package"
+msgstr "Pachet necunoscut"
+
+msgid "update"
+msgstr "actualizare"
+
+msgid "Update"
+msgstr "Actualizează"
+
+msgid "Update All"
+msgstr "Actualizați toate"
+
+msgid "Update check was cancelled."
+msgstr "Verificarea actualizării a fost anulată."
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "Update was cancelled."
+msgstr "Actualizarea a fost anulată."
+
+msgid "updated"
+msgstr "actualizat"
+
+msgid "Updated: %d packages"
+msgstr "Actualizat: pachete %d"
+
+msgid "Updating"
+msgstr "Actualizare"
+
+msgid "Updating ZenPM..."
+msgstr "Se actualizează ZenPM..."
+
+msgid "username"
+msgstr "nume de utilizator"
+
+msgid "Version: "
+msgstr "Versiune: "
+
+msgid "Welcome"
+msgstr "Bun venit"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Interfață Zen Package Manager pentru KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Zen UI este instalat. Majoritatea patch-urilor nu ar trebui să fie utilizate cu Zen UI."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "Companionul Android ZenPM nu și-a putut porni actualizatorul."
+
+msgid "ZenPM Android companion is not available."
+msgstr "Companionul Android ZenPM nu este disponibil."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "ZenPM Android Companion nu este instalat sau nu a putut porni. Vedea"
+
+msgid "ZenPM backend"
+msgstr "Backend ZenPM"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "Backend-ul ZenPM nu a pornit. Asigurați-vă că ați folosit versiunea ZenPM corectă pentru acest dispozitiv."
+
+msgid "ZenPM bug reporter"
+msgstr "Raportor de erori ZenPM"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion caută o actualizare."
+
+msgid "ZenPM companion update failed."
+msgstr "Actualizarea ZenPM însoțitoare a eșuat."
+
+msgid "ZenPM font size"
+msgstr "Dimensiunea fontului ZenPM"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM este la zi."
+
+msgid "ZenPM update v"
+msgstr "Actualizare ZenPM v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM a fost actualizat la v"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log și crash.log de la KOReader (dacă există) vor fi atașate unei probleme publice GitHub. Acestea pot conține nume de pachete, adrese URL de depozit și căi de fișiere."

@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "доступен. Обновить сейчас?"
 
-msgid "Open ZenPM"
-msgstr "Открыть ZenPM"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "Интерфейс Zen Package Manager для KOReader."
-
-msgid "Featured"
-msgstr "Рекомендуемые"
-
-msgid "Sources"
-msgstr "Источники"
-
-msgid "Installed"
-msgstr "Установлено"
-
-msgid "Debug"
-msgstr "Отладка"
-
-msgid "Search"
-msgstr "Поиск"
-
-msgid "Welcome"
-msgstr "Добро пожаловать"
-
-msgid "Add Source"
-msgstr "Добавить источник"
-
-msgid "Add"
-msgstr "Добавить"
-
-msgid "Search..."
-msgstr "Поиск..."
-
-msgid "Filter installed..."
-msgstr "Фильтр установленных..."
-
-msgid "Packages"
-msgstr "Пакеты"
-
-msgid "Source Details"
-msgstr "Сведения об источнике"
-
-msgid "Package Details"
-msgstr "Сведения о пакете"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - Отладка"
-
-msgid "Featured packages coming soon."
-msgstr "Рекомендуемые пакеты скоро появятся."
-
-msgid "No packages found. Try Refresh."
-msgstr "Пакеты не найдены. Попробуйте обновить."
-
-msgid "No installed packages match the filter."
-msgstr "Нет установленных пакетов, подходящих под фильтр."
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "Пакеты не установлены. Используйте Поиск, чтобы найти пакеты."
-
-msgid "No packages match the filter."
-msgstr "Нет пакетов, подходящих под фильтр."
-
-msgid "No repositories configured."
-msgstr "Репозитории не настроены."
-
-msgid "No packages found for this source."
-msgstr "Для этого источника пакеты не найдены."
-
-msgid "By "
-msgstr "Автор: "
-
-msgid "Description"
-msgstr "Описание"
-
-msgid "No description available."
-msgstr "Описание недоступно."
-
-msgid "Unknown package"
-msgstr "Неизвестный пакет"
-
-msgid "No description"
-msgstr "Нет описания"
-
-msgid "Source"
-msgstr "Источник"
-
-msgid "Remove"
-msgstr "Удалить"
-
-msgid "Modify"
-msgstr "Изменить"
-
-msgid "Get"
-msgstr "Получить"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "Отмена"
-
-msgid "Clear"
-msgstr "Очистить"
-
-msgid "Info"
-msgstr "Инфо"
-
-msgid "Reinstall"
-msgstr "Переустановить"
-
-msgid "Uninstall"
-msgstr "Удалить"
-
-msgid "Refresh"
-msgstr "Обновить"
-
-msgid "About"
-msgstr "О программе"
-
-msgid "Update"
-msgstr "Обновить"
-
-msgid "Quit"
-msgstr "Выйти"
-
-msgid "Filter installed packages"
-msgstr "Фильтровать установленные пакеты"
-
-msgid "Search packages"
-msgstr "Искать пакеты"
-
-msgid "Please enter a URL."
-msgstr "Введите URL."
-
-msgid "Detecting repo..."
-msgstr "Определение репозитория..."
-
-msgid "Could not detect repo format."
-msgstr "Не удалось определить формат репозитория."
-
-msgid "Another operation is in progress. Please wait."
-msgstr "Другая операция уже выполняется. Подождите."
-
-msgid "Package has no id."
-msgstr "У пакета нет id."
-
-msgid "Downloading... Please wait."
-msgstr "Загрузка... Подождите."
-
-msgid "Refreshing repositories..."
-msgstr "Обновление репозиториев..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "Проверить и запустить обновление ZenPM?"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "Обновление принято. Демон может перезапуститься."
-
-msgid "None"
-msgstr "Нет"
-
-msgid "Version: "
-msgstr "Версия: "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "Автор: Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " did not complete.\n\nCheck the debug log for details."
+msgid " returned HTTP "
+msgstr "вернул HTTP"
 
 msgid " successfully."
 msgstr " успешно."
 
-msgid "Are you sure you want to download "
-msgstr "Вы уверены, что хотите скачать "
+msgid " was copied to the Kindle homepage."
+msgstr "был скопирован на домашнюю страницу Kindle."
 
-msgid "Are you sure you want to reinstall "
-msgstr "Вы уверены, что хотите переустановить "
+msgid "%d packages queued"
+msgstr "Пакеты %d поставлены в очередь"
 
-msgid "Are you sure you want to uninstall "
-msgstr "Вы уверены, что хотите удалить "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s конфликтует с %s. Их не следует использовать вместе. Все равно установить?"
 
-msgid "Loading packages, please wait"
-msgstr "Загрузка пакетов, пожалуйста, подождите"
+msgid "(installed)"
+msgstr "(установлен)"
+
+msgid "... Please wait."
+msgstr "... Пожалуйста, подождите."
+
+msgid "1 package queued"
+msgstr "1 пакет в очереди"
+
+msgid "A short summary of what went wrong"
+msgstr "Краткое описание того, что пошло не так"
+
+msgid "About"
+msgstr "О программе"
+
+msgid "Add"
+msgstr "Добавить"
+
+msgid "Add Source"
+msgstr "Добавить источник"
+
+msgid "Added to Queue"
+msgstr "Добавлено в очередь"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "Другая операция уже выполняется. Подождите."
+
+msgid "Are you sure you want to "
+msgstr "Вы уверены, что хотите"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "Вы уверены, что хотите очистить очередь?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "Вы уверены, что хотите выполнить все действия в очереди?"
+
+msgid "Are you sure you want to remove "
+msgstr "Вы уверены, что хотите удалить"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "Автор: Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "Бета-обновления"
+
+msgid "Brief description of the bug"
+msgstr "Краткое описание ошибки"
+
+msgid "Bug description (optional)"
+msgstr "Описание ошибки (необязательно)"
+
+msgid "Bug report submitted!"
+msgstr "Отчет об ошибке отправлен!"
+
+msgid "Bug report title"
+msgstr "Название отчета об ошибке"
+
+msgid "By "
+msgstr "Автор: "
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Categories"
+msgstr "Категории"
+
+msgid "Category"
+msgstr "Категория"
+
+msgid "Category not found."
+msgstr "Категория не найдена."
+
+msgid "Change version"
+msgstr "Изменить версию"
+
+msgid "Check for updates automatically"
+msgstr "Автоматическая проверка обновлений"
+
+msgid "Check the debug log for details."
+msgstr "Подробности проверьте в журнале отладки."
+
+msgid "Checking for update..."
+msgstr "Проверяем наличие обновлений..."
+
+msgid "Choose a build for "
+msgstr "Выберите сборку для"
+
+msgid "Choose a patch for "
+msgstr "Выберите патч для"
+
+msgid "Clear"
+msgstr "Очистить"
+
+msgid "Companion update failed to start: "
+msgstr "Не удалось запустить обновление Companion:"
+
+msgid "Confirm"
+msgstr "Подтверждать"
+
+msgid "Continue"
+msgstr "Продолжать"
+
+msgid "Continue?"
+msgstr "Продолжать?"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "Копирование ZenPM на домашнюю страницу Kindle..."
+
+msgid "Could not "
+msgstr "Не мог"
 
 msgid "Could not add source: "
 msgstr "Could not add source: "
 
+msgid "Could not connect to "
+msgstr "Не удалось подключиться к"
+
+msgid "Could not connect to GitHub: "
+msgstr "Не удалось подключиться к GitHub:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "Не удалось подключиться к GitHub: поддержка HTTPS недоступна в этой сборке KOReader."
+
+msgid "Could not create ZenPM directory: "
+msgstr "Не удалось создать каталог ZenPM:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "Не удалось создать каталог настроек ZenPM:"
+
+msgid "Could not detect repo format."
+msgstr "Не удалось определить формат репозитория."
+
+msgid "Could not determine which build to install: "
+msgstr "Не удалось определить, какую сборку установить:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "Не удалось установить встроенный бэкэнд ZenPM в:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "Не удалось установить оболочку командной строки ZenPM."
+
+msgid "Could not load GitHub releases: "
+msgstr "Не удалось загрузить выпуски GitHub:"
+
 msgid "Could not read log: "
 msgstr "Could not read log: "
 
+msgid "Could not remove patch: "
+msgstr "Не удалось удалить патч:"
+
 msgid "Could not remove source: "
 msgstr "Could not remove source: "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "Не удалось удалить плагин ZenPM."
+
+msgid "Could not resolve patch file."
+msgstr "Не удалось разрешить файл исправления."
+
+msgid "Could not resolve plugin name."
+msgstr "Не удалось разрешить имя плагина."
+
+msgid "Debug"
+msgstr "Отладка"
+
+msgid "Description"
+msgstr "Описание"
+
+msgid "Details"
+msgstr "Подробности"
+
+msgid "Detected ABI: "
+msgstr "Обнаруженный ABI:"
+
+msgid "Detecting repo..."
+msgstr "Определение репозитория..."
+
+msgid "Disable"
+msgstr "Запрещать"
+
+msgid "disable"
+msgstr "запрещать"
+
+msgid "disabled"
+msgstr "неполноценный"
+
+msgid "Downgrade"
+msgstr "Понизить версию"
+
+msgid "downgrade"
+msgstr "понизить рейтинг"
+
+msgid "downgraded"
+msgstr "понижен в рейтинге"
+
+msgid "Downgrading"
+msgstr "Понижение"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "Загрузить и скопировать последнюю версию ZenPM на домашнюю страницу Kindle? Это добавит скриптлет (книгу) ZenPM в домашнюю страницу/библиотеку Kindle."
+
+msgid "download failed"
+msgstr "download failed"
+
+msgid "Download this asset: "
+msgstr "Загрузите этот ресурс:"
+
+msgid "enable"
+msgstr "давать возможность"
+
+msgid "Enable"
+msgstr "Давать возможность"
+
+msgid "enabled"
+msgstr "включено"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "Введите свое имя пользователя GitHub, чтобы вас отметили в задаче."
 
 msgid "Failed to load package: "
 msgstr "Failed to load package: "
@@ -217,14 +258,98 @@ msgstr "Failed to load sources: "
 msgid "Failed to start package action: "
 msgstr "Failed to start package action: "
 
+msgid "Failed to submit report: "
+msgstr "Не удалось отправить отчет:"
+
+msgid "Featured"
+msgstr "Рекомендуемые"
+
+msgid "Font preview"
+msgstr "Предварительный просмотр шрифта"
+
+msgid "Font size"
+msgstr "Размер шрифта"
+
+msgid "Found %d installed plugins"
+msgstr "Найдены установленные плагины %d."
+
+msgid "Get"
+msgstr "Получить"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "Загрузка GitHub перенаправлялась слишком много раз."
+
+msgid "GitHub download returned HTTP "
+msgstr "Загрузка GitHub вернула HTTP"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub предоставил недопустимое перенаправление загрузки."
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub предоставил ненадежный URL-адрес для загрузки."
+
+msgid "GitHub username (optional)"
+msgstr "Имя пользователя GitHub (необязательно)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "HTTPS support is unavailable in this KOReader build."
+
+msgid "install"
+msgstr "установка"
+
+msgid "Install"
+msgstr "Установить"
+
+msgid "Install anyway"
+msgstr "Все равно установить"
+
+msgid "Install anyway?"
+msgstr "Все равно установить?"
+
+msgid "Install to Kindle homepage"
+msgstr "Установить на домашнюю страницу Kindle"
+
+msgid "Installed"
+msgstr "Установлено"
+
+msgid "installed"
+msgstr "установлен"
 
 msgid "Installing"
 msgstr "Установка"
 
+msgid "Keep settings"
+msgstr "Сохранить настройки"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Не удалось установить домашнюю страницу Kindle:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "Установка домашней страницы Kindle была отменена."
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "Сеть Кобо не готова. Пожалуйста, подождите немного и повторите попытку."
+
+msgid "KOReader settings are unavailable."
+msgstr "Настройки KOReader недоступны."
+
+msgid "Latest"
+msgstr "Последний"
+
+msgid "Loading categories..."
+msgstr "Загрузка категорий..."
+
+msgid "Loading category..."
+msgstr "Загрузка категории..."
+
 msgid "Loading featured packages..."
 msgstr "Загрузка рекомендуемых пакетов..."
+
+msgid "Loading GitHub releases..."
+msgstr "Загрузка выпусков GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Загрузка установленных пакетов..."
@@ -232,8 +357,8 @@ msgstr "Загрузка установленных пакетов..."
 msgid "Loading log..."
 msgstr "Загрузка журнала..."
 
-msgid "Loading package..."
-msgstr "Загрузка пакета..."
+msgid "Loading packages, please wait"
+msgstr "Загрузка пакетов, пожалуйста, подождите"
 
 msgid "Loading packages..."
 msgstr "Загрузка пакетов..."
@@ -247,8 +372,89 @@ msgstr "Загрузка источников..."
 msgid "Log is empty."
 msgstr "Журнал пуст."
 
+msgid "Modify"
+msgstr "Изменить"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "network error"
+msgstr "сетевая ошибка"
+
+msgid "Next"
+msgstr "Следующий"
+
+msgid "No categories found."
+msgstr "Категории не найдены."
+
+msgid "No categories match the filter."
+msgstr "Ни одна категория не соответствует фильтру."
+
+msgid "No description"
+msgstr "Нет описания"
+
+msgid "No description available."
+msgstr "Описание недоступно."
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "Релизов GitHub с ZIP-ресурсами обнаружено не было."
+
+msgid "No installed packages match the filter."
+msgstr "Нет установленных пакетов, подходящих под фильтр."
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "Нет подключения к сети. Пожалуйста, подключитесь к Wi-Fi и повторите попытку."
+
+msgid "No packages found for this category."
+msgstr "Для этой категории пакетов не найдено."
+
+msgid "No packages found for this source."
+msgstr "Для этого источника пакеты не найдены."
+
+msgid "No packages found. Try Refresh."
+msgstr "Пакеты не найдены. Попробуйте обновить."
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "Пакеты не установлены. Используйте Поиск, чтобы найти пакеты."
+
+msgid "No packages match the filter."
+msgstr "Нет пакетов, подходящих под фильтр."
+
+msgid "No queued operations."
+msgstr "Никаких операций в очереди."
+
+msgid "No README available."
+msgstr "README отсутствует."
+
+msgid "No repositories configured."
+msgstr "Репозитории не настроены."
+
+msgid "None"
+msgstr "Нет"
+
+msgid "of"
+msgstr "для"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "Показывать только устанавливаемые пакеты"
+
+msgid "Open ZenPM"
+msgstr "Открыть ZenPM"
+
 msgid "Package"
 msgstr "Пакет"
+
+msgid "Package Details"
+msgstr "Сведения о пакете"
+
+msgid "Package has no id."
+msgstr "У пакета нет id."
+
+msgid "Package manager for KOReader."
+msgstr "Менеджер пакетов для KOReader."
 
 msgid "Package not found."
 msgstr "Пакет не найден."
@@ -256,47 +462,71 @@ msgstr "Пакет не найден."
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "Package operation status could not be checked. See Debug log."
 
+msgid "packages"
+msgstr "пакеты"
+
+msgid "Packages updated"
+msgstr "Пакеты обновлены"
+
+msgid "patch"
+msgstr "пластырь"
+
+msgid "Patch file not found."
+msgstr "Файл патча не найден."
+
+msgid "Patch has no file name."
+msgstr "Патч не имеет имени файла."
+
+msgid "Patches"
+msgstr "Патчи"
+
+msgid "Platform: "
+msgstr "Платформа:"
+
+msgid "Please enter a URL."
+msgstr "Введите URL."
+
+msgid "Plugin scan failed: "
+msgstr "Сканирование плагина не удалось:"
+
+msgid "prerelease"
+msgstr "предварительный выпуск"
+
+msgid "Queue"
+msgstr "Очередь"
+
+msgid "Queue %d/%d: "
+msgstr "Очередь %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "Очередь завершена: %d успешно, %d не удалось."
+
+msgid "Queue completed: %d succeeded."
+msgstr "Очередь завершена: %d выполнен успешно."
+
+msgid "Queue is running. Please wait."
+msgstr "Очередь работает. Пожалуйста, подождите."
+
+msgid "Queued"
+msgstr "В очереди"
+
+msgid "Quit"
+msgstr "Выйти"
+
+msgid "README"
+msgstr "ЧИТАЙТЕ"
+
+msgid "Refresh"
+msgstr "Обновить"
+
 msgid "Refresh failed: "
 msgstr "Refresh failed: "
 
-msgid "Reinstalling"
-msgstr "Переустановка"
+msgid "Refreshing repositories..."
+msgstr "Обновление репозиториев..."
 
-msgid "Remove source "
-msgstr "Удалить источник "
-
-msgid "Source not found."
-msgstr "Источник не найден."
-
-msgid "Uninstalling"
-msgstr "Удаление"
-
-msgid "Update failed: "
-msgstr "Update failed: "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "ZenPM backend not found. Expected "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-
-msgid "download failed"
-msgstr "download failed"
-
-msgid "install"
-msgstr "установка"
-
-msgid "installed"
-msgstr "установлен"
-
-msgid "network error"
-msgstr "сетевая ошибка"
-
-msgid "of"
-msgstr "для"
-
-msgid "or"
-msgstr "или"
+msgid "Reinstall"
+msgstr "Переустановить"
 
 msgid "reinstall"
 msgstr "переустановка"
@@ -304,11 +534,245 @@ msgstr "переустановка"
 msgid "reinstalled"
 msgstr "переустановлен"
 
+msgid "Reinstalling"
+msgstr "Переустановка"
+
+msgid "remote server"
+msgstr "удаленный сервер"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Remove %s from queue?"
+msgstr "Удалить %s из очереди?"
+
+msgid "Remove from queue"
+msgstr "Удалить из очереди"
+
+msgid "Remove settings"
+msgstr "Удалить настройки"
+
+msgid "Remove source "
+msgstr "Удалить источник "
+
+msgid "rename failed"
+msgstr "переименовать не удалось"
+
+msgid "Report a Bug"
+msgstr "Сообщить об ошибке"
+
 msgid "request failed"
 msgstr "request failed"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "Перезапустите KOReader, чтобы применить изменения."
+
+msgid "Restart later"
+msgstr "Перезагрузить позже"
+
+msgid "Restart now"
+msgstr "Перезагрузить сейчас"
+
+msgid "Restarting..."
+msgstr "Перезапуск..."
+
+msgid "Retry"
+msgstr "Повторить попытку"
+
+msgid "Scan installed plugins"
+msgstr "Сканировать установленные плагины"
+
+msgid "Scanning installed plugins..."
+msgstr "Сканирование установленных плагинов..."
+
+msgid "Search"
+msgstr "Поиск"
+
+msgid "Search categories"
+msgstr "Категории поиска"
+
+msgid "Search categories..."
+msgstr "Категории поиска..."
+
+msgid "Search category"
+msgstr "Категория поиска"
+
+msgid "Search category..."
+msgstr "Категория поиска..."
+
+msgid "Search installed packages"
+msgstr "Поиск установленных пакетов"
+
+msgid "Search installed..."
+msgstr "Поиск установлен..."
+
+msgid "Search packages"
+msgstr "Искать пакеты"
+
+msgid "Search..."
+msgstr "Поиск..."
+
+msgid "Select version for "
+msgstr "Выберите версию для"
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Show all release builds"
+msgstr "Показать все сборки релизов"
+
+msgid "Show more"
+msgstr "Показать больше"
+
+msgid "Show README images"
+msgstr "Показать изображения README"
+
+msgid "Skip"
+msgstr "Пропускать"
+
+msgid "Sort"
+msgstr "Сортировать"
+
+msgid "Sort packages"
+msgstr "Сортировать пакеты"
+
+msgid "Source"
+msgstr "Источник"
+
+msgid "Source not found."
+msgstr "Источник не найден."
+
+msgid "Sources"
+msgstr "Источники"
+
+msgid "Stars"
+msgstr "Звезды"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "Шаги по воспроизведению ожидаемого и фактического поведения"
+
+msgid "Submit"
+msgstr "Представлять на рассмотрение"
+
+msgid "Submitting report…"
+msgstr "Отправка отчета…"
+
+msgid "This release has no ZIP assets."
+msgstr "В этом выпуске нет ZIP-ресурсов."
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "Это будет установлено как «книга» на главном экране Kindle."
+
+msgid "to"
+msgstr "к"
 
 msgid "uninstall"
 msgstr "удаление"
 
+msgid "Uninstall"
+msgstr "Удалить"
+
+msgid "Uninstall ZenPM?"
+msgstr "Удалить ZenPM?"
+
 msgid "uninstalled"
 msgstr "удален"
+
+msgid "Uninstalling"
+msgstr "Удаление"
+
+msgid "Uninstalling ZenPM..."
+msgstr "Удаление ZenPM..."
+
+msgid "Unknown package"
+msgstr "Неизвестный пакет"
+
+msgid "update"
+msgstr "обновлять"
+
+msgid "Update"
+msgstr "Обновить"
+
+msgid "Update All"
+msgstr "Обновить все"
+
+msgid "Update check was cancelled."
+msgstr "Проверка обновлений отменена."
+
+msgid "Update failed: "
+msgstr "Update failed: "
+
+msgid "Update was cancelled."
+msgstr "Обновление было отменено."
+
+msgid "updated"
+msgstr "обновлено"
+
+msgid "Updated: %d packages"
+msgstr "Обновлено: пакеты %d."
+
+msgid "Updating"
+msgstr "Обновление"
+
+msgid "Updating ZenPM..."
+msgstr "Обновление ZenPM..."
+
+msgid "username"
+msgstr "имя пользователя"
+
+msgid "Version: "
+msgstr "Версия: "
+
+msgid "Welcome"
+msgstr "Добро пожаловать"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "Интерфейс Zen Package Manager для KOReader."
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Дзен UI установлен. Большинство патчей не следует использовать с пользовательским интерфейсом Zen."
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "ZenPM Android-компаньон не смог запустить программу обновления."
+
+msgid "ZenPM Android companion is not available."
+msgstr "Компаньон ZenPM для Android недоступен."
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "ZenPM Android-компаньон не установлен или не может запуститься. Видеть"
+
+msgid "ZenPM backend"
+msgstr "Серверная часть ZenPM"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "Серверная часть ZenPM не запустилась. Убедитесь, что вы использовали правильную версию ZenPM для этого устройства."
+
+msgid "ZenPM bug reporter"
+msgstr "Репортер об ошибках ZenPM"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion проверяет наличие обновлений."
+
+msgid "ZenPM companion update failed."
+msgstr "Обновление компаньона ZenPM не удалось."
+
+msgid "ZenPM font size"
+msgstr "Размер шрифта ЗенПМ"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM обновлен."
+
+msgid "ZenPM update v"
+msgstr "Обновление ZenPM v."
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM обновлен до v"
+
+msgid "ZenPM v"
+msgstr "ЗенПМ v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log и Crash.log KOReader (если есть) будут прикреплены к общедоступной проблеме GitHub. Они могут содержать имена пакетов, URL-адреса репозитория и пути к файлам."

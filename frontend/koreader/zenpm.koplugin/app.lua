@@ -20,7 +20,7 @@ local Util = require("zenpm_util")
 
 local App = {}
 
--- Persist UI preferences (filter, advanced mode, update checks) in our own config file inside
+-- Persist UI preferences in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
 local config_settings = nil
 local UPDATE_CHECK_INTERVAL = 24 * 60 * 60
@@ -72,7 +72,8 @@ function App:new(plugin)
             page = "home",
             active_tab = "home",
             filter_installable = App.load_setting("filter_installable", true),
-            advanced = App.load_setting("advanced", false),
+            manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
+            show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
             update_auto_check = App.load_setting("update_auto_check", true),
             show_readme_images = App.load_setting("show_readme_images", true),
@@ -335,7 +336,7 @@ end
 
 local function plugin_has_delete_settings(inst)
     return type(inst) == "table"
-        and (type(inst.deletePluginSettings) == "function" or inst.settings_file or inst.settings_key)
+        and type(inst.deletePluginSettings) == "function"
 end
 
 -- Locate a package's .koplugin directory on disk, even if the plugin is not
@@ -386,27 +387,10 @@ local function load_plugin_from_disk(dir_path)
     return mod
 end
 
-local function delete_default_plugin_settings(plugin_name)
-    if type(plugin_name) ~= "string" or plugin_name == "" then return end
-    local ok_ds, DataStorage = pcall(require, "datastorage")
-    if ok_ds and DataStorage and DataStorage.getSettingsDir then
-        local settings_file = DataStorage:getSettingsDir() .. "/" .. plugin_name .. ".lua"
-        os.remove(settings_file)
-        os.remove(settings_file .. ".old")
-    end
-    if G_reader_settings and G_reader_settings.delSetting then
-        G_reader_settings:delSetting(plugin_name)
-    end
-end
-
--- Delete plugin settings from either a live instance or a module loaded from
--- disk, using KOReader's wrapper when available so settings_file/settings_key
--- are handled the same way KOReader handles its own plugin manager.
-local function delete_plugin_settings(plugin, plugin_name)
-    if type(plugin) ~= "table" then
-        delete_default_plugin_settings(plugin_name)
-        return
-    end
+-- Delete settings only through the plugin's explicit cleanup method. This
+-- avoids guessing which generic settings files belong to a plugin.
+local function delete_plugin_settings(plugin)
+    if not plugin_has_delete_settings(plugin) then return end
     local ok_pl, PluginLoader = pcall(require, "pluginloader")
     if ok_pl and type(PluginLoader) == "table"
             and type(PluginLoader.deletePluginSettings) == "function" then
@@ -423,31 +407,22 @@ local function delete_plugin_settings(plugin, plugin_name)
             G_reader_settings:delSetting(plugin.settings_key)
         end
     end
-    delete_default_plugin_settings(plugin_name)
 end
 
--- Resolve a best-effort settings deleter before the backend uninstall purges
--- the .koplugin directory. The returned closure captures any loaded module from
--- disk, so deletePluginSettings can still run after the directory is removed.
+-- Resolve a settings deleter before the backend uninstall purges the .koplugin
+-- directory. The returned closure captures any loaded module from disk, so
+-- deletePluginSettings can still run after the directory is removed.
 local function resolve_plugin_settings_deleter(pkg)
     local dir_path = find_koplugin_dir(pkg)
-    local plugin_name = koplugin_dir_basename(dir_path)
-    if type(plugin_name) ~= "string" or plugin_name == "" then
-        plugin_name = pkg and (pkg.plugin_module or pkg.id or pkg.name)
-    end
 
     local inst = koreader_plugin_instance(pkg)
     if plugin_has_delete_settings(inst) then
-        return function() delete_plugin_settings(inst, plugin_name) end
+        return function() delete_plugin_settings(inst) end
     end
 
     local mod = load_plugin_from_disk(dir_path)
     if plugin_has_delete_settings(mod) then
-        return function() delete_plugin_settings(mod, plugin_name) end
-    end
-
-    if dir_path or package_is_koreader_plugin(pkg) then
-        return function() delete_plugin_settings(nil, plugin_name) end
+        return function() delete_plugin_settings(mod) end
     end
     return nil
 end
@@ -633,6 +608,7 @@ function App:queue_entry_for(pkg, action, asset, opts)
     if not id then return nil end
     opts = opts or {}
     local is_patch = Models.is_patch_package(pkg)
+    local is_font = Models.is_font_package(pkg)
     local display_name = is_patch and asset and asset ~= ""
         and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
@@ -647,7 +623,8 @@ function App:queue_entry_for(pkg, action, asset, opts)
         is_patch = is_patch,
         prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
-        settings_deleter = action == "uninstall" and resolve_plugin_settings_deleter(pkg) or nil,
+        settings_deleter = action == "uninstall" and not is_patch and not is_font
+            and resolve_plugin_settings_deleter(pkg) or nil,
     }
 end
 
@@ -925,8 +902,10 @@ function App:finish_queue_batch(batch)
             if queue_completed then
                 self:close_queue()
                 self:reload_current_page()
+                Modals.notice(result)
+            else
+                Modals.confirm(result, nil, function() end)
             end
-            Modals.info_for(result, #batch.failed > 0 and Constants.PACKAGE_ERROR_NOTICE_SECONDS or Constants.PACKAGE_NOTICE_SECONDS)
         end
     end
     finish_prompts(1)
@@ -2083,24 +2062,29 @@ function App:perform_package_action(pkg, on_done)
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif self.state.advanced and Models.has_github_source(pkg) then
-        self:prompt_package_versions(pkg, on_done)
+    elseif Models.has_github_source(pkg) then
+        self:prompt_default_package_version(pkg, on_done, "install")
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
 end
 
 function App:confirm_uninstall_self()
+    local cleanup = self.plugin and type(self.plugin.deletePluginSettings) == "function"
     Modals.confirm(
         _("Uninstall ZenPM?"),
         _("Uninstall"),
         function()
-            Modals.plugin_settings_cleanup(
-                _("ZenPM will be uninstalled.\n\nRemove plugin settings?"),
-                function(remove_settings)
-                    self:uninstall_self(remove_settings)
-                end
-            )
+            if cleanup then
+                Modals.plugin_settings_cleanup(
+                    _("ZenPM will be uninstalled.\n\nRemove plugin settings?"),
+                    function(remove_settings)
+                        self:uninstall_self(remove_settings)
+                    end
+                )
+            else
+                self:uninstall_self(false)
+            end
         end,
         true
     )
@@ -2256,8 +2240,7 @@ local function version_action(current, tag)
     return "reinstall"
 end
 
-function App:prompt_package_versions(pkg, on_done)
-    local current = pkg.installed and (pkg.installed_version or pkg.version or "") or ""
+function App:load_package_releases(pkg)
     Modals.status(_("Loading GitHub releases..."))
     local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
     Modals.close_status()
@@ -2274,9 +2257,30 @@ function App:prompt_package_versions(pkg, on_done)
     end
     if #releases == 0 then
         Modals.info(_("No GitHub releases with ZIP assets were found."))
+        return nil
+    end
+    return releases
+end
+
+function App:prompt_package_versions(pkg, on_done)
+    local current = pkg.installed and (pkg.installed_version or pkg.version or "") or ""
+    local releases = self:load_package_releases(pkg)
+    if not releases then return end
+    self:show_versions_page(pkg, releases, current, 1, on_done)
+end
+
+function App:prompt_latest_package_build(pkg, on_done, action)
+    local releases = self:load_package_releases(pkg)
+    if not releases then return end
+    self:choose_version_release(pkg, releases[1], action or "install", on_done)
+end
+
+function App:prompt_default_package_version(pkg, on_done, action)
+    if self.state.manual_version_picker then
+        self:prompt_package_versions(pkg, on_done)
         return
     end
-    self:show_versions_page(pkg, releases, current, 1, on_done)
+    self:prompt_latest_package_build(pkg, on_done, action)
 end
 
 function App:show_versions_page(pkg, releases, current, page, on_done)
@@ -2315,15 +2319,12 @@ end
 
 function App:choose_version_release(pkg, release, action, on_done)
     local assets = type(release.assets) == "table" and release.assets or {}
-    if #assets == 1 then
-        self:confirm_package_version(pkg, release.tag_name, action, assets[1].name, on_done)
-        return
-    end
     local rows = {}
     for _, asset in ipairs(assets) do
         if asset.name and asset.name ~= "" then
             table.insert(rows, {
                 text = asset.name,
+                asset = asset.name,
                 callback = function()
                     self:confirm_package_version(pkg, release.tag_name, action, asset.name, on_done)
                 end,
@@ -2332,6 +2333,14 @@ function App:choose_version_release(pkg, release, action, on_done)
     end
     if #rows == 0 then
         Modals.info(_("This release has no ZIP assets."))
+        return
+    end
+    if #rows == 1 then
+        self:confirm_package_version(pkg, release.tag_name, action, rows[1].asset, on_done)
+        return
+    end
+    if not self.state.show_all_builds then
+        self:confirm_package_version(pkg, release.tag_name, action, nil, on_done)
         return
     end
     Modals.actions(_("Choose a build for ") .. tostring(release.tag_name), rows)
@@ -2362,7 +2371,7 @@ function App:start_package_action(pkg, action, on_done, opts)
             and type(info.candidates) == "table" and #info.candidates > 0
         if not ok then
             if Models.has_github_source(pkg) then
-                self:prompt_package_versions(pkg, on_done)
+                self:prompt_default_package_version(pkg, on_done, action)
                 return
             end
             Modals.info(_("Could not determine which build to install: ") .. tostring(info))
@@ -2370,7 +2379,7 @@ function App:start_package_action(pkg, action, on_done, opts)
         end
         if Models.has_github_source(pkg)
             and (type(info) ~= "table" or ((not info.auto or info.auto == "") and not has_candidates)) then
-            self:prompt_package_versions(pkg, on_done)
+            self:prompt_default_package_version(pkg, on_done, action)
             return
         end
         if has_candidates then
@@ -2444,7 +2453,6 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
     if not ok then
         self.busy = false
-        Modals.close_status()
         local message = _("Failed to start package action: ") .. tostring(err)
         if opts and opts.on_result then
             opts.on_result(false, message)
@@ -2549,7 +2557,6 @@ function App:poll_package_action(op, attempt)
         local detail = self:package_action_failure_detail(op)
         if detail then
             self.busy = false
-            Modals.close_status()
             if op.on_result then
                 op.on_result(false, detail, op)
             else
@@ -2565,7 +2572,6 @@ function App:poll_package_action(op, attempt)
         if not ok then
             if attempt >= Constants.MAX_POLL_RETRIES then
                 self.busy = false
-                Modals.close_status()
                 local message = _("Package operation status could not be checked. See Debug log.")
                 if op.on_result then
                     op.on_result(false, message, op)
@@ -2587,7 +2593,6 @@ function App:poll_package_action(op, attempt)
         if succeeded then
             self.busy = false
             local done = action_done(op.action)
-            Modals.close_status()
             if op.on_result then
                 op.on_result(true, nil, op)
                 return
@@ -2625,7 +2630,6 @@ function App:poll_package_action(op, attempt)
             else
                 message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
             end
-            Modals.close_status()
             if op.on_result then
                 op.on_result(false, message, op)
             else
@@ -2725,9 +2729,14 @@ function App:toggle_filter_installable()
     self:reload_current_page()
 end
 
-function App:toggle_advanced()
-    self.state.advanced = not self.state.advanced
-    App.save_setting("advanced", self.state.advanced)
+function App:toggle_manual_version_picker()
+    self.state.manual_version_picker = not self.state.manual_version_picker
+    App.save_setting("manual_version_picker", self.state.manual_version_picker)
+end
+
+function App:toggle_show_all_builds()
+    self.state.show_all_builds = not self.state.show_all_builds
+    App.save_setting("show_all_builds", self.state.show_all_builds)
 end
 
 function App:toggle_beta_updates()

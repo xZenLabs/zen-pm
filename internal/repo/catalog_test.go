@@ -211,7 +211,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"readme_url": "packages/koreader/koreader-rsvp-plugin/README.md",
 				"featured_order": 10,
 				"stars": "31",
-				"assets": [{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}],
+				"assets": [{"arch":"arm","asset":"plugin.zip","url":"packages/koreader/plugin.zip","size":"12"}],
 				"constraints": {"abi":["hf","sf"]},
 				"conflicts": ["zen-ui"],
 				"incompatible_platforms": ["android", "host"],
@@ -255,7 +255,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	if entries[0].UninstallURL != "https://example.invalid/repo/packages/koreader/uninstall-plugin.sh" {
 		t.Fatalf("UninstallURL = %q", entries[0].UninstallURL)
 	}
-	if entries[0].Assets != `[{"arch":"arm","asset":"plugin.zip","url":"https://example.invalid/plugin.zip","size":"12"}]` {
+	if entries[0].Assets != `[{"arch":"arm","asset":"plugin.zip","size":"12","url":"https://example.invalid/repo/packages/koreader/plugin.zip"}]` {
 		t.Fatalf("Assets = %q", entries[0].Assets)
 	}
 	if entries[0].Constraints != `{"abi":["hf","sf"]}` {

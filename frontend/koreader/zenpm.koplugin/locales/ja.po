@@ -3,204 +3,245 @@
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 
-msgid "ZenPM"
-msgstr "ZenPM"
+msgid " is available. Update now?"
+msgstr "利用可能です。今すぐアップデートしますか?"
 
-msgid "Open ZenPM"
-msgstr "ZenPMを開く"
-
-msgid "Zen Package Manager frontend for KOReader."
-msgstr "KOReader用Zen Package Managerフロントエンド。"
-
-msgid "Featured"
-msgstr "注目"
-
-msgid "Sources"
-msgstr "ソース"
-
-msgid "Installed"
-msgstr "インストール済み"
-
-msgid "Debug"
-msgstr "デバッグ"
-
-msgid "Search"
-msgstr "検索"
-
-msgid "Welcome"
-msgstr "ようこそ"
-
-msgid "Add Source"
-msgstr "ソースを追加"
-
-msgid "Add"
-msgstr "追加"
-
-msgid "Search..."
-msgstr "検索..."
-
-msgid "Filter installed..."
-msgstr "インストール済みを絞り込み..."
-
-msgid "Packages"
-msgstr "パッケージ"
-
-msgid "Source Details"
-msgstr "ソースの詳細"
-
-msgid "Package Details"
-msgstr "パッケージの詳細"
-
-msgid "ZenPM - Debug"
-msgstr "ZenPM - デバッグ"
-
-msgid "Featured packages coming soon."
-msgstr "注目パッケージは近日公開予定です。"
-
-msgid "No packages found. Try Refresh."
-msgstr "パッケージが見つかりません。更新を試してください。"
-
-msgid "No installed packages match the filter."
-msgstr "絞り込み条件に一致するインストール済みパッケージはありません。"
-
-msgid "No packages installed. Browse Search to find packages."
-msgstr "インストール済みパッケージはありません。検索でパッケージを探してください。"
-
-msgid "No packages match the filter."
-msgstr "絞り込み条件に一致するパッケージはありません。"
-
-msgid "No repositories configured."
-msgstr "リポジトリが設定されていません。"
-
-msgid "No packages found for this source."
-msgstr "このソースにはパッケージが見つかりません。"
-
-msgid "By "
-msgstr "作成者: "
-
-msgid "Description"
-msgstr "説明"
-
-msgid "No description available."
-msgstr "説明はありません。"
-
-msgid "Unknown package"
-msgstr "不明なパッケージ"
-
-msgid "No description"
-msgstr "説明なし"
-
-msgid "Source"
-msgstr "ソース"
-
-msgid "Remove"
-msgstr "削除"
-
-msgid "Modify"
-msgstr "変更"
-
-msgid "Get"
-msgstr "取得"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Cancel"
-msgstr "キャンセル"
-
-msgid "Clear"
-msgstr "クリア"
-
-msgid "Info"
-msgstr "情報"
-
-msgid "Reinstall"
-msgstr "再インストール"
-
-msgid "Uninstall"
-msgstr "アンインストール"
-
-msgid "Refresh"
-msgstr "更新"
-
-msgid "About"
-msgstr "情報"
-
-msgid "Update"
-msgstr "更新"
-
-msgid "Quit"
-msgstr "終了"
-
-msgid "Filter installed packages"
-msgstr "インストール済みパッケージを絞り込み"
-
-msgid "Search packages"
-msgstr "パッケージを検索"
-
-msgid "Please enter a URL."
-msgstr "URLを入力してください。"
-
-msgid "Detecting repo..."
-msgstr "リポジトリを検出中..."
-
-msgid "Could not detect repo format."
-msgstr "リポジトリ形式を検出できませんでした。"
-
-msgid "Another operation is in progress. Please wait."
-msgstr "別の操作が進行中です。お待ちください。"
-
-msgid "Package has no id."
-msgstr "パッケージにIDがありません。"
-
-msgid "Downloading... Please wait."
-msgstr "ダウンロード中... お待ちください。"
-
-msgid "Refreshing repositories..."
-msgstr "リポジトリを更新中..."
-
-msgid "Check for and start a ZenPM update?"
-msgstr "ZenPMの更新を確認して開始しますか？"
-
-msgid "Update accepted. The daemon may restart."
-msgstr "更新を受け付けました。デーモンが再起動する場合があります。"
-
-msgid "None"
-msgstr "なし"
-
-msgid "Version: "
-msgstr "バージョン: "
-
-msgid "Author: Anthony Gress (ZenLabs)"
-msgstr "作者: Anthony Gress (ZenLabs)"
-
-msgid " did not complete.\n\nCheck the debug log for details."
-msgstr " は完了しませんでした。\n\n詳細はデバッグログを確認してください。"
+msgid " returned HTTP "
+msgstr "返されたHTTP"
 
 msgid " successfully."
 msgstr " に成功しました。"
 
-msgid "Are you sure you want to download "
-msgstr "本当にダウンロードしますか: "
+msgid " was copied to the Kindle homepage."
+msgstr "Kindle のホームページにコピーされました。"
 
-msgid "Are you sure you want to reinstall "
-msgstr "本当に再インストールしますか: "
+msgid "%d packages queued"
+msgstr "%d パッケージがキューに登録されました"
 
-msgid "Are you sure you want to uninstall "
-msgstr "本当にアンインストールしますか: "
+msgid "%s conflicts with %s. They should not be used together. Install anyway?"
+msgstr "%s は %s と競合します。これらを一緒に使用しないでください。とにかくインストールしますか?"
 
-msgid "Loading packages, please wait"
-msgstr "パッケージを読み込んでいます。お待ちください"
+msgid "(installed)"
+msgstr "(設置済み)"
+
+msgid "... Please wait."
+msgstr "... お待ちください。"
+
+msgid "1 package queued"
+msgstr "1 個のパッケージがキューにあります"
+
+msgid "A short summary of what went wrong"
+msgstr "何がうまくいかなかったのかを簡単にまとめたもの"
+
+msgid "About"
+msgstr "情報"
+
+msgid "Add"
+msgstr "追加"
+
+msgid "Add Source"
+msgstr "ソースを追加"
+
+msgid "Added to Queue"
+msgstr "キューに追加されました"
+
+msgid "Another operation is in progress. Please wait."
+msgstr "別の操作が進行中です。お待ちください。"
+
+msgid "Are you sure you want to "
+msgstr "本当によろしいですか"
+
+msgid "Are you sure you want to clear the queue?"
+msgstr "キューをクリアしてもよろしいですか?"
+
+msgid "Are you sure you want to perform all queued actions?"
+msgstr "キューに入れられたすべてのアクションを実行してもよろしいですか?"
+
+msgid "Are you sure you want to remove "
+msgstr "削除してもよろしいですか"
+
+msgid "Author: Anthony Gress (ZenLabs)"
+msgstr "作者: Anthony Gress (ZenLabs)"
+
+msgid "Beta updates"
+msgstr "ベータ版のアップデート"
+
+msgid "Brief description of the bug"
+msgstr "バグの簡単な説明"
+
+msgid "Bug description (optional)"
+msgstr "バグの説明 (オプション)"
+
+msgid "Bug report submitted!"
+msgstr "バグレポートが提出されました!"
+
+msgid "Bug report title"
+msgstr "バグレポートのタイトル"
+
+msgid "By "
+msgstr "作成者: "
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Categories"
+msgstr "カテゴリー"
+
+msgid "Category"
+msgstr "カテゴリ"
+
+msgid "Category not found."
+msgstr "カテゴリが見つかりません。"
+
+msgid "Change version"
+msgstr "バージョンを変更する"
+
+msgid "Check for updates automatically"
+msgstr "アップデートを自動的にチェックする"
+
+msgid "Check the debug log for details."
+msgstr "詳細については、デバッグ ログを確認してください。"
+
+msgid "Checking for update..."
+msgstr "アップデートをチェックしています..."
+
+msgid "Choose a build for "
+msgstr "ビルドを選択してください"
+
+msgid "Choose a patch for "
+msgstr "パッチを選択してください"
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Companion update failed to start: "
+msgstr "コンパニオンのアップデートを開始できませんでした:"
+
+msgid "Confirm"
+msgstr "確認する"
+
+msgid "Continue"
+msgstr "続く"
+
+msgid "Continue?"
+msgstr "続く？"
+
+msgid "Copying ZenPM to Kindle homepage..."
+msgstr "ZenPM を Kindle ホームページにコピーしています..."
+
+msgid "Could not "
+msgstr "できませんでした"
 
 msgid "Could not add source: "
 msgstr "ソースを追加できませんでした: "
 
+msgid "Could not connect to "
+msgstr "に接続できませんでした"
+
+msgid "Could not connect to GitHub: "
+msgstr "GitHub に接続できませんでした:"
+
+msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
+msgstr "GitHub に接続できませんでした: この KOReader ビルドでは HTTPS サポートを利用できません。"
+
+msgid "Could not create ZenPM directory: "
+msgstr "ZenPM ディレクトリを作成できませんでした:"
+
+msgid "Could not create ZenPM settings directory: "
+msgstr "ZenPM 設定ディレクトリを作成できませんでした:"
+
+msgid "Could not detect repo format."
+msgstr "リポジトリ形式を検出できませんでした。"
+
+msgid "Could not determine which build to install: "
+msgstr "どのビルドをインストールするかを決定できませんでした:"
+
+msgid "Could not install bundled ZenPM backend to: "
+msgstr "バンドルされた ZenPM バックエンドを次の場所にインストールできませんでした:"
+
+msgid "Could not install the ZenPM command-line wrapper."
+msgstr "ZenPM コマンドライン ラッパーをインストールできませんでした。"
+
+msgid "Could not load GitHub releases: "
+msgstr "GitHub リリースをロードできませんでした:"
+
 msgid "Could not read log: "
 msgstr "ログを読み取れませんでした: "
 
+msgid "Could not remove patch: "
+msgstr "パッチを削除できませんでした:"
+
 msgid "Could not remove source: "
 msgstr "ソースを削除できませんでした: "
+
+msgid "Could not remove the ZenPM plugin."
+msgstr "ZenPM プラグインを削除できませんでした。"
+
+msgid "Could not resolve patch file."
+msgstr "パッチファイルを解決できませんでした。"
+
+msgid "Could not resolve plugin name."
+msgstr "プラグイン名を解決できませんでした。"
+
+msgid "Debug"
+msgstr "デバッグ"
+
+msgid "Description"
+msgstr "説明"
+
+msgid "Details"
+msgstr "詳細"
+
+msgid "Detected ABI: "
+msgstr "検出された ABI:"
+
+msgid "Detecting repo..."
+msgstr "リポジトリを検出中..."
+
+msgid "Disable"
+msgstr "無効にする"
+
+msgid "disable"
+msgstr "無効にする"
+
+msgid "disabled"
+msgstr "無効"
+
+msgid "Downgrade"
+msgstr "ダウングレード"
+
+msgid "downgrade"
+msgstr "ダウングレード"
+
+msgid "downgraded"
+msgstr "格下げされた"
+
+msgid "Downgrading"
+msgstr "ダウングレード中"
+
+msgid "Download and copy the latest standalone ZenPM release to the Kindle homepage? This adds a ZenPM scriptlet (book) to the Kindle Home/Library"
+msgstr "最新のスタンドアロン ZenPM リリースをダウンロードして Kindle ホームページにコピーしますか?これにより、ZenPM スクリプトレット (ブック) が Kindle ホーム/ライブラリに追加されます"
+
+msgid "download failed"
+msgstr "ダウンロードに失敗しました"
+
+msgid "Download this asset: "
+msgstr "このアセットをダウンロードします。"
+
+msgid "enable"
+msgstr "有効にする"
+
+msgid "Enable"
+msgstr "有効にする"
+
+msgid "enabled"
+msgstr "有効"
+
+msgid "Enter your GitHub username to be tagged in the issue"
+msgstr "問題にタグ付けする GitHub ユーザー名を入力してください"
 
 msgid "Failed to load package: "
 msgstr "パッケージの読み込みに失敗しました: "
@@ -217,14 +258,98 @@ msgstr "ソースの読み込みに失敗しました: "
 msgid "Failed to start package action: "
 msgstr "パッケージ操作を開始できませんでした: "
 
+msgid "Failed to submit report: "
+msgstr "レポートの送信に失敗しました:"
+
+msgid "Featured"
+msgstr "注目"
+
+msgid "Font preview"
+msgstr "フォントプレビュー"
+
+msgid "Font size"
+msgstr "フォントサイズ"
+
+msgid "Found %d installed plugins"
+msgstr "%d がインストールされたプラグインが見つかりました"
+
+msgid "Get"
+msgstr "取得"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "GitHub download redirected too many times."
+msgstr "GitHub ダウンロードがリダイレクトされる回数が多すぎます。"
+
+msgid "GitHub download returned HTTP "
+msgstr "GitHub ダウンロードで HTTP が返されました"
+
+msgid "GitHub supplied an invalid download redirect."
+msgstr "GitHub が無効なダウンロード リダイレクトを提供しました。"
+
+msgid "GitHub supplied an untrusted download URL."
+msgstr "GitHub が信頼できないダウンロード URL を提供しました。"
+
+msgid "GitHub username (optional)"
+msgstr "GitHub ユーザー名 (オプション)"
+
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "このKOReaderビルドではHTTPSサポートを利用できません。"
+
+msgid "install"
+msgstr "インストール"
+
+msgid "Install"
+msgstr "インストール"
+
+msgid "Install anyway"
+msgstr "とにかくインストールする"
+
+msgid "Install anyway?"
+msgstr "とにかくインストールしますか?"
+
+msgid "Install to Kindle homepage"
+msgstr "Kindle ホームページにインストールする"
+
+msgid "Installed"
+msgstr "インストール済み"
+
+msgid "installed"
+msgstr "インストール済み"
 
 msgid "Installing"
 msgstr "インストール中"
 
+msgid "Keep settings"
+msgstr "設定を維持する"
+
+msgid "Kindle homepage installation failed: "
+msgstr "Kindle ホームページのインストールに失敗しました:"
+
+msgid "Kindle homepage installation was cancelled."
+msgstr "Kindle ホームページのインストールがキャンセルされました。"
+
+msgid "Kobo network is not ready. Please wait a moment and try again."
+msgstr "kobo ネットワークの準備ができていません。しばらく待ってから、もう一度試してください。"
+
+msgid "KOReader settings are unavailable."
+msgstr "KOReader 設定は使用できません。"
+
+msgid "Latest"
+msgstr "最新"
+
+msgid "Loading categories..."
+msgstr "カテゴリを読み込んでいます..."
+
+msgid "Loading category..."
+msgstr "カテゴリを読み込み中..."
+
 msgid "Loading featured packages..."
 msgstr "注目パッケージを読み込み中..."
+
+msgid "Loading GitHub releases..."
+msgstr "GitHub リリースを読み込んでいます..."
 
 msgid "Loading installed packages..."
 msgstr "インストール済みパッケージを読み込み中..."
@@ -232,8 +357,8 @@ msgstr "インストール済みパッケージを読み込み中..."
 msgid "Loading log..."
 msgstr "ログを読み込み中..."
 
-msgid "Loading package..."
-msgstr "パッケージを読み込み中..."
+msgid "Loading packages, please wait"
+msgstr "パッケージを読み込んでいます。お待ちください"
 
 msgid "Loading packages..."
 msgstr "パッケージを読み込み中..."
@@ -247,8 +372,89 @@ msgstr "ソースを読み込み中..."
 msgid "Log is empty."
 msgstr "ログは空です。"
 
+msgid "Modify"
+msgstr "変更"
+
+msgid "Name"
+msgstr "名前"
+
+msgid "network error"
+msgstr "ネットワークエラー"
+
+msgid "Next"
+msgstr "次"
+
+msgid "No categories found."
+msgstr "カテゴリが見つかりませんでした。"
+
+msgid "No categories match the filter."
+msgstr "フィルターに一致するカテゴリはありません。"
+
+msgid "No description"
+msgstr "説明なし"
+
+msgid "No description available."
+msgstr "説明はありません。"
+
+msgid "No GitHub releases with ZIP assets were found."
+msgstr "ZIP アセットを含む GitHub リリースは見つかりませんでした。"
+
+msgid "No installed packages match the filter."
+msgstr "絞り込み条件に一致するインストール済みパッケージはありません。"
+
+msgid "No network connection. Please connect to Wi-Fi and try again."
+msgstr "ネットワーク接続がありません。 Wi-Fiに接続して再度お試しください。"
+
+msgid "No packages found for this category."
+msgstr "このカテゴリのパッケージは見つかりませんでした。"
+
+msgid "No packages found for this source."
+msgstr "このソースにはパッケージが見つかりません。"
+
+msgid "No packages found. Try Refresh."
+msgstr "パッケージが見つかりません。更新を試してください。"
+
+msgid "No packages installed. Browse Search to find packages."
+msgstr "インストール済みパッケージはありません。検索でパッケージを探してください。"
+
+msgid "No packages match the filter."
+msgstr "絞り込み条件に一致するパッケージはありません。"
+
+msgid "No queued operations."
+msgstr "キューに入れられた操作はありません。"
+
+msgid "No README available."
+msgstr "利用可能な README はありません。"
+
+msgid "No repositories configured."
+msgstr "リポジトリが設定されていません。"
+
+msgid "None"
+msgstr "なし"
+
+msgid "of"
+msgstr "の"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Only show installable packages"
+msgstr "インストール可能なパッケージのみを表示する"
+
+msgid "Open ZenPM"
+msgstr "ZenPMを開く"
+
 msgid "Package"
 msgstr "パッケージ"
+
+msgid "Package Details"
+msgstr "パッケージの詳細"
+
+msgid "Package has no id."
+msgstr "パッケージにIDがありません。"
+
+msgid "Package manager for KOReader."
+msgstr "KOReader のパッケージ マネージャー。"
 
 msgid "Package not found."
 msgstr "パッケージが見つかりません。"
@@ -256,47 +462,71 @@ msgstr "パッケージが見つかりません。"
 msgid "Package operation status could not be checked. See Debug log."
 msgstr "パッケージ操作の状態を確認できませんでした。デバッグログを参照してください。"
 
+msgid "packages"
+msgstr "パッケージ"
+
+msgid "Packages updated"
+msgstr "パッケージが更新されました"
+
+msgid "patch"
+msgstr "パッチ"
+
+msgid "Patch file not found."
+msgstr "パッチファイルが見つかりません。"
+
+msgid "Patch has no file name."
+msgstr "パッチにはファイル名がありません。"
+
+msgid "Patches"
+msgstr "パッチ"
+
+msgid "Platform: "
+msgstr "プラットフォーム:"
+
+msgid "Please enter a URL."
+msgstr "URLを入力してください。"
+
+msgid "Plugin scan failed: "
+msgstr "プラグインのスキャンに失敗しました:"
+
+msgid "prerelease"
+msgstr "プレリリース"
+
+msgid "Queue"
+msgstr "列"
+
+msgid "Queue %d/%d: "
+msgstr "キュー %d/%d:"
+
+msgid "Queue completed: %d succeeded, %d failed."
+msgstr "キューが完了しました: %d は成功しました、%d は失敗しました。"
+
+msgid "Queue completed: %d succeeded."
+msgstr "キューが完了しました: %d は成功しました。"
+
+msgid "Queue is running. Please wait."
+msgstr "キューが実行中です。お待ちください。"
+
+msgid "Queued"
+msgstr "キューに入れられました"
+
+msgid "Quit"
+msgstr "終了"
+
+msgid "README"
+msgstr "お読みください"
+
+msgid "Refresh"
+msgstr "更新"
+
 msgid "Refresh failed: "
 msgstr "更新に失敗しました: "
 
-msgid "Reinstalling"
-msgstr "再インストール中"
+msgid "Refreshing repositories..."
+msgstr "リポジトリを更新中..."
 
-msgid "Remove source "
-msgstr "ソースを削除 "
-
-msgid "Source not found."
-msgstr "ソースが見つかりません。"
-
-msgid "Uninstalling"
-msgstr "アンインストール中"
-
-msgid "Update failed: "
-msgstr "更新に失敗しました: "
-
-msgid "ZenPM backend not found. Expected "
-msgstr "ZenPMバックエンドが見つかりません。期待される場所: "
-
-msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
-msgstr "ZenPMデーモンに接続できません。実行中でない場合はZenPMインストーラーを再実行してください。"
-
-msgid "download failed"
-msgstr "ダウンロードに失敗しました"
-
-msgid "install"
-msgstr "インストール"
-
-msgid "installed"
-msgstr "インストール済み"
-
-msgid "network error"
-msgstr "ネットワークエラー"
-
-msgid "of"
-msgstr "の"
-
-msgid "or"
-msgstr "または"
+msgid "Reinstall"
+msgstr "再インストール"
 
 msgid "reinstall"
 msgstr "再インストール"
@@ -304,11 +534,245 @@ msgstr "再インストール"
 msgid "reinstalled"
 msgstr "再インストール済み"
 
+msgid "Reinstalling"
+msgstr "再インストール中"
+
+msgid "remote server"
+msgstr "リモートサーバー"
+
+msgid "Remove"
+msgstr "削除"
+
+msgid "Remove %s from queue?"
+msgstr "%s をキューから削除しますか?"
+
+msgid "Remove from queue"
+msgstr "キューから削除"
+
+msgid "Remove settings"
+msgstr "設定を削除する"
+
+msgid "Remove source "
+msgstr "ソースを削除 "
+
+msgid "rename failed"
+msgstr "名前の変更に失敗しました"
+
+msgid "Report a Bug"
+msgstr "バグを報告する"
+
 msgid "request failed"
 msgstr "リクエストに失敗しました"
+
+msgid "Restart KOReader to apply the changes."
+msgstr "KOReader を再起動して変更を適用します。"
+
+msgid "Restart later"
+msgstr "後で再起動する"
+
+msgid "Restart now"
+msgstr "今すぐ再起動してください"
+
+msgid "Restarting..."
+msgstr "再起動中..."
+
+msgid "Retry"
+msgstr "リトライ"
+
+msgid "Scan installed plugins"
+msgstr "インストールされているプラ​​グインをスキャンする"
+
+msgid "Scanning installed plugins..."
+msgstr "インストールされているプラ​​グインをスキャンしています..."
+
+msgid "Search"
+msgstr "検索"
+
+msgid "Search categories"
+msgstr "カテゴリを検索する"
+
+msgid "Search categories..."
+msgstr "カテゴリを検索..."
+
+msgid "Search category"
+msgstr "検索カテゴリー"
+
+msgid "Search category..."
+msgstr "カテゴリを検索..."
+
+msgid "Search installed packages"
+msgstr "インストールされているパッケージを検索する"
+
+msgid "Search installed..."
+msgstr "インストールされている検索..."
+
+msgid "Search packages"
+msgstr "パッケージを検索"
+
+msgid "Search..."
+msgstr "検索..."
+
+msgid "Select version for "
+msgstr "バージョンを選択してください"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "Show all release builds"
+msgstr "すべてのリリース ビルドを表示"
+
+msgid "Show more"
+msgstr "もっと見る"
+
+msgid "Show README images"
+msgstr "README イメージを表示する"
+
+msgid "Skip"
+msgstr "スキップ"
+
+msgid "Sort"
+msgstr "選別"
+
+msgid "Sort packages"
+msgstr "パッケージの並べ替え"
+
+msgid "Source"
+msgstr "ソース"
+
+msgid "Source not found."
+msgstr "ソースが見つかりません。"
+
+msgid "Sources"
+msgstr "ソース"
+
+msgid "Stars"
+msgstr "星"
+
+msgid "Steps to reproduce, expected vs. actual behavior"
+msgstr "再現手順、予想される動作と実際の動作"
+
+msgid "Submit"
+msgstr "提出する"
+
+msgid "Submitting report…"
+msgstr "レポートを送信中…"
+
+msgid "This release has no ZIP assets."
+msgstr "このリリースには ZIP アセットがありません。"
+
+msgid "This will install as a \"book\" on the Kindle homescreen."
+msgstr "これは Kindle ホーム画面に「書籍」としてインストールされます。"
+
+msgid "to"
+msgstr "に"
 
 msgid "uninstall"
 msgstr "アンインストール"
 
+msgid "Uninstall"
+msgstr "アンインストール"
+
+msgid "Uninstall ZenPM?"
+msgstr "ZenPM をアンインストールしますか?"
+
 msgid "uninstalled"
 msgstr "アンインストール済み"
+
+msgid "Uninstalling"
+msgstr "アンインストール中"
+
+msgid "Uninstalling ZenPM..."
+msgstr "ZenPM をアンインストールしています..."
+
+msgid "Unknown package"
+msgstr "不明なパッケージ"
+
+msgid "update"
+msgstr "アップデート"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Update All"
+msgstr "すべて更新"
+
+msgid "Update check was cancelled."
+msgstr "更新チェックがキャンセルされました。"
+
+msgid "Update failed: "
+msgstr "更新に失敗しました: "
+
+msgid "Update was cancelled."
+msgstr "更新が中止されました。"
+
+msgid "updated"
+msgstr "更新されました"
+
+msgid "Updated: %d packages"
+msgstr "更新: %d パッケージ"
+
+msgid "Updating"
+msgstr "更新中"
+
+msgid "Updating ZenPM..."
+msgstr "ZenPM を更新しています..."
+
+msgid "username"
+msgstr "ユーザー名"
+
+msgid "Version: "
+msgstr "バージョン: "
+
+msgid "Welcome"
+msgstr "ようこそ"
+
+msgid "Zen Package Manager frontend for KOReader."
+msgstr "KOReader用Zen Package Managerフロントエンド。"
+
+msgid "Zen UI is installed. Most patches should not be used with Zen UI."
+msgstr "Zen UIがインストールされています。ほとんどのパッチは Zen UI では使用しないでください。"
+
+msgid "ZenPM"
+msgstr "ZenPM"
+
+msgid "ZenPM Android companion could not start its updater."
+msgstr "ZenPM Android コンパニオンはアップデータを開始できませんでした。"
+
+msgid "ZenPM Android companion is not available."
+msgstr "ZenPM Android コンパニオンは利用できません。"
+
+msgid "ZenPM Android companion is not installed or could not start. See "
+msgstr "ZenPM Android コンパニオンがインストールされていないか、起動できませんでした。見る"
+
+msgid "ZenPM backend"
+msgstr "ZenPM バックエンド"
+
+msgid "ZenPM backend did not start. Ensure you used the correct ZenPM version for this device."
+msgstr "ZenPM バックエンドが起動しませんでした。このデバイスに正しい ZenPM バージョンを使用していることを確認してください。"
+
+msgid "ZenPM bug reporter"
+msgstr "ZenPM バグレポーター"
+
+msgid "ZenPM Companion is checking for an update."
+msgstr "ZenPM Companion はアップデートをチェックしています。"
+
+msgid "ZenPM companion update failed."
+msgstr "ZenPM コンパニオンの更新に失敗しました。"
+
+msgid "ZenPM font size"
+msgstr "ZenPMのフォントサイズ"
+
+msgid "ZenPM is up to date."
+msgstr "ZenPM は最新です。"
+
+msgid "ZenPM update v"
+msgstr "ZenPM アップデート v"
+
+msgid "ZenPM updated to v"
+msgstr "ZenPM が v に更新されました"
+
+msgid "ZenPM v"
+msgstr "ZenPM v"
+
+msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
+msgstr "ZenPM.log と KOReader の crash.log (存在する場合) は、公開されている GitHub の問題に添付されます。これらには、パッケージ名、リポジトリ URL、およびファイル パスが含まれる場合があります。"

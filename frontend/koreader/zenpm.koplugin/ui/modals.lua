@@ -30,14 +30,26 @@ end
 
 function Modals.info(text)
     UIManager:show(InfoMessage:new{ text = text })
+    Modals.close_status()
 end
 
 function Modals.info_for(text, seconds)
     local modal = InfoMessage:new{ text = text }
     UIManager:show(modal)
+    Modals.close_status()
     UIManager:scheduleIn(seconds, function()
         UIManager:close(modal)
     end)
+end
+
+function Modals.notice(text)
+    UIManager:show(ConfirmBox:new{
+        text = text,
+        icon = "notice-info",
+        no_ok_button = true,
+        cancel_text = _("OK"),
+    })
+    Modals.close_status()
 end
 
 function Modals.status(text)
@@ -45,6 +57,7 @@ function Modals.status(text)
     status_modal = InfoMessage:new{
         text = text,
         dismissable = false,
+        timeout = 60,
         flush_events_on_show = true,
     }
     UIManager:show(status_modal)
@@ -74,6 +87,7 @@ function Modals.confirm(text, ok_text, ok_callback, close_before_callback)
         end,
     }
     UIManager:show(dialog)
+    Modals.close_status()
 end
 
 function Modals.input(title, input, hint, ok_text, callback, clear_callback)
@@ -300,56 +314,32 @@ function Modals.actions(title, rows, options)
 end
 
 function Modals.plugin_settings_cleanup(text, callback)
-    local dialog
-    dialog = ButtonDialog:new{
-        title = text,
-        buttons = {
-            {
-                {
-                    text = _("Keep settings"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        if callback then callback(false) end
-                    end,
-                },
-                {
-                    text = _("Remove settings"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        if callback then callback(true) end
-                    end,
-                },
-            },
-        },
-    }
-    UIManager:show(dialog)
+    UIManager:show(ConfirmBox:new{
+        text = text,
+        ok_text = _("Remove settings"),
+        cancel_text = _("Keep settings"),
+        ok_callback = function()
+            if callback then callback(true) end
+        end,
+        cancel_callback = function()
+            if callback then callback(false) end
+        end,
+    })
+    Modals.close_status()
 end
 
 function Modals.restart_koreader(text, restart_callback, restart_later_callback)
-    local dialog
-    dialog = ButtonDialog:new{
-        title = text,
-        buttons = {
-            {
-                {
-                    text = _("Restart later"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        if restart_later_callback then restart_later_callback() end
-                    end,
-                },
-                {
-                    text = _("Restart now"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        logger.info("ZenPM: requesting KOReader restart")
-                        restart_callback()
-                    end,
-                },
-            },
-        },
-    }
-    UIManager:show(dialog)
+    UIManager:show(ConfirmBox:new{
+        text = text,
+        ok_text = _("Restart now"),
+        cancel_text = _("Restart later"),
+        ok_callback = function()
+            logger.info("ZenPM: requesting KOReader restart")
+            restart_callback()
+        end,
+        cancel_callback = restart_later_callback,
+    })
+    Modals.close_status()
 end
 
 return Modals

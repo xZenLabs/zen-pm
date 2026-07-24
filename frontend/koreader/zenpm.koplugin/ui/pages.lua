@@ -273,11 +273,20 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_readme_images() end,
         },
         {
-            text = _("Show all release builds"),
+            text = _("Always manually pick version"),
             toggle = true,
-            value = function() return view.app.state.advanced end,
+            value = function() return view.app.state.manual_version_picker end,
             callback = function()
-                view.app:toggle_advanced()
+                view.app:toggle_manual_version_picker()
+                view:refresh()
+            end,
+        },
+        {
+            text = _("Show all builds"),
+            toggle = true,
+            value = function() return view.app.state.show_all_builds end,
+            callback = function()
+                view.app:toggle_show_all_builds()
                 view:refresh()
             end,
         },
@@ -353,7 +362,8 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local inner_x = x + pad + Theme.scale(12)
     local inner_w = w - pad * 2 - Theme.scale(24)
     local iy = cy + Theme.scale(12)
-    if pkg.featured_image then
+    local show_featured_at_top = pkg.featured_image and not Models.is_font_package(pkg)
+    if show_featured_at_top then
         local art_h = m.featured_h - Theme.scale(118)
         local border = Theme.scale(2)
         if not P.image_zoomed_masked(bb, view.app:package_featured_file(pkg), panel_x + border, cy + border, panel_w - border * 2, art_h - border, 1.1, {
@@ -393,6 +403,13 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     }
     for _, block in ipairs(Markdown.parse(readme)) do
         table.insert(readme_blocks, block)
+    end
+    if Models.is_font_package(pkg) and pkg.featured_image and pkg.featured_image ~= "" then
+        table.insert(readme_blocks, {
+            kind = "image",
+            alt = I18n.dynamic_or(pkg.name, _("Font preview")),
+            url = pkg.featured_image,
+        })
     end
     local assets = Models.package_assets(pkg)
     local show_patch_tabs = Models.is_patch_package(pkg) and #assets > 0

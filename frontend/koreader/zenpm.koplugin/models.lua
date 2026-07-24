@@ -302,6 +302,10 @@ function Models.is_patch_package(pkg)
     return normalize_category(pkg.category) == "koreaderpatches"
 end
 
+function Models.is_font_package(pkg)
+    return pkg and normalize_category(pkg.category) == "fonts" or false
+end
+
 function Models.is_installed_patch_item(pkg)
     return Models.is_patch_package(pkg) and type(pkg.patch_asset) == "string" and pkg.patch_asset ~= ""
 end
