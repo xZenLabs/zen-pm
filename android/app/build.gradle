@@ -6,9 +6,10 @@ def zenpmVersionParts = zenpmVersionValue.tokenize('-')[0].tokenize('.')
 if (zenpmVersionParts.size() != 3) {
     throw new GradleException("VERSION must be major.minor.patch, got: ${zenpmVersion}")
 }
-def zenpmPrereleaseMatcher = zenpmVersionValue =~ /[-+].*?(\d+)$/
-def zenpmPrereleaseCode = zenpmPrereleaseMatcher.find() ? zenpmPrereleaseMatcher.group(1).toInteger() : 999
-if (zenpmPrereleaseCode > 998) {
+def zenpmPrereleaseMatcher = zenpmVersionValue =~ /-beta(\d+)$/
+def zenpmHasPrerelease = zenpmPrereleaseMatcher.find()
+def zenpmPrereleaseCode = zenpmHasPrerelease ? zenpmPrereleaseMatcher.group(1).toInteger() : 999
+if (zenpmHasPrerelease && zenpmPrereleaseCode > 998) {
     throw new GradleException("VERSION prerelease number must be below 999, got: ${zenpmVersion}")
 }
 def zenpmVersionCode = zenpmVersionParts[0].toInteger() * 10000000 +
