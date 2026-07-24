@@ -234,10 +234,10 @@ function Reporter:submit(app, title, description, username)
         local ok_log, zenpm_log = app.client:get_log(5000)
         if not ok_log or type(zenpm_log) ~= "string" or zenpm_log == "" then
             zenpm_log = "ZenPM log unavailable: " .. tostring(zenpm_log or "unknown error")
-            local companion_log = android_companion_log(app)
-            if companion_log ~= "" then
-                zenpm_log = zenpm_log .. "\n\nAndroid companion log:\n" .. companion_log
-            end
+        end
+        local companion_log = android_companion_log(app)
+        if companion_log ~= "" then
+            zenpm_log = zenpm_log .. "\n\nAndroid companion log:\n" .. companion_log
         end
 
         local uploaded_zenpm_log_url

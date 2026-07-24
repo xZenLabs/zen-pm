@@ -180,7 +180,9 @@ function App:run_update_task(task, trap_widget, on_done)
     end
 
     -- Forking with live EGL state aborts KOReader on SDL/Wayland desktop.
-    if is_sdl_wayland_desktop() then
+    -- Android's JNI-backed runtime can likewise exit without returning the
+    -- updater result to Trapper.
+    if self.daemon:is_android() or is_sdl_wayland_desktop() then
         UIManager:nextTick(function()
             local invoked, called, ok, result = pcall(task)
             if invoked then
@@ -323,7 +325,7 @@ local function zenpm_self_package(daemon)
         plugin_module = "zenpm",
         category = "utility",
         icon = Constants.ASSET_DIR .. "/zenpm.svg",
-        description = _("Package manager for KOReader."),
+        description = _("Zen Package Manager - A package manager (App Store) for E-Readers"),
         zenpm_self = true,
     }
 end
