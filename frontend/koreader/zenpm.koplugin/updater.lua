@@ -337,8 +337,10 @@ local function select_standalone_release(releases, allow_prerelease)
     return nil
 end
 
-local function fetch_releases()
-    local response, err = request(RELEASES_URL)
+local function fetch_releases(force_refresh)
+    local url = RELEASES_URL
+    if force_refresh then url = url .. "&cache_bust=" .. tostring(os.time()) end
+    local response, err = request(url)
     if not response then
         log_warn("release request failed", err)
         return nil, err
@@ -472,9 +474,9 @@ local function extract_standalone(zip_path, stage_dir)
     return true
 end
 
-local function latest_release(daemon, allow_prerelease)
+local function latest_release(daemon, allow_prerelease, force_refresh)
     log_info("checking for updates", "platform=", daemon:detect_platform(), "prereleases=", allow_prerelease == true)
-    local releases, err = fetch_releases()
+    local releases, err = fetch_releases(force_refresh)
     if not releases then return false, err end
     local release, expected_asset = select_release(releases, daemon, allow_prerelease)
     if not release then
@@ -488,8 +490,8 @@ local function latest_release(daemon, allow_prerelease)
     return true, release
 end
 
-function Updater:check(daemon, allow_prerelease)
-    local ok, release_or_err = latest_release(daemon, allow_prerelease)
+function Updater:check(daemon, allow_prerelease, force_refresh)
+    local ok, release_or_err = latest_release(daemon, allow_prerelease, force_refresh)
     if not ok then return false, release_or_err end
     local release = release_or_err
     local plugin_version = daemon:plugin_version()
@@ -505,8 +507,8 @@ function Updater:check(daemon, allow_prerelease)
     return true, release.version
 end
 
-function Updater:update(daemon, allow_prerelease)
-    local ok, release_or_err = latest_release(daemon, allow_prerelease)
+function Updater:update(daemon, allow_prerelease, force_refresh)
+    local ok, release_or_err = latest_release(daemon, allow_prerelease, force_refresh)
     if not ok then return false, release_or_err end
     local release = release_or_err
     if not release or not version_gt(release.tag, daemon:plugin_version()) then
@@ -569,8 +571,8 @@ function Updater:update(daemon, allow_prerelease)
     return true, release.version
 end
 
-function Updater:install_kindle_standalone(daemon, allow_prerelease)
-    local releases, releases_err = fetch_releases()
+function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refresh)
+    local releases, releases_err = fetch_releases(force_refresh)
     if not releases then return standalone_failure(daemon, releases_err) end
     local release = select_standalone_release(releases, allow_prerelease)
     if not release then
