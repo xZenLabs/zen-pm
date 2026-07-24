@@ -767,6 +767,16 @@ components:
         installed_version:
           type: string
           description: Version recorded at install time, when the package is installed.
+        installed_at:
+          type: string
+          format: date-time
+          description: UTC timestamp recorded when the package was installed.
+        installed_asset_dates:
+          type: object
+          additionalProperties:
+            type: string
+            format: date-time
+          description: UTC install timestamps by installed patch-file asset.
         latest_version:
           type: string
           description: Latest GitHub release tag when update checks are requested.

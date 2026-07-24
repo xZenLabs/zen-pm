@@ -35,43 +35,45 @@ type Server struct {
 }
 
 type pkgJSON struct {
-	ID                    string          `json:"id"`
-	Name                  string          `json:"name"`
-	Version               string          `json:"version"`
-	Description           string          `json:"description"`
-	Author                string          `json:"author"`
-	Tags                  []string        `json:"tags"`
-	Category              string          `json:"category,omitempty"`
-	Platforms             []string        `json:"platforms"`
-	IncompatiblePlatforms []string        `json:"incompatible_platforms,omitempty"`
-	Conflicts             []string        `json:"conflicts,omitempty"`
-	Repo                  string          `json:"repo"`
-	RepoTrust             string          `json:"repo_trust,omitempty"`
-	RepoDefault           bool            `json:"repo_default,omitempty"`
-	Installed             bool            `json:"installed"`
-	InstalledVer          string          `json:"installed_version,omitempty"`
-	InstalledAsset        string          `json:"installed_asset,omitempty"`
-	InstalledAssets       []string        `json:"installed_assets,omitempty"`
-	UnmanagedPatch        bool            `json:"unmanaged_patch,omitempty"`
-	LatestVersion         string          `json:"latest_version,omitempty"`
-	LatestRelease         string          `json:"latest_release,omitempty"`
-	UpdateAvail           bool            `json:"update_available,omitempty"`
-	IconURL               string          `json:"icon_url,omitempty"`
-	RepoIconURL           string          `json:"repo_icon_url,omitempty"`
-	ImageURL              string          `json:"image_url,omitempty"`
-	Images                []string        `json:"images,omitempty"`
-	Featured              bool            `json:"featured,omitempty"`
-	FeaturedImage         string          `json:"featured_image,omitempty"`
-	FeaturedOrder         *int            `json:"featured_order,omitempty"`
-	Source                string          `json:"source,omitempty"`
-	SourceAsset           string          `json:"source_asset,omitempty"`
-	SourceType            string          `json:"source_type,omitempty"`
-	SourceURL             string          `json:"source_url,omitempty"`
-	ReadmeURL             string          `json:"readme_url,omitempty"`
-	Stars                 string          `json:"stars,omitempty"`
-	PluginModule          string          `json:"plugin_module,omitempty"`
-	Assets                json.RawMessage `json:"assets,omitempty"`
-	Constraints           json.RawMessage `json:"constraints,omitempty"`
+	ID                    string            `json:"id"`
+	Name                  string            `json:"name"`
+	Version               string            `json:"version"`
+	Description           string            `json:"description"`
+	Author                string            `json:"author"`
+	Tags                  []string          `json:"tags"`
+	Category              string            `json:"category,omitempty"`
+	Platforms             []string          `json:"platforms"`
+	IncompatiblePlatforms []string          `json:"incompatible_platforms,omitempty"`
+	Conflicts             []string          `json:"conflicts,omitempty"`
+	Repo                  string            `json:"repo"`
+	RepoTrust             string            `json:"repo_trust,omitempty"`
+	RepoDefault           bool              `json:"repo_default,omitempty"`
+	Installed             bool              `json:"installed"`
+	InstalledVer          string            `json:"installed_version,omitempty"`
+	InstalledAt           string            `json:"installed_at,omitempty"`
+	InstalledAsset        string            `json:"installed_asset,omitempty"`
+	InstalledAssets       []string          `json:"installed_assets,omitempty"`
+	InstalledAssetDates   map[string]string `json:"installed_asset_dates,omitempty"`
+	UnmanagedPatch        bool              `json:"unmanaged_patch,omitempty"`
+	LatestVersion         string            `json:"latest_version,omitempty"`
+	LatestRelease         string            `json:"latest_release,omitempty"`
+	UpdateAvail           bool              `json:"update_available,omitempty"`
+	IconURL               string            `json:"icon_url,omitempty"`
+	RepoIconURL           string            `json:"repo_icon_url,omitempty"`
+	ImageURL              string            `json:"image_url,omitempty"`
+	Images                []string          `json:"images,omitempty"`
+	Featured              bool              `json:"featured,omitempty"`
+	FeaturedImage         string            `json:"featured_image,omitempty"`
+	FeaturedOrder         *int              `json:"featured_order,omitempty"`
+	Source                string            `json:"source,omitempty"`
+	SourceAsset           string            `json:"source_asset,omitempty"`
+	SourceType            string            `json:"source_type,omitempty"`
+	SourceURL             string            `json:"source_url,omitempty"`
+	ReadmeURL             string            `json:"readme_url,omitempty"`
+	Stars                 string            `json:"stars,omitempty"`
+	PluginModule          string            `json:"plugin_module,omitempty"`
+	Assets                json.RawMessage   `json:"assets,omitempty"`
+	Constraints           json.RawMessage   `json:"constraints,omitempty"`
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
@@ -485,17 +487,24 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	installed, _ := s.st.ReadInstalled()
 	installedSet := make(map[string]bool, len(installed))
 	installedVersion := make(map[string]string, len(installed))
+	installedAt := make(map[string]string, len(installed))
 	installedAsset := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
 		installedVersion[e.ID] = e.Version
+		installedAt[e.ID] = e.InstalledAt
 		installedAsset[e.ID] = e.Asset
 	}
 
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
 	installedAssets := make(map[string][]string)
+	installedAssetDates := make(map[string]map[string]string)
 	for _, f := range patchFiles {
 		installedAssets[f.PackageID] = append(installedAssets[f.PackageID], f.Asset)
+		if installedAssetDates[f.PackageID] == nil {
+			installedAssetDates[f.PackageID] = make(map[string]string)
+		}
+		installedAssetDates[f.PackageID][f.Asset] = f.InstalledAt
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
@@ -538,9 +547,11 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		}
 		if files := installedAssets[e.ID]; len(files) > 0 {
 			item.InstalledAssets = files
+			item.InstalledAssetDates = installedAssetDates[e.ID]
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
+			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
 			if checkUpdates {
 				applyUpdateInfo(&item, allowPrerelease)
@@ -560,6 +571,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 				ID: e.ID, Name: name, Version: e.Version,
 				Repo: e.Repo, Installed: true,
 				InstalledVer:   e.Version,
+				InstalledAt:    e.InstalledAt,
 				InstalledAsset: e.Asset,
 				Platforms:      platformList,
 			}

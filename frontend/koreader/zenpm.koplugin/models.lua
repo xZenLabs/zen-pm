@@ -170,6 +170,10 @@ local function package_stars_value(pkg)
     return tonumber(stars)
 end
 
+local function package_installed_at(pkg)
+    return tostring(pkg and pkg.installed_at or "")
+end
+
 local function compare_text(a, b)
     local an, bn = package_name(a), package_name(b)
     if an ~= bn then
@@ -197,6 +201,15 @@ function Models.sort_packages(packages, sort_key)
             local ar, br = package_repo(a), package_repo(b)
             if ar ~= br then
                 return ar < br
+            end
+            return compare_text(a, b)
+        elseif sort_key == "installed_at_desc" or sort_key == "installed_at_asc" then
+            local aa, ba = package_installed_at(a), package_installed_at(b)
+            if aa ~= ba then
+                if sort_key == "installed_at_desc" then
+                    return aa > ba
+                end
+                return aa < ba
             end
             return compare_text(a, b)
         end
@@ -246,6 +259,10 @@ function Models.installed_patch_item(pkg, asset)
     item.patch_asset = asset
     item.installed_assets = { asset }
     item.installed = true
+
+    if type(pkg.installed_asset_dates) == "table" then
+        item.installed_at = pkg.installed_asset_dates[asset]
+    end
     -- Drop the multi-asset list so the details view shows the patch itself, not the
     -- parent's per-file "Patches" tab.
     item.assets = nil

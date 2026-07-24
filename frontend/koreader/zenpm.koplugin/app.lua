@@ -2061,20 +2061,33 @@ function App:prompt_sort(kind)
         return function() return current == key end
     end
     if kind == "installed" or kind == "sources" then
-        Modals.actions(title, {
+        local rows = {
             {
                 icon = "sort_asc",
-                text = _("Ascending"),
+                text = _("Title (A-Z)"),
                 checked_func = selected("name_asc"),
                 callback = function() self:set_sort(kind, "name_asc") end,
             },
             {
                 icon = "sort_desc",
-                text = _("Descending"),
+                text = _("Title (Z-A)"),
                 checked_func = selected("name_desc"),
                 callback = function() self:set_sort(kind, "name_desc") end,
             },
-        })
+        }
+        if kind == "installed" then
+            table.insert(rows, {
+                text = _("Installed date (newest first)"),
+                checked_func = selected("installed_at_desc"),
+                callback = function() self:set_sort(kind, "installed_at_desc") end,
+            })
+            table.insert(rows, {
+                text = _("Installed date (oldest first)"),
+                checked_func = selected("installed_at_asc"),
+                callback = function() self:set_sort(kind, "installed_at_asc") end,
+            })
+        end
+        Modals.actions(title, rows)
         return
     end
     Modals.actions(title, {

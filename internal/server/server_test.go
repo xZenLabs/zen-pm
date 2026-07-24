@@ -166,7 +166,7 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := st.AppendInstalled(state.InstalledEntry{
-		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", Asset: "pkg-armv7.zip",
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", Asset: "pkg-armv7.zip", InstalledAt: "2026-07-24T12:00:00Z",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
 		t.Fatal(err)
 	}
-	if len(packages) != 1 || packages[0].InstalledAsset != "pkg-armv7.zip" {
+	if len(packages) != 1 || packages[0].InstalledAsset != "pkg-armv7.zip" || packages[0].InstalledAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("packages = %#v", packages)
 	}
 }

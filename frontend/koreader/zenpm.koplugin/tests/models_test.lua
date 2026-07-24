@@ -28,4 +28,20 @@ assert(repos[1].name == "ZenLabs")
 local descending = Models.sort_repos(repos, "name_desc")
 assert(descending[1].name == "ZenLabs" and descending[2].name == "Beta" and descending[3].name == "Alpha")
 
+local installed = {
+    { id = "first", name = "First", installed_at = "2026-07-21T10:00:00Z" },
+    { id = "second", name = "Second", installed_at = "2026-07-22T10:00:00Z" },
+    { id = "third", name = "Third", installed_at = "2026-07-23T10:00:00Z" },
+}
+local newest = Models.sort_packages(installed, "installed_at_desc")
+assert(newest[1].id == "third" and newest[2].id == "second" and newest[3].id == "first")
+
+local oldest = Models.sort_packages(installed, "installed_at_asc")
+assert(oldest[1].id == "first" and oldest[2].id == "second" and oldest[3].id == "third")
+
+local patch = Models.installed_patch_item({
+    id = "patch", installed_asset_dates = { ["patch.lua"] = "2026-07-23T10:00:00Z" },
+}, "patch.lua")
+assert(patch.installed_at == "2026-07-23T10:00:00Z")
+
 print("models tests passed")
