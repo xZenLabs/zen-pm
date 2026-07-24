@@ -112,7 +112,7 @@ function App:new(plugin)
             update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", categories = "", category = "" },
-            sorts = { search = "stars", installed = "name_asc", category = "stars", source = "stars" },
+            sorts = { search = "stars", installed = "name_asc", sources = "name_asc", category = "stars", source = "stars" },
             scroll = {},
             packages = {},
             visible_packages = {},
@@ -1864,7 +1864,7 @@ function App:show_sources()
         self:set_error(_("Failed to load sources: ") .. tostring(err))
         return
     end
-    self.state.repos = repos
+    self.state.repos = self:sorted_repos(repos)
     self.state.current_repo = nil
     self:clear_status()
     self:refresh()
@@ -2016,6 +2016,10 @@ function App:sorted_packages(kind, packages)
     return Models.sort_packages(packages, self.state.sorts[kind])
 end
 
+function App:sorted_repos(repos)
+    return Models.sort_repos(repos, self.state.sorts.sources)
+end
+
 function App:set_filter(kind, value)
     self.state.filters[kind] = value or ""
     if kind == "categories" then
@@ -2039,6 +2043,8 @@ function App:set_sort(kind, value)
     self:reset_scroll(self:scroll_key())
     if kind == "installed" then
         self:show_installed()
+    elseif kind == "sources" then
+        self:show_sources()
     elseif kind == "category" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif kind == "source" and self.state.current_repo then
@@ -2050,38 +2056,41 @@ end
 
 function App:prompt_sort(kind)
     local current = self.state.sorts[kind] or "stars"
-    local function label(key, text)
-        if current == key then
-            return "• " .. text
-        end
-        return text
+    local title = kind == "sources" and _("Sort sources") or _("Sort packages")
+    local function selected(key)
+        return function() return current == key end
     end
-    if kind == "installed" then
-        Modals.actions(_("Sort packages"), {
+    if kind == "installed" or kind == "sources" then
+        Modals.actions(title, {
             {
                 icon = "sort_asc",
-                text = label("name_asc", _("Ascending")),
+                text = _("Ascending"),
+                checked_func = selected("name_asc"),
                 callback = function() self:set_sort(kind, "name_asc") end,
             },
             {
                 icon = "sort_desc",
-                text = label("name_desc", _("Descending")),
+                text = _("Descending"),
+                checked_func = selected("name_desc"),
                 callback = function() self:set_sort(kind, "name_desc") end,
             },
         })
         return
     end
-    Modals.actions(_("Sort packages"), {
+    Modals.actions(title, {
         {
-            text = label("stars", _("Stars")),
+            text = _("Stars"),
+            checked_func = selected("stars"),
             callback = function() self:set_sort(kind, "stars") end,
         },
         {
-            text = label("name", _("Name")),
+            text = _("Name"),
+            checked_func = selected("name"),
             callback = function() self:set_sort(kind, "name") end,
         },
         {
-            text = label("repo", _("Source")),
+            text = _("Source"),
+            checked_func = selected("repo"),
             callback = function() self:set_sort(kind, "repo") end,
         },
     })

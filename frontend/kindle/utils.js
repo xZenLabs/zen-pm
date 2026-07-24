@@ -193,7 +193,7 @@ var ZenUtils = (function () {
         });
     }
 
-    // Sets up the chrome bar with Refresh + About menu items for any page.
+    // Sets up the chrome bar with system-menu items for any page.
     function setupPageChrome(title, refreshHandler) {
         var k = getKindle();
         if (!k || !k.messaging) return;
@@ -203,10 +203,11 @@ var ZenUtils = (function () {
                 "profile": {
                     "name": "default",
                     "items": [
-                        { "id": "ZEN_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 0 },
-                        { "id": "ZEN_UPDATE",  "state": "enabled", "handling": "notifyApp", "label": "Update",  "position": 1 },
-                        { "id": "ZEN_BETA_UPDATES", "state": "enabled", "handling": "notifyApp", "label": "Allow beta updates: " + (betaUpdatesEnabled() ? "On" : "Off"), "position": 2 },
-                        { "id": "ZEN_ABOUT",   "state": "enabled", "handling": "notifyApp", "label": "About",   "position": 3 }
+                        { "id": "ZEN_ABOUT", "state": "enabled", "handling": "notifyApp", "label": "About", "position": 0 },
+                        { "id": "ZEN_REFRESH", "state": "enabled", "handling": "notifyApp", "label": "Refresh", "position": 1 },
+                        { "id": "ZEN_DEBUG", "state": "enabled", "handling": "notifyApp", "label": "Debug", "position": 2 },
+                        { "id": "ZEN_BETA_UPDATES", "state": "enabled", "handling": "notifyApp", "label": "Beta updates", "position": 3 },
+                        { "id": "ZEN_UPDATE", "state": "enabled", "handling": "notifyApp", "label": "Update", "position": 4 }
                     ],
                     "selectionMode": "none",
                     "closeOnUse": true
@@ -217,6 +218,7 @@ var ZenUtils = (function () {
         k.messaging.receiveMessage("systemMenuItemSelected", function (property, data) {
             if (data === "ZEN_REFRESH") refreshSources(refreshHandler);
             if (data === "ZEN_UPDATE") startUpdate();
+            if (data === "ZEN_DEBUG") window.location.href = basePath() + "/pages/debug/index.html";
             if (data === "ZEN_BETA_UPDATES") {
                 toggleBetaUpdates();
                 setupPageChrome(title, refreshHandler);
@@ -254,7 +256,7 @@ var ZenUtils = (function () {
     }
 
     // Render universal bottom navbar. Call once per page with the active tab id:
-    // 'home', 'search', 'installed', 'sources', or 'debug'.
+    // 'home', 'search', 'installed', or 'sources'.
     function renderNavbar(activeTab) {
         postLog("[utils] renderNavbar: " + activeTab);
 
@@ -266,7 +268,6 @@ var ZenUtils = (function () {
             { id: 'home',      label: 'Featured',  icon: bp + '/assets/star.svg',      href: bp + '/index.html' },
             { id: 'sources',   label: 'Sources',    icon: bp + '/assets/sources.svg',   href: bp + '/pages/sources/index.html' },
             { id: 'installed', label: 'Installed',  icon: bp + '/assets/packages.svg',  href: bp + '/pages/installed/index.html' },
-            { id: 'debug',     label: 'Debug',      icon: bp + '/assets/debug.svg',     href: bp + '/pages/debug/index.html' },
             { id: 'search',    label: 'Discover',   icon: bp + '/assets/discover.svg',  href: bp + '/pages/search/index.html' }
         ];
 

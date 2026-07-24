@@ -239,21 +239,20 @@ function Header.draw(view, bb, x, y, w)
         search = "search",
         category_details = "category",
         installed = "installed",
+        sources = "sources",
         source_details = "source",
     })[page]
-    if page == "sources" then
-        local label = "+ " .. _("Add Source")
-        local add_source_x = x + w - pad - title_button_width(label)
-        draw_title_button(view, bb, add_source_x, button_y, label, function()
-            view.app:prompt_add_source()
-        end, "add-source", true)
-        return y + toolbar_h
-    end
     if sort_kind then
         control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
     end
     local right_x = x + w - pad
-    if page == "installed" then
+    if page == "sources" then
+        local label = "+ " .. _("Add Source")
+        right_x = right_x - title_button_width(label)
+        draw_title_button(view, bb, right_x, button_y, label, function()
+            view.app:prompt_add_source()
+        end, "add-source", true)
+    elseif page == "installed" then
         local updates = view.app:installed_update_count()
         local label = _("Update All") .. " (" .. tostring(updates) .. ")"
         local enabled = updates > 0 and not view.app.state.queue_running

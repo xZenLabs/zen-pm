@@ -215,6 +215,25 @@ function Models.sort_packages(packages, sort_key)
     return out
 end
 
+function Models.sort_repos(repos, sort_key)
+    local out = {}
+    for _, repo in ipairs(repos or {}) do
+        table.insert(out, repo)
+    end
+    table.sort(out, function(a, b)
+        local an = tostring(I18n.dynamic_or(a and a.name, "")):lower()
+        local bn = tostring(I18n.dynamic_or(b and b.name, "")):lower()
+        if an == bn then
+            return tostring(a and a.url or "") < tostring(b and b.url or "")
+        end
+        if sort_key == "name_desc" then
+            return an > bn
+        end
+        return an < bn
+    end)
+    return out
+end
+
 -- Build the single-file view of an installed patch: a shallow clone of the parent
 -- patch package narrowed to one asset, so its name/title and modify actions target
 -- that patch file rather than the parent package.

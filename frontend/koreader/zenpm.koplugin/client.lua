@@ -16,6 +16,7 @@ local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
 local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
 local PACKAGE_LIST_TIMEOUT = { block = 5, total = 20 }
+local PACKAGE_RELEASES_TIMEOUT = { block = 10, total = 15 }
 
 local function url_encode(value)
     value = tostring(value or "")
@@ -274,7 +275,7 @@ function Client:get_package_readme(id)
 end
 
 function Client:get_package_releases(id)
-    return self:request("GET", "/packages/" .. url_encode(id) .. "/releases", nil)
+    return self:request("GET", "/packages/" .. url_encode(id) .. "/releases", nil, PACKAGE_RELEASES_TIMEOUT)
 end
 
 function Client:get_log(tail)
