@@ -390,21 +390,23 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
     local description = I18n.dynamic_or(pkg.description, _("No description available."))
-    local readme = tostring(pkg.readme or "")
-    if readme == "" then
-        readme = _("No README available.")
-    end
+    local is_font = Models.is_font_package(pkg)
     local description_heading = _("Description")
-    local readme_heading = _("README")
     local readme_blocks = {
         { kind = "heading", level = 2, text = description_heading, plain = true },
         { kind = "paragraph", text = description, plain = true },
-        { kind = "heading", level = 2, text = readme_heading, plain = true },
     }
-    for _, block in ipairs(Markdown.parse(readme)) do
-        table.insert(readme_blocks, block)
+    if not is_font then
+        local readme = tostring(pkg.readme or "")
+        if readme == "" then
+            readme = _("No README available.")
+        end
+        table.insert(readme_blocks, { kind = "heading", level = 2, text = _("README"), plain = true })
+        for _, block in ipairs(Markdown.parse(readme)) do
+            table.insert(readme_blocks, block)
+        end
     end
-    if Models.is_font_package(pkg) and pkg.featured_image and pkg.featured_image ~= "" then
+    if is_font and pkg.featured_image and pkg.featured_image ~= "" then
         table.insert(readme_blocks, {
             kind = "image",
             alt = I18n.dynamic_or(pkg.name, _("Font preview")),
