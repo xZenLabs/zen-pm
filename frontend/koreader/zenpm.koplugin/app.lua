@@ -2899,7 +2899,7 @@ function App:apply_kindle_homepage_install()
     local status = Modals.status(_("Copying ZenPM to Kindle homepage..."))
     UIManager:forceRePaint()
     self:run_update_task(function()
-        return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates)
+        return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates, true)
     end, status, function(completed, called, ok, result)
         self.busy = false
         Modals.close_status()
@@ -2944,6 +2944,9 @@ end
 function App:toggle_beta_updates()
     self.state.beta_updates = not self.state.beta_updates
     App.save_setting("beta_updates", self.state.beta_updates)
+    App.save_setting("last_update_check", 0)
+    self:set_update_available(false)
+    self:schedule_automatic_update_check()
 end
 
 function App:toggle_automatic_update_checks()
@@ -3071,7 +3074,7 @@ function App:start_update()
     local status = Modals.status(_("Checking for update..."))
     UIManager:forceRePaint()
     self:run_update_task(function()
-        return pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
+        return pcall(Updater.check, Updater, self.daemon, self.state.beta_updates, true)
     end, status, function(completed, called, ok, result)
         self.busy = false
         Modals.close_status()
@@ -3117,7 +3120,7 @@ function App:apply_update()
     local status = Modals.status(_("Updating ZenPM..."))
     UIManager:forceRePaint()
     self:run_update_task(function()
-        return pcall(Updater.update, Updater, self.daemon, self.state.beta_updates)
+        return pcall(Updater.update, Updater, self.daemon, self.state.beta_updates, true)
     end, status, function(completed, called, ok, result)
         self.busy = false
         Modals.close_status()
