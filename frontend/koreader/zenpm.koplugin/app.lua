@@ -2503,7 +2503,7 @@ function App:show_versions_page(pkg, releases, current, page, on_done)
             end,
         }
     end
-    Modals.actions(_("Select version for ") .. package_title(pkg, pkg.id or pkg.name), rows)
+    Modals.actions(package_title(pkg, pkg.id or pkg.name) .. ": " .. _("Versions"), rows, { align = "left" })
 end
 
 function App:choose_version_release(pkg, release, action, on_done)
