@@ -234,6 +234,7 @@ function Header.draw(view, bb, x, y, w)
     local filter_kind = ({
         search = "search",
         category_details = "category",
+        source_details = "source",
     })[page]
     local sort_kind = ({
         search = "search",

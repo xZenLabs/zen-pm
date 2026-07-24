@@ -508,20 +508,17 @@ var ZenUtils = (function () {
 
     function repoIconURL(repo, fallback) {
         var bp = fallback || basePath() + '/assets/sources.svg';
-        if (repo && repo.icon_url && !isFaviconURL(repo.icon_url)) {
-            return repo.icon_url;
-        }
         if (repo && isZenLabsRepoName(repo.name)) {
             return basePath() + '/assets/zen.svg';
         }
         if (repo && repo.name === REPO_KINDLEFORGE_NAME) {
             return basePath() + '/assets/kindleforge.svg';
         }
-        if (repo && repo.icon_url) {
-            return repo.icon_url;
-        }
         if (repo && repo.url) {
             return repo.url.replace(/\/+$/, "") + "/favicon.svg";
+        }
+        if (repo && repo.icon_url) {
+            return repo.icon_url;
         }
         return bp;
     }
@@ -541,6 +538,9 @@ var ZenUtils = (function () {
 
     function firstPackageImage(pkg) {
         if (!pkg) return "";
+        if (isZenLabsRepoName(pkg.repo) || pkg.repo === REPO_KINDLEFORGE_NAME) {
+            return bundledRepoIcon(pkg);
+        }
         if (pkg.icon_url) return pkg.icon_url;
         if (pkg.icon) return pkg.icon;
         if (pkg.image_url) return pkg.image_url;

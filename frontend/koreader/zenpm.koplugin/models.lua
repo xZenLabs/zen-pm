@@ -42,14 +42,8 @@ function Models.filter_packages(packages, query)
         local hay = table.concat({
             tostring(pkg.name or ""),
             tostring(I18n.dynamic(pkg.name) or ""),
-            tostring(pkg.id or ""),
-            tostring(pkg.patch_asset or ""),
-            tostring(pkg.description or ""),
-            tostring(I18n.dynamic(pkg.description) or ""),
-            tostring(pkg.category or ""),
-            tostring(I18n.dynamic(pkg.category) or ""),
-            tostring(pkg.repo or ""),
-            tostring(I18n.dynamic(pkg.repo) or ""),
+            tostring(pkg.author or ""),
+            tostring(I18n.dynamic(pkg.author) or ""),
         }, " "):lower()
         if hay:find(query, 1, true) then
             table.insert(out, pkg)

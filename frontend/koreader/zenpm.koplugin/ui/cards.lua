@@ -127,7 +127,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local h = opts.height or m.card_h
     P.box(bb, x, y, w, h, { border = opts.border })
     local pad = opts.pad or Theme.scale(10)
-    local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(72), h - pad * 2)
+    local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(64), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)

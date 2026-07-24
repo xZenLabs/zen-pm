@@ -113,7 +113,7 @@ function App:new(plugin)
             show_readme_images = App.load_setting("show_readme_images", true),
             update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
-            filters = { search = "", categories = "", category = "" },
+            filters = { search = "", categories = "", category = "", source = "" },
             sorts = {
                 search = saved_sorts.search or "stars",
                 installed = saved_sorts.installed or "name_asc",
@@ -1907,7 +1907,7 @@ function App:show_source_details(name)
     self.state.repos = repos
     self.state.packages = packages
     self.state.current_repo = repo
-    self.state.visible_packages = self:sorted_packages("source", visible)
+    self.state.visible_packages = self:sorted_packages("source", Models.filter_packages(visible, self.state.filters.source))
     self:clear_status()
     self:refresh()
 end
@@ -2034,6 +2034,8 @@ function App:set_filter(kind, value)
         self:reset_scroll("categories")
     elseif kind == "category" and self.state.current_category then
         self:reset_scroll("category:" .. tostring(self.state.current_category.id))
+    elseif kind == "source" and self.state.current_repo then
+        self:reset_scroll("source:" .. tostring(self.state.current_repo.name))
     else
         self:reset_scroll("search")
     end
@@ -2041,6 +2043,8 @@ function App:set_filter(kind, value)
         self:show_categories()
     elseif kind == "category" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
+    elseif kind == "source" and self.state.current_repo then
+        self:show_source_details(self.state.current_repo.name)
     else
         self:show_search()
     end
@@ -2086,44 +2090,44 @@ function App:prompt_sort(kind)
         }
         if kind == "installed" then
             table.insert(rows, {
+                icon = "date",
                 text = _("Installed date (newest first)"),
                 checked_func = selected("installed_at_desc"),
                 callback = function() self:set_sort(kind, "installed_at_desc") end,
             })
             table.insert(rows, {
+                icon = "date",
                 text = _("Installed date (oldest first)"),
                 checked_func = selected("installed_at_asc"),
                 callback = function() self:set_sort(kind, "installed_at_asc") end,
             })
         end
-        Modals.actions(title, rows)
+        Modals.actions(title, rows, { show_cancel = false, align = "left" })
         return
     end
     local rows = {
         {
+            icon = "star",
             text = _("Stars"),
             checked_func = selected("stars"),
             callback = function() self:set_sort(kind, "stars") end,
         },
         {
+            icon = "sort_asc",
             text = _("Name"),
             checked_func = selected("name"),
             callback = function() self:set_sort(kind, "name") end,
         },
-        {
-            text = _("Source"),
-            checked_func = selected("repo"),
-            callback = function() self:set_sort(kind, "repo") end,
-        },
     }
     if kind == "search" then
         table.insert(rows, 2, {
-            text = _("Published date (newest first)"),
+            icon = "date",
+            text = _("Recently updated"),
             checked_func = selected("published_at_desc"),
             callback = function() self:set_sort(kind, "published_at_desc") end,
         })
     end
-    Modals.actions(title, rows)
+    Modals.actions(title, rows, { show_cancel = false, align = "left" })
 end
 
 function App:prompt_filter(kind)
@@ -2135,6 +2139,9 @@ function App:prompt_filter(kind)
     elseif kind == "category" then
         title = _("Search category")
         hint = _("Search category...")
+    elseif kind == "source" then
+        title = _("Search source")
+        hint = _("Search source...")
     end
     Modals.search(title, self.state.filters[kind] or "", hint, function(text)
         self:set_filter(kind, Util.trim(text))

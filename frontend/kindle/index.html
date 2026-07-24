@@ -153,6 +153,9 @@
             }
 
             function featuredImageURL(pkg) {
+                if (ZenUtils.isZenLabsRepoName(pkg.repo) || pkg.repo === ZenUtils.REPO_KINDLEFORGE_NAME) {
+                    return repoIcon(pkg);
+                }
                 var value = pkg.featured_image || pkg.icon_url || repoIcon(pkg);
                 ZenUtils.postLog("[home] featured image id=" + (pkg.id || "") + " value=" + value + " featured_image=" + (pkg.featured_image || "") + " icon_url=" + (pkg.icon_url || "") + " repo_icon_url=" + (pkg.repo_icon_url || ""));
                 return value;

@@ -11,7 +11,13 @@ package.preload["i18n"] = function()
         dynamic_or = function(value, fallback) return value or fallback end,
     }
 end
-package.preload["zenpm_util"] = function() return {} end
+package.preload["zenpm_util"] = function()
+    return {
+        trim = function(value)
+            return tostring(value or ""):gsub("^%s*(.-)%s*$", "%1")
+        end,
+    }
+end
 package.preload["gettext"] = function() return function(value) return value end end
 
 local Models = require("models")
@@ -46,6 +52,15 @@ local published = {
 }
 local recent = Models.sort_packages(published, "published_at_desc")
 assert(recent[1].id == "third" and recent[2].id == "second" and recent[3].id == "first")
+
+local searchable = {
+    { id = "title", name = "Title match", author = "Other", description = "No match" },
+    { id = "author", name = "Other", author = "Author match", description = "No match" },
+    { id = "description", name = "Other", author = "Other", description = "Description match" },
+}
+assert(#Models.filter_packages(searchable, "title match") == 1)
+assert(#Models.filter_packages(searchable, "author match") == 1)
+assert(#Models.filter_packages(searchable, "description match") == 0)
 
 local patch = Models.installed_patch_item({
     id = "patch", installed_asset_dates = { ["patch.lua"] = "2026-07-23T10:00:00Z" },
