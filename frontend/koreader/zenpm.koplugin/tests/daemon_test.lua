@@ -73,6 +73,9 @@ assert(changed and not prepare_err)
 local installed_backend = assert(io.open(no_wrapper:standalone_backend(), "rb"))
 installed_backend:close()
 
+changed, prepare_err = no_wrapper:ensure_backend_files()
+assert(not changed and not prepare_err)
+
 os.remove(source_path)
 os.remove(no_wrapper:standalone_backend())
 os.remove(no_wrapper:standalone_backend_dir() .. "/VERSION")

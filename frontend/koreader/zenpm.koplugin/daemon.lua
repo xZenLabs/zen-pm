@@ -674,7 +674,7 @@ function Daemon:ensure_backend_files()
             os.execute("chmod +x " .. Util.sh_quote(backend_dir .. "/" .. basename(companion)))
         end
         if not self:install_cli_wrapper() then
-            return false, _("Could not install the ZenPM command-line wrapper.")
+            self:log_cli("continuing without the optional command-line wrapper")
         end
         self.backend_path = backend
         return false, nil
