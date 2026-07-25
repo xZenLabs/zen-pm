@@ -4,7 +4,12 @@ Download the required files from the [ZenPM releases page](https://github.com/xZ
 
 ## Kindle standalone
 
-This install requires a jailbroken Kindle with the latest hotfix
+> **Warning:** Install the standalone package only on older Kindle jailbreaks
+> that provide root access, such as WinterBreak and AdBreak. Do not install it
+> on newer jailbreaks or any setup without root access.
+
+This install also requires the latest hotfix, the device's `sqlite3` binary,
+and a script launcher such as KUAL.
 
 ### Hotfix update/reinstall
 Reinstallation steps:

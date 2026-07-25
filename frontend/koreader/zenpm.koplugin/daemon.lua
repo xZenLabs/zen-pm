@@ -170,6 +170,41 @@ function Daemon:detect_platform()
     return self.platform
 end
 
+local function version_is_newer(version, maximum)
+    local version_parts = {}
+    local maximum_parts = {}
+    for part in tostring(version or ""):gmatch("%d+") do
+        table.insert(version_parts, tonumber(part))
+    end
+    for part in tostring(maximum or ""):gmatch("%d+") do
+        table.insert(maximum_parts, tonumber(part))
+    end
+    if #version_parts < 3 or #maximum_parts < 3 then
+        return false
+    end
+    local count = math.max(#version_parts, #maximum_parts)
+    for index = 1, count do
+        local left = version_parts[index] or 0
+        local right = maximum_parts[index] or 0
+        if left ~= right then
+            return left > right
+        end
+    end
+    return false
+end
+
+function Daemon:kindle_firmware_version()
+    if self:detect_platform() ~= "kindle" then
+        return nil
+    end
+    return read_text("/etc/version.txt"):match("(%d+%.%d+%.%d+[%d%.]*)")
+end
+
+function Daemon:kindle_homepage_install_supported()
+    local version = self:kindle_firmware_version()
+    return not version_is_newer(version, "5.18.3")
+end
+
 function Daemon:is_android()
     return ok_android and android ~= nil
 end
@@ -446,10 +481,11 @@ function Daemon:backend_not_started_error()
 end
 
 function Daemon:wait_for_loopback()
-    if self:detect_platform() ~= "kobo" then
+    local platform = self:detect_platform()
+    if platform ~= "kobo" and platform ~= "ereader" then
         return true
     end
-    -- Kobo can launch KOReader before loopback has been configured.
+    -- Some e-readers can launch KOReader before loopback has been configured.
     os.execute("ifconfig lo 127.0.0.1 >/dev/null 2>&1")
     for attempt = 1, 20 do
         local probe = socket.tcp()
@@ -462,7 +498,7 @@ function Daemon:wait_for_loopback()
         end
         socket.sleep(0.5)
     end
-    return false, _("Kobo network is not ready. Please wait a moment and try again.")
+    return false, _("Local network is not ready. Please wait a moment and try again.")
 end
 
 -- uname output never changes within a session; cache the two reads on self.

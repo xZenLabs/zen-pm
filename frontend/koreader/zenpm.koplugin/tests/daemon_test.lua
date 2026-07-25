@@ -23,6 +23,13 @@ daemon.write_cli_wrapper = function(_, path, script)
     return true
 end
 
+daemon.kindle_firmware_version = function() return "5.18.3" end
+assert(daemon:kindle_homepage_install_supported())
+daemon.kindle_firmware_version = function() return "5.18.3.1" end
+assert(not daemon:kindle_homepage_install_supported())
+daemon.kindle_firmware_version = function() return "5.19.0" end
+assert(not daemon:kindle_homepage_install_supported())
+
 assert(daemon:install_cli_wrapper())
 local wrapper = assert(wrappers["/usr/local/bin/zenpm"])
 assert(wrapper:find("export ZENPM_HOME='/mnt/us/koreader/settings/ZenPM'", 1, true))
@@ -43,6 +50,27 @@ ereader.plugin_version = function() return "1.2.3" end
 
 assert(ereader:expected_plugin_asset() == "ZenPM-koreader-ereader-1.2.3.zip")
 assert(ereader:bundled_backend_candidates()[1] == "/mnt/us/koreader/plugins/zenpm.koplugin/backend/zenpm-hf")
+
+local socket = require("socket")
+local original_tcp = socket.tcp
+local original_execute = os.execute
+local loopback_commands = {}
+local probe_closed = false
+socket.tcp = function()
+    return {
+        bind = function(_, host) return host == "127.0.0.1" end,
+        close = function() probe_closed = true end,
+    }
+end
+os.execute = function(command)
+    table.insert(loopback_commands, command)
+    return 0
+end
+assert(ereader:wait_for_loopback())
+socket.tcp = original_tcp
+os.execute = original_execute
+assert(probe_closed)
+assert(loopback_commands[1] == "ifconfig lo 127.0.0.1 >/dev/null 2>&1")
 
 constants.PLUGIN_DIR = "/mnt/ext1/applications/koreader/plugins-user/zenpm.koplugin"
 local user_plugin = Daemon:new()
@@ -83,7 +111,6 @@ os.remove(no_wrapper:standalone_marker())
 os.execute("rmdir " .. no_wrapper:standalone_backend_dir())
 
 local commands = {}
-local original_execute = os.execute
 local original_remove = os.remove
 os.execute = function(command)
     table.insert(commands, command)

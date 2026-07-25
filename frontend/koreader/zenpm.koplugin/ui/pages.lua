@@ -300,7 +300,7 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             end,
         },
     }
-    if view.app.daemon:detect_platform() == "kindle" then
+    if view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
         table.insert(rows, 2, {
             text = _("Install to Kindle homepage"),
             callback = function() view.app:install_to_kindle_homepage() end,
