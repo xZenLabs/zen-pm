@@ -691,7 +691,7 @@ function Daemon:ensure_backend_files()
     write_text(self:standalone_backend_dir() .. "/VERSION", self:bundled_backend_version() .. "\n")
     write_text(self:standalone_marker(), marker)
     if not self:install_cli_wrapper() then
-        return false, _("Could not install the ZenPM command-line wrapper.")
+        self:log_cli("continuing without the optional command-line wrapper")
     end
     self.backend_path = backend
     self:stop_standalone_backend()

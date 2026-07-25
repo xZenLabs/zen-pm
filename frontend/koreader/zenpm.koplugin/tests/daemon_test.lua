@@ -44,6 +44,33 @@ ereader.plugin_version = function() return "1.2.3" end
 assert(ereader:expected_plugin_asset() == "ZenPM-koreader-ereader-1.2.3.zip")
 assert(ereader:bundled_backend_candidates()[1] == "/mnt/us/koreader/plugins/zenpm.koplugin/backend/zenpm-hf")
 
+local source_path = os.tmpname()
+local source_file = assert(io.open(source_path, "wb"))
+source_file:write("backend")
+source_file:close()
+
+local no_wrapper = Daemon:new()
+no_wrapper.ensure_runtime_dirs = function() return false, nil end
+no_wrapper.bundled_backend = function() return source_path end
+no_wrapper.standalone_backend_dir = function() return source_path .. ".backend" end
+no_wrapper.bundled_backend_version = function() return "1.2.3" end
+no_wrapper.desired_marker = function() return "marker\n" end
+no_wrapper.bundled_backend_companions = function() return {} end
+no_wrapper.install_cli_wrapper = function() return false end
+no_wrapper.log_cli = function() end
+no_wrapper.stop_standalone_backend = function() end
+
+local changed, prepare_err = no_wrapper:ensure_backend_files()
+assert(changed and not prepare_err)
+local installed_backend = assert(io.open(no_wrapper:standalone_backend(), "rb"))
+installed_backend:close()
+
+os.remove(source_path)
+os.remove(no_wrapper:standalone_backend())
+os.remove(no_wrapper:standalone_backend_dir() .. "/VERSION")
+os.remove(no_wrapper:standalone_marker())
+os.execute("rmdir " .. no_wrapper:standalone_backend_dir())
+
 local commands = {}
 local original_execute = os.execute
 local original_remove = os.remove
