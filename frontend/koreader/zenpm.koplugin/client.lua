@@ -10,6 +10,7 @@ local ok_https, https = pcall(require, "ssl.https")
 local ok_socketutil, socketutil = pcall(require, "socketutil")
 local ok_logger, logger = pcall(require, "logger")
 local ok_android = pcall(require, "android")
+local ok_device, Device = pcall(require, "device")
 
 local Client = {}
 local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
@@ -60,9 +61,26 @@ end
 
 function Client:new(opts)
     opts = opts or {}
+    local unix_socket = opts.unix_socket_path
+    if unix_socket == nil and ok_device and Device and type(Device.isPocketBook) == "function" then
+        local ok, is_pocketbook = pcall(Device.isPocketBook, Device)
+        if ok and is_pocketbook then
+            unix_socket = Constants.POCKETBOOK_SOCKET
+        end
+    end
     local o = {
         base_url = opts.base_url or Constants.API_BASE,
+        unix_socket = unix_socket,
+        unix_http = opts.unix_http,
     }
+    if o.unix_socket and not o.unix_http then
+        local ok, transport = pcall(dofile, Constants.PLUGIN_DIR .. "/unix_http.lua")
+        if ok then
+            o.unix_http = transport
+        else
+            o.unix_http_error = transport
+        end
+    end
     setmetatable(o, self)
     self.__index = self
     return o
@@ -76,6 +94,7 @@ function Client:build_url(path)
 end
 
 function Client:request(method, path, body, timeout)
+    local backend_path = not tostring(path or ""):match("^https?://")
     local url = self:build_url(path)
     local started_at = socket.gettime()
     if ok_logger and logger and logger.info then
@@ -85,47 +104,64 @@ function Client:request(method, path, body, timeout)
     local headers = {
         ["Accept"] = "application/json, text/plain, */*",
     }
-    local source
     local body_json
 
     if body ~= nil then
         body_json = JSON.encode(body)
         headers["Content-Type"] = "application/json"
         headers["Content-Length"] = tostring(#body_json)
-        source = ltn12.source.string(body_json)
     end
 
-    local request = {
-        url = url,
-        method = method,
-        headers = headers,
-        sink = ltn12.sink.table(sink),
-        source = source,
-    }
-
-    local requester = http
-    if url:match("^https://") then
-        if not ok_https then
-            local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
+    local code, resp_headers, status
+    local text
+    if self.unix_socket and backend_path then
+        if not self.unix_http then
+            local err = connection_error(url, self.unix_http_error or _("Unix socket support is unavailable."))
             log_request(method, url, started_at, err)
             return false, err
         end
-        requester = https
+        local response_body
+        code, resp_headers, response_body, status = self.unix_http.request(
+            self.unix_socket,
+            method,
+            path,
+            body_json,
+            timeout and timeout.total or UI_TOTAL_TIMEOUT_SECONDS,
+            headers["Accept"])
+        text = response_body or ""
+    else
+        local request = {
+            url = url,
+            method = method,
+            headers = headers,
+            sink = ltn12.sink.table(sink),
+            source = body_json and ltn12.source.string(body_json) or nil,
+        }
+
+        local requester = http
+        if url:match("^https://") then
+            if not ok_https then
+                local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
+                log_request(method, url, started_at, err)
+                return false, err
+            end
+            requester = https
+        end
+
+        if ok_socketutil then
+            socketutil:set_timeout(
+                timeout and timeout.block or UI_BLOCK_TIMEOUT_SECONDS,
+                timeout and timeout.total or UI_TOTAL_TIMEOUT_SECONDS)
+        end
+
+        code, resp_headers, status = socket.skip(1, requester.request(request))
+
+        if ok_socketutil then
+            socketutil:reset_timeout()
+        end
+        text = table.concat(sink)
     end
 
-    if ok_socketutil then
-        socketutil:set_timeout(
-            timeout and timeout.block or UI_BLOCK_TIMEOUT_SECONDS,
-            timeout and timeout.total or UI_TOTAL_TIMEOUT_SECONDS)
-    end
-
-    local code, resp_headers, status = socket.skip(1, requester.request(request))
-
-    if ok_socketutil then
-        socketutil:reset_timeout()
-    end
-
-    local text = table.concat(sink)
     local numeric_code = tonumber(code)
     if not numeric_code then
         local err = connection_error(url, code or status or _("network error"))
@@ -153,39 +189,59 @@ function Client:request(method, path, body, timeout)
 end
 
 function Client:download(path)
+    local backend_path = not tostring(path or ""):match("^https?://")
     local url = self:build_url(path)
     local started_at = socket.gettime()
     if ok_logger and logger and logger.info then
         logger.info("ZenPM HTTP GET " .. url .. " started")
     end
     local sink = {}
-    local request = {
-        url = url,
-        method = "GET",
-        headers = {
-            ["Accept"] = "image/svg+xml,image/png,image/jpeg,image/gif,*/*",
-        },
-        sink = ltn12.sink.table(sink),
-    }
-
-    local requester = http
-    if url:match("^https://") then
-        if not ok_https then
-            local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
+    local accept = "image/svg+xml,image/png,image/jpeg,image/gif,*/*"
+    local code, resp_headers, status
+    local response_body
+    if self.unix_socket and backend_path then
+        if not self.unix_http then
+            local err = connection_error(url, self.unix_http_error or _("Unix socket support is unavailable."))
             log_request("GET", url, started_at, err)
             return false, err
         end
-        requester = https
-    end
+        code, resp_headers, response_body, status = self.unix_http.request(
+            self.unix_socket,
+            "GET",
+            path,
+            nil,
+            UI_TOTAL_TIMEOUT_SECONDS,
+            accept)
+    else
+        local request = {
+            url = url,
+            method = "GET",
+            headers = {
+                ["Accept"] = accept,
+            },
+            sink = ltn12.sink.table(sink),
+        }
 
-    if ok_socketutil then
-        socketutil:set_timeout(UI_BLOCK_TIMEOUT_SECONDS, UI_TOTAL_TIMEOUT_SECONDS)
-    end
+        local requester = http
+        if url:match("^https://") then
+            if not ok_https then
+                local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
+                log_request("GET", url, started_at, err)
+                return false, err
+            end
+            requester = https
+        end
 
-    local code, resp_headers, status = socket.skip(1, requester.request(request))
+        if ok_socketutil then
+            socketutil:set_timeout(UI_BLOCK_TIMEOUT_SECONDS, UI_TOTAL_TIMEOUT_SECONDS)
+        end
 
-    if ok_socketutil then
-        socketutil:reset_timeout()
+        code, resp_headers, status = socket.skip(1, requester.request(request))
+
+        if ok_socketutil then
+            socketutil:reset_timeout()
+        end
+        response_body = table.concat(sink)
     end
 
     local numeric_code = tonumber(code)
@@ -200,7 +256,7 @@ function Client:download(path)
         return false, err, numeric_code, resp_headers
     end
     log_request("GET", url, started_at, "HTTP " .. numeric_code)
-    return true, table.concat(sink), numeric_code, resp_headers
+    return true, response_body or "", numeric_code, resp_headers
 end
 
 function Client:health()

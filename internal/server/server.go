@@ -27,11 +27,12 @@ var Version = "dev"
 
 // Server is the ZenPM HTTP API server.
 type Server struct {
-	st        *state.State
-	repos     *repo.Manager
-	pkgs      *pkg.Manager
-	port      int
-	StartedAt time.Time
+	st         *state.State
+	repos      *repo.Manager
+	pkgs       *pkg.Manager
+	port       int
+	unixSocket bool
+	StartedAt  time.Time
 }
 
 type pkgJSON struct {
@@ -82,6 +83,32 @@ func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Ser
 }
 
 func (s *Server) ListenAndServe() error {
+	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
+	return s.listenAndServe(addr, func() (net.Listener, error) {
+		return s.listen(addr)
+	})
+}
+
+func (s *Server) ListenAndServeUnix(path string) error {
+	s.unixSocket = true
+	bound := false
+	err := s.listenAndServe("unix:"+path, func() (net.Listener, error) {
+		ln, listenErr := s.listenUnix(path)
+		if listenErr == nil {
+			bound = true
+		}
+		return ln, listenErr
+	})
+	if errors.Is(err, errServerAlreadyRunning) {
+		return nil
+	}
+	if bound {
+		_ = os.Remove(path)
+	}
+	return err
+}
+
+func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) error {
 	state.StartupTrace("HTTP server: configuring routes.")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.wrap(s.handleHealth))
@@ -122,9 +149,8 @@ func (s *Server) ListenAndServe() error {
 	// repo manifests itself: refresh once a day for long-running daemons.
 	go s.periodicRefresh()
 
-	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 	state.StartupTrace("HTTP server: binding " + addr + ".")
-	ln, err := s.listen(addr)
+	ln, err := bind()
 	if err != nil {
 		return err
 	}
@@ -136,6 +162,8 @@ func (s *Server) ListenAndServe() error {
 	}
 	return http.Serve(ln, mux)
 }
+
+var errServerAlreadyRunning = errors.New("ZenPM server already running")
 
 // listen binds addr, resolving the two racy port-conflict cases that arise when
 // the native installer daemon and the KOReader plugin both target port 8080:
@@ -163,6 +191,39 @@ func (s *Server) listen(addr string) (net.Listener, error) {
 		log.Infof("Port %s busy but no healthy daemon — retrying bind (%d/%d)", addr, i+1, attempts)
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+func (s *Server) listenUnix(path string) (net.Listener, error) {
+	if path == "" {
+		return nil, errors.New("Unix socket path is empty")
+	}
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSocket == 0 {
+			return nil, fmt.Errorf("listen unix:%s: existing path is not a socket", path)
+		}
+		conn, dialErr := net.DialTimeout("unix", path, 200*time.Millisecond)
+		if dialErr == nil {
+			conn.Close()
+			log.Infof("ZenPM already running on unix:%s — this instance exiting", path)
+			return nil, errServerAlreadyRunning
+		}
+		if err := os.Remove(path); err != nil {
+			return nil, fmt.Errorf("remove stale Unix socket %s: %w", path, err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("inspect Unix socket %s: %w", path, err)
+	}
+
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, fmt.Errorf("listen unix:%s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		ln.Close()
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("secure Unix socket %s: %w", path, err)
+	}
+	return ln, nil
 }
 
 // daemonAlreadyRunning probes /health to confirm a live ZenPM daemon owns addr,
@@ -236,7 +297,7 @@ func (rec *responseRecorder) WriteHeader(code int) {
 	rec.ResponseWriter.WriteHeader(code)
 }
 
-// wrap adds CORS headers, enforces loopback-only access, and logs every request.
+// wrap adds CORS headers, enforces local-only access, and logs every request.
 func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -246,10 +307,12 @@ func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		host, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if host != "127.0.0.1" && host != "::1" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
+		if !s.unixSocket {
+			host, _, _ := net.SplitHostPort(r.RemoteAddr)
+			if host != "127.0.0.1" && host != "::1" {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 		}
 		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		h(rec, r)

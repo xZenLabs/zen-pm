@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,37 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
+
+func TestListenUnixBindsSocket(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zenpm.sock")
+	srv := &Server{}
+	ln, err := srv.listenUnix(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	conn, err := net.DialTimeout("unix", path, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+}
+
+func TestWrapAllowsUnixSocketRequest(t *testing.T) {
+	srv := &Server{unixSocket: true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.RemoteAddr = "@"
+
+	srv.wrap(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
 
 func TestInitialCatalogStateRefreshesEmptySQLiteCatalog(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")

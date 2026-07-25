@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -35,6 +37,38 @@ func TestCacheInstalledUninstallScriptsSkipsNativeKOReaderPackages(t *testing.T)
 	}
 	if _, err := os.Stat(st.CachedUninstallScriptPath("reader-plugin")); !os.IsNotExist(err) {
 		t.Fatalf("cached uninstall script exists or could not be checked: %v", err)
+	}
+}
+
+func TestRefreshKeepsCatalogWhenRepositoriesAreUnavailable(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{
+		Name: "offline", URL: "file://" + filepath.Join(t.TempDir(), "missing"), Priority: 10,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "cached", Name: "Cached", Version: "1.0.0", Repo: "offline", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	err = New(st).Refresh()
+	if err == nil {
+		t.Fatal("Refresh() succeeded with no reachable repositories")
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog) != 1 || catalog[0].ID != "cached" {
+		t.Fatalf("catalog after failed refresh = %#v, want cached entry", catalog)
 	}
 }
 
@@ -152,6 +186,25 @@ func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
 		t.Fatalf("manifest requests = %d, want 0", got)
 	}
 	assertEntryIDs(t, entries, []string{"notebook"})
+}
+
+func TestFetchCatalogIncludesHTTPFailureDetail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("User-Agent"); got != "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)" {
+			t.Errorf("User-Agent = %q", got)
+		}
+		if got := r.Header.Get("Accept"); got != "application/json, text/plain, */*" {
+			t.Errorf("Accept = %q", got)
+		}
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("blocked by test WAF"))
+	}))
+	defer srv.Close()
+
+	_, err := FetchCatalog("blocked", srv.URL, 10, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "blocked by test WAF") {
+		t.Fatalf("FetchCatalog() error = %v, want HTTP failure detail", err)
+	}
 }
 
 func TestCatalogSourceAssetRoundTrip(t *testing.T) {

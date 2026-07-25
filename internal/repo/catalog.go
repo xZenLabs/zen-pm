@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -724,12 +725,29 @@ func fetchBytes(url string) ([]byte, error) {
 		return os.ReadFile(strings.TrimPrefix(url, "file://"))
 	}
 	client := cabundle.Client(30 * time.Second)
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		detail := strings.Join(strings.Fields(string(body)), " ")
+		if len(detail) > 400 {
+			detail = detail[:400] + "..."
+		}
+		requestID := resp.Header.Get("CF-RAY")
+		log.Warnf("HTTP GET %s: status=%d protocol=%s server=%q cf_ray=%q body=%q",
+			url, resp.StatusCode, resp.Proto, resp.Header.Get("Server"), requestID, detail)
+		if detail != "" {
+			return nil, fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, url, detail)
+		}
 		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
 	return io.ReadAll(resp.Body)

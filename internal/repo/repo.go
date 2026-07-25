@@ -81,16 +81,32 @@ func (m *Manager) Refresh() error {
 	if len(repos) == 0 {
 		return fmt.Errorf("no repositories configured")
 	}
+	previous, err := m.ReadCatalog()
+	if err != nil {
+		previous = nil
+	}
 	var all []*CatalogEntry
+	failed := make(map[string]bool)
+	var failures []string
 	for _, r := range repos {
 		log.Infof("Refreshing repo %s from %s", r.Name, r.URL)
 		entries, err := FetchCatalog(r.Name, r.URL, r.Priority, m.st.CacheDir)
 		if err != nil {
 			log.Warnf("Repo %s: %v", r.Name, err)
+			failed[r.Name] = true
+			failures = append(failures, r.Name+": "+err.Error())
 			continue
 		}
 		log.Infof("Repo %s: %d packages", r.Name, len(entries))
 		all = append(all, entries...)
+	}
+	for _, entry := range previous {
+		if entry != nil && failed[entry.Repo] {
+			all = append(all, entry)
+		}
+	}
+	if len(all) == 0 && len(failures) > 0 {
+		return fmt.Errorf("no repositories could be refreshed: %s", strings.Join(failures, "; "))
 	}
 	merged := MergeCatalogs(all)
 	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
@@ -102,6 +118,9 @@ func (m *Manager) Refresh() error {
 	m.CacheInstalledUninstallScripts(merged)
 	m.touchRefreshMarker()
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
+	if len(failures) > 0 {
+		return fmt.Errorf("catalog refreshed with cached packages for unavailable repositories: %s", strings.Join(failures, "; "))
+	}
 	return nil
 }
 

@@ -77,7 +77,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  update  [id]")
 	fmt.Fprintln(os.Stderr, "  doctor")
 	fmt.Fprintln(os.Stderr, "  logs    [--tail N]")
-	fmt.Fprintln(os.Stderr, "  serve   [--port PORT]")
+	fmt.Fprintln(os.Stderr, "  serve   [--port PORT] [--socket PATH]")
 	fmt.Fprintln(os.Stderr, "  maintenance update|uninstall [--parent-pid PID] [--remove-settings]")
 }
 
@@ -288,14 +288,22 @@ func runLogs(st *state.State, args []string) {
 
 func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, startedAt time.Time, args []string) {
 	port := 8080
+	socketPath := ""
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	fs.IntVar(&port, "port", 8080, "port to bind on 127.0.0.1")
+	fs.StringVar(&socketPath, "socket", "", "Unix socket path (instead of TCP)")
 	fs.Parse(args)
 
 	server.Version = version
 	srv := server.New(st, repos, pkgs, port)
 	srv.StartedAt = startedAt
-	if err := srv.ListenAndServe(); err != nil {
+	var err error
+	if socketPath != "" {
+		err = srv.ListenAndServeUnix(socketPath)
+	} else {
+		err = srv.ListenAndServe()
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 		os.Exit(1)
 	}

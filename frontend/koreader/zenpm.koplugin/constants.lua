@@ -5,6 +5,7 @@ return {
     ASSET_DIR = plugin_dir .. "/assets",
 
     API_BASE = "http://127.0.0.1:8080",
+    POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
 
     REPO_ZENLABS_NAME = "ZenLabs",
     REPO_ZENLABS_DISPLAY = "ZenLabs Repo",

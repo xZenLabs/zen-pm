@@ -501,10 +501,10 @@ end
 
 function Daemon:wait_for_loopback()
     local platform = self:detect_platform()
-    if platform ~= "kobo" and not self:is_pocketbook() then
+    if platform ~= "kobo" then
         return true
     end
-    -- Kobo and PocketBook can launch KOReader before loopback is configured.
+    -- Kobo can launch KOReader before loopback is configured.
     os.execute("ifconfig lo 127.0.0.1 >/dev/null 2>&1")
     for _ = 1, 20 do
         if self:loopback_ready() then
@@ -665,8 +665,10 @@ function Daemon:stop_standalone_backend()
         os.execute("kill " .. pid .. " >/dev/null 2>&1")
     end
     os.execute("pkill -f " .. Util.sh_quote(self:standalone_backend() .. " serve --port 8080") .. " >/dev/null 2>&1")
+    os.execute("pkill -f " .. Util.sh_quote(self:standalone_backend() .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
     for _, candidate in ipairs(self:bundled_backend_candidates()) do
         os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --port 8080") .. " >/dev/null 2>&1")
+        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
     end
     socket.sleep(0.8)
 end
@@ -675,6 +677,7 @@ function Daemon:stop_known_backends()
     self:stop_standalone_backend()
     for _, candidate in ipairs(self:candidate_backends()) do
         os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --port 8080") .. " >/dev/null 2>&1")
+        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
     end
     socket.sleep(0.8)
 end
@@ -823,13 +826,19 @@ function Daemon:start(prepared)
                 return true
             end
         end
+        -- Some Android builds decline custom-scheme links from KOReader. Start
+        -- the exported activity explicitly first so it can start its own
+        -- foreground service while it is in the foreground.
+        local uri = "zenpm://start?home=" .. uri_escape(self:state_home())
+            .. "&root=" .. uri_escape(root)
+        local activity_args = " -W -n org.zenlabs.zenpm/.ZenPMActivity"
+            .. " -a android.intent.action.VIEW -d " .. Util.sh_quote(uri)
         local service_args = " -n org.zenlabs.zenpm/.ZenPMService"
-            .. " --es zenpm_home " .. Util.sh_quote(self:state_home())
+            .. " --es zenpm_log_home " .. Util.sh_quote(self:state_home())
             .. " --es koreader_root " .. Util.sh_quote(root)
-        -- Android 8+ rejects a background-service start once KOReader is not
-        -- foreground. Fall back to the old command only for older Android.
-        local cmd = "( /system/bin/am start-foreground-service" .. service_args
-            .. " >/dev/null 2>&1 || /system/bin/am startservice" .. service_args
+        local cmd = "( /system/bin/am start" .. activity_args
+            .. " || /system/bin/am start-foreground-service" .. service_args
+            .. " || /system/bin/am startservice" .. service_args
             .. " ) </dev/null >>" .. Util.sh_quote(companion_log) .. " 2>&1"
         if os.execute(cmd) ~= 0 then
             return false, _("ZenPM Android companion is not installed or could not start. See ") .. companion_log
@@ -883,12 +892,16 @@ function Daemon:start(prepared)
     self:log_cli("starting backend " .. backend
         .. " platform=" .. platform
         .. " abi=" .. self:ereader_backend_suffix())
+    local serve_args = " serve --port 8080"
+    if self:is_pocketbook() then
+        serve_args = " serve --socket " .. Util.sh_quote(Constants.POCKETBOOK_SOCKET)
+    end
     -- Some Android e-reader shells do not provide nohup. Ignore SIGHUP with
     -- POSIX shell built-ins instead, while keeping the daemon detached from
     -- KOReader's stdout/stderr.
     local cmd = "( trap '' HUP; " .. env
         .. " exec " .. Util.sh_quote(backend)
-        .. " serve --port 8080 >>" .. Util.sh_quote(log_path)
+        .. serve_args .. " >>" .. Util.sh_quote(log_path)
         .. " 2>&1 ) &"
     if write_pid then
         cmd = cmd .. " echo $! >" .. Util.sh_quote(self:standalone_pid_file())

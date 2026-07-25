@@ -4,7 +4,10 @@ package.path = root .. "/?.lua;" .. package.path
 
 package.preload["socket"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
-local constants = { PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin" }
+local constants = {
+    PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin",
+    POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
+}
 package.preload["constants"] = function() return constants end
 local datastorage = {
     getSettingsDir = function() return "./settings" end,
@@ -72,12 +75,8 @@ pocketbook.detect_platform = function() return "ereader" end
 pocketbook.is_pocketbook = function() return true end
 pocketbook.detect_abi = function() return "hf" end
 assert(pocketbook:ereader_backend_suffix() == "sf")
-local probe_closed = false
 socket.tcp = function()
-    return {
-        bind = function(_, host) return host == "127.0.0.1" end,
-        close = function() probe_closed = true end,
-    }
+    error("PocketBook should not probe TCP loopback")
 end
 os.execute = function(command)
     table.insert(loopback_commands, command)
@@ -86,8 +85,7 @@ end
 assert(pocketbook:wait_for_loopback())
 socket.tcp = original_tcp
 os.execute = original_execute
-assert(probe_closed)
-assert(loopback_commands[1] == "ifconfig lo 127.0.0.1 >/dev/null 2>&1")
+assert(#loopback_commands == 0)
 
 constants.PLUGIN_DIR = "/mnt/ext1/applications/koreader/plugins-user/zenpm.koplugin"
 local user_plugin = Daemon:new()
@@ -138,7 +136,7 @@ end
 assert(pocketbook_backend:start(true))
 os.execute = saved_execute
 assert(#start_commands == 1)
-assert(start_commands[1]:find("exec '" .. source_path .. "' serve --port 8080", 1, true))
+assert(start_commands[1]:find("exec '" .. source_path .. "' serve --socket '/tmp/zenpm.sock'", 1, true))
 assert(start_commands[1]:find("ZENPM_HOME='./settings/ZenPM'", 1, true))
 assert(start_logs[1]:find("starting backend " .. source_path, 1, true))
 assert(start_logs[1]:find("abi=sf", 1, true))
@@ -186,5 +184,28 @@ os.remove = original_remove
 assert(table.concat(commands, "\n"):find("rm %-rf '/mnt/us/ZenPM'"))
 assert(table.concat(commands, "\n"):find("rm %-rf '/mnt/us/%.ZenPM'"))
 assert(table.concat(commands, "\n"):find("remove /mnt/us/documents/ZenPM.sh", 1, true))
+
+package.loaded["daemon"] = nil
+package.preload["android"] = function()
+    return {
+        getExternalStoragePath = function() return "/storage/emulated/0" end,
+        openLink = function() return false end,
+    }
+end
+local AndroidDaemon = require("daemon")
+local android_daemon = AndroidDaemon:new()
+android_daemon.state_home = function() return "/storage/emulated/0/ZenPM" end
+android_daemon.koreader_root = function() return "/storage/emulated/0/koreader" end
+local android_commands = {}
+os.execute = function(command)
+    table.insert(android_commands, command)
+    return 0
+end
+assert(android_daemon:start(true))
+os.execute = original_execute
+assert(#android_commands == 1)
+local android_command = android_commands[1]
+assert(android_command:find("/system/bin/am start -W -n org.zenlabs.zenpm/.ZenPMActivity -a android.intent.action.VIEW -d 'zenpm://start?home=%2Fstorage%2Femulated%2F0%2FZenPM&root=%2Fstorage%2Femulated%2F0%2Fkoreader'", 1, true))
+assert(android_command:find("--es zenpm_log_home '/storage/emulated/0/ZenPM'", 1, true))
 
 print("daemon tests passed")
