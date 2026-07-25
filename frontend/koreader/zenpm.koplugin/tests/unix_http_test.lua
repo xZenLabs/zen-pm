@@ -2,6 +2,7 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
 
 local UnixHTTP = dofile(root .. "/unix_http.lua")
+assert(UnixHTTP.AF_UNIX == 1)
 
 local status, headers, body = UnixHTTP.parse_response(
     "HTTP/1.0 200 OK\r\n"

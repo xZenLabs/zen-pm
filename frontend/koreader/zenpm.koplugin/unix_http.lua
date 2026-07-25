@@ -1,4 +1,8 @@
-local UnixHTTP = {}
+local UnixHTTP = {
+    -- AF_UNIX is fixed by the Linux userspace ABI. Older KOReader FFI headers
+    -- do not declare the constant even though they expose Unix socket calls.
+    AF_UNIX = 1,
+}
 
 function UnixHTTP.parse_response(raw)
     if type(raw) ~= "string" then
@@ -58,7 +62,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
         return tonumber(clock.tv_sec) + tonumber(clock.tv_usec) / 1000000
     end
 
-    local fd = C.socket(C.AF_UNIX, 1, 0) -- SOCK_STREAM is 1 on PocketBook Linux.
+    local fd = C.socket(UnixHTTP.AF_UNIX, 1, 0) -- SOCK_STREAM is 1 on PocketBook Linux.
     if fd < 0 then
         return nil, nil, nil, "socket: " .. strerror()
     end
@@ -69,7 +73,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
         if #socket_path >= path_capacity then
             error("Unix socket path is too long")
         end
-        address.sun_family = C.AF_UNIX
+        address.sun_family = UnixHTTP.AF_UNIX
         ffi.copy(address.sun_path, socket_path)
         if C.connect(fd, ffi.cast("const struct sockaddr *", address), ffi.sizeof(address)) ~= 0 then
             error("connect: " .. strerror())
