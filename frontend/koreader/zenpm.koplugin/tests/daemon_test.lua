@@ -4,13 +4,13 @@ package.path = root .. "/?.lua;" .. package.path
 
 package.preload["socket"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
-package.preload["constants"] = function() return { PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin" } end
-package.preload["datastorage"] = function()
-    return {
-        getSettingsDir = function() return "./settings" end,
-        getFullDataDir = function() return "/mnt/us/koreader" end,
-    }
-end
+local constants = { PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin" }
+package.preload["constants"] = function() return constants end
+local datastorage = {
+    getSettingsDir = function() return "./settings" end,
+    getFullDataDir = function() return "/mnt/us/koreader" end,
+}
+package.preload["datastorage"] = function() return datastorage end
 
 local Daemon = require("daemon")
 local daemon = Daemon:new()
@@ -43,6 +43,14 @@ ereader.plugin_version = function() return "1.2.3" end
 
 assert(ereader:expected_plugin_asset() == "ZenPM-koreader-ereader-1.2.3.zip")
 assert(ereader:bundled_backend_candidates()[1] == "/mnt/us/koreader/plugins/zenpm.koplugin/backend/zenpm-hf")
+
+constants.PLUGIN_DIR = "/mnt/ext1/applications/koreader/plugins-user/zenpm.koplugin"
+local user_plugin = Daemon:new()
+assert(user_plugin:koreader_plugin_dir() == "/mnt/ext1/applications/koreader/plugins-user")
+datastorage.getFullDataDir = function() return "" end
+assert(user_plugin:koreader_data_dir() == "/mnt/ext1/applications/koreader")
+datastorage.getFullDataDir = function() return "/mnt/us/koreader" end
+constants.PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin"
 
 local source_path = os.tmpname()
 local source_file = assert(io.open(source_path, "wb"))

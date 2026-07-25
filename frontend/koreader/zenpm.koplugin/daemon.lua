@@ -253,11 +253,18 @@ function Daemon:koreader_data_dir()
             return data_dir
         end
     end
-    local root = tostring(Constants.PLUGIN_DIR or ""):match("^(.*)/plugins/[^/]+$")
+    local plugin_dir = tostring(Constants.PLUGIN_DIR or "")
+    local root = plugin_dir:match("^(.*)/plugins%-user/[^/]+$")
+        or plugin_dir:match("^(.*)/plugins/[^/]+$")
     return root or ""
 end
 
 function Daemon:koreader_plugin_dir()
+    local plugin_dir = tostring(Constants.PLUGIN_DIR or "")
+    local parent = plugin_dir:match("^(.*)/[^/]+$")
+    if parent and parent ~= "" then
+        return parent
+    end
     return self:koreader_data_dir() .. "/plugins"
 end
 
