@@ -66,7 +66,9 @@ public final class ZenPMService extends Service {
                 nativeStart(home, logHome, root == null ? "" : root, 8080);
             }
         }
-        return START_NOT_STICKY;
+        // Recreate the backend with its KOReader paths if Android reclaims
+        // this foreground-service process.
+        return START_REDELIVER_INTENT;
     }
 
     @Override public IBinder onBind(Intent intent) { return null; }
