@@ -70,6 +70,8 @@ assert(#loopback_commands == 0)
 local pocketbook = Daemon:new()
 pocketbook.detect_platform = function() return "ereader" end
 pocketbook.is_pocketbook = function() return true end
+pocketbook.detect_abi = function() return "hf" end
+assert(pocketbook:ereader_backend_suffix() == "sf")
 local probe_closed = false
 socket.tcp = function()
     return {
@@ -103,6 +105,7 @@ source_file:close()
 local pocketbook_backend = Daemon:new()
 pocketbook_backend.ensure_runtime_dirs = function() return false, nil end
 pocketbook_backend.bundled_backend = function() return source_path end
+pocketbook_backend.bundled_backend_version = function() return "1.2.3" end
 pocketbook_backend.is_pocketbook = function() return true end
 pocketbook_backend.install_cli_wrapper = function()
     error("PocketBook should not install a copied backend wrapper")
@@ -116,12 +119,17 @@ local pocketbook_changed, pocketbook_prepare_err = pocketbook_backend:ensure_bac
 os.execute = saved_execute
 assert(not pocketbook_changed and not pocketbook_prepare_err)
 assert(pocketbook_backend.backend_path == source_path)
+assert(pocketbook_backend:installed_backend_version() == "1.2.3")
 
 local start_commands = {}
+local start_logs = {}
 pocketbook_backend.detect_platform = function() return "ereader" end
 pocketbook_backend.wait_for_loopback = function() return true end
 pocketbook_backend.bundled_backend_dir = function()
     return assert(source_path:match("^(.*)/[^/]+$"))
+end
+pocketbook_backend.log_cli = function(_, message)
+    table.insert(start_logs, message)
 end
 os.execute = function(command)
     table.insert(start_commands, command)
@@ -132,6 +140,8 @@ os.execute = saved_execute
 assert(#start_commands == 1)
 assert(start_commands[1]:find("exec '" .. source_path .. "' serve --port 8080", 1, true))
 assert(start_commands[1]:find("ZENPM_HOME='./settings/ZenPM'", 1, true))
+assert(start_logs[1]:find("starting backend " .. source_path, 1, true))
+assert(start_logs[1]:find("abi=sf", 1, true))
 
 local no_wrapper = Daemon:new()
 no_wrapper.ensure_runtime_dirs = function() return false, nil end

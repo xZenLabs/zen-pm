@@ -442,6 +442,11 @@ function Daemon:detect_abi()
 end
 
 function Daemon:ereader_backend_suffix()
+    -- KOReader's PocketBook target uses the soft-float ABI even on devices
+    -- whose firmware also ships a hard-float loader.
+    if self:is_pocketbook() then
+        return "sf"
+    end
     if self:detect_platform() == "kobo" then
         local machine = self:uname_machine()
         if machine == "arm64" or machine == "aarch64" then
@@ -601,6 +606,9 @@ function Daemon:bundled_backend_version()
 end
 
 function Daemon:installed_backend_version()
+    if self:is_pocketbook() then
+        return self:bundled_backend_version()
+    end
     return read_text(self:standalone_backend_dir() .. "/VERSION")
 end
 
@@ -830,6 +838,7 @@ function Daemon:start(prepared)
     end
     local loopback_ready, loopback_err = self:wait_for_loopback()
     if not loopback_ready then
+        self:log_cli("backend start blocked: " .. tostring(loopback_err))
         return false, loopback_err
     end
     if changed then
@@ -871,6 +880,9 @@ function Daemon:start(prepared)
     if set_home then
         env = env .. " ZENPM_HOME=" .. Util.sh_quote(set_home)
     end
+    self:log_cli("starting backend " .. backend
+        .. " platform=" .. platform
+        .. " abi=" .. self:ereader_backend_suffix())
     -- Some Android e-reader shells do not provide nohup. Ignore SIGHUP with
     -- POSIX shell built-ins instead, while keeping the daemon detached from
     -- KOReader's stdout/stderr.

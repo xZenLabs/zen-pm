@@ -3,6 +3,7 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
 local settings = {}
+local modal_message
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function() return {} end
 package.preload["ui/uimanager"] = function() return {} end
@@ -13,7 +14,11 @@ package.preload["constants"] = function() return { PLUGIN_DIR = root } end
 package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
 package.preload["i18n"] = function() return {} end
 package.preload["ui/images"] = function() return {} end
-package.preload["ui/modals"] = function() return {} end
+package.preload["ui/modals"] = function()
+    return {
+        info = function(message) modal_message = message end,
+    }
+end
 package.preload["models"] = function() return {} end
 package.preload["ui/theme"] = function() return {} end
 package.preload["updater"] = function() return {} end
@@ -52,5 +57,17 @@ assert(not app.state.update_available)
 assert(settings.beta_updates == true)
 assert(settings.last_update_check == 0)
 assert(checks == 1)
+
+local about_app = {
+    daemon = {
+        installed_backend_version = function() return "1.2.3" end,
+        detect_platform = function() return "ereader" end,
+        ereader_backend_suffix = function() return "sf" end,
+    },
+    package_platforms = function() return "ereader,koreader" end,
+}
+App.show_about(about_app)
+assert(modal_message:find("Version: 1.2.3", 1, true))
+assert(modal_message:find("ABI: sf", 1, true))
 
 print("app tests passed")

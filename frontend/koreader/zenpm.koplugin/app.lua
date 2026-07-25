@@ -3065,7 +3065,7 @@ function App:show_about()
     local platform = tostring(self:package_platforms())
     local device_platform = self.daemon:detect_platform()
     local abi = nil
-    if device_platform == "kindle" or device_platform == "kobo" then
+    if device_platform == "kindle" or device_platform == "kobo" or device_platform == "ereader" then
         abi = _("\nABI: ") .. tostring(self.daemon:ereader_backend_suffix())
     end
     Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. (abi or "") .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
