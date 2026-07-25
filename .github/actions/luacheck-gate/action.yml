@@ -1,0 +1,21 @@
+name: LuaCheck Gate
+description: Run LuaCheck and fail on any non-zero LuaCheck exit.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Lua
+      uses: leafo/gh-actions-lua@v11
+      with:
+        luaVersion: "5.1"
+
+    - name: Set up LuaRocks
+      uses: leafo/gh-actions-luarocks@v4
+
+    - name: Install LuaCheck
+      shell: bash
+      run: luarocks install luacheck
+
+    - name: Run LuaCheck
+      shell: bash
+      run: luacheck -q frontend/koreader/zenpm.koplugin

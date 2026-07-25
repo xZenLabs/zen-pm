@@ -25,3 +25,4 @@ dist/
 .dev-kodev.pid
 __pycache__
 reference.md
+.luarocks

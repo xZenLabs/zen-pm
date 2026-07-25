@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   shellcheck:
@@ -34,9 +34,18 @@ jobs:
           echo build.sh >> /tmp/zenpm-shell-files.txt
           while IFS= read -r file; do sh -n "$file"; done < /tmp/zenpm-shell-files.txt
 
+  luacheck:
+    name: LuaCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run LuaCheck gate
+        uses: ./.github/actions/luacheck-gate
+
   release:
     name: Build & Release
-    needs: [shellcheck, shell-syntax]
+    needs: [shellcheck, shell-syntax, luacheck]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'ci-skip')
     runs-on: macos-latest
     permissions:
