@@ -119,7 +119,7 @@ local function release_asset_name(daemon, version)
         return "ZenPM-koreader-android-" .. version .. ".zip"
     end
     local platform = daemon:detect_platform()
-    if platform == "kindle" or platform == "kobo" then
+    if platform == "kindle" or platform == "kobo" or platform == "ereader" then
         if platform == "kobo" and daemon:ereader_backend_suffix() == "arm64" then
             return "ZenPM-koreader-linux-" .. version .. ".zip"
         end

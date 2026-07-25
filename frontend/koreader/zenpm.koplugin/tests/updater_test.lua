@@ -66,4 +66,15 @@ ok, version = Updater:check(daemon, false)
 assert(ok and version == "up_to_date")
 assert(not requested_url:find("cache_bust", 1, true))
 
+local ereader_daemon = {
+    detect_platform = function() return "ereader" end,
+    host_backend_platform = function() return "linux" end,
+    is_android = function() return false end,
+    plugin_version = function() return "1.0.0" end,
+}
+
+ok, version = Updater:check(ereader_daemon, true)
+assert(not ok)
+assert(version:find("expected ZenPM%-koreader%-ereader%-1%.0%.1%-beta1%.zip"))
+
 print("updater tests passed")
