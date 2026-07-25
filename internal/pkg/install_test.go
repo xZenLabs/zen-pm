@@ -136,6 +136,22 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 }
 
+func TestRemoveKOReaderPluginResolvesRelativePluginDirectory(t *testing.T) {
+	root := t.TempDir()
+	plugin := filepath.Join(root, "plugins", "storefront.koplugin")
+	if err := os.MkdirAll(plugin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", "plugins")
+
+	if err := removeKOReaderPlugin(root, "storefront.koplugin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(plugin); !os.IsNotExist(err) {
+		t.Fatalf("native plugin was not removed: %v", err)
+	}
+}
+
 func TestInstallGenericFontNatively(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

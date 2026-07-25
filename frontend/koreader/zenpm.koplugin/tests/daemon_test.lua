@@ -55,6 +55,21 @@ local socket = require("socket")
 local original_tcp = socket.tcp
 local original_execute = os.execute
 local loopback_commands = {}
+local generic_probe_called = false
+socket.tcp = function()
+    generic_probe_called = true
+end
+os.execute = function(command)
+    table.insert(loopback_commands, command)
+    return 0
+end
+assert(ereader:wait_for_loopback())
+assert(not generic_probe_called)
+assert(#loopback_commands == 0)
+
+local pocketbook = Daemon:new()
+pocketbook.detect_platform = function() return "ereader" end
+pocketbook.is_pocketbook = function() return true end
 local probe_closed = false
 socket.tcp = function()
     return {
@@ -66,7 +81,7 @@ os.execute = function(command)
     table.insert(loopback_commands, command)
     return 0
 end
-assert(ereader:wait_for_loopback())
+assert(pocketbook:wait_for_loopback())
 socket.tcp = original_tcp
 os.execute = original_execute
 assert(probe_closed)
@@ -84,6 +99,39 @@ local source_path = os.tmpname()
 local source_file = assert(io.open(source_path, "wb"))
 source_file:write("backend")
 source_file:close()
+
+local pocketbook_backend = Daemon:new()
+pocketbook_backend.ensure_runtime_dirs = function() return false, nil end
+pocketbook_backend.bundled_backend = function() return source_path end
+pocketbook_backend.is_pocketbook = function() return true end
+pocketbook_backend.install_cli_wrapper = function()
+    error("PocketBook should not install a copied backend wrapper")
+end
+
+local saved_execute = os.execute
+os.execute = function()
+    error("PocketBook should not chmod or copy the bundled backend")
+end
+local pocketbook_changed, pocketbook_prepare_err = pocketbook_backend:ensure_backend_files()
+os.execute = saved_execute
+assert(not pocketbook_changed and not pocketbook_prepare_err)
+assert(pocketbook_backend.backend_path == source_path)
+
+local start_commands = {}
+pocketbook_backend.detect_platform = function() return "ereader" end
+pocketbook_backend.wait_for_loopback = function() return true end
+pocketbook_backend.bundled_backend_dir = function()
+    return assert(source_path:match("^(.*)/[^/]+$"))
+end
+os.execute = function(command)
+    table.insert(start_commands, command)
+    return 0
+end
+assert(pocketbook_backend:start(true))
+os.execute = saved_execute
+assert(#start_commands == 1)
+assert(start_commands[1]:find("exec '" .. source_path .. "' serve --port 8080", 1, true))
+assert(start_commands[1]:find("ZENPM_HOME='./settings/ZenPM'", 1, true))
 
 local no_wrapper = Daemon:new()
 no_wrapper.ensure_runtime_dirs = function() return false, nil end

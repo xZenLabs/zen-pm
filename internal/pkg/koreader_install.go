@@ -145,7 +145,10 @@ func isKOReaderPluginRoot(root string) bool {
 
 func koreaderPluginDir(root string) string {
 	if path := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PLUGIN_DIR")); path != "" {
-		return filepath.Clean(path)
+		if filepath.IsAbs(path) {
+			return filepath.Clean(path)
+		}
+		return filepath.Join(root, path)
 	}
 	return filepath.Join(root, "plugins")
 }

@@ -209,6 +209,10 @@ function Daemon:is_android()
     return ok_android and android ~= nil
 end
 
+function Daemon:is_pocketbook()
+    return path_exists("/ebrmain")
+end
+
 function Daemon:platform_filter()
     local platform = self:detect_platform()
     if platform == "host" or platform == "android" then
@@ -480,21 +484,26 @@ function Daemon:backend_not_started_error()
     return message
 end
 
+function Daemon:loopback_ready()
+    local probe = socket.tcp()
+    if not probe then
+        return false
+    end
+    local ready = probe:bind("127.0.0.1", 0)
+    probe:close()
+    return ready and true or false
+end
+
 function Daemon:wait_for_loopback()
     local platform = self:detect_platform()
-    if platform ~= "kobo" and platform ~= "ereader" then
+    if platform ~= "kobo" and not self:is_pocketbook() then
         return true
     end
-    -- Some e-readers can launch KOReader before loopback has been configured.
+    -- Kobo and PocketBook can launch KOReader before loopback is configured.
     os.execute("ifconfig lo 127.0.0.1 >/dev/null 2>&1")
-    for attempt = 1, 20 do
-        local probe = socket.tcp()
-        if probe then
-            local ready = probe:bind("127.0.0.1", 0)
-            probe:close()
-            if ready then
-                return true
-            end
+    for _ = 1, 20 do
+        if self:loopback_ready() then
+            return true
         end
         socket.sleep(0.5)
     end
@@ -692,6 +701,12 @@ function Daemon:ensure_backend_files()
     if not source then
         return false, self:backend_not_started_error()
     end
+    -- PocketBook mounts KOReader's settings without allowing executable bits
+    -- to be set. Keep using the executable shipped with the plugin instead.
+    if self:is_pocketbook() then
+        self.backend_path = source
+        return false, nil
+    end
     local backend_dir = self:standalone_backend_dir()
     if not Util.ensure_dir(backend_dir) then
         return false, _("Could not create ZenPM settings directory: ") .. backend_dir
@@ -831,7 +846,7 @@ function Daemon:start(prepared)
     local write_pid = false
     local log_path = nil
     if backend == self:standalone_backend() or tostring(backend):find(self:bundled_backend_dir(), 1, true) == 1 then
-        if backend ~= self:standalone_backend() then
+        if backend ~= self:standalone_backend() and not self:is_pocketbook() then
             local _, prep_err = self:ensure_backend_files()
             if prep_err then
                 return false, prep_err
