@@ -50,6 +50,14 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
     require("ffi/posix_h")
     local C = ffi.C
 
+    local function ensure_function(name, declaration)
+        if not pcall(function() return C[name] end) then
+            ffi.cdef(declaration)
+        end
+    end
+    ensure_function("send", "ssize_t send(int, const void *, size_t, int);")
+    ensure_function("recv", "ssize_t recv(int, void *, size_t, int);")
+
     local function strerror()
         return ffi.string(C.strerror(ffi.errno()))
     end
