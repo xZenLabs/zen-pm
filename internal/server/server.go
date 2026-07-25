@@ -654,7 +654,7 @@ func rawJSON(value string) json.RawMessage {
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
-	// Expects: /packages/{id}/{install,uninstall,assets,readme,releases}
+	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,readme,releases}
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 2 || parts[0] == "" {
@@ -674,7 +674,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		s.handlePackageReleases(w, r, id)
 		return
 	}
-	if action != "install" && action != "uninstall" {
+	if action != "install" && action != "reinstall" && action != "uninstall" {
 		http.Error(w, "unknown action: "+action, http.StatusBadRequest)
 		return
 	}
@@ -686,7 +686,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	asset := r.URL.Query().Get("asset")
 	releaseTag := r.URL.Query().Get("release")
 
-	if action == "install" {
+	if action == "install" || action == "reinstall" {
 		if err := s.pkgs.CheckInstall(id); err != nil {
 			log.Errorf("Package %s %s failed: %v", id, action, err)
 			writeJSON(w, http.StatusConflict, map[string]interface{}{"ok": false, "error": err.Error()})
@@ -704,6 +704,8 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 			} else {
 				err = s.pkgs.InstallAsset(id, asset)
 			}
+		} else if action == "reinstall" {
+			err = s.pkgs.Reinstall(id, asset, releaseTag)
 		} else {
 			err = s.pkgs.Uninstall(id, asset)
 		}

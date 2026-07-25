@@ -48,7 +48,7 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if !ok || version != "1.0.0" {
 		t.Fatalf("IsInstalled = %v, %q", ok, version)
 	}
-	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "repo", Asset: "pkg-armv7.zip", AssetArch: "armv7"}); err != nil {
+	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "repo", Asset: "pkg-armv7.zip", AssetArch: "armv7", InstallPath: "/opt/pkg"}); err != nil {
 		t.Fatal(err)
 	}
 	ok, version = st.IsInstalled("pkg")
@@ -56,8 +56,15 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 		t.Fatalf("updated IsInstalled = %v, %q", ok, version)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" {
+	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" || installed[0].InstallPath != "/opt/pkg" {
 		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	if err := st.AppendInstalledPatchFile(PatchFileEntry{PackageID: "patches", Asset: "patch.lua", Name: "Patch", Version: "1.0.0", Repo: "repo", InstallPath: "/opt/patches/patch.lua"}); err != nil {
+		t.Fatal(err)
+	}
+	patches, err := st.ReadInstalledPatchFiles()
+	if err != nil || len(patches) != 1 || patches[0].InstallPath != "/opt/patches/patch.lua" {
+		t.Fatalf("patches = %#v, %v", patches, err)
 	}
 	featuredOrder := 10
 	catalog := []CatalogEntry{{

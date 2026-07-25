@@ -253,7 +253,10 @@ local function action_progress(action)
 end
 
 local function backend_action_for(action)
-    return (action == "reinstall" or action == "update" or action == "downgrade") and "install" or action
+    if action == "reinstall" or action == "downgrade" then
+        return "reinstall"
+    end
+    return action == "update" and "install" or action
 end
 
 local function action_done(action)

@@ -64,6 +64,7 @@ func (s *sqliteStore) migrate() error {
 			repo TEXT NOT NULL,
 			asset TEXT NOT NULL DEFAULT '',
 			asset_arch TEXT NOT NULL DEFAULT '',
+			install_path TEXT NOT NULL DEFAULT '',
 			installed_at TEXT NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS installed_patch_files (
@@ -72,6 +73,7 @@ func (s *sqliteStore) migrate() error {
 			name TEXT NOT NULL,
 			version TEXT NOT NULL,
 			repo TEXT NOT NULL,
+			install_path TEXT NOT NULL DEFAULT '',
 			installed_at TEXT NOT NULL,
 			PRIMARY KEY(package_id, asset)
 		)`,
@@ -124,6 +126,12 @@ func (s *sqliteStore) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("installed_packages", "asset_arch", "asset_arch TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("installed_packages", "install_path", "install_path TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("installed_patch_files", "install_path", "install_path TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "source_type", "source_type TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -314,7 +322,7 @@ func (s *sqliteStore) WriteRepos(repos []RepoEntry) error {
 }
 
 func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
-	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, installed_at FROM installed_packages ORDER BY name, id`)
+	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, install_path, installed_at FROM installed_packages ORDER BY name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +330,7 @@ func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
 	var entries []InstalledEntry
 	for rows.Next() {
 		var e InstalledEntry
-		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstalledAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstallPath, &e.InstalledAt); err != nil {
 			return nil, err
 		}
 		if e.Name == "" {
@@ -341,8 +349,8 @@ func (s *sqliteStore) AppendInstalled(e InstalledEntry) error {
 		e.Name = e.ID
 	}
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO installed_packages(id, name, version, repo, asset, asset_arch, installed_at) VALUES(?, ?, ?, ?, ?, ?, ?)`,
-		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstalledAt,
+		`INSERT OR REPLACE INTO installed_packages(id, name, version, repo, asset, asset_arch, install_path, installed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstallPath, e.InstalledAt,
 	)
 	return err
 }
@@ -365,7 +373,7 @@ func (s *sqliteStore) IsInstalled(id string) (bool, string) {
 }
 
 func (s *sqliteStore) ReadInstalledPatchFiles() ([]PatchFileEntry, error) {
-	rows, err := s.db.Query(`SELECT package_id, asset, name, version, repo, installed_at FROM installed_patch_files ORDER BY package_id, asset`)
+	rows, err := s.db.Query(`SELECT package_id, asset, name, version, repo, install_path, installed_at FROM installed_patch_files ORDER BY package_id, asset`)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +381,7 @@ func (s *sqliteStore) ReadInstalledPatchFiles() ([]PatchFileEntry, error) {
 	var entries []PatchFileEntry
 	for rows.Next() {
 		var e PatchFileEntry
-		if err := rows.Scan(&e.PackageID, &e.Asset, &e.Name, &e.Version, &e.Repo, &e.InstalledAt); err != nil {
+		if err := rows.Scan(&e.PackageID, &e.Asset, &e.Name, &e.Version, &e.Repo, &e.InstallPath, &e.InstalledAt); err != nil {
 			return nil, err
 		}
 		entries = append(entries, e)
@@ -386,8 +394,8 @@ func (s *sqliteStore) AppendInstalledPatchFile(e PatchFileEntry) error {
 		e.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	}
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO installed_patch_files(package_id, asset, name, version, repo, installed_at) VALUES(?, ?, ?, ?, ?, ?)`,
-		e.PackageID, e.Asset, e.Name, e.Version, e.Repo, e.InstalledAt,
+		`INSERT OR REPLACE INTO installed_patch_files(package_id, asset, name, version, repo, install_path, installed_at) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+		e.PackageID, e.Asset, e.Name, e.Version, e.Repo, e.InstallPath, e.InstalledAt,
 	)
 	return err
 }
