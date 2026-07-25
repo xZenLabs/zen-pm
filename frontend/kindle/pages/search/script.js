@@ -117,7 +117,7 @@
     }
 
     function beginPackageAction(pkg, action, asset) {
-        var backendAction = action === "reinstall" ? "install" : action;
+        var backendAction = action;
         dbg("POST /packages/" + pkg.id + "/" + backendAction);
         setBusy(true, (action === "uninstall" ? "Uninstalling " : (action === "reinstall" ? "Reinstalling " : "Installing ")) + pkg.name);
         state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };

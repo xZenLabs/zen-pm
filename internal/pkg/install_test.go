@@ -188,6 +188,13 @@ func TestInstallGenericFontNatively(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(koRoot, "fonts", "Cartisse", "LICENSE")); err != nil {
 		t.Fatalf("font package contents were not preserved: %v", err)
 	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].InstallPath != filepath.Join(koRoot, "fonts", "Cartisse") {
+		t.Fatalf("installed fonts = %#v, %v", installed, err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-fonts")); !os.IsNotExist(err) {
+		t.Fatalf("font tracking directory exists after install: %v", err)
+	}
 
 	if err := manager.Uninstall("font-cartisse", ""); err != nil {
 		t.Fatal(err)
@@ -240,11 +247,11 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/patch.lua" {
+		if r.URL.Path != "/patch.zip" {
 			http.NotFound(w, r)
 			return
 		}
-		io.WriteString(w, "return {}\n")
+		w.Write(zipContents(t, map[string]string{"patch/patch.lua": "return {}\n"}))
 	}))
 	defer srv.Close()
 
@@ -258,7 +265,7 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 		InstallURL: srv.URL + "/install-patch.sh",
 		Source:     "https://github.com/owner/patches",
 		SourceType: "source",
-		Assets:     `[{"arch":"any","asset":"patch.lua","url":"` + srv.URL + `/patch.lua"}]`,
+		Assets:     `[{"arch":"any","asset":"patch.zip","url":"` + srv.URL + `/patch.zip"}]`,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -266,11 +273,15 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 	if err := New(st, repo.New(st), "host").Install("patch"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(koRoot, "patches", "patch.lua")); err != nil {
+	if _, err := os.Stat(filepath.Join(koRoot, "patches", "patch", "patch.lua")); err != nil {
 		t.Fatalf("native patch was not installed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-patches", "patch.lua")); err != nil {
-		t.Fatalf("patch tracking file was not written: %v", err)
+	patches, err := st.ReadInstalledPatchFiles()
+	if err != nil || len(patches) != 1 || patches[0].InstallPath != filepath.Join(koRoot, "patches", "patch") {
+		t.Fatalf("installed patch files = %#v, %v", patches, err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-patches")); !os.IsNotExist(err) {
+		t.Fatalf("patch tracking directory exists after install: %v", err)
 	}
 }
 
@@ -379,9 +390,20 @@ func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	if len(files) != 2 {
 		t.Fatalf("patch files after install = %#v, want 2", files)
 	}
+	for _, file := range files {
+		if file.InstallPath != filepath.Join(koRoot, "patches", file.Asset) {
+			t.Fatalf("patch install path = %q, want %q", file.InstallPath, filepath.Join(koRoot, "patches", file.Asset))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-patches")); !os.IsNotExist(err) {
+		t.Fatalf("patch tracking directory exists after install: %v", err)
+	}
 
 	if err := manager.Uninstall("koreader-11", "2-menu-size.lua"); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(koRoot, "patches", "2-menu-size.lua")); !os.IsNotExist(err) {
+		t.Fatalf("patch file remains after uninstall: %v", err)
 	}
 	files, _ = st.ReadInstalledPatchFiles()
 	if len(files) != 1 || files[0].Asset != "2-ui-font.lua" {
@@ -433,6 +455,72 @@ func TestUninstallGenericPatchRemovesDisabledFile(t *testing.T) {
 	}
 	if _, err := os.Stat(disabled); !os.IsNotExist(err) {
 		t.Fatalf("disabled patch remains after uninstall: %v", err)
+	}
+}
+
+func TestLegacyKOReaderTrackingMigratesToDatabase(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	root := filepath.Join(t.TempDir(), "koreader")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_DIR", root)
+	if err := os.MkdirAll(filepath.Join(root, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	fontPath := filepath.Join(root, "fonts", "Cartisse")
+	patchPath := filepath.Join(root, "patches", "patch.lua")
+	if err := os.MkdirAll(fontPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(patchPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(patchPath, []byte("return {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".zenpm-fonts"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".zenpm-fonts", "font-cartisse"), []byte("font_dir="+fontPath+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".zenpm-patches"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".zenpm-patches", "patch.lua"), []byte("patch_file="+patchPath+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".zenpm-plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".zenpm-plugins", "legacy.koplugin"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "font-cartisse", Name: "Cartisse", Version: "4.1", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalledPatchFile(state.PatchFileEntry{PackageID: "patch", Asset: "patch.lua", Name: "Patch", Version: "1.0.0", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	New(st, repo.New(st), "host")
+
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].InstallPath != fontPath {
+		t.Fatalf("installed fonts after migration = %#v, %v", installed, err)
+	}
+	patches, err := st.ReadInstalledPatchFiles()
+	if err != nil || len(patches) != 1 || patches[0].InstallPath != patchPath {
+		t.Fatalf("installed patches after migration = %#v, %v", patches, err)
+	}
+	for _, directory := range []string{".zenpm-fonts", ".zenpm-patches", ".zenpm-plugins"} {
+		if _, err := os.Stat(filepath.Join(root, directory)); !os.IsNotExist(err) {
+			t.Fatalf("legacy tracking directory %s remains after migration: %v", directory, err)
+		}
 	}
 }
 
@@ -598,6 +686,55 @@ func TestInstallReleasePassesSpecificGitHubReleaseAndRecordsVersion(t *testing.T
 	}
 	if len(installed) != 1 || installed[0].Version != "v1.5.0" {
 		t.Fatalf("installed = %#v", installed)
+	}
+}
+
+func TestReinstallUninstallsBeforeInstalling(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	out := filepath.Join(t.TempDir(), "reinstall.out")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_REINSTALL_OUT", out)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/install.sh":
+			io.WriteString(w, "#!/bin/sh\nprintf 'install\\n' >> \"$ZENPM_REINSTALL_OUT\"\n")
+		case "/uninstall.sh":
+			io.WriteString(w, "#!/bin/sh\nprintf 'uninstall\\n' >> \"$ZENPM_REINSTALL_OUT\"\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Version: "1.0.0", Repo: "ZenLabs",
+		InstallURL: srv.URL + "/install.sh", UninstallURL: srv.URL + "/uninstall.sh",
+		Source: "https://github.com/owner/reader",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "reader", Name: "Reader", Version: "1.0.0", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Reinstall("reader", "", "v0.9.0"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != "uninstall\ninstall\n" {
+		t.Fatalf("operation order = %q, want uninstall followed by install", got)
+	}
+	if installed, version := st.IsInstalled("reader"); !installed || version != "v0.9.0" {
+		t.Fatalf("installed package = %t %q, want true v0.9.0", installed, version)
 	}
 }
 

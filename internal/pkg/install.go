@@ -25,7 +25,11 @@ type Manager struct {
 }
 
 func New(st *state.State, repos *repo.Manager, plat string) *Manager {
-	return &Manager{st: st, repos: repos, plat: plat}
+	m := &Manager{st: st, repos: repos, plat: plat}
+	if err := m.migrateLegacyKOReaderTracking(); err != nil {
+		log.Warnf("Could not migrate legacy KOReader tracking: %v", err)
+	}
+	return m
 }
 
 func (m *Manager) Install(id string) error {
@@ -47,6 +51,22 @@ func (m *Manager) InstallAsset(id, assetOverride string) error {
 // installed version.
 func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
 	return m.installAssetRelease(id, assetOverride, tag)
+}
+
+// Reinstall removes an installed package before installing it again. When tag
+// is non-empty, it installs that specific GitHub release.
+func (m *Manager) Reinstall(id, assetOverride, tag string) error {
+	uninstallAsset := ""
+	if m.isPatchFileInstalled(id, assetOverride) {
+		uninstallAsset = assetOverride
+	}
+	if err := m.Uninstall(id, uninstallAsset); err != nil {
+		return fmt.Errorf("uninstall %s: %w", id, err)
+	}
+	if tag != "" {
+		return m.InstallRelease(id, tag, assetOverride)
+	}
+	return m.InstallAsset(id, assetOverride)
 }
 
 func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) error {
@@ -99,9 +119,10 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
 		genericInstaller := m.nativeKOReaderInstaller(entry, override)
 		installedPluginVersion := ""
+		installedPath := ""
 		if genericInstaller != "" {
 			var err error
-			installedPluginVersion, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller)
+			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller)
 			if err != nil {
 				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("install %s: %w", pkgID, err)
@@ -141,7 +162,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			}
 			_ = m.st.RemoveInstalled(pkgID)
 			if err := m.st.AppendInstalledPatchFile(state.PatchFileEntry{
-				PackageID: pkgID, Asset: asset, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
+				PackageID: pkgID, Asset: asset, Name: entry.Name, Version: installedVersion, Repo: entry.Repo, InstallPath: installedPath,
 			}); err != nil {
 				j.Abort("record failed: " + err.Error())
 				return err
@@ -154,7 +175,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
 			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
-			Asset: selectedName, AssetArch: selectedArch,
+			Asset: selectedName, AssetArch: selectedArch, InstallPath: installedPath,
 		}); err != nil {
 			j.Abort("record failed: " + err.Error())
 			return err

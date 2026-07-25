@@ -300,6 +300,38 @@ paths:
           $ref: "#/components/responses/TextError"
         "405":
           $ref: "#/components/responses/TextError"
+  /packages/{id}/reinstall:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    post:
+      tags:
+        - Packages
+      summary: Reinstall a package cleanly
+      description: |
+        Starts an uninstall followed by an installation asynchronously. Clients
+        can poll `/log` to observe progress and failures. Passing `release`
+        installs that GitHub release after removal.
+      operationId: reinstallPackage
+      parameters:
+        - name: asset
+          in: query
+          required: false
+          description: Exact release ZIP asset name selected by the client.
+          schema:
+            type: string
+        - name: release
+          in: query
+          required: false
+          description: GitHub release tag to install after removal.
+          schema:
+            type: string
+      responses:
+        "202":
+          $ref: "#/components/responses/Started"
+        "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
   /packages/{id}/readme:
     parameters:
       - $ref: "#/components/parameters/PackageId"

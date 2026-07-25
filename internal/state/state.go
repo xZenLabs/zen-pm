@@ -294,6 +294,7 @@ type InstalledEntry struct {
 	Repo        string
 	Asset       string // selected release asset, empty when ZenPM did not install it
 	AssetArch   string // selected release asset architecture
+	InstallPath string // native install location, when ZenPM needs it for removal
 	InstalledAt string
 }
 
@@ -304,6 +305,7 @@ type PatchFileEntry struct {
 	Name        string // package display name
 	Version     string
 	Repo        string
+	InstallPath string // native install location, when ZenPM needs it for removal
 	InstalledAt string
 }
 
