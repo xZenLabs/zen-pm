@@ -2848,21 +2848,31 @@ end
 
 function App:refresh_repos()
     Modals.status(_("Refreshing repositories..."))
-    local ok, data = self.client:refresh_repos()
+    local ok, err, status_code = self.client:refresh_repos()
     Modals.close_status()
-    if ok then
-        self.image_files = {}
-        Images.invalidate_cache()
-        local found, packages = self:load_packages(false, true)
-        self:load_repos(true)
-        self:reload_current_page()
-        if found then
-            Modals.info_for(string.format(_("Updated: %d packages"), #packages), Constants.PACKAGE_NOTICE_SECONDS)
-        else
-            Modals.info_for(_("Packages updated"), Constants.PACKAGE_NOTICE_SECONDS)
+    if not ok then
+        -- A refresh failure from the local backend can contain the upstream
+        -- HTTP status too; prefer it over the local HTTP 500 response.
+        for code in tostring(err or ""):gmatch("HTTP%s+(%d%d%d)") do
+            status_code = code
         end
+        local message = _("Refresh failed")
+        if status_code then
+            message = message .. " (HTTP " .. tostring(status_code) .. ")"
+        end
+        Modals.info_for(message, Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return
+    end
+
+    self.image_files = {}
+    Images.invalidate_cache()
+    local found, packages = self:load_packages(false, true)
+    self:load_repos(true)
+    self:reload_current_page()
+    if found then
+        Modals.info_for(string.format(_("Updated: %d packages"), #packages), Constants.PACKAGE_NOTICE_SECONDS)
     else
-        Modals.info(_("Refresh failed: ") .. tostring(data))
+        Modals.info_for(_("Packages updated"), Constants.PACKAGE_NOTICE_SECONDS)
     end
 end
 
