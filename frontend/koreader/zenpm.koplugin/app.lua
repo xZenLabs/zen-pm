@@ -1573,7 +1573,7 @@ function App:cached_image_file(value)
     if self.image_files[value] and Util.path_exists(self.image_files[value]) then
         return self.image_files[value], false
     end
-    local file = Images.cached_file(value)
+    local file = Images.cached_file(self:platform(), value)
     if file then
         self.image_files[value] = file
         return file, false
