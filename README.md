@@ -246,8 +246,10 @@ unsigned or plain-HTTP repositories accordingly. See the
 
 ## Build and develop
 
-Building requires Go 1.22+ and FontTools (pyftsubset). Set a SemVer version in
-VERSION, then run:
+Building requires Go 1.22+ and FontTools (pyftsubset). Builds use the SemVer
+version already in `VERSION` and overwrite the prior `dist/` artifacts. Update
+`VERSION` and `frontend/koreader/zenpm.koplugin/_meta.lua` together only when
+preparing a new release, then run:
 
 ~~~sh
 ./build.sh
