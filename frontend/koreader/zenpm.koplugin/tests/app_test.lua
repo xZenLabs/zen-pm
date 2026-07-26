@@ -7,12 +7,15 @@ local modal_message
 local modal_title
 local modal_rows
 local plugin_settings_prompt
+local package_modify_callbacks
+local updater_reinstall_requests = 0
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function() return {} end
 package.preload["ui/uimanager"] = function()
     return {
         nextTick = function(_, callback) callback() end,
         scheduleIn = function(_, _, callback) callback() end,
+        forceRePaint = function() end,
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
@@ -23,7 +26,11 @@ package.preload["constants"] = function()
 end
 package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
 package.preload["i18n"] = function() return {} end
-package.preload["ui/images"] = function() return {} end
+package.preload["ui/images"] = function()
+    return {
+        asset = function(name) return "assets/" .. name end,
+    }
+end
 package.preload["ui/modals"] = function()
     return {
         info = function(message) modal_message = message end,
@@ -33,6 +40,9 @@ package.preload["ui/modals"] = function()
         actions = function(title, rows)
             modal_title = title
             modal_rows = rows
+        end,
+        package_modify = function(_, callbacks)
+            package_modify_callbacks = callbacks
         end,
         plugin_settings_cleanup = function(message, callback)
             plugin_settings_prompt = message
@@ -51,7 +61,10 @@ package.preload["models"] = function()
             return pkg.release_notes_url
         end,
         is_patch_package = function(pkg) return pkg and pkg.is_patch == true end,
+        is_installed_patch_item = function() return false end,
+        is_unmanaged_patch = function() return false end,
         is_font_package = function() return false end,
+        has_version_history = function(pkg) return pkg and pkg.versions_url ~= nil end,
         find_package = function(packages, id)
             for _, pkg in ipairs(packages or {}) do
                 if pkg.id == id then return pkg end
@@ -75,7 +88,17 @@ package.preload["models"] = function()
     }
 end
 package.preload["ui/theme"] = function() return {} end
-package.preload["updater"] = function() return {} end
+package.preload["updater"] = function()
+    return {
+        reinstall = function(_, _, tag, allow_prerelease, force_refresh)
+            updater_reinstall_requests = updater_reinstall_requests + 1
+            assert(tag == "v1.2.3")
+            assert(not allow_prerelease)
+            assert(force_refresh)
+            return true, "1.2.3"
+        end,
+    }
+end
 package.preload["zenpm_util"] = function()
     return {
         trim = function(value)
@@ -116,29 +139,35 @@ end
 local App = require("app")
 dofile = original_dofile
 
-local checks = 0
 local app = {
-    state = { beta_updates = false, update_auto_check = true, update_available = true },
-    set_update_available = App.set_update_available,
-    schedule_automatic_update_check = function() checks = checks + 1 end,
+    state = { beta_updates = false },
 }
 
 App.toggle_beta_updates(app)
 
 assert(app.state.beta_updates)
-assert(not app.state.update_available)
 assert(settings.beta_updates == true)
-assert(settings.last_update_check == 0)
-assert(checks == 1)
 
-local zenpm_package = { zenpm_self = true }
-local update_state_app = {
-    state = { installed_packages = { zenpm_package } },
-    set_update_available = App.set_update_available,
-}
-App.set_update_available(update_state_app, true)
-assert(update_state_app.state.update_available)
-assert(zenpm_package.update_available)
+local zenpm_package = { id = "zenpm-koreader" }
+assert(App.package_icon_file({}, zenpm_package) == "assets/zenpm.svg")
+
+local release_requests = 0
+local zenpm_versions = App.load_package_releases({
+    state = { beta_updates = false },
+    client = {
+        get_package_releases = function(_, id)
+            release_requests = release_requests + 1
+            assert(id == "zenpm-koreader")
+            return true, {
+                releases = {
+                    { tag_name = "v1.2.3" },
+                },
+            }
+        end,
+    },
+}, zenpm_package)
+assert(release_requests == 1)
+assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 local about_app = {
     daemon = {
@@ -211,16 +240,78 @@ assert(update_result[4] == "1.2.4")
 assert(trapper_required)
 
 local self_update_queued = 0
-local self_uninstall_confirmed = 0
 local self_action_app = {
     queue_self_update = function() self_update_queued = self_update_queued + 1 end,
-    confirm_uninstall_self = function() self_uninstall_confirmed = self_uninstall_confirmed + 1 end,
 }
-App.perform_package_action(self_action_app, { zenpm_self = true, update_available = true })
+App.start_package_action(self_action_app, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 1)
-assert(self_uninstall_confirmed == 0)
-App.perform_package_action(self_action_app, { zenpm_self = true })
-assert(self_uninstall_confirmed == 1)
+
+App.queue_package_action({
+    state = { queue_running = false },
+    queue_self_update = function() self_update_queued = self_update_queued + 1 return true end,
+}, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
+assert(self_update_queued == 2)
+
+local companion_update_requests = 0
+local reinstalled_scan_calls = 0
+local reinstalled_result
+App.apply_update({
+    state = { beta_updates = false },
+    daemon = {
+        is_android = function() return true end,
+        request_android_update = function()
+            companion_update_requests = companion_update_requests + 1
+            return true
+        end,
+        stop_standalone_backend = function() end,
+    },
+    client = {
+        scan_installed_plugins = function()
+            reinstalled_scan_calls = reinstalled_scan_calls + 1
+            return true
+        end,
+    },
+    run_update_task = function(_, task, _, callback)
+        local called, ok, result = task()
+        callback(true, called, ok, result)
+    end,
+}, "v1.2.3", function(...)
+    reinstalled_result = { ... }
+end)
+assert(companion_update_requests == 1)
+assert(updater_reinstall_requests == 1)
+assert(reinstalled_scan_calls == 1)
+assert(reinstalled_result[1] == true and reinstalled_result[2] == "1.2.3")
+
+local selected_zenpm_release
+App.confirm_package_version({
+    queue_self_reinstall = function(_, _, release)
+        selected_zenpm_release = release
+    end,
+}, { id = "zenpm-koreader", installed = true }, "v1.2.3", "reinstall")
+assert(selected_zenpm_release == "v1.2.3")
+
+local regular_zenpm_action
+App.perform_package_action({
+    state = { page = "installed", active_tab = "installed" },
+    package_icon_file = function() return nil end,
+    confirm_package_action = function(_, _, action) regular_zenpm_action = action end,
+}, {
+    id = "zenpm-koreader",
+    name = "ZenPM",
+    plugin_module = "zenpm",
+    installed = true,
+    update_available = true,
+    platforms = { "koreader" },
+    versions_url = "https://example.test/versions.json",
+})
+assert(package_modify_callbacks.info)
+assert(package_modify_callbacks.update)
+assert(package_modify_callbacks.enable_disable)
+assert(package_modify_callbacks.downgrade)
+assert(package_modify_callbacks.uninstall)
+package_modify_callbacks.update()
+assert(regular_zenpm_action == "update")
 
 local queued_operations
 local queue_app = {
@@ -262,6 +353,42 @@ App.run_next_queue_operation(queued_self_app, queued_self_batch)
 assert(#queued_self_batch.succeeded == 1)
 assert(queued_self_batch.prompt_restart)
 assert(queued_self_completed)
+
+local queued_reinstall_entry = {
+    name = "ZenPM",
+    pkg = { id = "zenpm-koreader" },
+    self_reinstall = true,
+    release = "v1.2.3",
+}
+local queued_reinstall_batch = {
+    operations = { queued_reinstall_entry },
+    index = 1,
+    succeeded = {},
+    failed = {},
+}
+local uninstall_started = false
+local reinstalled_release
+local queued_reinstall_complete = false
+App.run_next_queue_operation({
+    run_package_action = function(_, _, action, _, _, opts)
+        assert(action == "uninstall")
+        uninstall_started = true
+        opts.on_result(true)
+    end,
+    apply_update = function(_, release, callback)
+        assert(uninstall_started)
+        reinstalled_release = release
+        callback(true, "1.2.3")
+    end,
+    remove_queue_entry = function(_, entry) assert(entry == queued_reinstall_entry) end,
+    run_next_queue_operation = function(_, batch)
+        queued_reinstall_complete = batch.index == 2
+    end,
+}, queued_reinstall_batch)
+assert(reinstalled_release == "v1.2.3")
+assert(#queued_reinstall_batch.succeeded == 1)
+assert(queued_reinstall_batch.prompt_restart)
+assert(queued_reinstall_complete)
 
 local local_plugin_entry = App.queue_entry_for({
     state = {},

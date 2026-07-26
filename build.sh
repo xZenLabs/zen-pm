@@ -206,14 +206,11 @@ run_dev() {
         esac
     fi
 
-    (
-        cd "$KOREADER_DIR"
-        nohup "$KOREADER_DIR/kodev" run >/dev/null 2>&1 &
-        kodev_pid=$!
-        printf '%s\n' "$kodev_pid" > "$DEV_PID_FILE"
-        focus_koreader "$kodev_pid" &
-    )
-    echo "Restarted KOReader development build"
+    cd "$KOREADER_DIR"
+    printf '%s\n' "$$" > "$DEV_PID_FILE"
+    focus_koreader "$$" &
+    echo "Starting KOReader development build (attached; press Ctrl-C to stop)"
+    "$KOREADER_DIR/kodev" run
 }
 
 if [ "$DEV_MODE" = true ]; then

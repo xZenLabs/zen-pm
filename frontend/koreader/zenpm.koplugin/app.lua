@@ -23,7 +23,6 @@ local App = {}
 -- Persist UI preferences in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
 local config_settings = nil
-local UPDATE_CHECK_INTERVAL = 24 * 60 * 60
 
 local function open_config()
     if config_settings then return config_settings end
@@ -109,9 +108,7 @@ function App:new(plugin)
             manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
             show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
-            update_auto_check = App.load_setting("update_auto_check", true),
             show_readme_images = App.load_setting("show_readme_images", true),
-            update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", categories = "", category = "", installed = "", source = "" },
             sorts = {
@@ -319,24 +316,11 @@ local function queue_notice(pkg)
     return text
 end
 
-local function zenpm_self_package(daemon, update_available)
-    local version = daemon:plugin_version()
-    return {
-        id = "zenpm-koreader",
-        name = _("ZenPM"),
-        version = version,
-        installed_version = version,
-        installed = true,
-        update_available = update_available == true,
-        repo = Constants.REPO_ZENLABS_NAME,
-        repo_default = true,
-        platforms = { "koreader" },
-        plugin_module = "zenpm",
-        category = "utility",
-        icon = Constants.ASSET_DIR .. "/zenpm.svg",
-        description = _("Zen Package Manager - A package manager (App Store) for E-Readers"),
-        zenpm_self = true,
-    }
+local function is_zenpm_package(pkg)
+    if type(pkg) ~= "table" then return false end
+    local module = Util.trim(tostring(pkg.plugin_module or "")):lower()
+    local id = Util.trim(tostring(pkg.id or "")):lower()
+    return module == "zenpm" or id == "zenpm" or id == "zenpm-koreader"
 end
 
 local function action_installs_package(action)
@@ -718,6 +702,14 @@ function App:queue_all_updates()
         if pkg.installed and pkg.update_available then
             local key = queue_key(pkg.id or pkg.name, nil)
             if not queued[key] then
+                if is_zenpm_package(pkg) then
+                    if self:queue_self_update(pkg, { silent = true }) then
+                        added = added + 1
+                    end
+                    queued[key] = true
+                    add_next(index + 1)
+                    return
+                end
                 if Models.is_font_package(pkg) then
                     if self:queue_package_action(pkg, "update", nil, { silent = true }) then
                         added = added + 1
@@ -795,6 +787,9 @@ function App:queue_package_action(pkg, action, asset, opts)
         return false
     end
     opts = opts or {}
+    if action == "update" and is_zenpm_package(pkg) then
+        return self:queue_self_update(pkg, opts)
+    end
     if action_installs_package(action) and not opts.conflict_confirmed then
         local conflicts = self:conflicting_packages(pkg)
         local zen_ui_warning = Models.is_patch_package(pkg) and self:zen_ui_installed()
@@ -849,20 +844,24 @@ function App:queue_package_action(pkg, action, asset, opts)
     return true
 end
 
-function App:queue_self_update(pkg)
+function App:queue_self_update(pkg, opts)
     if self.state.queue_running then
         Modals.info(_("Queue is running. Please wait."))
         return false
     end
+    opts = opts or {}
     local id = pkg and (pkg.id or pkg.name)
     if not id then return false end
+    local reinstall = opts.reinstall == true
     local entry = {
         key = queue_key(id, nil),
         id = id,
         pkg = pkg,
         name = package_title(pkg, _("ZenPM")),
-        action = "update",
-        self_update = true,
+        action = reinstall and "reinstall" or "update",
+        release = opts.release,
+        self_update = not reinstall,
+        self_reinstall = reinstall,
     }
     for index, queued in ipairs(self.state.queue) do
         if queued.key == entry.key then
@@ -872,9 +871,18 @@ function App:queue_self_update(pkg)
         end
     end
     table.insert(self.state.queue, entry)
-    Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
+    if not opts.silent then
+        Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
+    end
     self:refresh()
     return true
+end
+
+function App:queue_self_reinstall(pkg, release, opts)
+    opts = opts or {}
+    opts.reinstall = true
+    opts.release = release
+    return self:queue_self_update(pkg, opts)
 end
 
 local function conflict_set(pkg)
@@ -1002,7 +1010,7 @@ function App:show_queue_entry_modify(entry)
     if self.state.queue_running or not entry or not entry.pkg then return end
     local pkg = entry.pkg
     local remove_queue = function() self:confirm_remove_queue_entry(entry) end
-    if entry.self_update then
+    if entry.self_update or entry.self_reinstall then
         Modals.actions(Models.package_display_name(pkg, _("ZenPM")), {
             { text = _("Remove from queue"), callback = remove_queue },
         })
@@ -1065,7 +1073,6 @@ function App:refresh_queue_package_state()
     if not ok then return end
     self.state.packages = packages
     local installed = Models.installed_packages(packages)
-    table.insert(installed, 1, zenpm_self_package(self.daemon, self.state.update_available))
     self.state.installed_packages = installed
     local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
     self.state.visible_packages = self:sorted_packages("installed", visible)
@@ -1114,8 +1121,8 @@ function App:run_next_queue_operation(batch)
         return
     end
     local position = batch.index
-    if entry.self_update then
-        self:apply_update(function(succeeded, detail)
+    if entry.self_update or entry.self_reinstall then
+        local function complete(succeeded, detail)
             if succeeded then
                 self:remove_queue_entry(entry)
                 table.insert(batch.succeeded, entry)
@@ -1127,7 +1134,23 @@ function App:run_next_queue_operation(batch)
             UIManager:nextTick(function()
                 self:run_next_queue_operation(batch)
             end)
-        end)
+        end
+        if entry.self_reinstall then
+            self:run_package_action(entry.pkg, "uninstall", nil, nil, {
+                status_prefix = string.format(_("Queue %d/%d: "), position, #batch.operations),
+                on_result = function(succeeded, detail)
+                    if not succeeded then
+                        complete(false, detail)
+                        return
+                    end
+                    self:apply_update(entry.release, function(installed, version)
+                        complete(installed, version)
+                    end)
+                end,
+            })
+        else
+            self:apply_update(complete)
+        end
         return
     end
     self:run_package_action(entry.pkg, entry.action, entry.asset, nil, {
@@ -1160,7 +1183,7 @@ function App:prepare_queue_assets(operations, index, on_ready)
         on_ready()
         return
     end
-    if entry.self_update or not action_installs_package(entry.action) or (entry.asset and entry.asset ~= "") then
+    if entry.self_update or entry.self_reinstall or not action_installs_package(entry.action) or (entry.asset and entry.asset ~= "") then
         self:prepare_queue_assets(operations, index + 1, on_ready)
         return
     end
@@ -1213,13 +1236,13 @@ function App:confirm_queue()
     if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
     local operations = {}
     for _, entry in ipairs(self.state.queue) do
-        if not entry.self_update and entry.action == "uninstall" then table.insert(operations, entry) end
+        if not entry.self_update and not entry.self_reinstall and entry.action == "uninstall" then table.insert(operations, entry) end
     end
     for _, entry in ipairs(self.state.queue) do
-        if not entry.self_update and entry.action ~= "uninstall" then table.insert(operations, entry) end
+        if not entry.self_update and not entry.self_reinstall and entry.action ~= "uninstall" then table.insert(operations, entry) end
     end
     for _, entry in ipairs(self.state.queue) do
-        if entry.self_update then table.insert(operations, entry) end
+        if entry.self_update or entry.self_reinstall then table.insert(operations, entry) end
     end
     self.state.queue_running = true
     local batch = {
@@ -1251,7 +1274,6 @@ function App:show()
     end
     self:intercept_koreader_exit()
     UIManager:show(self.view)
-    self:schedule_automatic_update_check()
     self.scan_plugins_on_open = true
     if self.backend_ready then
         self:finish_deferred_font_uninstalls()
@@ -1286,44 +1308,6 @@ function App:restore_koreader_exit()
     self.exit_menu = nil
     self.exit_original = nil
     self.exit_hook = nil
-end
-
-function App:set_update_available(available)
-    self.state.update_available = available == true
-    for _, pkg in ipairs(self.state.installed_packages or {}) do
-        if pkg.zenpm_self then
-            pkg.update_available = self.state.update_available
-        end
-    end
-    App.save_setting("update_available", self.state.update_available)
-end
-
-function App:schedule_automatic_update_check()
-    if not self.state.update_auto_check or self.state.update_checking then return end
-    local now = os.time()
-    local last_check = tonumber(App.load_setting("last_update_check", 0)) or 0
-    if now - last_check < UPDATE_CHECK_INTERVAL then return end
-
-    local ok_network, NetworkMgr = pcall(require, "ui/network/manager")
-    if ok_network and NetworkMgr and NetworkMgr.isWifiOn and not NetworkMgr:isWifiOn() then return end
-
-    self.state.update_checking = true
-    UIManager:scheduleIn(15, function()
-        if not self.view or self.busy or not self.state.update_auto_check then
-            self.state.update_checking = false
-            return
-        end
-        self:run_update_task(function()
-            return pcall(Updater.check, Updater, self.daemon, self.state.beta_updates)
-        end, nil, function(completed, called, ok, result)
-            self.state.update_checking = false
-            if completed and called and ok then
-                App.save_setting("last_update_check", os.time())
-                self:set_update_available(result ~= "up_to_date")
-                self:refresh()
-            end
-        end)
-    end)
 end
 
 function App:close()
@@ -1621,6 +1605,10 @@ function App:queue_readme_image(value)
 end
 
 function App:package_icon_file(pkg)
+    if is_zenpm_package(pkg) then
+        local icon = Images.asset("zenpm.svg")
+        return icon, true, icon, "zenpm"
+    end
     local icon_value = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
     local source = icon_value == fallback_value and "repo-fallback" or "package"
@@ -1935,7 +1923,6 @@ function App:show_installed()
         return
     end
     local installed = Models.installed_packages(packages)
-    table.insert(installed, 1, zenpm_self_package(self.daemon, self.state.update_available))
     self.state.packages = packages
     self.state.installed_packages = installed
     local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
@@ -2366,14 +2353,6 @@ function App:perform_package_action(pkg, on_done)
         Modals.info(_("Another operation is in progress. Please wait."))
         return
     end
-    if pkg.zenpm_self then
-        if pkg.update_available then
-            self:queue_self_update(pkg)
-            return
-        end
-        self:confirm_uninstall_self()
-        return
-    end
     if Models.is_unmanaged_patch(pkg) then
         self:show_unmanaged_patch_modify(pkg, on_done)
         return
@@ -2414,57 +2393,6 @@ function App:perform_package_action(pkg, on_done)
     else
         self:confirm_package_action(pkg, "install", on_done)
     end
-end
-
-function App:confirm_uninstall_self()
-    local cleanup = self.plugin and type(self.plugin.deletePluginSettings) == "function"
-    Modals.confirm(
-        _("Uninstall ZenPM?"),
-        _("Uninstall"),
-        function()
-            if cleanup then
-                Modals.plugin_settings_cleanup(
-                    _("ZenPM will be uninstalled.\n\nRemove plugin settings?"),
-                    function(remove_settings)
-                        self:uninstall_self(remove_settings)
-                    end
-                )
-            else
-                self:uninstall_self(false)
-            end
-        end,
-        true
-    )
-end
-
-function App:uninstall_self(remove_settings)
-    if self.busy then return end
-    self.busy = true
-    Modals.status(_("Uninstalling ZenPM..."))
-    UIManager:nextTick(function()
-        if remove_settings then
-            local plugin = self.plugin
-            if plugin and type(plugin.deletePluginSettings) == "function" then
-                pcall(plugin.deletePluginSettings, plugin)
-            else
-                self.daemon:remove_all_settings()
-            end
-        else
-            self.daemon:stop_standalone_backend()
-        end
-        local removed = os.execute("rm -rf " .. Util.sh_quote(Constants.PLUGIN_DIR)) == 0
-        self.busy = false
-        Modals.close_status()
-        if not removed then
-            Modals.info_for(_("Could not remove the ZenPM plugin."), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
-            return
-        end
-        self:close()
-        Modals.restart_koreader(
-            _("ZenPM uninstalled successfully.\n\nRestart KOReader to apply the change."),
-            function() self:restart_koreader() end
-        )
-    end)
 end
 
 function App:show_unmanaged_patch_modify(pkg, on_done)
@@ -2693,6 +2621,10 @@ function App:choose_version_release(pkg, release, action, on_done)
 end
 
 function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
+    if pkg.installed and is_zenpm_package(pkg) then
+        self:queue_self_reinstall(pkg, release_tag)
+        return
+    end
     self:queue_package_action(pkg, action, asset, { release = release_tag })
 end
 
@@ -2706,6 +2638,10 @@ function App:start_package_action(pkg, action, on_done, opts)
     local id = pkg.id or pkg.name
     if not id then
         Modals.info(_("Package has no id."))
+        return
+    end
+    if action == "update" and is_zenpm_package(pkg) then
+        self:queue_self_update(pkg)
         return
     end
     if action_installs_package(action) and opts and opts.release then
@@ -3111,17 +3047,6 @@ end
 function App:toggle_beta_updates()
     self.state.beta_updates = not self.state.beta_updates
     App.save_setting("beta_updates", self.state.beta_updates)
-    App.save_setting("last_update_check", 0)
-    self:set_update_available(false)
-    self:schedule_automatic_update_check()
-end
-
-function App:toggle_automatic_update_checks()
-    self.state.update_auto_check = not self.state.update_auto_check
-    App.save_setting("update_auto_check", self.state.update_auto_check)
-    if self.state.update_auto_check then
-        self:schedule_automatic_update_check()
-    end
 end
 
 function App:toggle_readme_images()
@@ -3258,12 +3183,10 @@ function App:start_update()
             return
         end
         if result == "up_to_date" then
-            self:set_update_available(false)
             Modals.info(_("ZenPM is up to date."))
             return
         end
 
-        self:set_update_available(true)
         Modals.confirm(
             _("ZenPM update v") .. tostring(result) .. _(" is available. Update now?"),
             _("Update"),
@@ -3273,7 +3196,11 @@ function App:start_update()
     end)
 end
 
-function App:apply_update(on_result)
+function App:apply_update(release_tag, on_result)
+    if type(release_tag) == "function" then
+        on_result = release_tag
+        release_tag = nil
+    end
     local companion_update_started = false
     if self.daemon:is_android() then
         local started, err = self.daemon:request_android_update()
@@ -3289,9 +3216,12 @@ function App:apply_update(on_result)
         companion_update_started = true
     end
     self.busy = true
-    local status = Modals.status(_("Updating ZenPM..."))
+    local status = Modals.status(release_tag and _("Reinstalling ZenPM...") or _("Updating ZenPM..."))
     UIManager:forceRePaint()
     self:run_update_task(function()
+        if release_tag then
+            return pcall(Updater.reinstall, Updater, self.daemon, release_tag, self.state.beta_updates, true)
+        end
         return pcall(Updater.update, Updater, self.daemon, self.state.beta_updates, true)
     end, status, function(completed, called, ok, result)
         self.busy = false
@@ -3312,7 +3242,6 @@ function App:apply_update(on_result)
             return
         end
         if result == "up_to_date" then
-            self:set_update_available(false)
             if on_result then
                 on_result(true)
                 return
@@ -3327,7 +3256,11 @@ function App:apply_update(on_result)
 
         -- The next startup copies the new bundled backend; stop the old one
         -- now so it cannot be reused after KOReader restarts.
-        self:set_update_available(false)
+        if release_tag and self.client and self.client.scan_installed_plugins then
+            -- The reinstall unregistered ZenPM before replacing its directory.
+            -- Scan while this backend is still running to record the new copy.
+            self.client:scan_installed_plugins()
+        end
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
         if on_result then

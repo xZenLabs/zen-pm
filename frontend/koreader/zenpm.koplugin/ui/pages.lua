@@ -247,15 +247,6 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
     local rows = {
         { text = _("Scan installed plugins"), callback = function() view.app:scan_installed_plugins() end },
         {
-            text = _("Check for updates automatically"),
-            toggle = true,
-            value = function() return view.app.state.update_auto_check end,
-            callback = function()
-                view.app:toggle_automatic_update_checks()
-                view:refresh()
-            end,
-        },
-        {
             text = _("Only show installable packages"),
             toggle = true,
             value = function() return view.app.state.filter_installable end,

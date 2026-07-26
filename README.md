@@ -69,8 +69,6 @@ install the standalone package on any setup without root access.
 > similar devices—anything with a `JAILBREAK` booklet—is strongly discouraged
 > to prevent future conflicts and other issues with KPM. This will be resolved
 > in a future update.
-> `/mnt/us/kmc/kpm` exists. The KOReader homepage installer is also disabled on
-> unsupported Kindle firmware.
 
 Most of the Kindle standalone frontend is based on work from the
 [KindleForge project](https://github.com/KindleTweaks/KindleForge).
@@ -103,7 +101,7 @@ updates.
 | Device or runtime | Download |
 | --- | --- |
 | KOReader on a 32-bit Kindle or Kobo | ZenPM-koreader-ereader-<version>.zip |
-| KOReader on ARM64 Kobo, including Kobo Libra Colour | ZenPM-koreader-linux-<version>.zip |
+| KOReader on ARM64 Kobo, including (some) Kobo Libra Colour | ZenPM-koreader-linux-<version>.zip |
 | KOReader on Android | ZenPM-koreader-android-<version>.zip and ZenPM-android-<version>.apk |
 | KOReader on macOS | ZenPM-koreader-macos-<version>.zip |
 | KOReader on Linux desktop | ZenPM-koreader-linux-<version>.zip |

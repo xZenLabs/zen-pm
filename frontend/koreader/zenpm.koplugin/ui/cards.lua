@@ -277,11 +277,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end)
     end, action_icon, action_icon_size, queued ~= nil or update_action)
     P.hit(view, x, y, action_x - x, h, function()
-        if pkg.zenpm_self then
-            view.app:perform_package_action(pkg)
-        else
-            view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
-        end
+        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
     end, "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))
     return h
 end

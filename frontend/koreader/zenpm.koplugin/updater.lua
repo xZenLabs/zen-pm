@@ -507,20 +507,17 @@ function Updater:check(daemon, allow_prerelease, force_refresh)
     return true, release.version
 end
 
-function Updater:update(daemon, allow_prerelease, force_refresh)
-    local ok, release_or_err = latest_release(daemon, allow_prerelease, force_refresh)
-    if not ok then return false, release_or_err end
-    local release = release_or_err
-    if not release or not version_gt(release.tag, daemon:plugin_version()) then
-        return true, "up_to_date"
+local function install_release(daemon, release)
+    if not release then
+        return false, "No compatible ZenPM release is available for this platform."
     end
 
     local plugin_dir = Constants.PLUGIN_DIR
     local plugins_dir = plugin_dir:match("^(.*)/[^/]+$")
     local plugin_name = plugin_dir:match("([^/]+)$")
-    if not plugins_dir or not plugin_name or not is_dir(plugin_dir) then
-        log_warn("installed plugin directory could not be found")
-        return false, "Could not find the installed ZenPM plugin directory."
+    if not plugins_dir or not plugin_name or not is_dir(plugins_dir) then
+        log_warn("KOReader plugins directory could not be found")
+        return false, "Could not find KOReader's plugins directory."
     end
     local probe = plugins_dir .. "/.zenpm-update-write-probe"
     local probe_file = io.open(probe, "wb")
@@ -535,6 +532,7 @@ function Updater:update(daemon, allow_prerelease, force_refresh)
     local stage_dir = plugins_dir .. "/.zenpm-update-stage"
     local staged_plugin = stage_dir .. "/" .. RELEASE_ROOT
     local backup_dir = plugins_dir .. "/." .. plugin_name .. ".backup"
+    local had_plugin = is_dir(plugin_dir)
     remove_tree(stage_dir)
     remove_tree(backup_dir)
     os.remove(zip_path)
@@ -554,13 +552,13 @@ function Updater:update(daemon, allow_prerelease, force_refresh)
         return false, unpack_err
     end
 
-    if not os.rename(plugin_dir, backup_dir) then
+    if had_plugin and not os.rename(plugin_dir, backup_dir) then
         remove_tree(stage_dir)
         log_warn("could not back up installed plugin")
         return false, "Could not move the old ZenPM plugin."
     end
     if not os.rename(staged_plugin, plugin_dir) then
-        os.rename(backup_dir, plugin_dir)
+        if had_plugin then os.rename(backup_dir, plugin_dir) end
         remove_tree(stage_dir)
         log_warn("could not install staged plugin; restored previous version")
         return false, "Could not install the updated ZenPM plugin."
@@ -569,6 +567,29 @@ function Updater:update(daemon, allow_prerelease, force_refresh)
     remove_tree(backup_dir)
     log_info("update installed", release.version)
     return true, release.version
+end
+
+function Updater:update(daemon, allow_prerelease, force_refresh)
+    local ok, release_or_err = latest_release(daemon, allow_prerelease, force_refresh)
+    if not ok then return false, release_or_err end
+    local release = release_or_err
+    if not release or not version_gt(release.tag, daemon:plugin_version()) then
+        return true, "up_to_date"
+    end
+    return install_release(daemon, release)
+end
+
+function Updater:reinstall(daemon, tag, allow_prerelease, force_refresh)
+    local releases, err = fetch_releases(force_refresh)
+    if not releases then return false, err end
+    local wanted = tostring(tag or "")
+    for _, release in ipairs(releases) do
+        local entry = find_asset(release, daemon)
+        if entry and entry.tag == wanted and (allow_prerelease or not entry.prerelease) then
+            return install_release(daemon, entry)
+        end
+    end
+    return false, "The selected ZenPM version is not available for this platform."
 end
 
 function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refresh)
