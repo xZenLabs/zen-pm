@@ -15,7 +15,8 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local UIManager = require("ui/uimanager")
 
 local Header = require("ui/header")
-local I18n = require("i18n")
+local Constants = require("constants")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Nav = require("ui/nav")
 local P = require("ui/primitives")
 local Pages = require("ui/pages")
@@ -151,6 +152,14 @@ end
 
 function AppView:_scroll_list(steps, page_sized)
     local key = self.app:scroll_key()
+    if steps > 0
+        and self.package_details_featured_visible
+        and not self.app.state.details_featured_expanded then
+        self.app.state.details_featured_expanded = true
+        self.app.state.scroll[key] = 0
+        self:refresh()
+        return true
+    end
     local old = self.app.state.scroll[key] or 0
     local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
     if page_sized and self.list_bounds then
@@ -315,6 +324,7 @@ function AppView:paintTo(bb, x, y)
     self.scroll_step = nil
     self.scrollbar = nil
     self.koreader_menu_zone = nil
+    self.package_details_featured_visible = false
     local m = Theme.metrics()
     self.dimen = Geom:new{ x = x, y = y, w = m.screen_w, h = m.screen_h }
     P.rect(bb, x, y, m.screen_w, m.screen_h, Theme.bg)
@@ -370,7 +380,7 @@ function AppView:draw_content(bb, x, y, w, h)
         local category = state.current_category or {}
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)
     elseif page == "installed" then
-        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages)
+        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
     elseif page == "queue" then
         max_scroll = Pages.queue(self, bb, x, y, w, h, scroll)
     elseif page == "sources" then

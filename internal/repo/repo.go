@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,6 +35,9 @@ func (m *Manager) List() ([]state.RepoEntry, error) {
 }
 
 func (m *Manager) Add(name, url string, priority int, trust string) error {
+	if IsKindleForgeRepo(name, url) && !m.st.AllowsKindleWAF() {
+		return errors.New("KindleForge is only available on compatible Kindle devices")
+	}
 	repos, err := m.st.ReadRepos()
 	if err != nil {
 		return err
@@ -89,6 +93,10 @@ func (m *Manager) Refresh() error {
 	failed := make(map[string]bool)
 	var failures []string
 	for _, r := range repos {
+		if IsKindleForgeRepo(r.Name, r.URL) && !m.st.AllowsKindleWAF() {
+			log.Infof("Skipping KindleForge on an unsupported device")
+			continue
+		}
 		log.Infof("Refreshing repo %s from %s", r.Name, r.URL)
 		entries, err := FetchCatalog(r.Name, r.URL, r.Priority, m.st.CacheDir)
 		if err != nil {
@@ -113,7 +121,7 @@ func (m *Manager) Refresh() error {
 		return fmt.Errorf("write merged catalog: %w", err)
 	}
 	if err := m.st.WriteValue(state.CatalogPublishedAtRefreshKey, ""); err != nil {
-		log.Warnf("Could not clear catalog publication-date refresh marker: %v", err)
+		log.Warnf("Could not clear catalog metadata refresh marker: %v", err)
 	}
 	m.CacheInstalledUninstallScripts(merged)
 	m.touchRefreshMarker()
@@ -243,7 +251,8 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
-			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, PublishedAt: e.PublishedAt,
+			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
+			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
 		})
 	}
 	return out
@@ -259,7 +268,8 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			IconURL: e.IconURL, RepoIconURL: e.RepoIconURL, Images: e.Images,
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
-			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, PublishedAt: e.PublishedAt,
+			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
+			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
 		})
 	}
 	return out

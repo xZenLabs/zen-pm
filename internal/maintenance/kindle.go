@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
+	"github.com/xZenLabs/zen-pm/internal/httpdiag"
 	"github.com/xZenLabs/zen-pm/internal/platform"
 	"github.com/xZenLabs/zen-pm/internal/releases"
 )
@@ -51,6 +52,9 @@ func Run(action string, parentPID int, removeSettings bool) error {
 	}
 	switch action {
 	case "update":
+		if !platform.KindleWAFAllowed(platform.Kindle) {
+			return errors.New("Kindle standalone is not supported on this device")
+		}
 		return update(parentPID)
 	case "uninstall":
 		return uninstall(parentPID, removeSettings)
@@ -170,7 +174,7 @@ func downloadAsset(asset releases.ReleaseAsset, destination string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("download update returned %s", resp.Status)
+		return fmt.Errorf("download update: %w", httpdiag.ResponseError(resp))
 	}
 
 	file, err := os.Create(destination)

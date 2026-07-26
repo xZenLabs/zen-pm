@@ -1,0 +1,40 @@
+local source = debug.getinfo(1, "S").source:gsub("^@", "")
+local root = assert(source:match("^(.*)/tests/[^/]+$"))
+
+local stopped = 0
+local uninstalled = 0
+
+package.preload["i18n"] = function()
+    return {
+        install = function() end,
+        uninstall = function() uninstalled = uninstalled + 1 end,
+    }
+end
+package.preload["dispatcher"] = function() return { registerAction = function() end } end
+package.preload["ui/widget/container/widgetcontainer"] = function()
+    return { extend = function(_, prototype) return prototype end }
+end
+package.preload["gettext"] = function() return function(value) return value end end
+package.preload["json"] = function() return {} end
+package.preload["socket.http"] = function() return {} end
+package.preload["ltn12"] = function() return {} end
+package.preload["socket"] = function() return { gettime = function() return 0 end } end
+package.preload["launcher"] = function() return { open = function() return true end } end
+package.preload["constants"] = function() return { PLUGIN_DIR = root } end
+package.preload["daemon"] = function()
+    return {
+        new = function()
+            return {
+                stop_standalone_backend = function() stopped = stopped + 1 end,
+            }
+        end,
+    }
+end
+
+local ZenPM = dofile(root .. "/main.lua")
+ZenPM:onCloseWidget()
+
+assert(stopped == 1)
+assert(uninstalled == 1)
+
+print("main tests passed")

@@ -85,8 +85,8 @@ For the local KOReader development build, set `KOREADER_DIR` in `.env`, then run
 ```
 
 This compiles the macOS backend, deploys `zenpm.koplugin` to the emulator, and
-restarts and focuses KOReader. It does not create release archives or change
-the project version.
+restarts and focuses KOReader. The command stays attached so its log output is
+visible; press Ctrl-C to stop it.
 
 ### Static linting (LuaCheck)
 

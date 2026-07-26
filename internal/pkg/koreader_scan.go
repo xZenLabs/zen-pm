@@ -50,8 +50,9 @@ var koreaderBuiltInPlugins = map[string]bool{
 
 var koreaderMetaVersion = regexp.MustCompile(`\bversion\s*=\s*["']([^"']+)["']`)
 
-// ScanKOReaderPlugins records installed external KOReader plugins that match
-// the current catalog. force bypasses the one-time scan marker.
+// ScanKOReaderPlugins records installed external KOReader plugins. Catalog
+// matches use catalog metadata; unmatched plugins use their directory name.
+// force bypasses the one-time scan marker.
 func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, error) {
 	var result KOReaderPluginScanResult
 	if !force {
@@ -101,47 +102,55 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 				continue
 			}
 			result.Scanned++
+			pluginPath := filepath.Join(pluginDir, dir.Name())
 			pkg := byModule[module]
 			if pkg == nil {
 				pkg = byID[module]
 			}
-			if pkg == nil {
-				continue
-			}
-			result.Matched++
 
-			version, err := koreaderPluginVersion(filepath.Join(pluginDir, dir.Name()))
+			id, name, repoName := module, module, ""
+			if pkg != nil {
+				result.Matched++
+				id, name, repoName = pkg.ID, pkg.Name, pkg.Repo
+			}
+
+			version, err := koreaderPluginVersion(pluginPath)
 			if err != nil {
 				log.Warnf("Could not read version for KOReader plugin %s: %v", module, err)
 				version = "0.0.0"
 			}
 
-			previous, exists := installedByID[pkg.ID]
+			previous, exists := installedByID[id]
 			if exists && version == "0.0.0" && previous.Version != "" && previous.Version != "0.0.0" {
-				continue
+				version = previous.Version
 			}
 			current := state.InstalledEntry{
-				ID: pkg.ID, Name: pkg.Name, Version: version, Repo: pkg.Repo,
+				ID: id, Name: name, Version: version, Repo: repoName, InstallPath: pluginPath,
 			}
 			if exists {
-				if previous.Name == current.Name && previous.Version == current.Version && previous.Repo == current.Repo {
-					continue
+				if pkg == nil {
+					current.Name = previous.Name
+					current.Repo = previous.Repo
 				}
 				current.Asset = previous.Asset
 				current.AssetArch = previous.AssetArch
 				current.InstalledAt = previous.InstalledAt
+				if previous.Name == current.Name && previous.Version == current.Version &&
+					previous.Repo == current.Repo && previous.InstallPath == current.InstallPath {
+					continue
+				}
 				if err := m.st.AppendInstalled(current); err != nil {
-					return result, fmt.Errorf("record KOReader plugin %s: %w", pkg.ID, err)
+					return result, fmt.Errorf("record KOReader plugin %s: %w", id, err)
 				}
 				result.Updated++
-				installedByID[pkg.ID] = current
+				installedByID[id] = current
 				continue
 			}
 			if err := m.st.AppendInstalled(current); err != nil {
-				return result, fmt.Errorf("record KOReader plugin %s: %w", pkg.ID, err)
+				return result, fmt.Errorf("record KOReader plugin %s: %w", id, err)
 			}
 			result.Added++
-			installedByID[pkg.ID] = current
+			installedByID[id] = current
 		}
 	}
 

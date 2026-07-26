@@ -22,6 +22,11 @@ alert() {
     lipc-set-prop com.lab126.pillow pillowAlert "$json"
 }
 
+if [ -d /mnt/us/kmc/kpm ]; then
+    alert "Update Failed!" "Kindle standalone is incompatible with KPM."
+    exit 1
+fi
+
 cleanup() {
     rm -rf "$TMPDIR"
 }

@@ -48,6 +48,15 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
     local bit = require("bit")
     local ffi = require("ffi")
     require("ffi/posix_h")
+    -- Some PocketBook KOReader FFI headers omit the Linux sockaddr_un layout.
+    if not pcall(ffi.typeof, "struct sockaddr_un") then
+        ffi.cdef[[
+            struct sockaddr_un {
+                unsigned short sun_family;
+                char sun_path[108];
+            };
+        ]]
+    end
     local C = ffi.C
 
     local function ensure_function(name, declaration)
@@ -55,6 +64,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             ffi.cdef(declaration)
         end
     end
+    ensure_function("connect", "int connect(int, const struct sockaddr *, unsigned int);")
     ensure_function("send", "ssize_t send(int, const void *, size_t, int);")
     ensure_function("recv", "ssize_t recv(int, void *, size_t, int);")
 

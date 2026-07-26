@@ -18,6 +18,8 @@ local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
 local PACKAGE_LIST_TIMEOUT = { block = 5, total = 20 }
 local PACKAGE_RELEASES_TIMEOUT = { block = 10, total = 15 }
+local PLUGIN_SCAN_TIMEOUT = { block = 10, total = 60 }
+local LOG_TIMEOUT = { block = 5, total = 30 }
 
 local function url_encode(value)
     value = tostring(value or "")
@@ -282,7 +284,7 @@ function Client:refresh_repos()
 end
 
 function Client:scan_installed_plugins()
-    return self:request("POST", "/koreader/plugins/scan", nil)
+    return self:request("POST", "/koreader/plugins/scan", nil, PLUGIN_SCAN_TIMEOUT)
 end
 
 function Client:list_packages(platform, check_updates, allow_prerelease)
@@ -293,9 +295,9 @@ function Client:list_packages(platform, check_updates, allow_prerelease)
     end
     if check_updates then
         table.insert(query, "check_updates=1")
-        if allow_prerelease then
-            table.insert(query, "beta=1")
-        end
+    end
+    if allow_prerelease then
+        table.insert(query, "beta=1")
     end
     if #query > 0 then
         path = path .. "?" .. table.concat(query, "&")
@@ -330,12 +332,20 @@ function Client:get_package_readme(id)
     return self:request("GET", "/packages/" .. url_encode(id) .. "/readme", nil)
 end
 
+function Client:get_package_release_notes(id, prerelease)
+    local path = "/packages/" .. url_encode(id) .. "/release-notes"
+    if prerelease then
+        path = path .. "?prerelease=1"
+    end
+    return self:request("GET", path, nil)
+end
+
 function Client:get_package_releases(id)
     return self:request("GET", "/packages/" .. url_encode(id) .. "/releases", nil, PACKAGE_RELEASES_TIMEOUT)
 end
 
 function Client:get_log(tail)
-    return self:request("GET", "/log?tail=" .. tostring(tail or 500), nil)
+    return self:request("GET", "/log?tail=" .. tostring(tail or 500), nil, LOG_TIMEOUT)
 end
 
 function Client:start_update()

@@ -20,12 +20,14 @@ import (
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
+	"github.com/xZenLabs/zen-pm/internal/httpdiag"
 	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url
 type CatalogEntry struct {
 	Repo                  string
 	Priority              int
@@ -58,7 +60,11 @@ type CatalogEntry struct {
 	Constraints           string
 	PluginModule          string
 	ReadmeURL             string
+	VersionsURL           string
 	PublishedAt           string
+	ReleaseNotesURL       string
+	PrereleaseNotesURL    string
+	PrereleaseVersion     string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -112,6 +118,10 @@ func (e *CatalogEntry) serialize() string {
 		optionalIntField(e.FeaturedOrder),
 		e.ReadmeURL,
 		e.PublishedAt,
+		e.ReleaseNotesURL,
+		e.PrereleaseNotesURL,
+		e.PrereleaseVersion,
+		e.VersionsURL,
 	}, "|")
 }
 
@@ -221,6 +231,18 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 32 {
 		e.PublishedAt = parts[31]
+	}
+	if len(parts) >= 33 {
+		e.ReleaseNotesURL = parts[32]
+	}
+	if len(parts) >= 34 {
+		e.PrereleaseNotesURL = parts[33]
+	}
+	if len(parts) >= 35 {
+		e.PrereleaseVersion = parts[34]
+	}
+	if len(parts) >= 36 {
+		e.VersionsURL = parts[35]
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -345,6 +367,10 @@ type manifestJSON struct {
 		SourceType            string          `json:"source_type,omitempty"`
 		SourceURL             string          `json:"source_url,omitempty"`
 		ReadmeURL             string          `json:"readme_url,omitempty"`
+		VersionsURL           string          `json:"versions_url,omitempty"`
+		ReleaseNotesURL       string          `json:"release_notes_url,omitempty"`
+		PrereleaseNotesURL    string          `json:"prerelease_notes_url,omitempty"`
+		PrereleaseVersion     string          `json:"prerelease_version,omitempty"`
 		PublishedAt           string          `json:"published_at,omitempty"`
 		Stars                 string          `json:"stars,omitempty"`
 		Assets                json.RawMessage `json:"assets,omitempty"`
@@ -406,9 +432,7 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 
 // IsKindleForgeRepo reports whether a repo is the known KindleForge registry.
 func IsKindleForgeRepo(repoName, repoURL string) bool {
-	name := strings.ToLower(strings.TrimSpace(repoName))
-	url := strings.ToLower(strings.TrimRight(strings.TrimSpace(repoURL), "/"))
-	return name == "kindleforge" || url == "https://kf.penguins184.xyz"
+	return state.IsKindleForgeRepo(repoName, repoURL)
 }
 
 // parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.
@@ -459,6 +483,10 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			SourceType:            p.SourceType,
 			SourceURL:             resolveURL(repoURL, p.SourceURL),
 			ReadmeURL:             resolveURL(repoURL, p.ReadmeURL),
+			VersionsURL:           resolveURL(repoURL, strings.TrimSpace(p.VersionsURL)),
+			ReleaseNotesURL:       resolveURL(repoURL, p.ReleaseNotesURL),
+			PrereleaseNotesURL:    resolveURL(repoURL, p.PrereleaseNotesURL),
+			PrereleaseVersion:     strings.TrimSpace(p.PrereleaseVersion),
 			PublishedAt:           strings.TrimSpace(p.PublishedAt),
 			Stars:                 strings.TrimSpace(p.Stars),
 			Assets:                resolveAssetURLs(repoURL, p.Assets),
@@ -737,18 +765,9 @@ func fetchBytes(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		detail := strings.Join(strings.Fields(string(body)), " ")
-		if len(detail) > 400 {
-			detail = detail[:400] + "..."
-		}
-		requestID := resp.Header.Get("CF-RAY")
-		log.Warnf("HTTP GET %s: status=%d protocol=%s server=%q cf_ray=%q body=%q",
-			url, resp.StatusCode, resp.Proto, resp.Header.Get("Server"), requestID, detail)
-		if detail != "" {
-			return nil, fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, url, detail)
-		}
-		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+		err := httpdiag.ResponseError(resp)
+		log.Warn(err.Error())
+		return nil, err
 	}
 	return io.ReadAll(resp.Body)
 }

@@ -84,6 +84,10 @@ local function android_companion_log(app)
     return contents
 end
 
+local function without_dhcpd_lines(log)
+    return (log:gsub("[^\r\n]*[dD][hH][cC][pP][dD][^\r\n]*\r?\n?", ""))
+end
+
 local function issue_body(description, app, username, uploaded_zenpm_log_url, uploaded_crash_log_url, inline_zenpm_log, inline_crash_log)
     local parts = {
         "**Describe the bug**",
@@ -239,6 +243,8 @@ function Reporter:submit(app, title, description, username)
         if companion_log ~= "" then
             zenpm_log = zenpm_log .. "\n\nAndroid companion log:\n" .. companion_log
         end
+        zenpm_log = without_dhcpd_lines(zenpm_log)
+        crash_log = without_dhcpd_lines(crash_log)
 
         local uploaded_zenpm_log_url
         local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log }, REPORT_TIMEOUT)

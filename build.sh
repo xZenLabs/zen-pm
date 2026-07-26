@@ -7,8 +7,8 @@ ROOT_DIR="$SCRIPT_DIR"
 DIST_DIR="$ROOT_DIR/dist"
 BUILD_DIR="$DIST_DIR/.build"
 VERSION_FILE="$ROOT_DIR/VERSION"
-KOREADER_META_FILE="$ROOT_DIR/frontend/koreader/zenpm.koplugin/_meta.lua"
 DEV_MODE=false
+LOCAL_REPO=false
 DEV_PID_FILE="$ROOT_DIR/.dev-kodev.pid"
 KOREADER_PLUGIN_DIR="$ROOT_DIR/frontend/koreader/zenpm.koplugin"
 NERD_FONT_SOURCE="$KOREADER_PLUGIN_DIR/fonts/SymbolsNerdFont-Regular.ttf"
@@ -16,25 +16,29 @@ NERD_FONT_NAME="ZenPMSymbolsNerdFont-Regular.ttf"
 INLINE_ICON_MAP="$KOREADER_PLUGIN_DIR/ui/inline_icon_map.lua"
 
 usage() {
-    echo "Usage: $0 [--dev]"
+    echo "Usage: $0 [--dev [--local]]"
     echo "Without --dev, version is read from $VERSION_FILE"
     exit 1
 }
 
-case "$#" in
-    0)
-        ;;
-    1)
-        if [ "$1" = "--dev" ]; then
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dev)
             DEV_MODE=true
-        else
+            ;;
+        --local)
+            LOCAL_REPO=true
+            ;;
+        *)
             usage
-        fi
-        ;;
-    *)
-        usage
-        ;;
-esac
+            ;;
+    esac
+    shift
+done
+
+if [ "$LOCAL_REPO" = true ] && [ "$DEV_MODE" != true ]; then
+    usage
+fi
 
 read_version_file() {
     if [ ! -f "$VERSION_FILE" ]; then
@@ -83,27 +87,6 @@ validate_semver() {
     printf '%s\n' "$candidate" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
 }
 
-next_version() {
-    version="$1"
-    case "$version" in
-        *-beta)
-            printf '%s1\n' "$version"
-            return
-            ;;
-    esac
-
-    beta_number=$(printf '%s\n' "$version" | sed -n 's/.*-beta\([0-9][0-9]*\)$/\1/p')
-    if [ -n "$beta_number" ]; then
-        printf '%s-beta%s\n' "${version%-beta*}" "$((beta_number + 1))"
-        return
-    fi
-
-    major=$(printf '%s' "$version" | cut -d. -f1)
-    minor=$(printf '%s' "$version" | cut -d. -f2)
-    patch=$(printf '%s' "$version" | cut -d. -f3)
-    printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))"
-}
-
 run_dev() {
     ENV_FILE="$ROOT_DIR/.env"
     if [ ! -f "$ENV_FILE" ]; then
@@ -142,6 +125,10 @@ run_dev() {
     echo "Building macOS backend..."
     GOFLAGS="-trimpath -buildvcs=false"
     LDFLAGS="-s -w -buildid= -X main.version=$VERSION"
+    if [ "$LOCAL_REPO" = true ]; then
+        LDFLAGS="$LDFLAGS -X github.com/xZenLabs/zen-pm/internal/state.DefaultZenLabsRepoURL=http://localhost:8000"
+        echo "Using local ZenPM repository: http://localhost:8000"
+    fi
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$DEV_BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm
     GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$DEV_BUILD_DIR/zenpm-darwin-amd64" ./cmd/zenpm
     lipo -create -output "$DEV_BUILD_DIR/zenpm-darwin" "$DEV_BUILD_DIR/zenpm-darwin-amd64" "$DEV_BUILD_DIR/zenpm-darwin-arm64"
@@ -219,14 +206,11 @@ run_dev() {
         esac
     fi
 
-    (
-        cd "$KOREADER_DIR"
-        nohup "$KOREADER_DIR/kodev" run >/dev/null 2>&1 &
-        kodev_pid=$!
-        printf '%s\n' "$kodev_pid" > "$DEV_PID_FILE"
-        focus_koreader "$kodev_pid" &
-    )
-    echo "Restarted KOReader development build"
+    cd "$KOREADER_DIR"
+    printf '%s\n' "$$" > "$DEV_PID_FILE"
+    focus_koreader "$$" &
+    echo "Starting KOReader development build (attached; press Ctrl-C to stop)"
+    "$KOREADER_DIR/kodev" run
 }
 
 if [ "$DEV_MODE" = true ]; then
@@ -301,10 +285,10 @@ build_go() {
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm
     GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-amd64" ./cmd/zenpm
     if command -v upx >/dev/null 2>&1; then
-        # ARMsf is not compressed for compatibility.
-        echo "Packing Linux and ARM Go binaries with UPX..."
+        # Keep both 32-bit e-reader binaries uncompressed for compatibility
+        # with legacy kernels, including the Kobo Touch A (N905).
+        echo "Packing desktop Linux Go binaries with UPX..."
         upx --best --lzma \
-            "$BUILD_DIR/zenpm-hf" \
             "$BUILD_DIR/zenpm-linux-arm64" \
             "$BUILD_DIR/zenpm-linux-amd64"
     else
@@ -478,9 +462,3 @@ echo "KOReader e-reader 32-bit:   $KOREADER_EREADER_ZIP"
 echo "KOReader Android plugin:     $KOREADER_ANDROID_ZIP"
 echo "KOReader macOS plugin:      $KOREADER_MACOS_ZIP"
 echo "KOReader Linux plugin:      $KOREADER_LINUX_ZIP"
-
-# Bump the beta number, or the patch version for stable releases.
-NEXT_VERSION=$(next_version "$VERSION")
-printf '%s\n' "$NEXT_VERSION" > "$VERSION_FILE"
-set_koreader_meta_version "$KOREADER_META_FILE" "$NEXT_VERSION"
-echo "Next version:     $NEXT_VERSION (VERSION bumped)"

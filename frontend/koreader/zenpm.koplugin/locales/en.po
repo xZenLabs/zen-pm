@@ -48,6 +48,9 @@ msgstr "Add Source"
 msgid "Added to Queue"
 msgstr "Added to Queue"
 
+msgid "All categories"
+msgstr "All categories"
+
 msgid "Always manually pick version"
 msgstr "Always manually pick version"
 
@@ -168,8 +171,11 @@ msgstr "Could not install bundled ZenPM backend to: "
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "Could not install the ZenPM command-line wrapper."
 
-msgid "Could not load GitHub releases: "
-msgstr "Could not load GitHub releases: "
+msgid "Could not load available versions: "
+msgstr "Could not load available versions: "
+
+msgid "Could not load release notes: "
+msgstr "Could not load release notes: "
 
 msgid "Could not read log: "
 msgstr "Could not read log: "
@@ -246,6 +252,9 @@ msgstr "enabled"
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Enter your GitHub username to be tagged in the issue"
 
+msgid "Error code: "
+msgstr "Error code: "
+
 msgid "Failed to load package: "
 msgstr "Failed to load package: "
 
@@ -266,6 +275,9 @@ msgstr "Failed to submit report: "
 
 msgid "Featured"
 msgstr "Featured"
+
+msgid "Filter by category"
+msgstr "Filter by category"
 
 msgid "Font preview"
 msgstr "Font preview"
@@ -351,8 +363,8 @@ msgstr "Loading category..."
 msgid "Loading featured packages..."
 msgstr "Loading featured packages..."
 
-msgid "Loading GitHub releases..."
-msgstr "Loading GitHub releases..."
+msgid "Loading available versions..."
+msgstr "Loading available versions..."
 
 msgid "Loading installed packages..."
 msgstr "Loading installed packages..."
@@ -365,6 +377,9 @@ msgstr "Loading packages, please wait"
 
 msgid "Loading packages..."
 msgstr "Loading packages..."
+
+msgid "Loading release notes..."
+msgstr "Loading release notes..."
 
 msgid "Loading source..."
 msgstr "Loading source..."
@@ -399,8 +414,8 @@ msgstr "No description"
 msgid "No description available."
 msgstr "No description available."
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "No GitHub releases with ZIP assets were found."
+msgid "No installable versions were found."
+msgstr "No installable versions were found."
 
 msgid "No installed packages match the filter."
 msgstr "No installed packages match the filter."
@@ -428,6 +443,9 @@ msgstr "No queued operations."
 
 msgid "No README available."
 msgstr "No README available."
+
+msgid "No release notes available."
+msgstr "No release notes available."
 
 msgid "No repositories configured."
 msgstr "No repositories configured."
@@ -539,6 +557,9 @@ msgstr "reinstalled"
 
 msgid "Reinstalling"
 msgstr "Reinstalling"
+
+msgid "Release Notes"
+msgstr "Release Notes"
 
 msgid "remote server"
 msgstr "remote server"

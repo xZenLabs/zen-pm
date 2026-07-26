@@ -14,7 +14,6 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/releases"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
-	"github.com/xZenLabs/zen-pm/internal/tx"
 )
 
 // Manager drives package install/uninstall/update operations.
@@ -47,14 +46,14 @@ func (m *Manager) InstallAsset(id, assetOverride string) error {
 	return m.installAssetRelease(id, assetOverride, "")
 }
 
-// InstallRelease installs a specific GitHub release and records its tag as the
+// InstallRelease installs a specific release and records its tag as the
 // installed version.
 func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
 	return m.installAssetRelease(id, assetOverride, tag)
 }
 
 // Reinstall removes an installed package before installing it again. When tag
-// is non-empty, it installs that specific GitHub release.
+// is non-empty, it installs that specific release.
 func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 	uninstallAsset := ""
 	if m.isPatchFileInstalled(id, assetOverride) {
@@ -69,16 +68,24 @@ func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 	return m.InstallAsset(id, assetOverride)
 }
 
-func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) error {
+func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (retErr error) {
 	catalog, plan, installedSet, err := m.installPlan(id)
 	if err != nil {
 		return err
 	}
 
-	j, err := tx.Begin(m.st, "install", id)
-	if err != nil {
+	if err := m.st.LockAcquire("operation"); err != nil {
 		return err
 	}
+	log.Infof("Package operation started: install %s", id)
+	defer func() {
+		m.st.LockRelease("operation")
+		if retErr != nil {
+			log.Errorf("Package operation failed: install %s: %v", id, retErr)
+			return
+		}
+		log.Infof("Package operation completed: install %s", id)
+	}()
 
 	byID := make(map[string]*repo.CatalogEntry, len(catalog))
 	for _, e := range catalog {
@@ -99,7 +106,6 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		if pkgID == id && releaseTag != "" && !isFontPackage(entry) {
 			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
 			if err != nil {
-				j.Abort("release failed: " + err.Error())
 				return err
 			}
 			entryCopy := *entry
@@ -116,7 +122,6 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		} else {
 			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(installEntry.Version), entry.Repo)
 		}
-		j.Record("execute", "ok", fmt.Sprintf("pkg=%s ver=%s", pkgID, installEntry.Version))
 		genericInstaller := m.nativeKOReaderInstaller(entry, override)
 		installedPluginVersion := ""
 		installedPath := ""
@@ -124,18 +129,14 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			var err error
 			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller)
 			if err != nil {
-				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("install %s: %w", pkgID, err)
 			}
 		} else {
-			j.Record("fetch-script", "ok", "pkg="+pkgID)
 			scriptPath, err := m.repos.FetchScript(entry.InstallURL)
 			if err != nil {
-				j.Abort("fetch failed: " + err.Error())
 				return fmt.Errorf("fetch install script for %s: %w", pkgID, err)
 			}
 			if err := platform.ExecuteScriptWithEnv(scriptPath, m.installEnv(installEntry, override)); err != nil {
-				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 			}
 		}
@@ -157,14 +158,12 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 		if patchReason != "" {
 			asset := m.resolvePatchAsset(entry, override)
 			if asset == "" {
-				j.Abort("patch asset missing")
 				return fmt.Errorf("install %s: could not resolve patch file name", pkgID)
 			}
 			_ = m.st.RemoveInstalled(pkgID)
 			if err := m.st.AppendInstalledPatchFile(state.PatchFileEntry{
 				PackageID: pkgID, Asset: asset, Name: entry.Name, Version: installedVersion, Repo: entry.Repo, InstallPath: installedPath,
 			}); err != nil {
-				j.Abort("record failed: " + err.Error())
 				return err
 			}
 			log.Infof("Installed patch file: %s / %s", pkgID, asset)
@@ -177,13 +176,11 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) erro
 			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
 			Asset: selectedName, AssetArch: selectedArch, InstallPath: installedPath,
 		}); err != nil {
-			j.Abort("record failed: " + err.Error())
 			return err
 		}
 		log.Infof("Installed: %s %s", pkgID, displayVersion(installedVersion))
 	}
 
-	j.Commit()
 	return nil
 }
 
@@ -212,9 +209,10 @@ func (m *Manager) installedDependencySet(installed []state.InstalledEntry) map[s
 	return installedSet
 }
 
-func (m *Manager) Uninstall(id, asset string) error {
+func (m *Manager) Uninstall(id, asset string) (retErr error) {
 	asset = strings.TrimSpace(asset)
 	isPatch := asset != ""
+	trackedPluginPath := ""
 	if isPatch {
 		if !m.isPatchFileInstalled(id, asset) {
 			return fmt.Errorf("patch file %q of %q is not installed", asset, id)
@@ -225,11 +223,21 @@ func (m *Manager) Uninstall(id, asset string) error {
 		if !ok {
 			return fmt.Errorf("package %q is not installed", id)
 		}
+		installedPath, err := m.installedPackagePath(id)
+		if err != nil {
+			return fmt.Errorf("read installed package %q: %w", id, err)
+		}
+		if strings.HasSuffix(filepath.Base(installedPath), ".koplugin") {
+			trackedPluginPath = installedPath
+		}
 		log.Infof("Uninstalling %s", id)
 	}
 
 	entry := m.findCatalogEntry(id)
-	if entry == nil || (entry.UninstallURL == "" && m.nativeKOReaderInstaller(entry, asset) == "") {
+	trackedUnmatchedPlugin := trackedPluginPath != "" &&
+		m.nativeKOReaderInstaller(entry, asset) != genericPluginInstaller
+	if !trackedUnmatchedPlugin &&
+		(entry == nil || (entry.UninstallURL == "" && m.nativeKOReaderInstaller(entry, asset) == "")) {
 		log.Warnf("Package %s uninstall script missing from catalog; refreshing catalog", id)
 		if err := m.repos.Refresh(); err != nil {
 			log.Warnf("Package %s catalog refresh before uninstall failed: %v", id, err)
@@ -238,27 +246,37 @@ func (m *Manager) Uninstall(id, asset string) error {
 		}
 	}
 
-	j, err := tx.Begin(m.st, "uninstall", id)
-	if err != nil {
+	if err := m.st.LockAcquire("operation"); err != nil {
 		return err
 	}
+	log.Infof("Package operation started: uninstall %s", id)
+	defer func() {
+		m.st.LockRelease("operation")
+		if retErr != nil {
+			log.Errorf("Package operation failed: uninstall %s: %v", id, retErr)
+			return
+		}
+		log.Infof("Package operation completed: uninstall %s", id)
+	}()
 
 	genericInstaller := m.nativeKOReaderInstaller(entry, asset)
-	if genericInstaller != "" {
+	if trackedUnmatchedPlugin {
+		if err := m.removeTrackedKOReaderPlugin(trackedPluginPath); err != nil {
+			return err
+		}
+		log.Infof("Package %s removed from tracked KOReader plugin path %s", id, trackedPluginPath)
+	} else if genericInstaller != "" {
 		if err := m.uninstallGenericKOReader(entry, asset, genericInstaller); err != nil {
-			j.Abort("native removal failed: " + err.Error())
 			return err
 		}
 		log.Infof("Package %s removed with native KOReader installer", id)
 	} else if entry != nil && entry.UninstallURL != "" {
-		scriptPath := ""
 		log.Infof("Package %s uninstall metadata: repo=%s version=%s uninstall_url=%s", id, entry.Repo, displayVersion(entry.Version), entry.UninstallURL)
-		scriptPath, err = m.repos.FetchScript(entry.UninstallURL)
+		scriptPath, err := m.repos.FetchScript(entry.UninstallURL)
 		if err != nil {
 			log.Warnf("Fetch uninstall script failed for %s, trying cached script: %v", id, err)
 			scriptPath = m.st.CachedUninstallScriptPath(id)
 			if _, statErr := os.Stat(scriptPath); statErr != nil {
-				j.Abort("fetch failed: " + err.Error())
 				return fmt.Errorf("fetch uninstall script: %w", err)
 			}
 			log.Infof("Package %s using cached uninstall script: %s", id, scriptPath)
@@ -278,7 +296,6 @@ func (m *Manager) Uninstall(id, asset string) error {
 				}
 			}
 			if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
-				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("uninstall script failed: %w", err)
 			}
 			log.Infof("Package %s uninstall script completed", id)
@@ -293,7 +310,6 @@ func (m *Manager) Uninstall(id, asset string) error {
 				env["ZENPM_PACKAGE_SOURCE_ASSET"] = asset
 			}
 			if err := platform.ExecuteScriptWithEnv(scriptPath, env); err != nil {
-				j.Abort("execute failed: " + err.Error())
 				return fmt.Errorf("uninstall script failed: %w", err)
 			}
 			log.Infof("Package %s uninstall script completed", id)
@@ -304,22 +320,18 @@ func (m *Manager) Uninstall(id, asset string) error {
 
 	if isPatch {
 		if err := m.st.RemoveInstalledPatchFile(id, asset); err != nil {
-			j.Abort("remove from db failed: " + err.Error())
 			return err
 		}
 		log.Infof("Uninstalled patch file: %s / %s", id, asset)
-		j.Commit()
 		return nil
 	}
 
 	if err := m.st.RemoveInstalled(id); err != nil {
-		j.Abort("remove from db failed: " + err.Error())
 		return err
 	}
 	_ = os.Remove(m.st.CachedUninstallScriptPath(id))
 
 	log.Infof("Uninstalled: %s", id)
-	j.Commit()
 	return nil
 }
 

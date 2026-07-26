@@ -5,7 +5,8 @@ local InlineIcons = require("ui/inline_icon_map")
 local Models = require("models")
 
 local Geom = require("ui/geometry")
-local I18n = require("i18n")
+local Constants = require("constants")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
 local _ = require("gettext")
@@ -43,7 +44,8 @@ function Header.page_title(view)
         return I18n.dynamic_or(category.label, _("Category")) .. " ("
             .. filtered_count(state.visible_packages, state.category_packages, state.filters.category) .. ")"
     elseif page == "installed" then
-        return _("Installed") .. " (" .. tostring(#(state.installed_packages or {})) .. ")"
+        return _("Installed") .. " ("
+            .. filtered_count(state.visible_packages, state.installed_packages, state.filters.installed) .. ")"
     elseif page == "sources" then
         return _("Sources") .. " (" .. tostring(#(state.repos or {})) .. ")"
     elseif page == "source_details" then
@@ -95,6 +97,22 @@ function Header.draw_sort_button(view, bb, x, y, kind)
     P.center_text_box(bb, InlineIcons.icon("sort"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
     P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
     P.hit(view, x, y, w, s, function() view.app:prompt_sort(kind) end, "sort:" .. tostring(kind))
+    return w
+end
+
+function Header.draw_installed_category_button(view, bb, x, y)
+    local h = Theme.scale(42)
+    local icon = Theme.scale(24)
+    local category = Models.category_for_id(view.app.state.filters.installed)
+    local label = category and Models.category_label(category) or _("Filter")
+    local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
+    local w = Theme.scale(10) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
+    P.box(bb, x, y, w, h, { border = false, background = Theme.ink, radius = math.floor(h / 2) })
+    P.center_text_box(bb, InlineIcons.icon("filter"), x + Theme.scale(10), y, icon, h, "small", { bold = true, color = Theme.bg })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = Theme.bg })
+    P.hit(view, x, y, w, h, function()
+        view.app:prompt_installed_category_filter()
+    end, "filter-category:installed")
     return w
 end
 
@@ -245,6 +263,9 @@ function Header.draw(view, bb, x, y, w)
     })[page]
     if sort_kind then
         control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
+    end
+    if page == "installed" then
+        control_x = control_x + Header.draw_installed_category_button(view, bb, control_x, button_y) + gap
     end
     local right_x = x + w - pad
     if page == "sources" then

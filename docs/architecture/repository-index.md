@@ -39,6 +39,7 @@ Example:
       "published_at": "2026-03-01T12:00:00Z",
       "source": "https://github.com/koreader/koreader",
       "readme_url": "packages/koreader-kindle/README.md",
+      "versions_url": "packages/koreader-kindle/versions.json",
       "dependencies": ["kual"],
       "conflicts": ["zen-ui"],
       "install_url": "packages/koreader-kindle/scripts/install.sh",
@@ -48,6 +49,12 @@ Example:
   ]
 }
 ```
+
+`versions_url` points to a JSON object with a `releases` array. Each release
+contains `tag_name`, optional `name` and `prerelease`, plus `assets` with
+`name`, `url`, optional `size`, and optional `digest`. Clients must treat a
+missing, empty, or not-found versions file as an empty version history and
+must not query the upstream source as a fallback.
 
 `platforms` are required compatibility capabilities, not alternatives. For
 example, `["kindle", "koreader"]` is shown only when both Kindle and KOReader

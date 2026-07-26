@@ -200,7 +200,14 @@ function Daemon:kindle_firmware_version()
     return read_text("/etc/version.txt"):match("(%d+%.%d+%.%d+[%d%.]*)")
 end
 
+function Daemon:kindle_kpm_installed()
+    return path_exists("/mnt/us/kmc/kpm")
+end
+
 function Daemon:kindle_homepage_install_supported()
+    if self:detect_platform() ~= "kindle" or self:kindle_kpm_installed() then
+        return false
+    end
     local version = self:kindle_firmware_version()
     return not version_is_newer(version, "5.18.3")
 end

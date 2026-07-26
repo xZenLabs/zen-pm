@@ -3,7 +3,8 @@
 -- shared state and hitbox registration.
 
 local Cards = require("ui/cards")
-local I18n = require("i18n")
+local Constants = require("constants")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local Markdown = require("ui/markdown")
 local MarkdownRenderer = require("ui/markdown_renderer")
@@ -247,15 +248,6 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
     local rows = {
         { text = _("Scan installed plugins"), callback = function() view.app:scan_installed_plugins() end },
         {
-            text = _("Check for updates automatically"),
-            toggle = true,
-            value = function() return view.app.state.update_auto_check end,
-            callback = function()
-                view.app:toggle_automatic_update_checks()
-                view:refresh()
-            end,
-        },
-        {
             text = _("Only show installable packages"),
             toggle = true,
             value = function() return view.app.state.filter_installable end,
@@ -362,7 +354,11 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local inner_x = x + pad + Theme.scale(12)
     local inner_w = w - pad * 2 - Theme.scale(24)
     local iy = cy + Theme.scale(12)
-    local show_featured_at_top = pkg.featured_image and not Models.is_font_package(pkg)
+    local show_featured_at_top = pkg.featured_image
+        and not Models.is_font_package(pkg)
+        and not view.app.state.details_featured_expanded
+        and (tonumber(scroll) or 0) <= 0
+    view.package_details_featured_visible = show_featured_at_top
     if show_featured_at_top then
         local art_h = m.featured_h - Theme.scale(118)
         local border = Theme.scale(2)
@@ -400,6 +396,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local readme = tostring(pkg.readme or "")
         if readme == "" then
             readme = _("No README available.")
+            if pkg.readme_error_code then
+                readme = readme .. " " .. _("Error code: ") .. tostring(pkg.readme_error_code)
+            end
         end
         table.insert(readme_blocks, { kind = "heading", level = 2, text = _("README"), plain = true })
         for _, block in ipairs(Markdown.parse(readme)) do
@@ -414,15 +413,29 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         })
     end
     local assets = Models.package_assets(pkg)
-    local show_patch_tabs = Models.is_patch_package(pkg) and #assets > 0
-    local details_tab = show_patch_tabs and (view.app.state.details_tab or "readme") or "readme"
-    if details_tab ~= "patches" then
+    local show_patch_tab = Models.is_patch_package(pkg) and #assets > 0
+    local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates)
+    local details_tab = view.app.state.details_tab or "readme"
+    if details_tab == "release_notes" and not show_release_notes_tab then
+        details_tab = "readme"
+    elseif details_tab == "patches" and not show_patch_tab then
+        details_tab = "readme"
+    elseif details_tab ~= "release_notes" and details_tab ~= "patches" then
         details_tab = "readme"
     end
-    if show_patch_tabs then
+    local tabs = {
+        { id = "readme", label = _("README") },
+    }
+    if show_release_notes_tab then
+        table.insert(tabs, { id = "release_notes", label = _("Release Notes") })
+    end
+    if show_patch_tab then
+        table.insert(tabs, { id = "patches", label = _("Patches") })
+    end
+    if #tabs > 1 then
         local tab_h = Theme.scale(38)
         local gap = Theme.scale(8)
-        local tab_w = math.floor((inner_w - gap) / 2)
+        local tab_w = math.floor((inner_w - gap * (#tabs - 1)) / #tabs)
         local function draw_tab(id, label, tx, tw)
             local selected = details_tab == id
             P.box(bb, tx, iy, tw, tab_h, {
@@ -435,8 +448,12 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
                 view.app:set_package_details_tab(id)
             end, "details-tab:" .. id)
         end
-        draw_tab("readme", _("README"), inner_x, tab_w)
-        draw_tab("patches", _("Patches"), inner_x + tab_w + gap, inner_w - tab_w - gap)
+        local tab_x = inner_x
+        for index, tab in ipairs(tabs) do
+            local width = index == #tabs and inner_x + inner_w - tab_x or tab_w
+            draw_tab(tab.id, tab.label, tab_x, width)
+            tab_x = tab_x + width + gap
+        end
         iy = iy + tab_h + Theme.scale(14)
     end
     local content_h = cy + panel_h - Theme.scale(14) - iy
@@ -475,20 +492,51 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local viewport_inset = Theme.scale(6)
     local paragraph_w = inner_w - Theme.scale(12)
     local readme_base_url = pkg.readme_base_url or Markdown.base_url(pkg.readme_url)
-    local readme_link_base_url = Markdown.source_base_url(pkg.source)
-    if readme_link_base_url == "" then
-        readme_link_base_url = readme_base_url
+    local content_blocks = readme_blocks
+    local content_link_base_url = Markdown.source_base_url(pkg.source)
+    if content_link_base_url == "" then
+        content_link_base_url = readme_base_url
     end
-    local readme_image_base_url = pkg.readme_image_base_url
-    if not readme_image_base_url or readme_image_base_url == "" then
-        readme_image_base_url = Markdown.public_image_base_url(pkg.source)
+    local content_image_base_url = pkg.readme_image_base_url
+    if not content_image_base_url or content_image_base_url == "" then
+        content_image_base_url = Markdown.public_image_base_url(pkg.source)
     end
-    if readme_image_base_url == "" then
-        readme_image_base_url = readme_base_url
+    if content_image_base_url == "" then
+        content_image_base_url = readme_base_url
+    end
+    if details_tab == "release_notes" then
+        content_blocks = {}
+        local release_tag = tostring(pkg.release_notes_tag or "")
+        if release_tag ~= "" then
+            table.insert(content_blocks, { kind = "heading", level = 2, text = _("Version: ") .. release_tag, plain = true })
+        end
+        local release_notes = tostring(pkg.release_notes or "")
+        if release_notes == "" then
+            local message = _("No release notes available.")
+            if pkg.release_notes_error_code then
+                message = message .. " " .. _("Error code: ") .. tostring(pkg.release_notes_error_code)
+            end
+            table.insert(content_blocks, { kind = "paragraph", text = message, plain = true })
+        else
+            for _, block in ipairs(Markdown.parse(release_notes)) do
+                table.insert(content_blocks, block)
+            end
+        end
+        content_link_base_url = tostring(pkg.release_notes_base_url or "")
+        if content_link_base_url == "" then
+            content_link_base_url = Markdown.source_base_url(pkg.source)
+        end
+        content_image_base_url = tostring(pkg.release_notes_image_base_url or "")
+        if content_image_base_url == "" then
+            content_image_base_url = Markdown.public_image_base_url(pkg.source)
+        end
+        if content_image_base_url == "" then
+            content_image_base_url = content_link_base_url
+        end
     end
     local viewport_y = iy + viewport_inset
     local viewport_h = math.max(1, content_h - viewport_inset * 2)
-    local max_scroll = MarkdownRenderer.render(view, bb, readme_blocks, readme_link_base_url, readme_image_base_url, inner_x, viewport_y, paragraph_w, viewport_h, scroll)
+    local max_scroll = MarkdownRenderer.render(view, bb, content_blocks, content_link_base_url, content_image_base_url, inner_x, viewport_y, paragraph_w, viewport_h, scroll)
     Scroll.set_list_bounds(view, inner_x, viewport_y, inner_w, viewport_h, Theme.scale(96))
     return max_scroll
 end

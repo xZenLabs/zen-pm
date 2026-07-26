@@ -24,7 +24,7 @@ ZenPM brings package discovery and lifecycle management to e-readers:
 | Track your setup | See installed packages and available updates in one place. |
 | Manage sources | Review the built-in repositories or add your own compatible repository. |
 | Queue changes | In the KOReader plugin, review several install, update, or removal actions before confirming them. |
-| Work safely | Operations are serialized, journaled, and performed by a local daemon bound only to the device. |
+| Work safely | Operations are serialized and performed by a local daemon bound only to the device. |
 
 On Kindle, ZenPM has a native WAF interface. In KOReader, ZenPM appears in the
 KOReader menu and keeps its managed backend and state in KOReader's settings
@@ -65,7 +65,7 @@ needs the device's sqlite3 binary and a script launcher such as KUAL. Do not
 install the standalone package on any setup without root access.
 
 > [!WARNING]
-> As with KindleForge, using ZenPM on WinterBreak, SpringBreak, Sanctuary, or
+> As with KindleForge, using ZenPM Kindle Standalone on WinterBreak, SpringBreak, Sanctuary, or
 > similar devices—anything with a `JAILBREAK` booklet—is strongly discouraged
 > to prevent future conflicts and other issues with KPM. This will be resolved
 > in a future update.
@@ -101,7 +101,7 @@ updates.
 | Device or runtime | Download |
 | --- | --- |
 | KOReader on a 32-bit Kindle or Kobo | ZenPM-koreader-ereader-<version>.zip |
-| KOReader on ARM64 Kobo, including Kobo Libra Colour | ZenPM-koreader-linux-<version>.zip |
+| KOReader on ARM64 Kobo, including (some) Kobo Libra Colour | ZenPM-koreader-linux-<version>.zip |
 | KOReader on Android | ZenPM-koreader-android-<version>.zip and ZenPM-android-<version>.apk |
 | KOReader on macOS | ZenPM-koreader-macos-<version>.zip |
 | KOReader on Linux desktop | ZenPM-koreader-linux-<version>.zip |
@@ -181,7 +181,8 @@ zpm doctor
 zpm list
 ~~~
 
-The first launch seeds the ZenLabs and KindleForge repositories. User-added
+The first launch seeds the ZenLabs repository. Compatible Kindles also seed
+KindleForge. User-added
 repositories are refreshed from their URL and assigned trust automatically.
 
 ### Updates and removal
@@ -243,8 +244,10 @@ unsigned or plain-HTTP repositories accordingly. See the
 
 ## Build and develop
 
-Building requires Go 1.22+ and FontTools (pyftsubset). Set a SemVer version in
-VERSION, then run:
+Building requires Go 1.22+ and FontTools (pyftsubset). Builds use the SemVer
+version already in `VERSION` and overwrite the prior `dist/` artifacts. Update
+`VERSION` and `frontend/koreader/zenpm.koplugin/_meta.lua` together only when
+preparing a new release, then run:
 
 ~~~sh
 ./build.sh

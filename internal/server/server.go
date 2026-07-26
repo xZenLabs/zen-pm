@@ -71,6 +71,10 @@ type pkgJSON struct {
 	SourceType            string            `json:"source_type,omitempty"`
 	SourceURL             string            `json:"source_url,omitempty"`
 	ReadmeURL             string            `json:"readme_url,omitempty"`
+	VersionsURL           string            `json:"versions_url,omitempty"`
+	ReleaseNotesURL       string            `json:"release_notes_url,omitempty"`
+	PrereleaseNotesURL    string            `json:"prerelease_notes_url,omitempty"`
+	PrereleaseVersion     string            `json:"prerelease_version,omitempty"`
 	PublishedAt           string            `json:"published_at,omitempty"`
 	Stars                 string            `json:"stars,omitempty"`
 	PluginModule          string            `json:"plugin_module,omitempty"`
@@ -252,7 +256,7 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 		return nil, true
 	}
 	if refreshRequired, _ := s.st.ReadValue(state.CatalogPublishedAtRefreshKey); refreshRequired == "1" {
-		log.Info("Catalog needs publication-date refresh")
+		log.Info("Catalog metadata needs refresh")
 		return catalog, true
 	}
 	if age := s.repos.CatalogAge(); age >= catalogMaxAge {
@@ -286,15 +290,53 @@ func (s *Server) autoScanKOReaderPlugins() {
 	}
 }
 
-// responseRecorder captures the status code written by a handler.
+const accessErrorBodyLimit = 1024
+
+// responseRecorder captures the status code and a bounded error body written
+// by a handler.
 type responseRecorder struct {
 	http.ResponseWriter
-	status int
+	status        int
+	wroteHeader   bool
+	errorBody     strings.Builder
+	bodyTruncated bool
 }
 
 func (rec *responseRecorder) WriteHeader(code int) {
+	if rec.wroteHeader {
+		return
+	}
+	rec.wroteHeader = true
 	rec.status = code
 	rec.ResponseWriter.WriteHeader(code)
+}
+
+func (rec *responseRecorder) Write(data []byte) (int, error) {
+	if !rec.wroteHeader {
+		rec.WriteHeader(http.StatusOK)
+	}
+	if rec.status >= http.StatusBadRequest {
+		remaining := accessErrorBodyLimit - rec.errorBody.Len()
+		if remaining <= 0 {
+			rec.bodyTruncated = true
+		} else {
+			capture := data
+			if len(capture) > remaining {
+				rec.bodyTruncated = true
+				capture = capture[:remaining]
+			}
+			_, _ = rec.errorBody.Write(capture)
+		}
+	}
+	return rec.ResponseWriter.Write(data)
+}
+
+func (rec *responseRecorder) errorDetail() string {
+	detail := strings.Join(strings.Fields(rec.errorBody.String()), " ")
+	if rec.bodyTruncated {
+		detail += "..."
+	}
+	return detail
 }
 
 // wrap adds CORS headers, enforces local-only access, and logs every request.
@@ -307,19 +349,33 @@ func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		if !s.unixSocket {
 			host, _, _ := net.SplitHostPort(r.RemoteAddr)
 			if host != "127.0.0.1" && host != "::1" {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				http.Error(rec, "forbidden", http.StatusForbidden)
+				logAccess(r, rec)
 				return
 			}
 		}
-		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		h(rec, r)
-		if shouldLogAccess(r, rec.status) {
-			log.Infof("%s %s %d", r.Method, r.URL.RequestURI(), rec.status)
-		}
+		logAccess(r, rec)
 	}
+}
+
+func logAccess(r *http.Request, rec *responseRecorder) {
+	if !shouldLogAccess(r, rec.status) {
+		return
+	}
+	if rec.status >= http.StatusBadRequest {
+		message := fmt.Sprintf("%s %s %d %s", r.Method, r.URL.RequestURI(), rec.status, http.StatusText(rec.status))
+		if detail := rec.errorDetail(); detail != "" {
+			message += fmt.Sprintf(" error=%q", detail)
+		}
+		log.Warn(message)
+		return
+	}
+	log.Infof("%s %s %d", r.Method, r.URL.RequestURI(), rec.status)
 }
 
 func shouldLogAccess(r *http.Request, status int) bool {
@@ -539,7 +595,6 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plat := r.URL.Query().Get("platform")
-	checkUpdates := r.URL.Query().Get("check_updates") == "1" || r.URL.Query().Get("check_updates") == "true"
 	allowPrerelease := r.URL.Query().Get("beta") == "1" || r.URL.Query().Get("beta") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
@@ -608,6 +663,10 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			SourceType:            e.SourceType,
 			SourceURL:             e.SourceURL,
 			ReadmeURL:             e.ReadmeURL,
+			VersionsURL:           e.VersionsURL,
+			ReleaseNotesURL:       e.ReleaseNotesURL,
+			PrereleaseNotesURL:    e.PrereleaseNotesURL,
+			PrereleaseVersion:     e.PrereleaseVersion,
 			PublishedAt:           e.PublishedAt,
 			Stars:                 e.Stars,
 			PluginModule:          e.PluginModule,
@@ -622,9 +681,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
-			if checkUpdates {
-				applyUpdateInfo(&item, allowPrerelease)
-			}
+			applyUpdateInfo(&item, allowPrerelease)
 		}
 		result = append(result, item)
 	}
@@ -679,21 +736,30 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
 	if item == nil {
 		return
 	}
-	latest := item.Version // catalog (repo) version
-	if _, ok := releases.GitHubRepository(item.Source); ok && item.SourceAsset != "" {
-		release, _, err := releases.LatestGitHubRelease(item.Source, item.SourceAsset, allowPrerelease)
-		if err != nil {
-			log.Warnf("Could not check GitHub updates for %s: %v", item.ID, err)
-		} else {
-			latest = release.TagName
-			item.LatestRelease = release.TagName
-		}
+	latest := item.Version
+	if allowPrerelease && prereleaseIsNewer(item.Version, item.PrereleaseVersion) {
+		latest = item.PrereleaseVersion
 	}
 	if latest == "" || !hasKnownVersion(item.InstalledVer) {
 		return
 	}
 	item.LatestVersion = latest
 	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer)
+	if item.UpdateAvail {
+		item.LatestRelease = latest
+	}
+}
+
+func prereleaseIsNewer(stable, prerelease string) bool {
+	if strings.TrimSpace(prerelease) == "" {
+		return false
+	}
+	if strings.TrimSpace(stable) == "" {
+		return true
+	}
+	stableBase := strings.SplitN(releases.NormalizeVersion(stable), "-", 2)[0]
+	prereleaseBase := strings.SplitN(releases.NormalizeVersion(prerelease), "-", 2)[0]
+	return stableBase != prereleaseBase && releases.VersionGreater(prerelease, stable)
 }
 
 func hasKnownVersion(version string) bool {
@@ -717,7 +783,7 @@ func rawJSON(value string) json.RawMessage {
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
-	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,readme,releases}
+	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,readme,release-notes,releases}
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 2 || parts[0] == "" {
@@ -731,6 +797,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if action == "readme" {
 		s.handlePackageReadme(w, r, id)
+		return
+	}
+	if action == "release-notes" {
+		s.handlePackageReleaseNotes(w, r, id)
 		return
 	}
 	if action == "releases" {
@@ -801,17 +871,14 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageGitHubSource(id string) (string, error) {
+func (s *Server) packageVersionsURL(id string) (string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		return "", err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			if _, ok := releases.GitHubRepository(entry.Source); !ok {
-				return "", fmt.Errorf("package %q has no GitHub source", id)
-			}
-			return entry.Source, nil
+			return strings.TrimSpace(entry.VersionsURL), nil
 		}
 	}
 	return "", fmt.Errorf("package %q not found", id)
@@ -866,17 +933,67 @@ func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id 
 	})
 }
 
+func (s *Server) packageReleaseNotesMetadata(id string, prerelease bool) (string, string, string, error) {
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		return "", "", "", err
+	}
+	for _, entry := range catalog {
+		if entry.ID != id {
+			continue
+		}
+		notesURL := entry.ReleaseNotesURL
+		version := entry.Version
+		if prerelease && entry.PrereleaseNotesURL != "" {
+			notesURL = entry.PrereleaseNotesURL
+			version = entry.PrereleaseVersion
+		}
+		if notesURL == "" {
+			return "", "", "", fmt.Errorf("package %q has no release notes URL", id)
+		}
+		return notesURL, repositoryImageBaseURL(entry.Source), version, nil
+	}
+	return "", "", "", fmt.Errorf("package %q not found", id)
+}
+
+func (s *Server) handlePackageReleaseNotes(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	prerelease := r.URL.Query().Get("prerelease") == "1" || r.URL.Query().Get("prerelease") == "true"
+	notesURL, imageBaseURL, version, err := s.packageReleaseNotesMetadata(id, prerelease)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	document, err := releases.FetchReadmeDocument(notesURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"release_notes":                document.Readme,
+		"release_notes_base_url":       document.BaseURL,
+		"release_notes_image_base_url": imageBaseURL,
+		"version":                      version,
+	})
+}
+
 func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	source, err := s.packageGitHubSource(id)
+	versionsURL, err := s.packageVersionsURL(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	items, err := releases.FetchGitHubReleases(source, 100)
+	items := []releases.Release{}
+	if versionsURL != "" {
+		items, err = releases.FetchVersions(versionsURL)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -1025,6 +1142,10 @@ func (s *Server) handleForeground(w http.ResponseWriter, r *http.Request) {
 
 // foreground brings the ZenPM WAF to the foreground via LIPC.
 func (s *Server) foreground() {
+	if s.st == nil || !s.st.AllowsKindleWAF() {
+		log.Info("Foreground skipped: Kindle WAF is unavailable on this device")
+		return
+	}
 	cmd := exec.Command("lipc-set-prop", "com.lab126.appmgrd", "start", "app://com.zenlabs.zenpm")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1041,8 +1162,8 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-	if platform.Detect() != platform.Kindle {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "self-update is only available on Kindle"})
+	if platform.Detect() != platform.Kindle || !s.st.AllowsKindleWAF() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "self-update is only available on compatible Kindle devices"})
 		return
 	}
 	log.Info("Starting self-update")

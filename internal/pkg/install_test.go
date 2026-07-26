@@ -220,9 +220,10 @@ func TestInstallGenericFontNatively(t *testing.T) {
 	}
 }
 
-func TestDownloadInstallAssetResolvesRequestedReleaseBeforeCatalogURL(t *testing.T) {
+func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *testing.T) {
 	entry := &repo.CatalogEntry{
-		Source: "https://example.invalid/plugin",
+		ID:     "plugin",
+		Source: "https://github.com/owner/plugin",
 		Assets: `[{
 			"asset":"plugin.koplugin.zip",
 			"url":"://catalog-release.zip"
@@ -230,8 +231,41 @@ func TestDownloadInstallAssetResolvesRequestedReleaseBeforeCatalogURL(t *testing
 	}
 
 	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "plugin.koplugin.zip", "v1.4.3")
-	if err == nil || !strings.Contains(err.Error(), "source is not a GitHub repository") {
-		t.Fatalf("download error = %v, want GitHub release resolution error", err)
+	if err == nil || !strings.Contains(err.Error(), "has no versions metadata") {
+		t.Fatalf("download error = %v, want missing versions metadata error", err)
+	}
+}
+
+func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
+	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("zip contents"))
+	}))
+	defer assetServer.Close()
+	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"releases": [{
+				"tag_name": "v1.39.4",
+				"assets": [{
+					"name": "rakuyomi-kindlehf.zip",
+					"url": "` + assetServer.URL + `",
+					"size": 12,
+					"digest": "sha256:test"
+				}]
+			}]
+		}`))
+	}))
+	defer versionsServer.Close()
+	entry := &repo.CatalogEntry{
+		Source:      "https://github.com/tachibana-shin/rakuyomi",
+		VersionsURL: versionsServer.URL,
+	}
+
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "rakuyomi-kindlehf.zip", "1.39.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "rakuyomi-kindlehf.zip" || gotURL != assetServer.URL || string(data) != "zip contents" {
+		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
 	}
 }
 

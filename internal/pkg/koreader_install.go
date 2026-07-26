@@ -103,7 +103,11 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 		}
 	}
 	if assetURL == "" {
-		_, releaseAsset, err := releases.ResolveGitHubReleaseAsset(entry.Source, releaseTag, assetName)
+		versionsURL := strings.TrimSpace(entry.VersionsURL)
+		if versionsURL == "" {
+			return "", "", nil, fmt.Errorf("package %q has no versions metadata", entry.ID)
+		}
+		_, releaseAsset, err := releases.ResolveVersionsAsset(versionsURL, releaseTag, assetName)
 		if err != nil {
 			return "", "", nil, err
 		}
@@ -329,6 +333,27 @@ func removeKOReaderPlugin(root, name string) error {
 		return fmt.Errorf("remove KOReader plugin %s: %w", destination, err)
 	}
 	return nil
+}
+
+func (m *Manager) removeTrackedKOReaderPlugin(pluginPath string) error {
+	pluginPath = filepath.Clean(pluginPath)
+	if !strings.HasSuffix(filepath.Base(pluginPath), ".koplugin") {
+		return fmt.Errorf("invalid tracked KOReader plugin path %q", pluginPath)
+	}
+	pluginDirs, err := m.koreaderPluginDirs()
+	if err != nil {
+		return err
+	}
+	for _, pluginDir := range pluginDirs {
+		if filepath.Clean(filepath.Dir(pluginPath)) != filepath.Clean(pluginDir) {
+			continue
+		}
+		if err := os.RemoveAll(pluginPath); err != nil {
+			return fmt.Errorf("remove KOReader plugin %s: %w", pluginPath, err)
+		}
+		return nil
+	}
+	return fmt.Errorf("tracked KOReader plugin path is outside the plugins directories: %q", pluginPath)
 }
 
 func removeKOReaderPatch(root, id, asset, patchPath string) error {
