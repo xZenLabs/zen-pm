@@ -4,9 +4,15 @@ package.path = root .. "/?.lua;" .. package.path
 
 local settings = {}
 local modal_message
+local modal_title
+local modal_rows
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function() return {} end
-package.preload["ui/uimanager"] = function() return {} end
+package.preload["ui/uimanager"] = function()
+    return {
+        nextTick = function(_, callback) callback() end,
+    }
+end
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
@@ -22,9 +28,37 @@ package.preload["ui/modals"] = function()
         info_for = function(message) modal_message = message end,
         status = function() end,
         close_status = function() end,
+        actions = function(title, rows)
+            modal_title = title
+            modal_rows = rows
+        end,
     }
 end
-package.preload["models"] = function() return {} end
+package.preload["models"] = function()
+    return {
+        has_release_notes = function(pkg, allow_prerelease)
+            if allow_prerelease and pkg.prerelease_notes_url then return true end
+            return pkg.release_notes_url ~= nil
+        end,
+        release_notes_url = function(pkg, allow_prerelease)
+            if allow_prerelease and pkg.prerelease_notes_url then return pkg.prerelease_notes_url end
+            return pkg.release_notes_url
+        end,
+        is_patch_package = function(pkg) return pkg and pkg.is_patch == true end,
+        package_assets = function(pkg) return pkg and pkg.assets or {} end,
+        category_for_id = function(id)
+            if id == "fonts" then return { id = "fonts", label = "Fonts" } end
+            return nil
+        end,
+        category_cards = function()
+            return {
+                { id = "fonts", label = "Fonts", count = 2 },
+                { id = "games", label = "Games", count = 0 },
+            }
+        end,
+        category_label = function(category) return category.label end,
+    }
+end
 package.preload["ui/theme"] = function() return {} end
 package.preload["updater"] = function() return {} end
 package.preload["zenpm_util"] = function() return {} end
@@ -84,5 +118,108 @@ App.refresh_repos({
     },
 })
 assert(modal_message == "Refresh failed (HTTP 403)")
+
+local update_result
+local trapper_required = false
+package.preload["ui/trapper"] = function()
+    trapper_required = true
+    return {}
+end
+local trap_widget = { dismiss_callback = function() end }
+App.run_update_task({
+    daemon = {
+        is_android = function() return false end,
+        detect_platform = function() return "kobo" end,
+    },
+}, function()
+    return true, true, "1.2.3"
+end, trap_widget, function(...)
+    update_result = { ... }
+end)
+assert(update_result[1] == true)
+assert(update_result[2] == true)
+assert(update_result[3] == true)
+assert(update_result[4] == "1.2.3")
+assert(trap_widget.dismiss_callback == nil)
+assert(not trapper_required)
+
+package.preload["ui/trapper"] = function()
+    trapper_required = true
+    return {
+        wrap = function(_, callback) callback() end,
+    }
+end
+package.loaded["ui/trapper"] = nil
+update_result = nil
+App.run_update_task({
+    daemon = {
+        is_android = function() return false end,
+        detect_platform = function() return "kindle" end,
+    },
+}, function()
+    return true, true, "1.2.4"
+end, nil, function(...)
+    update_result = { ... }
+end)
+assert(update_result[1] == true)
+assert(update_result[2] == true)
+assert(update_result[3] == true)
+assert(update_result[4] == "1.2.4")
+assert(trapper_required)
+
+local release_requests = 0
+local release_app = {
+    state = {
+        beta_updates = true,
+        current_package = {
+            id = "reader",
+            prerelease_notes_url = "https://repo.example/reader/PRERELEASE_NOTES.md",
+            prerelease_version = "v2.0-beta",
+        },
+        details_tab = "readme",
+        release_notes_cache = {},
+    },
+    client = {
+        get_package_release_notes = function(_, _, prerelease)
+            release_requests = release_requests + 1
+            assert(prerelease)
+            return true, {
+                release_notes = "Beta notes",
+                version = "v2.0-beta",
+                release_notes_base_url = "https://repo.example/reader/",
+                release_notes_image_base_url = "https://github.com/owner/reader/raw/HEAD/",
+            }
+        end,
+    },
+    load_package_release_notes = App.load_package_release_notes,
+    reset_scroll = function() end,
+    refresh = function() end,
+}
+App.set_package_details_tab(release_app, "release_notes")
+assert(release_app.state.details_tab == "release_notes")
+assert(release_app.state.current_package.release_notes == "Beta notes")
+assert(release_app.state.current_package.release_notes_tag == "v2.0-beta")
+assert(release_app.state.current_package.release_notes_base_url == "https://repo.example/reader/")
+App.set_package_details_tab(release_app, "readme")
+App.set_package_details_tab(release_app, "release_notes")
+assert(release_requests == 1)
+
+local selected_category
+local category_app = {
+    state = {
+        filters = { installed = "" },
+        installed_packages = {},
+    },
+    set_installed_category_filter = function(_, value)
+        selected_category = value
+    end,
+}
+App.prompt_installed_category_filter(category_app)
+assert(modal_title == "Filter by category")
+assert(#modal_rows == 2)
+assert(modal_rows[1].text == "All categories")
+assert(modal_rows[2].text == "Fonts (2)")
+modal_rows[2].callback()
+assert(selected_category == "fonts")
 
 print("app tests passed")

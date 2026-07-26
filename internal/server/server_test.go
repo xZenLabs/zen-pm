@@ -187,7 +187,8 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	if err := st.WriteCatalog([]state.CatalogEntry{{
 		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
 		Platforms: []string{"host"}, Featured: true, FeaturedOrder: &featuredOrder,
-		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md", PublishedAt: "2026-07-24T12:00:00Z",
+		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md", ReleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md",
+		PrereleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md", PrereleaseVersion: "1.1.0-rc.1", PublishedAt: "2026-07-24T12:00:00Z",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +207,9 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 	if packages[0].ReadmeURL != "https://repo.zen-labs.org/packages/host/pkg/README.md" {
 		t.Fatalf("ReadmeURL = %q", packages[0].ReadmeURL)
+	}
+	if packages[0].ReleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md" || packages[0].PrereleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md" || packages[0].PrereleaseVersion != "1.1.0-rc.1" {
+		t.Fatalf("release notes metadata = %#v", packages[0])
 	}
 	if packages[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", packages[0].PublishedAt)
@@ -562,6 +566,58 @@ func TestHandlePackageReadmeReturnsMarkdownAndBaseURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if response.Readme != "# Reader\n\n![Logo](logo.png)" || response.ReadmeBaseURL != readmeServer.URL+"/docs/" || response.ImageBaseURL != "https://github.com/owner/reader/raw/HEAD/" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestHandlePackageReleaseNotesSelectsPrereleaseDocument(t *testing.T) {
+	notesServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/RELEASE_NOTES.md":
+			_, _ = w.Write([]byte("# Stable"))
+		case "/PRERELEASE_NOTES.md":
+			_, _ = w.Write([]byte("# Preview"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer notesServer.Close()
+
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Version: "1.0.0", Repo: "ZenLabs", Source: "https://github.com/owner/reader",
+		ReleaseNotesURL: notesServer.URL + "/RELEASE_NOTES.md", PrereleaseNotesURL: notesServer.URL + "/PRERELEASE_NOTES.md",
+		PrereleaseVersion: "1.1.0-rc.1",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, repo.New(st), pkg.New(st, repo.New(st), "host"), 0)
+	stableURL, _, stableVersion, err := srv.packageReleaseNotesMetadata("reader", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stableURL != notesServer.URL+"/RELEASE_NOTES.md" || stableVersion != "1.0.0" {
+		t.Fatalf("stable metadata = %q / %q", stableURL, stableVersion)
+	}
+	rec := httptest.NewRecorder()
+	srv.handlePackageReleaseNotes(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/release-notes?prerelease=1", nil), "reader")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		ReleaseNotes string `json:"release_notes"`
+		Version      string `json:"version"`
+		BaseURL      string `json:"release_notes_base_url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.ReleaseNotes != "# Preview" || response.Version != "1.1.0-rc.1" || response.BaseURL != notesServer.URL+"/" {
 		t.Fatalf("response = %#v", response)
 	}
 }

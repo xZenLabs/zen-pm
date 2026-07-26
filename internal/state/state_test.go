@@ -23,7 +23,28 @@ func TestResolvePersistDirUsesPlatformDefaultWithoutExplicitHome(t *testing.T) {
 	}
 }
 
-func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
+func TestInitUsesConfiguredZenLabsRepoURL(t *testing.T) {
+	previousURL := DefaultZenLabsRepoURL
+	DefaultZenLabsRepoURL = "http://localhost:8000"
+	t.Cleanup(func() {
+		DefaultZenLabsRepoURL = previousURL
+	})
+	t.Setenv("ZENPM_HOME", t.TempDir())
+
+	st, err := Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repos, err := st.ReadRepos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 1 || repos[0].Name != DefaultZenLabsRepoName || repos[0].URL != "http://localhost:8000" {
+		t.Fatalf("repos = %#v, want local ZenLabs repo", repos)
+	}
+}
+
+func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
 
@@ -38,7 +59,7 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 2 || !hasRepo(repos, DefaultZenLabsRepoName) || !hasRepo(repos, DefaultKindleForgeRepoName) {
+	if len(repos) != 1 || !hasRepo(repos, DefaultZenLabsRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("repos = %#v", repos)
 	}
 	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo"}); err != nil {
@@ -73,9 +94,12 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 		InstallURL: "https://example.invalid/install.sh", UninstallURL: "https://example.invalid/uninstall.sh",
 		Featured: true, FeaturedImage: "featured", FeaturedOrder: &featuredOrder, Category: "utility", Source: "source", SourceAsset: "pkg.zip",
 		SourceType: "release", SourceURL: "https://example.invalid/source.zip", Stars: "42",
-		ReadmeURL:   "https://example.invalid/README.md",
-		PublishedAt: "2026-07-24T12:00:00Z",
-		Assets:      `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`, Constraints: `{"abi":["hf","sf"]}`,
+		ReadmeURL:          "https://example.invalid/README.md",
+		ReleaseNotesURL:    "https://example.invalid/RELEASE_NOTES.md",
+		PrereleaseNotesURL: "https://example.invalid/PRERELEASE_NOTES.md",
+		PrereleaseVersion:  "1.2.0-rc.1",
+		PublishedAt:        "2026-07-24T12:00:00Z",
+		Assets:             `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`, Constraints: `{"abi":["hf","sf"]}`,
 	}}
 	if err := st.WriteCatalog(catalog); err != nil {
 		t.Fatal(err)
@@ -84,8 +108,45 @@ func TestSQLiteStoreSeedsDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].PublishedAt != "2026-07-24T12:00:00Z" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
+	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].ReleaseNotesURL != "https://example.invalid/RELEASE_NOTES.md" || gotCatalog[0].PrereleaseNotesURL != "https://example.invalid/PRERELEASE_NOTES.md" || gotCatalog[0].PrereleaseVersion != "1.2.0-rc.1" || gotCatalog[0].PublishedAt != "2026-07-24T12:00:00Z" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
 		t.Fatalf("catalog = %#v", gotCatalog)
+	}
+}
+
+func TestReconcileDefaultReposRemovesKindleForgeWhenUnsupported(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.kindleWAFAllowed = true
+	if err := reconcileDefaultRepos(st); err != nil {
+		t.Fatal(err)
+	}
+	repos, err := st.ReadRepos()
+	if err != nil || !hasRepo(repos, DefaultKindleForgeRepoName) {
+		t.Fatalf("supported repos = %#v, %v", repos, err)
+	}
+	if err := st.WriteCatalog([]CatalogEntry{{ID: "kindle-package", Repo: DefaultKindleForgeRepoName}}); err != nil {
+		t.Fatal(err)
+	}
+
+	st.kindleWAFAllowed = false
+	if err := reconcileDefaultRepos(st); err != nil {
+		t.Fatal(err)
+	}
+	repos, err = st.ReadRepos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasRepo(repos, DefaultKindleForgeRepoName) {
+		t.Fatalf("unsupported repos still contain KindleForge: %#v", repos)
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil || len(catalog) != 0 {
+		t.Fatalf("catalog after KindleForge removal = %#v, %v", catalog, err)
 	}
 }
 

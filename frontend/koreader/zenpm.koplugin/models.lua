@@ -110,6 +110,17 @@ function Models.packages_in_category(packages, category)
     return out
 end
 
+function Models.filter_packages_by_category(packages, category_id)
+    if normalize_category(category_id) == "" then
+        return packages or {}
+    end
+    local category = Models.category_for_id(category_id)
+    if not category then
+        return {}
+    end
+    return Models.packages_in_category(packages, category)
+end
+
 function Models.category_cards(packages)
     local cards = {}
     for _, category in ipairs(Constants.CATEGORIES) do
@@ -422,6 +433,17 @@ end
 
 function Models.has_readme(pkg)
     return tostring(pkg and pkg.readme_url or "") ~= ""
+end
+
+function Models.release_notes_url(pkg, allow_prerelease)
+    if allow_prerelease and tostring(pkg and pkg.prerelease_notes_url or "") ~= "" then
+        return pkg.prerelease_notes_url
+    end
+    return tostring(pkg and pkg.release_notes_url or "")
+end
+
+function Models.has_release_notes(pkg, allow_prerelease)
+    return Models.release_notes_url(pkg, allow_prerelease) ~= ""
 end
 
 function Models.package_meta(pkg)

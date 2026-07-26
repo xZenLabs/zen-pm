@@ -25,12 +25,16 @@ daemon.write_cli_wrapper = function(_, path, script)
     wrappers[path] = script
     return true
 end
+daemon.kindle_kpm_installed = function() return false end
 
 daemon.kindle_firmware_version = function() return "5.18.3" end
 assert(daemon:kindle_homepage_install_supported())
 daemon.kindle_firmware_version = function() return "5.18.3.1" end
 assert(not daemon:kindle_homepage_install_supported())
 daemon.kindle_firmware_version = function() return "5.19.0" end
+assert(not daemon:kindle_homepage_install_supported())
+daemon.kindle_firmware_version = function() return "5.18.3" end
+daemon.kindle_kpm_installed = function() return true end
 assert(not daemon:kindle_homepage_install_supported())
 
 assert(daemon:install_cli_wrapper())

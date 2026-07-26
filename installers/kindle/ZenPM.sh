@@ -13,9 +13,11 @@ MESQUITE_TARGET="/var/local/mesquite/ZenPM"
 # The zip extracts ZenPM/ directly to the Kindle USB root (/mnt/us/ZenPM/),
 # so no file copying is needed — this script just wires up the app.
 PAYLOAD_DIR="/mnt/us/ZenPM"
+KPM_DIR="/mnt/us/kmc/kpm"
 
 fail() { echo "[ZenPM] $*" >&2; exit 1; }
 
+[ ! -d "$KPM_DIR" ]                      || fail "Kindle standalone is incompatible with KPM: $KPM_DIR"
 [ -d "$PAYLOAD_DIR" ]                     || fail "Payload missing: $PAYLOAD_DIR"
 [ -d "$PAYLOAD_DIR/frontend/kindle" ] || fail "WAF missing: $PAYLOAD_DIR/frontend/kindle"
 [ -d "$PAYLOAD_DIR/backend" ]             || fail "Backend missing: $PAYLOAD_DIR/backend"

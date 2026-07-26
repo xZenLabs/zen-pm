@@ -113,7 +113,7 @@ function App:new(plugin)
             show_readme_images = App.load_setting("show_readme_images", true),
             update_available = App.load_setting("update_available", false),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
-            filters = { search = "", categories = "", category = "", source = "" },
+            filters = { search = "", categories = "", category = "", installed = "", source = "" },
             sorts = {
                 search = saved_sorts.search or "stars",
                 installed = saved_sorts.installed or "name_asc",
@@ -131,6 +131,7 @@ function App:new(plugin)
             category_packages = {},
             repos = {},
             readme_cache = {},
+            release_notes_cache = {},
             current_package = nil,
             current_repo = nil,
             current_category = nil,
@@ -179,10 +180,7 @@ function App:run_update_task(task, trap_widget, on_done)
         on_done(...)
     end
 
-    -- Forking with live EGL state aborts KOReader on SDL/Wayland desktop.
-    -- Android's JNI-backed runtime can likewise exit without returning the
-    -- updater result to Trapper.
-    if self.daemon:is_android() or is_sdl_wayland_desktop() then
+    local function run_in_process()
         UIManager:nextTick(function()
             local invoked, called, ok, result = pcall(task)
             if invoked then
@@ -191,19 +189,25 @@ function App:run_update_task(task, trap_widget, on_done)
                 finish(true, false, called)
             end
         end)
+    end
+
+    -- Forking with live EGL state aborts KOReader on SDL/Wayland desktop.
+    -- Android's JNI-backed runtime can likewise exit without returning the
+    -- updater result to Trapper. Kobo self-updates can fail before entering
+    -- the updater when forked, so keep them in the parent process too.
+    if self.daemon:is_android()
+        or self.daemon:detect_platform() == "kobo"
+        or is_sdl_wayland_desktop() then
+        run_in_process()
         return
     end
 
     local ok_trapper, Trapper = pcall(require, "ui/trapper")
-    if not ok_trapper or not Trapper then
-        UIManager:nextTick(function()
-            local invoked, called, ok, result = pcall(task)
-            if invoked then
-                finish(true, called, ok, result)
-            else
-                finish(true, false, called)
-            end
-        end)
+    if not ok_trapper
+        or type(Trapper) ~= "table"
+        or type(Trapper.wrap) ~= "function"
+        or type(Trapper.dismissableRunInSubprocess) ~= "function" then
+        run_in_process()
         return
     end
     Trapper:wrap(function()
@@ -1016,7 +1020,8 @@ function App:refresh_queue_package_state()
     local installed = Models.installed_packages(packages)
     table.insert(installed, 1, zenpm_self_package(self.daemon))
     self.state.installed_packages = installed
-    self.state.visible_packages = self:sorted_packages("installed", installed)
+    local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
+    self.state.visible_packages = self:sorted_packages("installed", visible)
 end
 
 function App:finish_queue_batch(batch)
@@ -1862,7 +1867,8 @@ function App:show_installed()
     table.insert(installed, 1, zenpm_self_package(self.daemon))
     self.state.packages = packages
     self.state.installed_packages = installed
-    self.state.visible_packages = self:sorted_packages("installed", installed)
+    local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
+    self.state.visible_packages = self:sorted_packages("installed", visible)
     self:clear_status()
     self:refresh()
 end
@@ -1968,15 +1974,27 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             pkg.readme_image_base_url = cached.image_base_url
         end
     end
+    local selected_tab = "readme"
+    if details_tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
+        selected_tab = "release_notes"
+        self:load_package_release_notes(pkg)
+    elseif details_tab == "patches" and Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 then
+        selected_tab = "patches"
+    end
     self.state.current_package = pkg
-    self.state.details_tab = Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 and details_tab == "patches" and "patches" or "readme"
+    self.state.details_tab = selected_tab
     self:reset_scroll("package:" .. cache_key .. ":" .. self.state.details_tab)
     self:clear_status()
     self:refresh()
 end
 
 function App:set_package_details_tab(tab)
-    if tab ~= "patches" then
+    local pkg = self.state.current_package or {}
+    if tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
+        self:load_package_release_notes(pkg)
+    elseif tab == "patches" and Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 then
+        -- Keep the requested patch tab.
+    else
         tab = "readme"
     end
     if self.state.details_tab == tab then
@@ -1985,6 +2003,38 @@ function App:set_package_details_tab(tab)
     self.state.details_tab = tab
     self:reset_scroll()
     self:refresh()
+end
+
+function App:load_package_release_notes(pkg)
+    local package_id = tostring(pkg and (pkg.id or pkg.name) or "")
+    if package_id == "" then return end
+    local notes_url = Models.release_notes_url(pkg, self.state.beta_updates)
+    if notes_url == "" then return end
+    local prerelease = self.state.beta_updates and notes_url == tostring(pkg.prerelease_notes_url or "")
+    self.state.release_notes_cache = self.state.release_notes_cache or {}
+    local cache_key = package_id .. ":" .. notes_url
+    local cached = self.state.release_notes_cache[cache_key]
+    if cached == nil then
+        Modals.status(_("Loading release notes..."))
+        local ok, data = self.client:get_package_release_notes(package_id, prerelease)
+        Modals.close_status()
+        if not ok then
+            cached = { error = tostring(data) }
+        else
+            cached = type(data) == "table" and {
+                body = tostring(data.release_notes or ""),
+                tag = tostring(data.version or ""),
+                base_url = tostring(data.release_notes_base_url or ""),
+                image_base_url = tostring(data.release_notes_image_base_url or ""),
+            } or {}
+        end
+        self.state.release_notes_cache[cache_key] = cached
+    end
+    pkg.release_notes = cached.body or ""
+    pkg.release_notes_tag = cached.tag or ""
+    pkg.release_notes_base_url = cached.base_url or ""
+    pkg.release_notes_image_base_url = cached.image_base_url or ""
+    pkg.release_notes_error = cached.error
 end
 
 function App:go_back_from_details()
@@ -2070,6 +2120,35 @@ function App:set_sort(kind, value)
     else
         self:show_search()
     end
+end
+
+function App:set_installed_category_filter(category_id)
+    local category = Models.category_for_id(category_id)
+    self.state.filters.installed = category and category.id or ""
+    self:reset_scroll("installed")
+    self:show_installed()
+end
+
+function App:prompt_installed_category_filter()
+    local current = self.state.filters.installed or ""
+    local rows = {
+        {
+            text = _("All categories"),
+            checked_func = function() return current == "" end,
+            callback = function() self:set_installed_category_filter("") end,
+        },
+    }
+    for _, category in ipairs(Models.category_cards(self.state.installed_packages)) do
+        if category.count > 0 then
+            local item = category
+            table.insert(rows, {
+                text = Models.category_label(item) .. " (" .. tostring(item.count) .. ")",
+                checked_func = function() return current == item.id end,
+                callback = function() self:set_installed_category_filter(item.id) end,
+            })
+        end
+    end
+    Modals.actions(_("Filter by category"), rows, { show_cancel = false, align = "left" })
 end
 
 function App:prompt_sort(kind)

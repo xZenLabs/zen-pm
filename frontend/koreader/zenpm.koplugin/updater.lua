@@ -572,6 +572,10 @@ function Updater:update(daemon, allow_prerelease, force_refresh)
 end
 
 function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refresh)
+    if not daemon or type(daemon.kindle_homepage_install_supported) ~= "function"
+            or not daemon:kindle_homepage_install_supported() then
+        return standalone_failure(daemon, "Kindle standalone is not supported on this device.")
+    end
     local releases, releases_err = fetch_releases(force_refresh)
     if not releases then return standalone_failure(daemon, releases_err) end
     local release = select_standalone_release(releases, allow_prerelease)

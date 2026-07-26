@@ -9,6 +9,7 @@ BUILD_DIR="$DIST_DIR/.build"
 VERSION_FILE="$ROOT_DIR/VERSION"
 KOREADER_META_FILE="$ROOT_DIR/frontend/koreader/zenpm.koplugin/_meta.lua"
 DEV_MODE=false
+LOCAL_REPO=false
 DEV_PID_FILE="$ROOT_DIR/.dev-kodev.pid"
 KOREADER_PLUGIN_DIR="$ROOT_DIR/frontend/koreader/zenpm.koplugin"
 NERD_FONT_SOURCE="$KOREADER_PLUGIN_DIR/fonts/SymbolsNerdFont-Regular.ttf"
@@ -16,25 +17,29 @@ NERD_FONT_NAME="ZenPMSymbolsNerdFont-Regular.ttf"
 INLINE_ICON_MAP="$KOREADER_PLUGIN_DIR/ui/inline_icon_map.lua"
 
 usage() {
-    echo "Usage: $0 [--dev]"
+    echo "Usage: $0 [--dev [--local]]"
     echo "Without --dev, version is read from $VERSION_FILE"
     exit 1
 }
 
-case "$#" in
-    0)
-        ;;
-    1)
-        if [ "$1" = "--dev" ]; then
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dev)
             DEV_MODE=true
-        else
+            ;;
+        --local)
+            LOCAL_REPO=true
+            ;;
+        *)
             usage
-        fi
-        ;;
-    *)
-        usage
-        ;;
-esac
+            ;;
+    esac
+    shift
+done
+
+if [ "$LOCAL_REPO" = true ] && [ "$DEV_MODE" != true ]; then
+    usage
+fi
 
 read_version_file() {
     if [ ! -f "$VERSION_FILE" ]; then
@@ -142,6 +147,10 @@ run_dev() {
     echo "Building macOS backend..."
     GOFLAGS="-trimpath -buildvcs=false"
     LDFLAGS="-s -w -buildid= -X main.version=$VERSION"
+    if [ "$LOCAL_REPO" = true ]; then
+        LDFLAGS="$LDFLAGS -X github.com/xZenLabs/zen-pm/internal/state.DefaultZenLabsRepoURL=http://localhost:8000"
+        echo "Using local ZenPM repository: http://localhost:8000"
+    fi
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$DEV_BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm
     GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$DEV_BUILD_DIR/zenpm-darwin-amd64" ./cmd/zenpm
     lipo -create -output "$DEV_BUILD_DIR/zenpm-darwin" "$DEV_BUILD_DIR/zenpm-darwin-amd64" "$DEV_BUILD_DIR/zenpm-darwin-arm64"

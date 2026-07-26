@@ -370,7 +370,7 @@ function AppView:draw_content(bb, x, y, w, h)
         local category = state.current_category or {}
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)
     elseif page == "installed" then
-        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages)
+        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
     elseif page == "queue" then
         max_scroll = Pages.queue(self, bb, x, y, w, h, scroll)
     elseif page == "sources" then

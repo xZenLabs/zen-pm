@@ -51,6 +51,9 @@ func Run(action string, parentPID int, removeSettings bool) error {
 	}
 	switch action {
 	case "update":
+		if !platform.KindleWAFAllowed(platform.Kindle) {
+			return errors.New("Kindle standalone is not supported on this device")
+		}
 		return update(parentPID)
 	case "uninstall":
 		return uninstall(parentPID, removeSettings)

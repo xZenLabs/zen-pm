@@ -6,7 +6,8 @@ Download the required files from the [ZenPM releases page](https://github.com/xZ
 
 > **Warning:** Install the standalone package only on older Kindle jailbreaks
 > that provide root access, such as WinterBreak and AdBreak. Do not install it
-> on newer jailbreaks or any setup without root access.
+> on newer jailbreaks, KPM-managed devices where `/mnt/us/kmc/kpm` exists, or
+> any setup without root access.
 
 This install also requires the latest hotfix, the device's `sqlite3` binary,
 and a script launcher such as KUAL.

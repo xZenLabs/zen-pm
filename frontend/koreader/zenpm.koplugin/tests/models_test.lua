@@ -3,7 +3,16 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
 package.preload["constants"] = function()
-    return { REPO_ZENLABS_NAME = "ZenLabs", REPO_ZENLABS_DISPLAY = "ZenLabs", REPO_KINDLEFORGE_NAME = "KindleForge" }
+    return {
+        REPO_ZENLABS_NAME = "ZenLabs",
+        REPO_ZENLABS_DISPLAY = "ZenLabs",
+        REPO_KINDLEFORGE_NAME = "KindleForge",
+        CATEGORIES = {
+            { id = "fonts", label = "Fonts" },
+            { id = "games", label = "Games" },
+            { id = "utility", label = "Utility" },
+        },
+    }
 end
 package.preload["i18n"] = function()
     return {
@@ -61,6 +70,27 @@ local searchable = {
 assert(#Models.filter_packages(searchable, "title match") == 1)
 assert(#Models.filter_packages(searchable, "author match") == 1)
 assert(#Models.filter_packages(searchable, "description match") == 0)
+
+local categorized = {
+    { id = "font", category = "fonts" },
+    { id = "game", category = "other", tags = { "Games" } },
+    { id = "utility", category = "utility" },
+}
+assert(Models.filter_packages_by_category(categorized, "") == categorized)
+local games = Models.filter_packages_by_category(categorized, "games")
+assert(#games == 1 and games[1].id == "game")
+local utilities = Models.filter_packages_by_category(categorized, "utilities")
+assert(#utilities == 1 and utilities[1].id == "utility")
+
+local notes = {
+    release_notes_url = "https://example.invalid/RELEASE_NOTES.md",
+    prerelease_notes_url = "https://example.invalid/PRERELEASE_NOTES.md",
+}
+assert(Models.has_release_notes(notes, false))
+assert(Models.release_notes_url(notes, false) == notes.release_notes_url)
+assert(Models.release_notes_url(notes, true) == notes.prerelease_notes_url)
+assert(not Models.has_release_notes({ prerelease_notes_url = notes.prerelease_notes_url }, false))
+assert(Models.has_release_notes({ prerelease_notes_url = notes.prerelease_notes_url }, true))
 
 local patch = Models.installed_patch_item({
     id = "patch", installed_asset_dates = { ["patch.lua"] = "2026-07-23T10:00:00Z" },

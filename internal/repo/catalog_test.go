@@ -14,6 +14,7 @@ import (
 )
 
 func TestCacheInstalledUninstallScriptsSkipsNativeKOReaderPackages(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
 	st, err := state.Init("host")
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +38,40 @@ func TestCacheInstalledUninstallScriptsSkipsNativeKOReaderPackages(t *testing.T)
 	}
 	if _, err := os.Stat(st.CachedUninstallScriptPath("reader-plugin")); !os.IsNotExist(err) {
 		t.Fatalf("cached uninstall script exists or could not be checked: %v", err)
+	}
+}
+
+func TestAddRejectsKindleForgeOnUnsupportedPlatform(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = New(st).Add("KindleForge", "https://kf.penguins184.xyz", UserAddedPriority, "trusted")
+	if err == nil || !strings.Contains(err.Error(), "compatible Kindle") {
+		t.Fatalf("Add KindleForge error = %v", err)
+	}
+}
+
+func TestRefreshSkipsKindleForgeOnUnsupportedPlatform(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{
+		Name: "KindleForge", URL: "file://" + t.TempDir(), Priority: 10, Trust: "trusted",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st).Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil || len(catalog) != 0 {
+		t.Fatalf("catalog after skipped KindleForge refresh = %#v, %v", catalog, err)
 	}
 }
 
@@ -227,6 +262,9 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		IncompatiblePlatforms: []string{"android", "host"},
 		FeaturedOrder:         &featuredOrder,
 		ReadmeURL:             "https://example.invalid/readme.md",
+		ReleaseNotesURL:       "https://example.invalid/release-notes.md",
+		PrereleaseNotesURL:    "https://example.invalid/prerelease-notes.md",
+		PrereleaseVersion:     "1.3.0-rc.1",
 	}
 
 	got, err := parseCatalogLine(entry.serialize())
@@ -242,7 +280,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	if got.FeaturedOrder == nil || *got.FeaturedOrder != featuredOrder {
 		t.Fatalf("FeaturedOrder = %v, want %d", got.FeaturedOrder, featuredOrder)
 	}
-	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
 	}
 }
@@ -262,6 +300,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"source_type": "source",
 				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
 				"readme_url": "packages/koreader/koreader-rsvp-plugin/README.md",
+				"release_notes_url": "packages/koreader/koreader-rsvp-plugin/RELEASE_NOTES.md",
+				"prerelease_version": "1.1.0-rc.1",
+				"prerelease_notes_url": "packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md",
 				"published_at": "2026-07-24T12:00:00Z",
 				"featured_order": 10,
 				"stars": "31",
@@ -305,6 +346,12 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].ReadmeURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/README.md" {
 		t.Fatalf("ReadmeURL = %q", entries[0].ReadmeURL)
+	}
+	if entries[0].ReleaseNotesURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/RELEASE_NOTES.md" {
+		t.Fatalf("ReleaseNotesURL = %q", entries[0].ReleaseNotesURL)
+	}
+	if entries[0].PrereleaseNotesURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md" || entries[0].PrereleaseVersion != "1.1.0-rc.1" {
+		t.Fatalf("prerelease notes = %q / %q", entries[0].PrereleaseNotesURL, entries[0].PrereleaseVersion)
 	}
 	if entries[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", entries[0].PublishedAt)

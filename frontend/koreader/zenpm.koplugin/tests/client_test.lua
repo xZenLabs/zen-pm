@@ -59,6 +59,14 @@ assert(unix_request.body == '{"scan":true}')
 assert(unix_request.timeout == 4)
 assert(unix_request.accept == "application/json, text/plain, */*")
 
+client.request = function(_, method, path, body)
+    assert(method == "GET")
+    assert(path == "/packages/example%20package/release-notes?prerelease=1")
+    assert(body == nil)
+    return true, {}
+end
+assert(client:get_package_release_notes("example package", true))
+
 local requested_timeout
 
 client.request = function(_, method, path, body, timeout)

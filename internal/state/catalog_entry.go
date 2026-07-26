@@ -33,4 +33,7 @@ type CatalogEntry struct {
 	PluginModule          string
 	ReadmeURL             string
 	PublishedAt           string
+	ReleaseNotesURL       string
+	PrereleaseNotesURL    string
+	PrereleaseVersion     string
 }

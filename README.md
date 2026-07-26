@@ -65,10 +65,12 @@ needs the device's sqlite3 binary and a script launcher such as KUAL. Do not
 install the standalone package on any setup without root access.
 
 > [!WARNING]
-> As with KindleForge, using ZenPM on WinterBreak, SpringBreak, Sanctuary, or
+> As with KindleForge, using ZenPM Kindle Standalone on WinterBreak, SpringBreak, Sanctuary, or
 > similar devices—anything with a `JAILBREAK` booklet—is strongly discouraged
 > to prevent future conflicts and other issues with KPM. This will be resolved
 > in a future update.
+> `/mnt/us/kmc/kpm` exists. The KOReader homepage installer is also disabled on
+> unsupported Kindle firmware.
 
 Most of the Kindle standalone frontend is based on work from the
 [KindleForge project](https://github.com/KindleTweaks/KindleForge).
@@ -181,7 +183,8 @@ zpm doctor
 zpm list
 ~~~
 
-The first launch seeds the ZenLabs and KindleForge repositories. User-added
+The first launch seeds the ZenLabs repository. Compatible Kindles also seed
+KindleForge. User-added
 repositories are refreshed from their URL and assigned trust automatically.
 
 ### Updates and removal

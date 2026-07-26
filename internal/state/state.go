@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
+	deviceplatform "github.com/xZenLabs/zen-pm/internal/platform"
 )
 
 const (
@@ -15,25 +16,28 @@ const (
 	kindlePersistDir             = "/mnt/us/.ZenPM"
 	koboPersistDir               = "/mnt/onboard/.adds/.ZenPM"
 	DefaultZenLabsRepoName       = "ZenLabs"
-	DefaultZenLabsRepoURL        = "https://repo.zen-labs.org"
 	DefaultKindleForgeRepoName   = "KindleForge"
 	DefaultKindleForgeRepoURL    = "https://kf.penguins184.xyz"
 	CatalogPublishedAtRefreshKey = "catalog_published_at_refresh_required"
 )
 
+// DefaultZenLabsRepoURL may be overridden at link time by development builds.
+var DefaultZenLabsRepoURL = "https://repo.zen-labs.org"
+
 // State holds all resolved paths for ZenPM's working directories.
 type State struct {
-	Home          string
-	SQLiteDB      string
-	CacheDir      string
-	ScriptDir     string
-	TmpDir        string
-	LockDir       string
-	JournalDir    string
-	CABundle      string
-	LogFile       string
-	SeededRepoURL string // non-empty only when the database was just created
-	store         Store
+	Home             string
+	SQLiteDB         string
+	CacheDir         string
+	ScriptDir        string
+	TmpDir           string
+	LockDir          string
+	JournalDir       string
+	CABundle         string
+	LogFile          string
+	SeededRepoURL    string // non-empty only when the database was just created
+	kindleWAFAllowed bool
+	store            Store
 }
 
 type Store interface {
@@ -54,12 +58,12 @@ type Store interface {
 
 // Init resolves ZENPM_HOME (or a platform default), creates all directories,
 // and seeds empty databases if missing.
-func Init(platform string) (*State, error) {
+func Init(platformName string) (*State, error) {
 	StartupTrace("State initialization: resolving directories.")
 	home := os.Getenv("ZENPM_HOME")
 	explicitHome := home != ""
 	if home == "" {
-		switch platform {
+		switch platformName {
 		case "kindle":
 			home = defaultKindleHome
 		case "kobo":
@@ -74,18 +78,19 @@ func Init(platform string) (*State, error) {
 	}
 
 	// Persistent state lives in a dot-directory so it survives app updates.
-	persistDir := resolvePersistDir(platform, home, explicitHome)
+	persistDir := resolvePersistDir(platformName, home, explicitHome)
 
 	s := &State{
-		Home:       home,
-		SQLiteDB:   filepath.Join(persistDir, "zenpm.sqlite3"),
-		ScriptDir:  filepath.Join(persistDir, "scripts"),
-		CacheDir:   filepath.Join(home, "cache"),
-		TmpDir:     filepath.Join(home, "tmp"),
-		LockDir:    filepath.Join(home, "locks"),
-		JournalDir: filepath.Join(home, "journal"),
-		CABundle:   filepath.Join(home, "cacert.pem"),
-		LogFile:    filepath.Join(home, "ZenPM.log"),
+		Home:             home,
+		SQLiteDB:         filepath.Join(persistDir, "zenpm.sqlite3"),
+		ScriptDir:        filepath.Join(persistDir, "scripts"),
+		CacheDir:         filepath.Join(home, "cache"),
+		TmpDir:           filepath.Join(home, "tmp"),
+		LockDir:          filepath.Join(home, "locks"),
+		JournalDir:       filepath.Join(home, "journal"),
+		CABundle:         filepath.Join(home, "cacert.pem"),
+		LogFile:          filepath.Join(home, "ZenPM.log"),
+		kindleWAFAllowed: deviceplatform.KindleWAFAllowed(platformName),
 	}
 
 	for _, dir := range []string{
@@ -117,7 +122,7 @@ func Init(platform string) (*State, error) {
 	StartupTrace("State initialization: repositories ready.")
 
 	// Clean up stale temp dirs and locks from interrupted operations.
-	cleanupStaleDirs(platform, s.LockDir)
+	cleanupStaleDirs(platformName, s.LockDir)
 
 	return s, nil
 }
@@ -164,7 +169,9 @@ func seedReposDB(s *State) error {
 	// Default repos seeded on first run.
 	defaults := []RepoEntry{
 		{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true},
-		{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true},
+	}
+	if s.kindleWAFAllowed {
+		defaults = append(defaults, RepoEntry{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true})
 	}
 
 	// Allow override via env var for custom setups.
@@ -187,6 +194,7 @@ func reconcileDefaultRepos(s *State) error {
 	hasZenLabs := false
 	hasKindleForge := false
 
+	filtered := repos[:0]
 	for i := range repos {
 		if repos[i].Name == DefaultZenLabsRepoName {
 			hasZenLabs = true
@@ -198,9 +206,14 @@ func reconcileDefaultRepos(s *State) error {
 				changed = true
 			}
 		}
-		if repos[i].Name == DefaultKindleForgeRepoName {
+		if IsKindleForgeRepo(repos[i].Name, repos[i].URL) {
+			if !s.kindleWAFAllowed {
+				changed = true
+				continue
+			}
 			hasKindleForge = true
-			if repos[i].URL != DefaultKindleForgeRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
+			if repos[i].Name != DefaultKindleForgeRepoName || repos[i].URL != DefaultKindleForgeRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
+				repos[i].Name = DefaultKindleForgeRepoName
 				repos[i].URL = DefaultKindleForgeRepoURL
 				repos[i].Priority = 10
 				repos[i].Trust = "trusted"
@@ -208,13 +221,15 @@ func reconcileDefaultRepos(s *State) error {
 				changed = true
 			}
 		}
+		filtered = append(filtered, repos[i])
 	}
+	repos = filtered
 
 	if !hasZenLabs {
 		repos = append([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true}}, repos...)
 		changed = true
 	}
-	if !hasKindleForge {
+	if s.kindleWAFAllowed && !hasKindleForge {
 		repos = append(repos, RepoEntry{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true})
 		changed = true
 	}
@@ -227,6 +242,19 @@ func reconcileDefaultRepos(s *State) error {
 	_ = s.WriteCatalog(nil)
 	s.SeededRepoURL = DefaultZenLabsRepoURL
 	return nil
+}
+
+// AllowsKindleWAF reports whether the Kindle WAF and KindleForge are available
+// on this device.
+func (s *State) AllowsKindleWAF() bool {
+	return s.kindleWAFAllowed
+}
+
+// IsKindleForgeRepo reports whether a name or URL identifies KindleForge.
+func IsKindleForgeRepo(name, url string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	url = strings.ToLower(strings.TrimRight(strings.TrimSpace(url), "/"))
+	return name == strings.ToLower(DefaultKindleForgeRepoName) || url == strings.ToLower(DefaultKindleForgeRepoURL)
 }
 
 // LockAcquire grabs a named lock via mkdir (atomic on Linux/macOS).

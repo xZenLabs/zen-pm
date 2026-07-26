@@ -77,4 +77,10 @@ ok, version = Updater:check(ereader_daemon, true)
 assert(not ok)
 assert(version:find("expected ZenPM%-koreader%-ereader%-1%.0%.1%-beta1%.zip"))
 
+local standalone_ok, standalone_err = Updater:install_kindle_standalone({
+    kindle_homepage_install_supported = function() return false end,
+}, false, true)
+assert(not standalone_ok)
+assert(standalone_err == "Kindle standalone is not supported on this device.")
+
 print("updater tests passed")
