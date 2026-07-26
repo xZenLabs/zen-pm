@@ -13,7 +13,7 @@ info:
     CORS is enabled for local browser/WAF clients. All routes return `204` for
     `OPTIONS` preflight requests.
 servers:
-  - url: http://127.0.0.1:8080
+  - url: http://127.0.0.1:18765
     description: Default local daemon
 tags:
   - name: Health
@@ -432,7 +432,7 @@ paths:
             text/plain:
               schema:
                 type: string
-              example: "ZenPM server listening on 127.0.0.1:8080\nGET /health 200"
+              example: "ZenPM server listening on 127.0.0.1:18765\nGET /health 200"
         "404":
           $ref: "#/components/responses/TextError"
   /log/client:

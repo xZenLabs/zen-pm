@@ -63,7 +63,7 @@ public final class ZenPMService extends Service {
                 String root = intent == null ? "" : intent.getStringExtra("koreader_root");
                 String home = getFilesDir().getAbsolutePath();
                 CompanionLog.write(this, logHome, "Ensuring native backend is running. " + abiInfo());
-                nativeStart(home, logHome, root == null ? "" : root, 8080);
+                nativeStart(home, logHome, root == null ? "" : root, 18765);
             }
         }
         // Recreate the backend with its KOReader paths if Android reclaims

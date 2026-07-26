@@ -18,4 +18,7 @@ return {
         "Scroll featured image up when scrolling package descriptions",
         "Bug fixes"
     },
+    ["1.1.1"] = {
+        "Fix potential backend port conflict"
+    },
 }

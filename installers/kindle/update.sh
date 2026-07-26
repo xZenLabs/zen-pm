@@ -168,6 +168,6 @@ sleep 2
 mv "$PAYLOAD_DIR" "$TMPDIR/ZenPM.previous"
 mv "$new_payload" "$PAYLOAD_DIR"
 sync
-nohup "$PAYLOAD_DIR/backend/zenpm" serve --port 8080 >>"$PAYLOAD_DIR/ZenPM.log" 2>&1 &
+nohup "$PAYLOAD_DIR/backend/zenpm" serve --port 18765 >>"$PAYLOAD_DIR/ZenPM.log" 2>&1 &
 sleep 2
 alert "Update Complete!" "Updated to v$latest_version!\nExit and reopen ZenPM to load the new interface."

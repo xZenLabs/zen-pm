@@ -1,10 +1,12 @@
 local source = debug.getinfo(1, "S").source or ""
 local plugin_dir = source:match("^@(.+)/constants%.lua$") or "plugins/zenpm.koplugin"
+local api_port = 18765
 return {
     PLUGIN_DIR = plugin_dir,
     ASSET_DIR = plugin_dir .. "/assets",
 
-    API_BASE = "http://127.0.0.1:8080",
+    PORT = api_port,
+    API_BASE = "http://127.0.0.1:" .. api_port,
     POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
 
     REPO_ZENLABS_NAME = "ZenLabs",

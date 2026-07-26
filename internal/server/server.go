@@ -170,7 +170,7 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 var errServerAlreadyRunning = errors.New("ZenPM server already running")
 
 // listen binds addr, resolving the two racy port-conflict cases that arise when
-// the native installer daemon and the KOReader plugin both target port 8080:
+// the native installer daemon and the KOReader plugin both target port 18765:
 //   - a healthy ZenPM already owns the port → duplicate launch, exit clean(0) so
 //     the frontend keeps using the live daemon instead of seeing a crash.
 //   - the port is held by a predecessor still shutting down (plugin pkill'd it a

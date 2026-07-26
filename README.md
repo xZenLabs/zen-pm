@@ -259,7 +259,7 @@ Build artifacts are written to dist/. For local CLI and frontend development:
 go build -o zenpm ./cmd/zenpm
 export ZENPM_HOME="$PWD/.zenpm-dev"
 export ZENPM_PLATFORM=host
-./zenpm serve --port 8080
+./zenpm serve --port 18765
 ~~~
 
 Use a separate emulator state while testing package changes:

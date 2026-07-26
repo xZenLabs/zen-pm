@@ -352,7 +352,7 @@ func startDaemon() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(filepath.Join(kindlePayloadDir, "backend", "zenpm"), "serve", "--port", "8080")
+	cmd := exec.Command(filepath.Join(kindlePayloadDir, "backend", "zenpm"), "serve", "--port", "18765")
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {

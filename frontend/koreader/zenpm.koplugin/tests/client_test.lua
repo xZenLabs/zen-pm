@@ -21,7 +21,7 @@ end
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["constants"] = function()
     return {
-        API_BASE = "http://127.0.0.1:8080",
+        API_BASE = "http://127.0.0.1:18765",
         PLUGIN_DIR = root,
         POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
     }

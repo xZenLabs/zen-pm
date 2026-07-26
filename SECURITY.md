@@ -33,7 +33,7 @@ Reported vulnerabilities will be reviewed and responded to as promptly as possib
 ## Scope
 
 This repository is the [Zen Package Manager (ZenPM)](https://github.com/xZenLabs/ZenPackageManager) — a package manager for jailbroken Kindle (and Kobo) devices, built from a local Go HTTP daemon (`zenpm`) and device frontends (Kindle WAF, KOReader plugin). The primary security surface is:   
-- The local HTTP daemon (`internal/server`), which listens on `127.0.0.1:8080` and accepts requests from the on-device frontend                                                                                     
+- The local HTTP daemon (`internal/server`), which listens on `127.0.0.1:18765` and accepts requests from the on-device frontend
 - Package install/uninstall execution (`internal/pkg`, `internal/launcher`), which runs scripts on the user's device                                                                                                    
 - Manifest signature verification (`internal/repo`), which checks the ed25519 signature on a repository's `manifest.json` before trusting its contents, including the configurable multi-repository trust policy        
 - The on-device installers (`installers/kindle`, `installers/kobo`) and the release/build workflow in `.gith
