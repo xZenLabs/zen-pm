@@ -803,7 +803,7 @@ func TestUninstallRefreshesCatalogWhenUninstallURLMissing(t *testing.T) {
 		case "/manifest.json":
 			w.Header().Set("Content-Type", "application/json")
 			io.WriteString(w, `{"packages":[{"id":"zen-koreader","name":"Zen KOReader","version":"1.0.5","platforms":["kindle"],"install_url":"install.sh","uninstall_url":"uninstall.sh"}]}`)
-		case "/uninstall.sh":
+		case "/packages/kindle/zen-koreader/scripts/uninstall.sh":
 			io.WriteString(w, "#!/bin/sh\nset -eu\necho \"$ZENPM_PACKAGE_ID\" > "+out+"\n")
 		default:
 			http.NotFound(w, r)
