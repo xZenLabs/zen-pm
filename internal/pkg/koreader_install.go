@@ -335,6 +335,27 @@ func removeKOReaderPlugin(root, name string) error {
 	return nil
 }
 
+func (m *Manager) removeTrackedKOReaderPlugin(pluginPath string) error {
+	pluginPath = filepath.Clean(pluginPath)
+	if !strings.HasSuffix(filepath.Base(pluginPath), ".koplugin") {
+		return fmt.Errorf("invalid tracked KOReader plugin path %q", pluginPath)
+	}
+	pluginDirs, err := m.koreaderPluginDirs()
+	if err != nil {
+		return err
+	}
+	for _, pluginDir := range pluginDirs {
+		if filepath.Clean(filepath.Dir(pluginPath)) != filepath.Clean(pluginDir) {
+			continue
+		}
+		if err := os.RemoveAll(pluginPath); err != nil {
+			return fmt.Errorf("remove KOReader plugin %s: %w", pluginPath, err)
+		}
+		return nil
+	}
+	return fmt.Errorf("tracked KOReader plugin path is outside the plugins directories: %q", pluginPath)
+}
+
 func removeKOReaderPatch(root, id, asset, patchPath string) error {
 	asset = filepath.Base(strings.TrimSpace(asset))
 	if asset == "" {

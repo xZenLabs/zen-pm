@@ -252,6 +252,46 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 	}
 }
 
+func TestPackageListIncludesInstalledPackageMissingFromCatalog(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "catalog-plugin", Name: "Catalog Plugin", Version: "1.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "local-plugin", Name: "local-plugin", Version: "2.3.4",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	req := httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, req)
+
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range packages {
+		if item.ID == "local-plugin" {
+			if !item.Installed || item.Name != "local-plugin" || item.InstalledVer != "2.3.4" ||
+				len(item.Platforms) != 1 || item.Platforms[0] != "koreader" {
+				t.Fatalf("unmatched installed plugin = %#v", item)
+			}
+			return
+		}
+	}
+	t.Fatalf("unmatched installed plugin missing from %#v", packages)
+}
+
 func TestPackageListIncludesConflicts(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

@@ -30,7 +30,7 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Scanned != 4 || result.Matched != 2 || result.Added != 2 || result.Updated != 0 {
+	if result.Scanned != 4 || result.Matched != 2 || result.Added != 4 || result.Updated != 0 {
 		t.Fatalf("scan result = %+v", result)
 	}
 
@@ -38,12 +38,15 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := map[string]string{}
+	got := map[string]state.InstalledEntry{}
 	for _, entry := range installed {
-		got[entry.ID] = entry.Version
+		got[entry.ID] = entry
 	}
-	if got["mapped-package"] != "1.2.3" || got["fallback"] != "0.0.0" || len(got) != 2 {
-		t.Fatalf("installed = %#v, want mapped and fallback plugins", got)
+	if got["mapped-package"].Version != "1.2.3" || got["fallback"].Version != "0.0.0" ||
+		got["unmatched"].Version != "99.0.0" || got["unmatched"].Name != "unmatched" ||
+		got["unmatched"].InstallPath != filepath.Join(plugins, "unmatched.koplugin") ||
+		got["patch"].InstallPath != filepath.Join(plugins, "patch.koplugin") || len(got) != 4 {
+		t.Fatalf("installed = %#v, want matched and unmatched plugin directories", got)
 	}
 	marker, err := st.ReadValue(koreaderPluginsScannedKey)
 	if err != nil || marker != "1" {
@@ -89,11 +92,35 @@ func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Updated != 0 {
-		t.Fatalf("scan result = %+v, want no update", result)
+	if result.Updated != 1 {
+		t.Fatalf("scan result = %+v, want install path update", result)
 	}
 	if _, version := st.IsInstalled("reader"); version != "1.2.3" {
 		t.Fatalf("installed version = %q, want 1.2.3", version)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].InstallPath != filepath.Join(plugins, "reader.koplugin") {
+		t.Fatalf("installed plugin = %#v, %v", installed, err)
+	}
+}
+
+func TestUninstallUnmatchedKOReaderPluginRemovesDetectedDirectory(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "local-plugin", Name: "Different Host Package", Repo: "ZenLabs", Platforms: []string{"host"},
+	}})
+	writeKOReaderPlugin(t, plugins, "local-plugin", `return { version = "1.2.3" }`)
+
+	if _, err := manager.ScanKOReaderPlugins(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Uninstall("local-plugin", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(plugins, "local-plugin.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("unmatched plugin directory remains after uninstall: %v", err)
+	}
+	if installed, _ := st.IsInstalled("local-plugin"); installed {
+		t.Fatal("unmatched plugin remains installed after uninstall")
 	}
 }
 

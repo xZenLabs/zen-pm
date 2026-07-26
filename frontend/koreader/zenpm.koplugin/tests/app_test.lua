@@ -6,11 +6,13 @@ local settings = {}
 local modal_message
 local modal_title
 local modal_rows
+local plugin_settings_prompt
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function() return {} end
 package.preload["ui/uimanager"] = function()
     return {
         nextTick = function(_, callback) callback() end,
+        scheduleIn = function(_, _, callback) callback() end,
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
@@ -32,6 +34,10 @@ package.preload["ui/modals"] = function()
             modal_title = title
             modal_rows = rows
         end,
+        plugin_settings_cleanup = function(message, callback)
+            plugin_settings_prompt = message
+            callback(true)
+        end,
     }
 end
 package.preload["models"] = function()
@@ -45,6 +51,15 @@ package.preload["models"] = function()
             return pkg.release_notes_url
         end,
         is_patch_package = function(pkg) return pkg and pkg.is_patch == true end,
+        is_font_package = function() return false end,
+        find_package = function(packages, id)
+            for _, pkg in ipairs(packages or {}) do
+                if pkg.id == id then return pkg end
+            end
+        end,
+        package_display_name = function(pkg, fallback)
+            return pkg and (pkg.name or pkg.id) or fallback
+        end,
         package_assets = function(pkg) return pkg and pkg.assets or {} end,
         category_for_id = function(id)
             if id == "fonts" then return { id = "fonts", label = "Fonts" } end
@@ -61,7 +76,26 @@ package.preload["models"] = function()
 end
 package.preload["ui/theme"] = function() return {} end
 package.preload["updater"] = function() return {} end
-package.preload["zenpm_util"] = function() return {} end
+package.preload["zenpm_util"] = function()
+    return {
+        trim = function(value)
+            return tostring(value or ""):match("^%s*(.-)%s*$")
+        end,
+    }
+end
+local local_plugin_cleanup_calls = 0
+package.preload["pluginloader"] = function()
+    return {
+        loaded_plugins = {
+            {
+                path = "/tmp/local-plugin.koplugin",
+                deletePluginSettings = function()
+                    local_plugin_cleanup_calls = local_plugin_cleanup_calls + 1
+                end,
+            },
+        },
+    }
+end
 package.preload["luasettings"] = function()
     return {
         open = function()
@@ -228,6 +262,33 @@ App.run_next_queue_operation(queued_self_app, queued_self_batch)
 assert(#queued_self_batch.succeeded == 1)
 assert(queued_self_batch.prompt_restart)
 assert(queued_self_completed)
+
+local local_plugin_entry = App.queue_entry_for({
+    state = {},
+}, {
+    id = "local-plugin",
+    name = "local-plugin",
+    installed = true,
+    platforms = { "koreader" },
+}, "uninstall")
+assert(type(local_plugin_entry.settings_deleter) == "function")
+
+App.poll_package_action({
+    busy = true,
+    package_action_failure_detail = function() return nil end,
+    load_packages = function() return true, {} end,
+    package_action_succeeded = function() return true end,
+    patch_action_succeeded_from_db = function() return false end,
+}, {
+    id = "local-plugin",
+    name = "local-plugin",
+    action = "uninstall",
+    was_installed = true,
+    prompt_restart = false,
+    settings_deleter = local_plugin_entry.settings_deleter,
+}, 1)
+assert(plugin_settings_prompt:find("Remove plugin settings?", 1, true))
+assert(local_plugin_cleanup_calls == 1)
 
 local release_requests = 0
 local release_app = {

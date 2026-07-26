@@ -351,6 +351,17 @@ local function koplugin_dir_basename(path)
     return (base:gsub("%.koplugin$", ""))
 end
 
+local function koplugin_candidates(pkg)
+    local candidates = {}
+    for _, key in ipairs({ "plugin_module", "id", "name" }) do
+        local value = pkg and pkg[key]
+        if type(value) == "string" and value ~= "" then
+            table.insert(candidates, value)
+        end
+    end
+    return candidates
+end
+
 -- Resolve the live KOReader plugin instance for a package by enumerating the
 -- loaded plugins and matching on each instance's actual install directory
 -- basename. This avoids guessing PluginLoader's internal key: we compare against
@@ -377,8 +388,8 @@ local function koreader_plugin_instance(pkg)
         end
     end
 
-    for _, candidate in ipairs({ pkg.plugin_module, pkg.id, pkg.name }) do
-        if type(candidate) == "string" and candidate ~= "" and by_dir[candidate] then
+    for _, candidate in ipairs(koplugin_candidates(pkg)) do
+        if by_dir[candidate] then
             return by_dir[candidate]
         end
     end
@@ -503,8 +514,8 @@ local function find_koplugin_dir(pkg)
             end
         end
     end
-    for _, candidate in ipairs({ pkg.plugin_module, pkg.id, pkg.name }) do
-        if type(candidate) == "string" and candidate ~= "" and by_key[candidate] then
+    for _, candidate in ipairs(koplugin_candidates(pkg)) do
+        if by_key[candidate] then
             return by_key[candidate]
         end
     end
@@ -3036,7 +3047,7 @@ function App:scan_installed_plugins()
     else
         self:reload_current_page()
     end
-    Modals.info_for(string.format(_("Found %d installed plugins"), tonumber(data.matched) or 0), Constants.PACKAGE_NOTICE_SECONDS)
+    Modals.info_for(string.format(_("Found %d installed plugins"), tonumber(data.scanned) or tonumber(data.matched) or 0), Constants.PACKAGE_NOTICE_SECONDS)
 end
 
 function App:install_to_kindle_homepage()

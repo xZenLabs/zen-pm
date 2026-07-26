@@ -215,6 +215,7 @@ func (m *Manager) installedDependencySet(installed []state.InstalledEntry) map[s
 func (m *Manager) Uninstall(id, asset string) error {
 	asset = strings.TrimSpace(asset)
 	isPatch := asset != ""
+	trackedPluginPath := ""
 	if isPatch {
 		if !m.isPatchFileInstalled(id, asset) {
 			return fmt.Errorf("patch file %q of %q is not installed", asset, id)
@@ -225,11 +226,21 @@ func (m *Manager) Uninstall(id, asset string) error {
 		if !ok {
 			return fmt.Errorf("package %q is not installed", id)
 		}
+		installedPath, err := m.installedPackagePath(id)
+		if err != nil {
+			return fmt.Errorf("read installed package %q: %w", id, err)
+		}
+		if strings.HasSuffix(filepath.Base(installedPath), ".koplugin") {
+			trackedPluginPath = installedPath
+		}
 		log.Infof("Uninstalling %s", id)
 	}
 
 	entry := m.findCatalogEntry(id)
-	if entry == nil || (entry.UninstallURL == "" && m.nativeKOReaderInstaller(entry, asset) == "") {
+	trackedUnmatchedPlugin := trackedPluginPath != "" &&
+		m.nativeKOReaderInstaller(entry, asset) != genericPluginInstaller
+	if !trackedUnmatchedPlugin &&
+		(entry == nil || (entry.UninstallURL == "" && m.nativeKOReaderInstaller(entry, asset) == "")) {
 		log.Warnf("Package %s uninstall script missing from catalog; refreshing catalog", id)
 		if err := m.repos.Refresh(); err != nil {
 			log.Warnf("Package %s catalog refresh before uninstall failed: %v", id, err)
@@ -244,7 +255,13 @@ func (m *Manager) Uninstall(id, asset string) error {
 	}
 
 	genericInstaller := m.nativeKOReaderInstaller(entry, asset)
-	if genericInstaller != "" {
+	if trackedUnmatchedPlugin {
+		if err := m.removeTrackedKOReaderPlugin(trackedPluginPath); err != nil {
+			j.Abort("tracked plugin removal failed: " + err.Error())
+			return err
+		}
+		log.Infof("Package %s removed from tracked KOReader plugin path %s", id, trackedPluginPath)
+	} else if genericInstaller != "" {
 		if err := m.uninstallGenericKOReader(entry, asset, genericInstaller); err != nil {
 			j.Abort("native removal failed: " + err.Error())
 			return err
