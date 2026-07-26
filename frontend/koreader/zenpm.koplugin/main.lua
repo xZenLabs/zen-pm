@@ -136,6 +136,10 @@ function ZenPM.open(plugin)
 end
 
 function ZenPM:onCloseWidget()
+    -- USB mass storage unmounts Kobo's onboard filesystem immediately after
+    -- KOReader closes. Stop the backend first so it cannot keep that storage
+    -- busy and block the handoff.
+    Daemon:new():stop_standalone_backend()
     I18n.uninstall()
 end
 

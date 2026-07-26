@@ -18,6 +18,8 @@ local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
 local PACKAGE_LIST_TIMEOUT = { block = 5, total = 20 }
 local PACKAGE_RELEASES_TIMEOUT = { block = 10, total = 15 }
+local PLUGIN_SCAN_TIMEOUT = { block = 10, total = 60 }
+local LOG_TIMEOUT = { block = 5, total = 30 }
 
 local function url_encode(value)
     value = tostring(value or "")
@@ -282,7 +284,7 @@ function Client:refresh_repos()
 end
 
 function Client:scan_installed_plugins()
-    return self:request("POST", "/koreader/plugins/scan", nil)
+    return self:request("POST", "/koreader/plugins/scan", nil, PLUGIN_SCAN_TIMEOUT)
 end
 
 function Client:list_packages(platform, check_updates, allow_prerelease)
@@ -343,7 +345,7 @@ function Client:get_package_releases(id)
 end
 
 function Client:get_log(tail)
-    return self:request("GET", "/log?tail=" .. tostring(tail or 500), nil)
+    return self:request("GET", "/log?tail=" .. tostring(tail or 500), nil, LOG_TIMEOUT)
 end
 
 function Client:start_update()
