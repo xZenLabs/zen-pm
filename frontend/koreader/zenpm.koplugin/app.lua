@@ -11,7 +11,7 @@ local Constants = require("constants")
 -- client explicitly so that cache entry cannot replace it.
 local Client = dofile(Constants.PLUGIN_DIR .. "/client.lua")
 local Daemon = require("daemon")
-local I18n = require("i18n")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local Modals = require("ui/modals")
 local Models = require("models")

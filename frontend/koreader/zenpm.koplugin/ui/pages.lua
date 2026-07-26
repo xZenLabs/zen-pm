@@ -3,7 +3,8 @@
 -- shared state and hitbox registration.
 
 local Cards = require("ui/cards")
-local I18n = require("i18n")
+local Constants = require("constants")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local Markdown = require("ui/markdown")
 local MarkdownRenderer = require("ui/markdown_renderer")

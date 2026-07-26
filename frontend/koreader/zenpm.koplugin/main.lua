@@ -1,12 +1,11 @@
-local I18n = require("i18n")
-I18n.install()
-
 local Dispatcher = require("dispatcher")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
 local Launcher = require("launcher")
 local Constants = require("constants")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
+I18n.install()
 local Daemon = require("daemon")
 local Client = dofile(Constants.PLUGIN_DIR .. "/client.lua")
 

@@ -1,5 +1,6 @@
 local Models = require("models")
-local I18n = require("i18n")
+local Constants = require("constants")
+local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
