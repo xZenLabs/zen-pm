@@ -2,6 +2,7 @@ local socket = require("socket")
 local Event = require("ui/event")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
+local ok_logger, logger = pcall(require, "logger")
 
 local AppView = require("ui/app_view")
 local BugReporter = require("bugreporter")
@@ -19,6 +20,23 @@ local Updater = require("updater")
 local Util = require("zenpm_util")
 
 local App = {}
+
+local function content_load_error_code(status_code, detail)
+    local error_code = tonumber(status_code)
+    for code in tostring(detail or ""):gmatch("HTTP%s+(%d%d%d)") do
+        error_code = tonumber(code)
+    end
+    return error_code
+end
+
+local function log_content_load_error(content, package_id, detail, status_code)
+    if not (ok_logger and logger and logger.warn) then return end
+    local message = "ZenPM could not load " .. content .. " for " .. tostring(package_id)
+    if status_code then
+        message = message .. " (HTTP " .. tostring(status_code) .. ")"
+    end
+    logger.warn(message .. ": " .. tostring(detail or "request failed"))
+end
 
 -- Persist UI preferences in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
@@ -2018,18 +2036,27 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
     if Models.has_readme(pkg) and cache_key ~= "" then
         local cached = self.state.readme_cache[cache_key]
         if cached == nil then
-            local readme_ok, data = self.client:get_package_readme(cache_key)
-            cached = readme_ok and type(data) == "table" and type(data.readme) == "string" and {
-                readme = data.readme,
-                base_url = data.readme_base_url,
-                image_base_url = data.readme_image_base_url,
-            } or false
+            local readme_ok, data, status_code = self.client:get_package_readme(cache_key)
+            if readme_ok and type(data) == "table" and type(data.readme) == "string" then
+                cached = {
+                    readme = data.readme,
+                    base_url = data.readme_base_url,
+                    image_base_url = data.readme_image_base_url,
+                }
+            elseif not readme_ok then
+                local error_code = content_load_error_code(status_code, data)
+                log_content_load_error("README", cache_key, data, error_code)
+                cached = { error_code = error_code }
+            else
+                cached = {}
+            end
             self.state.readme_cache[cache_key] = cached
         end
         if type(cached) == "table" then
             pkg.readme = cached.readme
             pkg.readme_base_url = cached.base_url
             pkg.readme_image_base_url = cached.image_base_url
+            pkg.readme_error_code = cached.error_code
         end
     end
     local selected_tab = "readme"
@@ -2075,10 +2102,12 @@ function App:load_package_release_notes(pkg)
     local cached = self.state.release_notes_cache[cache_key]
     if cached == nil then
         Modals.status(_("Loading release notes..."))
-        local ok, data = self.client:get_package_release_notes(package_id, prerelease)
+        local ok, data, status_code = self.client:get_package_release_notes(package_id, prerelease)
         Modals.close_status()
         if not ok then
-            cached = { error = tostring(data) }
+            local error_code = content_load_error_code(status_code, data)
+            log_content_load_error("release notes", package_id, data, error_code)
+            cached = { error_code = error_code }
         else
             cached = type(data) == "table" and {
                 body = tostring(data.release_notes or ""),
@@ -2093,7 +2122,7 @@ function App:load_package_release_notes(pkg)
     pkg.release_notes_tag = cached.tag or ""
     pkg.release_notes_base_url = cached.base_url or ""
     pkg.release_notes_image_base_url = cached.image_base_url or ""
-    pkg.release_notes_error = cached.error
+    pkg.release_notes_error_code = cached.error_code
 end
 
 function App:go_back_from_details()

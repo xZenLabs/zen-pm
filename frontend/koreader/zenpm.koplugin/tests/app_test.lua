@@ -9,6 +9,7 @@ local modal_rows
 local plugin_settings_prompt
 local package_modify_callbacks
 local updater_reinstall_requests = 0
+local logged_warnings = {}
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function() return {} end
 package.preload["ui/uimanager"] = function()
@@ -19,6 +20,11 @@ package.preload["ui/uimanager"] = function()
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
+package.preload["logger"] = function()
+    return {
+        warn = function(message) table.insert(logged_warnings, message) end,
+    }
+end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
 package.preload["constants"] = function()
@@ -56,6 +62,7 @@ package.preload["models"] = function()
             if allow_prerelease and pkg.prerelease_notes_url then return true end
             return pkg.release_notes_url ~= nil
         end,
+        has_readme = function(pkg) return pkg and pkg.readme_url ~= nil end,
         release_notes_url = function(pkg, allow_prerelease)
             if allow_prerelease and pkg.prerelease_notes_url then return pkg.prerelease_notes_url end
             return pkg.release_notes_url
@@ -167,6 +174,52 @@ local zenpm_versions = App.load_package_releases({
     },
 }, zenpm_package)
 assert(release_requests == 1)
+
+local failed_release_app = {
+    state = {
+        beta_updates = false,
+        release_notes_cache = {},
+    },
+    client = {
+        get_package_release_notes = function()
+            return false, "ZenPM backend returned HTTP 502: README request returned HTTP 404", 502
+        end,
+    },
+}
+local failed_release = {
+    id = "reader",
+    release_notes_url = "https://repo.example/reader/RELEASE_NOTES.md",
+}
+App.load_package_release_notes(failed_release_app, failed_release)
+assert(failed_release.release_notes == "")
+assert(failed_release.release_notes_error_code == 404)
+assert(logged_warnings[#logged_warnings]:find("could not load release notes", 1, true))
+
+local failed_readme_app = {
+    state = {
+        page = "search",
+        active_tab = "search",
+        beta_updates = false,
+        readme_cache = {},
+    },
+    ensure_backend = function() return true end,
+    load_packages = function()
+        return true, {
+            { id = "reader", readme_url = "https://repo.example/reader/README.md" },
+        }
+    end,
+    client = {
+        get_package_readme = function()
+            return false, "connection timed out"
+        end,
+    },
+    reset_scroll = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+}
+App.show_package_details(failed_readme_app, "reader")
+assert(failed_readme_app.state.current_package.readme_error_code == nil)
+assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 local about_app = {

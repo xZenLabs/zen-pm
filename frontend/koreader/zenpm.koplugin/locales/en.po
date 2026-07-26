@@ -252,6 +252,9 @@ msgstr "enabled"
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Enter your GitHub username to be tagged in the issue"
 
+msgid "Error code: "
+msgstr "Error code: "
+
 msgid "Failed to load package: "
 msgstr "Failed to load package: "
 

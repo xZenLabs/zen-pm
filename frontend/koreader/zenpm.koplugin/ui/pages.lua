@@ -395,6 +395,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local readme = tostring(pkg.readme or "")
         if readme == "" then
             readme = _("No README available.")
+            if pkg.readme_error_code then
+                readme = readme .. " " .. _("Error code: ") .. tostring(pkg.readme_error_code)
+            end
         end
         table.insert(readme_blocks, { kind = "heading", level = 2, text = _("README"), plain = true })
         for _, block in ipairs(Markdown.parse(readme)) do
@@ -509,8 +512,8 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local release_notes = tostring(pkg.release_notes or "")
         if release_notes == "" then
             local message = _("No release notes available.")
-            if pkg.release_notes_error and pkg.release_notes_error ~= "" then
-                message = _("Could not load release notes: ") .. tostring(pkg.release_notes_error)
+            if pkg.release_notes_error_code then
+                message = message .. " " .. _("Error code: ") .. tostring(pkg.release_notes_error_code)
             end
             table.insert(content_blocks, { kind = "paragraph", text = message, plain = true })
         else
