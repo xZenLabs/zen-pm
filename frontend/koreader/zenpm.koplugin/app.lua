@@ -3175,10 +3175,7 @@ function App:close_settings()
 end
 
 function App:show_about()
-    local version = self.daemon:plugin_version()
-    if version == "" then
-        version = self.daemon:installed_backend_version()
-    end
+    local version = self.daemon:installed_backend_version()
     if version == "" then
         version = self.version or "?"
     end

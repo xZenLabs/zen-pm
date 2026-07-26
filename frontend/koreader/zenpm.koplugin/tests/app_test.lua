@@ -227,7 +227,7 @@ assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 local about_app = {
     daemon = {
-        plugin_version = function() return "1.2.3-beta3" end,
+        plugin_version = function() error("About must not use the plugin version") end,
         installed_backend_version = function() return "1.2.3" end,
         detect_platform = function() return "ereader" end,
         ereader_backend_suffix = function() return "sf" end,
@@ -235,7 +235,7 @@ local about_app = {
     package_platforms = function() return "ereader,koreader" end,
 }
 App.show_about(about_app)
-assert(modal_message:find("Version: 1.2.3-beta3", 1, true))
+assert(modal_message:find("Version: 1.2.3", 1, true))
 assert(modal_message:find("ABI: sf", 1, true))
 
 modal_message = nil
