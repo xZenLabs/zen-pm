@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -77,5 +78,34 @@ func TestFetchVersionsTreatsMissingOrBlankFileAsEmpty(t *testing.T) {
 				t.Fatalf("releases = %#v", items)
 			}
 		})
+	}
+}
+
+func TestFetchVersionsIncludesHTTPFailureDiagnostics(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Server", "test-edge")
+		w.Header().Set("X-Request-ID", "req-123")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprintln(w, "rate limit exhausted")
+	}))
+	defer srv.Close()
+
+	_, err := FetchVersions(srv.URL + "/versions.json")
+	if err == nil {
+		t.Fatal("FetchVersions succeeded")
+	}
+	for _, detail := range []string{
+		"HTTP GET " + srv.URL + "/versions.json",
+		"429 Too Many Requests",
+		`protocol="HTTP/1.1"`,
+		`server="test-edge"`,
+		`request_id="req-123"`,
+		`content_type="text/plain"`,
+		`body="rate limit exhausted"`,
+	} {
+		if !strings.Contains(err.Error(), detail) {
+			t.Fatalf("FetchVersions() error = %q, want %q", err, detail)
+		}
 	}
 }

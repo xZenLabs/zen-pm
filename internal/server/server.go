@@ -290,15 +290,53 @@ func (s *Server) autoScanKOReaderPlugins() {
 	}
 }
 
-// responseRecorder captures the status code written by a handler.
+const accessErrorBodyLimit = 1024
+
+// responseRecorder captures the status code and a bounded error body written
+// by a handler.
 type responseRecorder struct {
 	http.ResponseWriter
-	status int
+	status        int
+	wroteHeader   bool
+	errorBody     strings.Builder
+	bodyTruncated bool
 }
 
 func (rec *responseRecorder) WriteHeader(code int) {
+	if rec.wroteHeader {
+		return
+	}
+	rec.wroteHeader = true
 	rec.status = code
 	rec.ResponseWriter.WriteHeader(code)
+}
+
+func (rec *responseRecorder) Write(data []byte) (int, error) {
+	if !rec.wroteHeader {
+		rec.WriteHeader(http.StatusOK)
+	}
+	if rec.status >= http.StatusBadRequest {
+		remaining := accessErrorBodyLimit - rec.errorBody.Len()
+		if remaining <= 0 {
+			rec.bodyTruncated = true
+		} else {
+			capture := data
+			if len(capture) > remaining {
+				rec.bodyTruncated = true
+				capture = capture[:remaining]
+			}
+			_, _ = rec.errorBody.Write(capture)
+		}
+	}
+	return rec.ResponseWriter.Write(data)
+}
+
+func (rec *responseRecorder) errorDetail() string {
+	detail := strings.Join(strings.Fields(rec.errorBody.String()), " ")
+	if rec.bodyTruncated {
+		detail += "..."
+	}
+	return detail
 }
 
 // wrap adds CORS headers, enforces local-only access, and logs every request.
@@ -311,19 +349,33 @@ func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		if !s.unixSocket {
 			host, _, _ := net.SplitHostPort(r.RemoteAddr)
 			if host != "127.0.0.1" && host != "::1" {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				http.Error(rec, "forbidden", http.StatusForbidden)
+				logAccess(r, rec)
 				return
 			}
 		}
-		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		h(rec, r)
-		if shouldLogAccess(r, rec.status) {
-			log.Infof("%s %s %d", r.Method, r.URL.RequestURI(), rec.status)
-		}
+		logAccess(r, rec)
 	}
+}
+
+func logAccess(r *http.Request, rec *responseRecorder) {
+	if !shouldLogAccess(r, rec.status) {
+		return
+	}
+	if rec.status >= http.StatusBadRequest {
+		message := fmt.Sprintf("%s %s %d %s", r.Method, r.URL.RequestURI(), rec.status, http.StatusText(rec.status))
+		if detail := rec.errorDetail(); detail != "" {
+			message += fmt.Sprintf(" error=%q", detail)
+		}
+		log.Warn(message)
+		return
+	}
+	log.Infof("%s %s %d", r.Method, r.URL.RequestURI(), rec.status)
 }
 
 func shouldLogAccess(r *http.Request, status int) bool {

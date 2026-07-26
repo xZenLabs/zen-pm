@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
+	"github.com/xZenLabs/zen-pm/internal/httpdiag"
 	"github.com/xZenLabs/zen-pm/internal/log"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
@@ -764,18 +765,9 @@ func fetchBytes(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		detail := strings.Join(strings.Fields(string(body)), " ")
-		if len(detail) > 400 {
-			detail = detail[:400] + "..."
-		}
-		requestID := resp.Header.Get("CF-RAY")
-		log.Warnf("HTTP GET %s: status=%d protocol=%s server=%q cf_ray=%q body=%q",
-			url, resp.StatusCode, resp.Proto, resp.Header.Get("Server"), requestID, detail)
-		if detail != "" {
-			return nil, fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, url, detail)
-		}
-		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+		err := httpdiag.ResponseError(resp)
+		log.Warn(err.Error())
+		return nil, err
 	}
 	return io.ReadAll(resp.Body)
 }

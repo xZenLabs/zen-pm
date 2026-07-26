@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
+	"github.com/xZenLabs/zen-pm/internal/httpdiag"
 )
 
 // FetchVersions retrieves a repository-generated versions.json document.
@@ -33,7 +34,7 @@ func FetchVersions(versionsURL string) ([]Release, error) {
 		return []Release{}, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("versions request returned %s", resp.Status)
+		return nil, fmt.Errorf("versions request: %w", httpdiag.ResponseError(resp))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
 	if err != nil {

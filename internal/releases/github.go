@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
+	"github.com/xZenLabs/zen-pm/internal/httpdiag"
 )
 
 const githubResponseLimit = 4 * 1024 * 1024
@@ -95,7 +96,7 @@ func FetchReadmeDocument(readmeURL string) (ReadmeDocument, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ReadmeDocument{}, fmt.Errorf("README request returned %s", resp.Status)
+		return ReadmeDocument{}, fmt.Errorf("README request: %w", httpdiag.ResponseError(resp))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
 	if err != nil {
@@ -267,7 +268,7 @@ func githubRequest(path, accept string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GitHub request returned %s", resp.Status)
+		return nil, fmt.Errorf("GitHub request: %w", httpdiag.ResponseError(resp))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
 	if err != nil {

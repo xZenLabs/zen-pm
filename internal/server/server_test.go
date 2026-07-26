@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xZenLabs/zen-pm/internal/log"
 	"github.com/xZenLabs/zen-pm/internal/pkg"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
@@ -750,6 +751,39 @@ func TestShouldLogAccessSkipsRoutineSuccessfulPolling(t *testing.T) {
 		req := httptest.NewRequest(tt.method, tt.target, nil)
 		if got := shouldLogAccess(req, tt.status); got != tt.want {
 			t.Fatalf("shouldLogAccess(%s %s, %d) = %v, want %v", tt.method, tt.target, tt.status, got, tt.want)
+		}
+	}
+}
+
+func TestWrapLogsHTTPErrorDetail(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "zenpm.log")
+	log.Init(logPath)
+	t.Cleanup(func() { log.Init("") })
+
+	srv := &Server{unixSocket: true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/packages/reader/releases", nil)
+	responseDetail := "versions request: upstream returned HTTP 429 Too Many Requests"
+	srv.wrap(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, responseDetail, http.StatusBadGateway)
+	})(rec, req)
+	if rec.Body.String() != responseDetail+"\n" {
+		t.Fatalf("response body = %q, want complete handler error", rec.Body.String())
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := string(data)
+	for _, detail := range []string{
+		"WARN",
+		"GET /packages/reader/releases",
+		"502 Bad Gateway",
+		`error="versions request: upstream returned HTTP 429 Too Many Requests"`,
+	} {
+		if !strings.Contains(line, detail) {
+			t.Fatalf("access log = %q, want %q", line, detail)
 		}
 	}
 }
