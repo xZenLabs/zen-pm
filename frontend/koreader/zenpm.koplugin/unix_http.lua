@@ -64,6 +64,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             ffi.cdef(declaration)
         end
     end
+    ensure_function("connect", "int connect(int, const struct sockaddr *, unsigned int);")
     ensure_function("send", "ssize_t send(int, const void *, size_t, int);")
     ensure_function("recv", "ssize_t recv(int, void *, size_t, int);")
 
