@@ -3175,7 +3175,10 @@ function App:close_settings()
 end
 
 function App:show_about()
-    local version = self.daemon:installed_backend_version()
+    local version = self.daemon:plugin_version()
+    if version == "" then
+        version = self.daemon:installed_backend_version()
+    end
     if version == "" then
         version = self.version or "?"
     end
@@ -3285,9 +3288,9 @@ function App:apply_update(release_tag, on_result)
 
         -- The next startup copies the new bundled backend; stop the old one
         -- now so it cannot be reused after KOReader restarts.
-        if release_tag and self.client and self.client.scan_installed_plugins then
-            -- The reinstall unregistered ZenPM before replacing its directory.
-            -- Scan while this backend is still running to record the new copy.
+        if self.client and self.client.scan_installed_plugins then
+            -- Record the replacement while this backend is still running so
+            -- the Installed page immediately reflects the new ZenPM version.
             self.client:scan_installed_plugins()
         end
         self.daemon:stop_standalone_backend()

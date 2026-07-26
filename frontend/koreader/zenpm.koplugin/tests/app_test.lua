@@ -97,6 +97,9 @@ end
 package.preload["ui/theme"] = function() return {} end
 package.preload["updater"] = function()
     return {
+        update = function()
+            return true, "1.2.4-beta3"
+        end,
         reinstall = function(_, _, tag, allow_prerelease, force_refresh)
             updater_reinstall_requests = updater_reinstall_requests + 1
             assert(tag == "v1.2.3")
@@ -224,6 +227,7 @@ assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 local about_app = {
     daemon = {
+        plugin_version = function() return "1.2.3-beta3" end,
         installed_backend_version = function() return "1.2.3" end,
         detect_platform = function() return "ereader" end,
         ereader_backend_suffix = function() return "sf" end,
@@ -231,7 +235,7 @@ local about_app = {
     package_platforms = function() return "ereader,koreader" end,
 }
 App.show_about(about_app)
-assert(modal_message:find("Version: 1.2.3", 1, true))
+assert(modal_message:find("Version: 1.2.3-beta3", 1, true))
 assert(modal_message:find("ABI: sf", 1, true))
 
 modal_message = nil
@@ -335,6 +339,30 @@ assert(companion_update_requests == 1)
 assert(updater_reinstall_requests == 1)
 assert(reinstalled_scan_calls == 1)
 assert(reinstalled_result[1] == true and reinstalled_result[2] == "1.2.3")
+
+local updated_scan_calls = 0
+local updated_result
+App.apply_update({
+    state = { beta_updates = false },
+    daemon = {
+        is_android = function() return false end,
+        stop_standalone_backend = function() end,
+    },
+    client = {
+        scan_installed_plugins = function()
+            updated_scan_calls = updated_scan_calls + 1
+            return true
+        end,
+    },
+    run_update_task = function(_, task, _, callback)
+        local called, ok, result = task()
+        callback(true, called, ok, result)
+    end,
+}, function(...)
+    updated_result = { ... }
+end)
+assert(updated_scan_calls == 1)
+assert(updated_result[1] == true and updated_result[2] == "1.2.4-beta3")
 
 local selected_zenpm_release
 App.confirm_package_version({
