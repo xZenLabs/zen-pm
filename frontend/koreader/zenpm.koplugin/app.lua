@@ -2994,6 +2994,7 @@ function App:refresh_repos()
         return
     end
 
+    self.state.readme_cache = {}
     self.image_files = {}
     Images.invalidate_cache()
     local found, packages = self:load_packages(false, true)

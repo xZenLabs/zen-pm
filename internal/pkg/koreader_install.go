@@ -111,6 +111,7 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 		if err != nil {
 			return "", "", nil, err
 		}
+		assetName = releaseAsset.Name
 		assetURL = releaseAsset.URL
 	}
 	data, err := repo.FetchBytes(assetURL)

@@ -35,6 +35,7 @@ package.preload["i18n"] = function() return {} end
 package.preload["ui/images"] = function()
     return {
         asset = function(name) return "assets/" .. name end,
+        invalidate_cache = function() end,
     }
 end
 package.preload["ui/modals"] = function()
@@ -240,14 +241,33 @@ assert(modal_message:find("Version: 1.2.3", 1, true))
 assert(modal_message:find("ABI: sf", 1, true))
 
 modal_message = nil
-App.refresh_repos({
+local failed_refresh_app = {
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
     client = {
         refresh_repos = function()
             return false, "ZenPM backend returned HTTP 500: upstream returned HTTP 403", 500
         end,
     },
-})
+}
+App.refresh_repos(failed_refresh_app)
 assert(modal_message == "Refresh failed (HTTP 403)")
+assert(failed_refresh_app.state.readme_cache.reader.readme == "Cached README")
+
+local refreshed_app = {
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
+    client = {
+        refresh_repos = function() return true end,
+    },
+    load_packages = function() return true, {} end,
+    load_repos = function() end,
+    reload_current_page = function() end,
+}
+App.refresh_repos(refreshed_app)
+assert(next(refreshed_app.state.readme_cache) == nil)
 
 local update_result
 local trapper_required = false

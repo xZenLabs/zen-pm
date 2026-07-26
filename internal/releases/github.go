@@ -185,6 +185,7 @@ func FetchGitHubReleases(source string, limit int) ([]Release, error) {
 // ResolveGitHubReleaseAsset returns the requested asset from a GitHub release.
 // An empty tag selects the newest non-prerelease release. asset may be an exact
 // filename or a suffix beginning with a dot (for example, ".koplugin.zip").
+// Version and ABI spelling changes are tolerated when unambiguous.
 func ResolveGitHubReleaseAsset(source, tag, asset string) (Release, ReleaseAsset, error) {
 	tag = strings.TrimSpace(tag)
 	asset = strings.TrimSpace(asset)
@@ -203,10 +204,8 @@ func ResolveGitHubReleaseAsset(source, tag, asset string) (Release, ReleaseAsset
 		if tag == "" && release.Prerelease {
 			continue
 		}
-		for _, candidate := range release.Assets {
-			if candidate.Name == asset || (strings.HasPrefix(asset, ".") && strings.HasSuffix(candidate.Name, asset)) {
-				return release, candidate, nil
-			}
+		if candidate, ok := matchReleaseAsset(release.Assets, asset); ok {
+			return release, candidate, nil
 		}
 		if tag != "" {
 			return Release{}, ReleaseAsset{}, fmt.Errorf("release %q has no asset matching %q", tag, asset)
@@ -237,14 +236,12 @@ func LatestGitHubRelease(source, asset string, allowPrerelease bool) (Release, R
 		if release.Prerelease && !allowPrerelease {
 			continue
 		}
-		for _, candidate := range release.Assets {
-			if candidate.Name != asset && !(strings.HasPrefix(asset, ".") && strings.HasSuffix(candidate.Name, asset)) {
-				continue
-			}
-			if latest.TagName == "" || releaseGreater(release, latest) {
-				latest, latestAsset = release, candidate
-			}
-			break
+		candidate, ok := matchReleaseAsset(release.Assets, asset)
+		if !ok {
+			continue
+		}
+		if latest.TagName == "" || releaseGreater(release, latest) {
+			latest, latestAsset = release, candidate
 		}
 	}
 	if latest.TagName == "" {
