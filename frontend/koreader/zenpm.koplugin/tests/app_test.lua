@@ -35,6 +35,7 @@ package.preload["i18n"] = function() return {} end
 package.preload["ui/images"] = function()
     return {
         asset = function(name) return "assets/" .. name end,
+        invalidate_cache = function() end,
     }
 end
 package.preload["ui/modals"] = function()
@@ -97,6 +98,9 @@ end
 package.preload["ui/theme"] = function() return {} end
 package.preload["updater"] = function()
     return {
+        update = function()
+            return true, "1.2.4-beta3"
+        end,
         reinstall = function(_, _, tag, allow_prerelease, force_refresh)
             updater_reinstall_requests = updater_reinstall_requests + 1
             assert(tag == "v1.2.3")
@@ -219,11 +223,13 @@ local failed_readme_app = {
 }
 App.show_package_details(failed_readme_app, "reader")
 assert(failed_readme_app.state.current_package.readme_error_code == nil)
+assert(failed_readme_app.state.readme_cache.reader == nil)
 assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 local about_app = {
     daemon = {
+        plugin_version = function() error("About must not use the plugin version") end,
         installed_backend_version = function() return "1.2.3" end,
         detect_platform = function() return "ereader" end,
         ereader_backend_suffix = function() return "sf" end,
@@ -235,14 +241,33 @@ assert(modal_message:find("Version: 1.2.3", 1, true))
 assert(modal_message:find("ABI: sf", 1, true))
 
 modal_message = nil
-App.refresh_repos({
+local failed_refresh_app = {
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
     client = {
         refresh_repos = function()
             return false, "ZenPM backend returned HTTP 500: upstream returned HTTP 403", 500
         end,
     },
-})
+}
+App.refresh_repos(failed_refresh_app)
 assert(modal_message == "Refresh failed (HTTP 403)")
+assert(failed_refresh_app.state.readme_cache.reader.readme == "Cached README")
+
+local refreshed_app = {
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
+    client = {
+        refresh_repos = function() return true end,
+    },
+    load_packages = function() return true, {} end,
+    load_repos = function() end,
+    reload_current_page = function() end,
+}
+App.refresh_repos(refreshed_app)
+assert(next(refreshed_app.state.readme_cache) == nil)
 
 local update_result
 local trapper_required = false
@@ -307,6 +332,7 @@ assert(self_update_queued == 2)
 
 local companion_update_requests = 0
 local reinstalled_scan_calls = 0
+local reinstalled_backend_restarts = 0
 local reinstalled_result
 App.apply_update({
     state = { beta_updates = false },
@@ -324,6 +350,9 @@ App.apply_update({
             return true
         end,
     },
+    start_backend_then_reload = function()
+        reinstalled_backend_restarts = reinstalled_backend_restarts + 1
+    end,
     run_update_task = function(_, task, _, callback)
         local called, ok, result = task()
         callback(true, called, ok, result)
@@ -334,7 +363,37 @@ end)
 assert(companion_update_requests == 1)
 assert(updater_reinstall_requests == 1)
 assert(reinstalled_scan_calls == 1)
+assert(reinstalled_backend_restarts == 1)
 assert(reinstalled_result[1] == true and reinstalled_result[2] == "1.2.3")
+
+local updated_scan_calls = 0
+local updated_backend_restarts = 0
+local updated_result
+App.apply_update({
+    state = { beta_updates = false },
+    daemon = {
+        is_android = function() return false end,
+        stop_standalone_backend = function() end,
+    },
+    client = {
+        scan_installed_plugins = function()
+            updated_scan_calls = updated_scan_calls + 1
+            return true
+        end,
+    },
+    start_backend_then_reload = function()
+        updated_backend_restarts = updated_backend_restarts + 1
+    end,
+    run_update_task = function(_, task, _, callback)
+        local called, ok, result = task()
+        callback(true, called, ok, result)
+    end,
+}, function(...)
+    updated_result = { ... }
+end)
+assert(updated_scan_calls == 1)
+assert(updated_backend_restarts == 1)
+assert(updated_result[1] == true and updated_result[2] == "1.2.4-beta3")
 
 local selected_zenpm_release
 App.confirm_package_version({
@@ -386,6 +445,13 @@ assert(queue_app.state.queue_running)
 assert(queued_operations[1].name == "Uninstall")
 assert(queued_operations[2].name == "Install")
 assert(queued_operations[3].name == "ZenPM")
+
+assert(App.queue_result_text({}, {
+    succeeded = {},
+    failed = {
+        { entry = { name = "Reader" }, detail = "download failed" },
+    },
+}) == "Queue completed: 0 succeeded, 1 failed.\n\nReader: download failed")
 
 local queued_self_entry = { name = "ZenPM", self_update = true }
 local queued_self_batch = {

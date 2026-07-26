@@ -62,6 +62,52 @@ func TestResolveVersionsAssetMatchesNormalizedTag(t *testing.T) {
 	}
 }
 
+func TestResolveVersionsAssetMatchesBetaAssetIgnoringVersionAndABIName(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+			"releases": [{
+				"tag_name": "1.2.0-pre",
+				"assets": [{"name": "filebrowserplus.koplugin-v1.2.0-pre-linux-armhf.zip", "url": "https://example.test/filebrowserplus.zip"}]
+			}]
+		}`)
+	}))
+	defer srv.Close()
+
+	_, asset, err := ResolveVersionsAsset(
+		srv.URL,
+		"1.2.0-pre",
+		"filebrowserplus.koplugin-v1.1.0-linux-armv7.zip",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asset.Name != "filebrowserplus.koplugin-v1.2.0-pre-linux-armhf.zip" {
+		t.Fatalf("asset = %#v", asset)
+	}
+}
+
+func TestMatchReleaseAssetSingleFallbackRejectsIncompatibleBuilds(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		wanted    string
+		candidate string
+		wantOK    bool
+	}{
+		{"safe renamed arm build", "filebrowserplus-v1.1.0-linux-armv7.zip", "filebrowserplus-beta-kindle-armv7.zip", true},
+		{"android for arm device", "filebrowserplus-v1.1.0-linux-armv7.zip", "filebrowserplus-android-armv7.zip", false},
+		{"desktop for arm device", "filebrowserplus-v1.1.0-linux-armv7.zip", "filebrowserplus-desktop-x86_64.zip", false},
+		{"arm64 for armv7 device", "filebrowserplus-v1.1.0-linux-armv7.zip", "filebrowserplus-linux-arm64.zip", false},
+		{"archive for Lua patch", "filebrowserplus.lua", "filebrowserplus.zip", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := matchReleaseAsset([]ReleaseAsset{{Name: tc.candidate}}, tc.wanted)
+			if ok != tc.wantOK {
+				t.Fatalf("matchReleaseAsset(%q, %q) ok = %t, want %t", tc.candidate, tc.wanted, ok, tc.wantOK)
+			}
+		})
+	}
+}
+
 func TestFetchVersionsTreatsMissingOrBlankFileAsEmpty(t *testing.T) {
 	for _, status := range []int{http.StatusOK, http.StatusNotFound} {
 		t.Run(http.StatusText(status), func(t *testing.T) {

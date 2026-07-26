@@ -21,7 +21,7 @@ end
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["constants"] = function()
     return {
-        API_BASE = "http://127.0.0.1:8080",
+        API_BASE = "http://127.0.0.1:18765",
         PLUGIN_DIR = root,
         POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
     }
@@ -89,6 +89,18 @@ end
 assert(client:list_packages("koreader", false, true))
 
 local requested_timeout
+
+client.request = function(_, method, path, body, timeout)
+    assert(method == "GET")
+    assert(path == "/packages/example%20package/readme")
+    assert(body == nil)
+    requested_timeout = timeout
+    return true, {}
+end
+
+assert(client:get_package_readme("example package"))
+assert(requested_timeout.block == 10)
+assert(requested_timeout.total == 20)
 
 client.request = function(_, method, path, body, timeout)
     assert(method == "GET")

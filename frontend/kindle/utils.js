@@ -1,6 +1,6 @@
 // Shared WAF utilities — loaded before every page script.
 var ZenUtils = (function () {
-    var API    = "http://127.0.0.1:8080";
+    var API    = "http://127.0.0.1:18765";
     var APP_ID = "com.zenlabs.zenpm";
     var REPO_ZENLABS_NAME = "ZenLabs";
     var REPO_ZENLABS_DISPLAY = "ZenLabs Repo";

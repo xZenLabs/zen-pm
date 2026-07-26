@@ -77,10 +77,8 @@ func ResolveVersionsAsset(versionsURL, tag, asset string) (Release, ReleaseAsset
 		if tag == "" && release.Prerelease {
 			continue
 		}
-		for _, candidate := range release.Assets {
-			if candidate.Name == asset || (strings.HasPrefix(asset, ".") && strings.HasSuffix(candidate.Name, asset)) {
-				return release, candidate, nil
-			}
+		if candidate, ok := matchReleaseAsset(release.Assets, asset); ok {
+			return release, candidate, nil
 		}
 		if tag != "" {
 			return Release{}, ReleaseAsset{}, fmt.Errorf("release %q has no asset matching %q", tag, asset)

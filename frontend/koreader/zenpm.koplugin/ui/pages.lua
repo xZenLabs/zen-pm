@@ -439,11 +439,13 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local function draw_tab(id, label, tx, tw)
             local selected = details_tab == id
             P.box(bb, tx, iy, tw, tab_h, {
-                background = selected and Theme.panel or Theme.bg,
-                border_color = selected and Theme.border or Theme.soft,
+                background = selected and Theme.ink or Theme.panel,
+                border_color = Theme.border,
                 radius = math.floor(tab_h / 2),
             })
-            P.center_text_box(bb, label, tx, iy, tw, tab_h, "small", { bold = selected })
+            P.center_text_box(bb, label, tx, iy, tw, tab_h, "small", {
+                color = selected and Theme.button_text or Theme.ink,
+            })
             P.hit(view, tx, iy, tw, tab_h, function()
                 view.app:set_package_details_tab(id)
             end, "details-tab:" .. id)

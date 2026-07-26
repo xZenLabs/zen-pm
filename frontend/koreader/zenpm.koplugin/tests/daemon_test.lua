@@ -6,6 +6,7 @@ package.preload["socket"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
 local constants = {
     PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin",
+    PORT = 18765,
     POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
 }
 package.preload["constants"] = function() return constants end
@@ -103,6 +104,35 @@ local source_path = os.tmpname()
 local source_file = assert(io.open(source_path, "wb"))
 source_file:write("backend")
 source_file:close()
+
+local tcp_backend = Daemon:new()
+tcp_backend.detect_platform = function() return "ereader" end
+tcp_backend.wait_for_loopback = function() return true end
+tcp_backend.find_backend = function() return source_path end
+tcp_backend.log_cli = function() end
+local tcp_start_commands = {}
+os.execute = function(command)
+    table.insert(tcp_start_commands, command)
+    return 0
+end
+assert(tcp_backend:start(true))
+os.execute = original_execute
+assert(#tcp_start_commands == 1)
+assert(tcp_start_commands[1]:find("serve --port 18765", 1, true))
+
+local stopped_commands = {}
+socket.sleep = function() end
+os.execute = function(command)
+    table.insert(stopped_commands, command)
+    return 0
+end
+tcp_backend.standalone_backend = function() return source_path end
+tcp_backend.standalone_pid_file = function() return "" end
+tcp_backend.bundled_backend_candidates = function() return {} end
+tcp_backend:stop_standalone_backend()
+os.execute = original_execute
+assert(table.concat(stopped_commands, "\n"):find("serve %-%-port 18765"))
+assert(table.concat(stopped_commands, "\n"):find("serve %-%-port 8080"))
 
 local pocketbook_backend = Daemon:new()
 pocketbook_backend.ensure_runtime_dirs = function() return false, nil end

@@ -287,10 +287,10 @@ func runLogs(st *state.State, args []string) {
 }
 
 func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, startedAt time.Time, args []string) {
-	port := 8080
+	port := 18765
 	socketPath := ""
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	fs.IntVar(&port, "port", 8080, "port to bind on 127.0.0.1")
+	fs.IntVar(&port, "port", 18765, "port to bind on 127.0.0.1")
 	fs.StringVar(&socketPath, "socket", "", "Unix socket path (instead of TCP)")
 	fs.Parse(args)
 

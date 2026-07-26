@@ -1083,7 +1083,18 @@ function App:queue_result_text(batch)
     if failed == 0 then
         return string.format(_("Queue completed: %d succeeded."), succeeded)
     end
+    local failures = {}
+    for _, failure in ipairs(batch.failed) do
+        local entry = failure.entry or {}
+        local name = entry.name or entry.id or _("Package")
+        local detail = failure.detail
+        if not detail or detail == "" then
+            detail = _("Check the debug log for details.")
+        end
+        table.insert(failures, name .. ": " .. detail)
+    end
     return string.format(_("Queue completed: %d succeeded, %d failed."), succeeded, failed)
+        .. "\n\n" .. table.concat(failures, "\n\n")
 end
 
 function App:refresh_queue_package_state()
@@ -2043,6 +2054,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
                     base_url = data.readme_base_url,
                     image_base_url = data.readme_image_base_url,
                 }
+                self.state.readme_cache[cache_key] = cached
             elseif not readme_ok then
                 local error_code = content_load_error_code(status_code, data)
                 log_content_load_error("README", cache_key, data, error_code)
@@ -2050,7 +2062,6 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             else
                 cached = {}
             end
-            self.state.readme_cache[cache_key] = cached
         end
         if type(cached) == "table" then
             pkg.readme = cached.readme
@@ -2983,6 +2994,7 @@ function App:refresh_repos()
         return
     end
 
+    self.state.readme_cache = {}
     self.image_files = {}
     Images.invalidate_cache()
     local found, packages = self:load_packages(false, true)
@@ -3285,13 +3297,17 @@ function App:apply_update(release_tag, on_result)
 
         -- The next startup copies the new bundled backend; stop the old one
         -- now so it cannot be reused after KOReader restarts.
-        if release_tag and self.client and self.client.scan_installed_plugins then
-            -- The reinstall unregistered ZenPM before replacing its directory.
-            -- Scan while this backend is still running to record the new copy.
+        if self.client and self.client.scan_installed_plugins then
+            -- Record the replacement while this backend is still running so
+            -- the Installed page immediately reflects the new ZenPM version.
             self.client:scan_installed_plugins()
         end
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
+        -- Start the new bundled backend now. KOReader still needs a restart to
+        -- load the replaced plugin code, but About can immediately report the
+        -- version that was just installed.
+        self:start_backend_then_reload()
         if on_result then
             on_result(true, result)
             return

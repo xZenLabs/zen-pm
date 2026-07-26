@@ -244,9 +244,9 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{
 			"releases": [{
-				"tag_name": "v1.39.4",
+				"tag_name": "v1.40.0-pre",
 				"assets": [{
-					"name": "rakuyomi-kindlehf.zip",
+					"name": "rakuyomi-kindlehf-v1.40.0-pre.zip",
 					"url": "` + assetServer.URL + `",
 					"size": 12,
 					"digest": "sha256:test"
@@ -260,11 +260,11 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 		VersionsURL: versionsServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "rakuyomi-kindlehf.zip", "1.39.4")
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "rakuyomi-kindlehf-v1.39.4.zip", "v1.40.0-pre")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "rakuyomi-kindlehf.zip" || gotURL != assetServer.URL || string(data) != "zip contents" {
+	if name != "rakuyomi-kindlehf-v1.40.0-pre.zip" || gotURL != assetServer.URL || string(data) != "zip contents" {
 		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
 	}
 }
@@ -803,7 +803,7 @@ func TestUninstallRefreshesCatalogWhenUninstallURLMissing(t *testing.T) {
 		case "/manifest.json":
 			w.Header().Set("Content-Type", "application/json")
 			io.WriteString(w, `{"packages":[{"id":"zen-koreader","name":"Zen KOReader","version":"1.0.5","platforms":["kindle"],"install_url":"install.sh","uninstall_url":"uninstall.sh"}]}`)
-		case "/uninstall.sh":
+		case "/packages/kindle/zen-koreader/scripts/uninstall.sh":
 			io.WriteString(w, "#!/bin/sh\nset -eu\necho \"$ZENPM_PACKAGE_ID\" > "+out+"\n")
 		default:
 			http.NotFound(w, r)

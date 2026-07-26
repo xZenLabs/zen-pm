@@ -42,9 +42,23 @@ jobs:
       - name: Run LuaCheck gate
         uses: ./.github/actions/luacheck-gate
 
+  go-test:
+    name: Go tests
+    needs: luacheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Run Go tests
+        run: go test ./...
+
   release:
     name: Build & Release
-    needs: [shellcheck, shell-syntax, luacheck]
+    needs: [shellcheck, shell-syntax, luacheck, go-test]
     if: ${{ !contains(github.event.head_commit.message, 'ci-skip') }}
     runs-on: macos-latest
     permissions:

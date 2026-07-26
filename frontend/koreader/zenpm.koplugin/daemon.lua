@@ -10,6 +10,7 @@ local ok_android, android = pcall(require, "android")
 
 local Daemon = {}
 local cli_wrapper_marker = "# Managed by ZenPM."
+local legacy_tcp_port = 8080
 
 function Daemon:new()
     local o = {
@@ -671,10 +672,10 @@ function Daemon:stop_standalone_backend()
     if pid ~= "" and pid:match("^%d+$") then
         os.execute("kill " .. pid .. " >/dev/null 2>&1")
     end
-    os.execute("pkill -f " .. Util.sh_quote(self:standalone_backend() .. " serve --port 8080") .. " >/dev/null 2>&1")
+    self:stop_tcp_backend(self:standalone_backend())
     os.execute("pkill -f " .. Util.sh_quote(self:standalone_backend() .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
     for _, candidate in ipairs(self:bundled_backend_candidates()) do
-        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --port 8080") .. " >/dev/null 2>&1")
+        self:stop_tcp_backend(candidate)
         os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
     end
     socket.sleep(0.8)
@@ -683,10 +684,16 @@ end
 function Daemon:stop_known_backends()
     self:stop_standalone_backend()
     for _, candidate in ipairs(self:candidate_backends()) do
-        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --port 8080") .. " >/dev/null 2>&1")
+        self:stop_tcp_backend(candidate)
         os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
     end
     socket.sleep(0.8)
+end
+
+function Daemon:stop_tcp_backend(backend)
+    for _, port in ipairs({ Constants.PORT, legacy_tcp_port }) do
+        os.execute("pkill -f " .. Util.sh_quote(backend .. " serve --port " .. port) .. " >/dev/null 2>&1")
+    end
 end
 
 function Daemon:health_matches(data)
@@ -899,7 +906,7 @@ function Daemon:start(prepared)
     self:log_cli("starting backend " .. backend
         .. " platform=" .. platform
         .. " abi=" .. self:ereader_backend_suffix())
-    local serve_args = " serve --port 8080"
+    local serve_args = " serve --port " .. Constants.PORT
     if self:is_pocketbook() then
         serve_args = " serve --socket " .. Util.sh_quote(Constants.POCKETBOOK_SOCKET)
     end
