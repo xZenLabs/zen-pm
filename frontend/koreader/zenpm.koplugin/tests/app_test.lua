@@ -222,6 +222,7 @@ local failed_readme_app = {
 }
 App.show_package_details(failed_readme_app, "reader")
 assert(failed_readme_app.state.current_package.readme_error_code == nil)
+assert(failed_readme_app.state.readme_cache.reader == nil)
 assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
 

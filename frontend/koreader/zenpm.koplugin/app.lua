@@ -2054,6 +2054,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
                     base_url = data.readme_base_url,
                     image_base_url = data.readme_image_base_url,
                 }
+                self.state.readme_cache[cache_key] = cached
             elseif not readme_ok then
                 local error_code = content_load_error_code(status_code, data)
                 log_content_load_error("README", cache_key, data, error_code)
@@ -2061,7 +2062,6 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             else
                 cached = {}
             end
-            self.state.readme_cache[cache_key] = cached
         end
         if type(cached) == "table" then
             pkg.readme = cached.readme

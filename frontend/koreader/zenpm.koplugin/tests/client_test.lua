@@ -92,6 +92,18 @@ local requested_timeout
 
 client.request = function(_, method, path, body, timeout)
     assert(method == "GET")
+    assert(path == "/packages/example%20package/readme")
+    assert(body == nil)
+    requested_timeout = timeout
+    return true, {}
+end
+
+assert(client:get_package_readme("example package"))
+assert(requested_timeout.block == 10)
+assert(requested_timeout.total == 20)
+
+client.request = function(_, method, path, body, timeout)
+    assert(method == "GET")
     assert(path == "/packages/example/releases")
     assert(body == nil)
     requested_timeout = timeout

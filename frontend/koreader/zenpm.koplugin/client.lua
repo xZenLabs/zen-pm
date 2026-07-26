@@ -17,6 +17,7 @@ local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
 local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
 local PACKAGE_LIST_TIMEOUT = { block = 5, total = 20 }
+local PACKAGE_README_TIMEOUT = { block = 10, total = 20 }
 local PACKAGE_RELEASES_TIMEOUT = { block = 10, total = 15 }
 local PLUGIN_SCAN_TIMEOUT = { block = 10, total = 60 }
 local LOG_TIMEOUT = { block = 5, total = 30 }
@@ -329,7 +330,7 @@ function Client:get_package_assets(id)
 end
 
 function Client:get_package_readme(id)
-    return self:request("GET", "/packages/" .. url_encode(id) .. "/readme", nil)
+    return self:request("GET", "/packages/" .. url_encode(id) .. "/readme", nil, PACKAGE_README_TIMEOUT)
 end
 
 function Client:get_package_release_notes(id, prerelease)
