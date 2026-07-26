@@ -3295,6 +3295,10 @@ function App:apply_update(release_tag, on_result)
         end
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
+        -- Start the new bundled backend now. KOReader still needs a restart to
+        -- load the replaced plugin code, but About can immediately report the
+        -- version that was just installed.
+        self:start_backend_then_reload()
         if on_result then
             on_result(true, result)
             return

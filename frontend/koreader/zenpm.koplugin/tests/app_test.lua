@@ -311,6 +311,7 @@ assert(self_update_queued == 2)
 
 local companion_update_requests = 0
 local reinstalled_scan_calls = 0
+local reinstalled_backend_restarts = 0
 local reinstalled_result
 App.apply_update({
     state = { beta_updates = false },
@@ -328,6 +329,9 @@ App.apply_update({
             return true
         end,
     },
+    start_backend_then_reload = function()
+        reinstalled_backend_restarts = reinstalled_backend_restarts + 1
+    end,
     run_update_task = function(_, task, _, callback)
         local called, ok, result = task()
         callback(true, called, ok, result)
@@ -338,9 +342,11 @@ end)
 assert(companion_update_requests == 1)
 assert(updater_reinstall_requests == 1)
 assert(reinstalled_scan_calls == 1)
+assert(reinstalled_backend_restarts == 1)
 assert(reinstalled_result[1] == true and reinstalled_result[2] == "1.2.3")
 
 local updated_scan_calls = 0
+local updated_backend_restarts = 0
 local updated_result
 App.apply_update({
     state = { beta_updates = false },
@@ -354,6 +360,9 @@ App.apply_update({
             return true
         end,
     },
+    start_backend_then_reload = function()
+        updated_backend_restarts = updated_backend_restarts + 1
+    end,
     run_update_task = function(_, task, _, callback)
         local called, ok, result = task()
         callback(true, called, ok, result)
@@ -362,6 +371,7 @@ App.apply_update({
     updated_result = { ... }
 end)
 assert(updated_scan_calls == 1)
+assert(updated_backend_restarts == 1)
 assert(updated_result[1] == true and updated_result[2] == "1.2.4-beta3")
 
 local selected_zenpm_release
