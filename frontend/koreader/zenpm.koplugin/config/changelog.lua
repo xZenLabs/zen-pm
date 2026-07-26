@@ -19,6 +19,7 @@ return {
         "Bug fixes"
     },
     ["1.1.1"] = {
-        "Fix potential backend port conflict"
+        "Fix potential backend port conflict",
+        "Better tab styling"
     },
 }
