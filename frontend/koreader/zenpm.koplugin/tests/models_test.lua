@@ -88,6 +88,10 @@ local notes = {
 }
 assert(Models.has_release_notes(notes, false))
 assert(Models.release_notes_url(notes, false) == notes.release_notes_url)
+assert(Models.has_version_history({ versions_url = "https://example.invalid/versions.json" }))
+assert(not Models.has_version_history({ versions_url = "   " }))
+assert(not Models.has_version_history({ source = "https://github.com/owner/plugin" }))
+assert(not Models.has_version_history({ source = "https://example.invalid/plugin" }))
 assert(Models.release_notes_url(notes, true) == notes.prerelease_notes_url)
 assert(not Models.has_release_notes({ prerelease_notes_url = notes.prerelease_notes_url }, false))
 assert(Models.has_release_notes({ prerelease_notes_url = notes.prerelease_notes_url }, true))

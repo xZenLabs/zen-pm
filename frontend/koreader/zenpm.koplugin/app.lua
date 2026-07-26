@@ -137,6 +137,7 @@ function App:new(plugin)
             current_category = nil,
             details_from = "search",
             details_tab = "readme",
+            details_featured_expanded = false,
             queue = {},
             queue_origin = nil,
             queue_running = false,
@@ -318,7 +319,7 @@ local function queue_notice(pkg)
     return text
 end
 
-local function zenpm_self_package(daemon)
+local function zenpm_self_package(daemon, update_available)
     local version = daemon:plugin_version()
     return {
         id = "zenpm-koreader",
@@ -326,6 +327,7 @@ local function zenpm_self_package(daemon)
         version = version,
         installed_version = version,
         installed = true,
+        update_available = update_available == true,
         repo = Constants.REPO_ZENLABS_NAME,
         repo_default = true,
         platforms = { "koreader" },
@@ -836,6 +838,34 @@ function App:queue_package_action(pkg, action, asset, opts)
     return true
 end
 
+function App:queue_self_update(pkg)
+    if self.state.queue_running then
+        Modals.info(_("Queue is running. Please wait."))
+        return false
+    end
+    local id = pkg and (pkg.id or pkg.name)
+    if not id then return false end
+    local entry = {
+        key = queue_key(id, nil),
+        id = id,
+        pkg = pkg,
+        name = package_title(pkg, _("ZenPM")),
+        action = "update",
+        self_update = true,
+    }
+    for index, queued in ipairs(self.state.queue) do
+        if queued.key == entry.key then
+            self.state.queue[index] = entry
+            self:refresh()
+            return true
+        end
+    end
+    table.insert(self.state.queue, entry)
+    Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
+    self:refresh()
+    return true
+end
+
 local function conflict_set(pkg)
     local set = {}
     for _, id in ipairs(type(pkg and pkg.conflicts) == "table" and pkg.conflicts or {}) do
@@ -961,6 +991,12 @@ function App:show_queue_entry_modify(entry)
     if self.state.queue_running or not entry or not entry.pkg then return end
     local pkg = entry.pkg
     local remove_queue = function() self:confirm_remove_queue_entry(entry) end
+    if entry.self_update then
+        Modals.actions(Models.package_display_name(pkg, _("ZenPM")), {
+            { text = _("Remove from queue"), callback = remove_queue },
+        })
+        return
+    end
     if entry.is_patch then
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
@@ -995,7 +1031,7 @@ function App:show_queue_entry_modify(entry)
         update = entry.action ~= "update" and pkg.update_available and function()
             self:confirm_package_action(pkg, "update")
         end or nil,
-            downgrade = Models.has_github_source(pkg) and function()
+            downgrade = Models.has_version_history(pkg) and function()
                 self:prompt_package_versions(pkg)
             end or nil,
         uninstall = entry.action ~= "uninstall" and function()
@@ -1014,11 +1050,11 @@ function App:queue_result_text(batch)
 end
 
 function App:refresh_queue_package_state()
-    local ok, packages = self:load_packages(true, true)
+    local ok, packages = self:load_packages(false, true)
     if not ok then return end
     self.state.packages = packages
     local installed = Models.installed_packages(packages)
-    table.insert(installed, 1, zenpm_self_package(self.daemon))
+    table.insert(installed, 1, zenpm_self_package(self.daemon, self.state.update_available))
     self.state.installed_packages = installed
     local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
     self.state.visible_packages = self:sorted_packages("installed", visible)
@@ -1067,6 +1103,22 @@ function App:run_next_queue_operation(batch)
         return
     end
     local position = batch.index
+    if entry.self_update then
+        self:apply_update(function(succeeded, detail)
+            if succeeded then
+                self:remove_queue_entry(entry)
+                table.insert(batch.succeeded, entry)
+                batch.prompt_restart = detail ~= nil
+            else
+                table.insert(batch.failed, { entry = entry, detail = detail })
+            end
+            batch.index = batch.index + 1
+            UIManager:nextTick(function()
+                self:run_next_queue_operation(batch)
+            end)
+        end)
+        return
+    end
     self:run_package_action(entry.pkg, entry.action, entry.asset, nil, {
         release = entry.release,
         settings_deleter = entry.settings_deleter,
@@ -1097,7 +1149,7 @@ function App:prepare_queue_assets(operations, index, on_ready)
         on_ready()
         return
     end
-    if not action_installs_package(entry.action) or (entry.asset and entry.asset ~= "") then
+    if entry.self_update or not action_installs_package(entry.action) or (entry.asset and entry.asset ~= "") then
         self:prepare_queue_assets(operations, index + 1, on_ready)
         return
     end
@@ -1150,10 +1202,13 @@ function App:confirm_queue()
     if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
     local operations = {}
     for _, entry in ipairs(self.state.queue) do
-        if entry.action == "uninstall" then table.insert(operations, entry) end
+        if not entry.self_update and entry.action == "uninstall" then table.insert(operations, entry) end
     end
     for _, entry in ipairs(self.state.queue) do
-        if entry.action ~= "uninstall" then table.insert(operations, entry) end
+        if not entry.self_update and entry.action ~= "uninstall" then table.insert(operations, entry) end
+    end
+    for _, entry in ipairs(self.state.queue) do
+        if entry.self_update then table.insert(operations, entry) end
     end
     self.state.queue_running = true
     local batch = {
@@ -1224,6 +1279,11 @@ end
 
 function App:set_update_available(available)
     self.state.update_available = available == true
+    for _, pkg in ipairs(self.state.installed_packages or {}) do
+        if pkg.zenpm_self then
+            pkg.update_available = self.state.update_available
+        end
+    end
     App.save_setting("update_available", self.state.update_available)
 end
 
@@ -1864,7 +1924,7 @@ function App:show_installed()
         return
     end
     local installed = Models.installed_packages(packages)
-    table.insert(installed, 1, zenpm_self_package(self.daemon))
+    table.insert(installed, 1, zenpm_self_package(self.daemon, self.state.update_available))
     self.state.packages = packages
     self.state.installed_packages = installed
     local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
@@ -1983,6 +2043,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
     end
     self.state.current_package = pkg
     self.state.details_tab = selected_tab
+    self.state.details_featured_expanded = false
     self:reset_scroll("package:" .. cache_key .. ":" .. self.state.details_tab)
     self:clear_status()
     self:refresh()
@@ -2295,6 +2356,10 @@ function App:perform_package_action(pkg, on_done)
         return
     end
     if pkg.zenpm_self then
+        if pkg.update_available then
+            self:queue_self_update(pkg)
+            return
+        end
         self:confirm_uninstall_self()
         return
     end
@@ -2326,14 +2391,14 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:confirm_toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = Models.has_github_source(pkg) and not Models.is_font_package(pkg) and function()
+            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif Models.has_github_source(pkg) and not Models.is_font_package(pkg) then
+    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg) then
         self:prompt_default_package_version(pkg, on_done, "install")
     else
         self:confirm_package_action(pkg, "install", on_done)
@@ -2497,11 +2562,10 @@ function App:confirm_remove_unmanaged_patch(asset, on_done)
     )
 end
 
--- Show installable GitHub releases for a package. Each version maps to an
+-- Show installable cached releases for a package. Each version maps to an
 -- update/reinstall/downgrade action based on its relation to the installed
 -- version. Prereleases are hidden unless the user enabled ZenPM beta updates.
--- All releases are fetched in one request (keeps GitHub API calls low under the
--- anonymous rate limit); the list is paged VERSIONS_PER_PAGE at a time in the UI.
+-- The list is paged VERSIONS_PER_PAGE at a time in the UI.
 local VERSIONS_PER_PAGE = 5
 
 local function version_action(current, tag)
@@ -2512,11 +2576,11 @@ local function version_action(current, tag)
 end
 
 function App:load_package_releases(pkg)
-    Modals.status(_("Loading GitHub releases..."))
+    Modals.status(_("Loading available versions..."))
     local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
     Modals.close_status()
     if not ok then
-        Modals.info(_("Could not load GitHub releases: ") .. tostring(data))
+        Modals.info(_("Could not load available versions: ") .. tostring(data))
         return
     end
     local allow_prerelease = self.state.beta_updates
@@ -2527,7 +2591,7 @@ function App:load_package_releases(pkg)
         end
     end
     if #releases == 0 then
-        Modals.info(_("No GitHub releases with ZIP assets were found."))
+        Modals.info(_("No installable versions were found."))
         return nil
     end
     return releases
@@ -2638,7 +2702,7 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action_installs_package(action) then
-        -- Fonts use the catalog's explicit ZIP URL. GitHub release assets do
+        -- Fonts use the catalog's explicit ZIP URL. Cached release assets do
         -- not describe installable font builds, so never invoke either chooser.
         if Models.is_font_package(pkg) then
             self:queue_package_action(pkg, action, nil, opts)
@@ -2648,14 +2712,14 @@ function App:start_package_action(pkg, action, on_done, opts)
         local has_candidates = type(info) == "table" and info.needs_choice
             and type(info.candidates) == "table" and #info.candidates > 0
         if not ok then
-            if Models.has_github_source(pkg) then
+            if Models.has_version_history(pkg) then
                 self:prompt_default_package_version(pkg, on_done, action)
                 return
             end
             Modals.info(_("Could not determine which build to install: ") .. tostring(info))
             return
         end
-        if Models.has_github_source(pkg)
+        if Models.has_version_history(pkg)
             and (type(info) ~= "table" or ((not info.auto or info.auto == "") and not has_candidates)) then
             self:prompt_default_package_version(pkg, on_done, action)
             return
@@ -3198,12 +3262,17 @@ function App:start_update()
     end)
 end
 
-function App:apply_update()
+function App:apply_update(on_result)
     local companion_update_started = false
     if self.daemon:is_android() then
         local started, err = self.daemon:request_android_update()
         if not started then
-            Modals.info(_("Companion update failed to start: ") .. tostring(err))
+            local message = _("Companion update failed to start: ") .. tostring(err)
+            if on_result then
+                on_result(false, message)
+            else
+                Modals.info(message)
+            end
             return
         end
         companion_update_started = true
@@ -3217,19 +3286,26 @@ function App:apply_update()
         self.busy = false
         Modals.close_status()
         if not completed then
-            Modals.info(_("Update was cancelled."))
+            local message = _("Update was cancelled.")
+            if on_result then on_result(false, message) else Modals.info(message) end
             return
         end
         if not called then
-            Modals.info(_("Update failed: ") .. tostring(ok))
+            local message = _("Update failed: ") .. tostring(ok)
+            if on_result then on_result(false, message) else Modals.info(message) end
             return
         end
         if not ok then
-            Modals.info(_("Update failed: ") .. tostring(result))
+            local message = _("Update failed: ") .. tostring(result)
+            if on_result then on_result(false, message) else Modals.info(message) end
             return
         end
         if result == "up_to_date" then
             self:set_update_available(false)
+            if on_result then
+                on_result(true)
+                return
+            end
             if companion_update_started then
                 Modals.info(_("ZenPM Companion is checking for an update."))
             else
@@ -3243,6 +3319,10 @@ function App:apply_update()
         self:set_update_available(false)
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
+        if on_result then
+            on_result(true, result)
+            return
+        end
         Modals.restart_koreader(
             _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
             function() self:restart_koreader() end)

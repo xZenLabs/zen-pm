@@ -97,6 +97,15 @@ assert(settings.beta_updates == true)
 assert(settings.last_update_check == 0)
 assert(checks == 1)
 
+local zenpm_package = { zenpm_self = true }
+local update_state_app = {
+    state = { installed_packages = { zenpm_package } },
+    set_update_available = App.set_update_available,
+}
+App.set_update_available(update_state_app, true)
+assert(update_state_app.state.update_available)
+assert(zenpm_package.update_available)
+
 local about_app = {
     daemon = {
         installed_backend_version = function() return "1.2.3" end,
@@ -166,6 +175,59 @@ assert(update_result[2] == true)
 assert(update_result[3] == true)
 assert(update_result[4] == "1.2.4")
 assert(trapper_required)
+
+local self_update_queued = 0
+local self_uninstall_confirmed = 0
+local self_action_app = {
+    queue_self_update = function() self_update_queued = self_update_queued + 1 end,
+    confirm_uninstall_self = function() self_uninstall_confirmed = self_uninstall_confirmed + 1 end,
+}
+App.perform_package_action(self_action_app, { zenpm_self = true, update_available = true })
+assert(self_update_queued == 1)
+assert(self_uninstall_confirmed == 0)
+App.perform_package_action(self_action_app, { zenpm_self = true })
+assert(self_uninstall_confirmed == 1)
+
+local queued_operations
+local queue_app = {
+    state = {
+        queue = {
+            { name = "Install", action = "install" },
+            { name = "ZenPM", action = "update", self_update = true },
+            { name = "Uninstall", action = "uninstall" },
+        },
+    },
+    queue_count = function(self) return #self.state.queue end,
+    prepare_queue_assets = function(_, operations)
+        queued_operations = operations
+    end,
+    refresh = function() end,
+}
+App.confirm_queue(queue_app)
+assert(queue_app.state.queue_running)
+assert(queued_operations[1].name == "Uninstall")
+assert(queued_operations[2].name == "Install")
+assert(queued_operations[3].name == "ZenPM")
+
+local queued_self_entry = { name = "ZenPM", self_update = true }
+local queued_self_batch = {
+    operations = { queued_self_entry },
+    index = 1,
+    succeeded = {},
+    failed = {},
+}
+local queued_self_completed = false
+local queued_self_app = {
+    apply_update = function(_, callback) callback(true, "1.2.3") end,
+    remove_queue_entry = function(_, entry) assert(entry == queued_self_entry) end,
+    run_next_queue_operation = function(_, batch)
+        queued_self_completed = batch.index == 2
+    end,
+}
+App.run_next_queue_operation(queued_self_app, queued_self_batch)
+assert(#queued_self_batch.succeeded == 1)
+assert(queued_self_batch.prompt_restart)
+assert(queued_self_completed)
 
 local release_requests = 0
 local release_app = {

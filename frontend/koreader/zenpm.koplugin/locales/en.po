@@ -171,8 +171,8 @@ msgstr "Could not install bundled ZenPM backend to: "
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "Could not install the ZenPM command-line wrapper."
 
-msgid "Could not load GitHub releases: "
-msgstr "Could not load GitHub releases: "
+msgid "Could not load available versions: "
+msgstr "Could not load available versions: "
 
 msgid "Could not load release notes: "
 msgstr "Could not load release notes: "
@@ -360,8 +360,8 @@ msgstr "Loading category..."
 msgid "Loading featured packages..."
 msgstr "Loading featured packages..."
 
-msgid "Loading GitHub releases..."
-msgstr "Loading GitHub releases..."
+msgid "Loading available versions..."
+msgstr "Loading available versions..."
 
 msgid "Loading installed packages..."
 msgstr "Loading installed packages..."
@@ -411,8 +411,8 @@ msgstr "No description"
 msgid "No description available."
 msgstr "No description available."
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "No GitHub releases with ZIP assets were found."
+msgid "No installable versions were found."
+msgstr "No installable versions were found."
 
 msgid "No installed packages match the filter."
 msgstr "No installed packages match the filter."

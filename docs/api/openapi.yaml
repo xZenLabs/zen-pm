@@ -278,7 +278,7 @@ paths:
       description: |
         Starts installation asynchronously and returns immediately. Clients can
         poll `/log` to observe progress and failures. Passing `release` installs
-        that GitHub release and records its tag as the installed version.
+        that repository-cached release and records its tag as the installed version.
       operationId: installPackage
       parameters:
         - name: asset
@@ -290,7 +290,7 @@ paths:
         - name: release
           in: query
           required: false
-          description: GitHub release tag to install instead of the catalog release.
+          description: Release tag from the package's `versions_url` to install instead of the catalog release.
           schema:
             type: string
       responses:
@@ -310,7 +310,7 @@ paths:
       description: |
         Starts an uninstall followed by an installation asynchronously. Clients
         can poll `/log` to observe progress and failures. Passing `release`
-        installs that GitHub release after removal.
+        installs that repository-cached release after removal.
       operationId: reinstallPackage
       parameters:
         - name: asset
@@ -322,7 +322,7 @@ paths:
         - name: release
           in: query
           required: false
-          description: GitHub release tag to install after removal.
+          description: Release tag from the package's `versions_url` to install after removal.
           schema:
             type: string
       responses:
@@ -370,8 +370,8 @@ paths:
     get:
       tags:
         - Packages
-      summary: List recent installable GitHub releases
-      description: Returns up to 10 non-draft releases that contain ZIP assets.
+      summary: List recent installable releases
+      description: Returns the releases cached at the package's repository-hosted `versions_url`. Returns an empty array when that field is absent or the file is blank or not found; GitHub is never queried as a fallback.
       operationId: listPackageReleases
       responses:
         "200":
@@ -815,7 +815,7 @@ components:
           description: Package publication timestamp supplied by the repository.
         latest_version:
           type: string
-          description: Latest GitHub release tag when update checks are requested.
+          description: Latest stable or enabled prerelease version declared by the repository.
         update_available:
           type: boolean
           description: True when `latest_version` is newer than `installed_version`.
@@ -845,11 +845,15 @@ components:
         source:
           type: string
           format: uri
-          description: Upstream source URL, used for GitHub release update checks when available.
+          description: Upstream package source URL.
         readme_url:
           type: string
           format: uri
           description: Repository-hosted README Markdown URL, when available.
+        versions_url:
+          type: string
+          format: uri
+          description: Repository-hosted cached release metadata used by the version picker and installer. When omitted, no version history is available.
     GitHubRelease:
       type: object
       required:

@@ -47,14 +47,14 @@ func (m *Manager) InstallAsset(id, assetOverride string) error {
 	return m.installAssetRelease(id, assetOverride, "")
 }
 
-// InstallRelease installs a specific GitHub release and records its tag as the
+// InstallRelease installs a specific release and records its tag as the
 // installed version.
 func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
 	return m.installAssetRelease(id, assetOverride, tag)
 }
 
 // Reinstall removes an installed package before installing it again. When tag
-// is non-empty, it installs that specific GitHub release.
+// is non-empty, it installs that specific release.
 func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 	uninstallAsset := ""
 	if m.isPatchFileInstalled(id, assetOverride) {

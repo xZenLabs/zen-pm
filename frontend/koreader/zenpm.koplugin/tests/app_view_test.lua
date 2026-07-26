@@ -31,4 +31,26 @@ local view = { app = { close = function() closed = closed + 1 end } }
 assert(AppView.onClose(view) == true)
 assert(closed == 1)
 
+local refreshes = 0
+local details_view = {
+    app = {
+        state = {
+            details_featured_expanded = false,
+            scroll = { ["package:demo:readme"] = 0 },
+        },
+        scroll_key = function() return "package:demo:readme" end,
+    },
+    package_details_featured_visible = true,
+    scroll_step = 10,
+    max_scroll = 100,
+    refresh = function() refreshes = refreshes + 1 end,
+}
+
+assert(AppView._scroll_list(details_view, 1) == true)
+assert(details_view.app.state.details_featured_expanded)
+assert(details_view.app.state.scroll["package:demo:readme"] == 0)
+assert(refreshes == 1)
+assert(AppView._scroll_list(details_view, 1) == true)
+assert(details_view.app.state.scroll["package:demo:readme"] == 10)
+
 print("app view tests passed")

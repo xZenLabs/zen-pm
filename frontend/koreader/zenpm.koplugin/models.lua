@@ -426,9 +426,8 @@ function Models.package_assets(pkg)
     return out
 end
 
-function Models.has_github_source(pkg)
-    local source = tostring(pkg and pkg.source or "")
-    return source:match("^https?://github%.com/[^/]+/[^/]+/?$") ~= nil
+function Models.has_version_history(pkg)
+    return tostring(pkg and pkg.versions_url or ""):match("%S") ~= nil
 end
 
 function Models.has_readme(pkg)

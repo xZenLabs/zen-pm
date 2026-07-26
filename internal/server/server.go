@@ -71,6 +71,7 @@ type pkgJSON struct {
 	SourceType            string            `json:"source_type,omitempty"`
 	SourceURL             string            `json:"source_url,omitempty"`
 	ReadmeURL             string            `json:"readme_url,omitempty"`
+	VersionsURL           string            `json:"versions_url,omitempty"`
 	ReleaseNotesURL       string            `json:"release_notes_url,omitempty"`
 	PrereleaseNotesURL    string            `json:"prerelease_notes_url,omitempty"`
 	PrereleaseVersion     string            `json:"prerelease_version,omitempty"`
@@ -542,7 +543,6 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plat := r.URL.Query().Get("platform")
-	checkUpdates := r.URL.Query().Get("check_updates") == "1" || r.URL.Query().Get("check_updates") == "true"
 	allowPrerelease := r.URL.Query().Get("beta") == "1" || r.URL.Query().Get("beta") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
@@ -611,6 +611,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			SourceType:            e.SourceType,
 			SourceURL:             e.SourceURL,
 			ReadmeURL:             e.ReadmeURL,
+			VersionsURL:           e.VersionsURL,
 			ReleaseNotesURL:       e.ReleaseNotesURL,
 			PrereleaseNotesURL:    e.PrereleaseNotesURL,
 			PrereleaseVersion:     e.PrereleaseVersion,
@@ -628,9 +629,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
-			if checkUpdates {
-				applyUpdateInfo(&item, allowPrerelease)
-			}
+			applyUpdateInfo(&item, allowPrerelease)
 		}
 		result = append(result, item)
 	}
@@ -685,21 +684,30 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
 	if item == nil {
 		return
 	}
-	latest := item.Version // catalog (repo) version
-	if _, ok := releases.GitHubRepository(item.Source); ok && item.SourceAsset != "" {
-		release, _, err := releases.LatestGitHubRelease(item.Source, item.SourceAsset, allowPrerelease)
-		if err != nil {
-			log.Warnf("Could not check GitHub updates for %s: %v", item.ID, err)
-		} else {
-			latest = release.TagName
-			item.LatestRelease = release.TagName
-		}
+	latest := item.Version
+	if allowPrerelease && prereleaseIsNewer(item.Version, item.PrereleaseVersion) {
+		latest = item.PrereleaseVersion
 	}
 	if latest == "" || !hasKnownVersion(item.InstalledVer) {
 		return
 	}
 	item.LatestVersion = latest
 	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer)
+	if item.UpdateAvail {
+		item.LatestRelease = latest
+	}
+}
+
+func prereleaseIsNewer(stable, prerelease string) bool {
+	if strings.TrimSpace(prerelease) == "" {
+		return false
+	}
+	if strings.TrimSpace(stable) == "" {
+		return true
+	}
+	stableBase := strings.SplitN(releases.NormalizeVersion(stable), "-", 2)[0]
+	prereleaseBase := strings.SplitN(releases.NormalizeVersion(prerelease), "-", 2)[0]
+	return stableBase != prereleaseBase && releases.VersionGreater(prerelease, stable)
 }
 
 func hasKnownVersion(version string) bool {
@@ -811,17 +819,14 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageGitHubSource(id string) (string, error) {
+func (s *Server) packageVersionsURL(id string) (string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		return "", err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			if _, ok := releases.GitHubRepository(entry.Source); !ok {
-				return "", fmt.Errorf("package %q has no GitHub source", id)
-			}
-			return entry.Source, nil
+			return strings.TrimSpace(entry.VersionsURL), nil
 		}
 	}
 	return "", fmt.Errorf("package %q not found", id)
@@ -928,12 +933,15 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	source, err := s.packageGitHubSource(id)
+	versionsURL, err := s.packageVersionsURL(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	items, err := releases.FetchGitHubReleases(source, 100)
+	items := []releases.Release{}
+	if versionsURL != "" {
+		items, err = releases.FetchVersions(versionsURL)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

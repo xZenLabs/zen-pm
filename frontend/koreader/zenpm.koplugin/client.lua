@@ -293,9 +293,9 @@ function Client:list_packages(platform, check_updates, allow_prerelease)
     end
     if check_updates then
         table.insert(query, "check_updates=1")
-        if allow_prerelease then
-            table.insert(query, "beta=1")
-        end
+    end
+    if allow_prerelease then
+        table.insert(query, "beta=1")
     end
     if #query > 0 then
         path = path .. "?" .. table.concat(query, "&")

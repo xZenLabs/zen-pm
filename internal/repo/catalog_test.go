@@ -262,6 +262,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		IncompatiblePlatforms: []string{"android", "host"},
 		FeaturedOrder:         &featuredOrder,
 		ReadmeURL:             "https://example.invalid/readme.md",
+		VersionsURL:           "https://example.invalid/versions.json",
 		ReleaseNotesURL:       "https://example.invalid/release-notes.md",
 		PrereleaseNotesURL:    "https://example.invalid/prerelease-notes.md",
 		PrereleaseVersion:     "1.3.0-rc.1",
@@ -280,7 +281,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	if got.FeaturedOrder == nil || *got.FeaturedOrder != featuredOrder {
 		t.Fatalf("FeaturedOrder = %v, want %d", got.FeaturedOrder, featuredOrder)
 	}
-	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.VersionsURL != entry.VersionsURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
 	}
 }
@@ -300,6 +301,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"source_type": "source",
 				"source_url": "https://codeload.github.com/karpushchenko/koreader-rsvp-plugin/zip/refs/heads/main",
 				"readme_url": "packages/koreader/koreader-rsvp-plugin/README.md",
+				"versions_url": "packages/koreader/koreader-rsvp-plugin/versions.json",
 				"release_notes_url": "packages/koreader/koreader-rsvp-plugin/RELEASE_NOTES.md",
 				"prerelease_version": "1.1.0-rc.1",
 				"prerelease_notes_url": "packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md",
@@ -346,6 +348,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].ReadmeURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/README.md" {
 		t.Fatalf("ReadmeURL = %q", entries[0].ReadmeURL)
+	}
+	if entries[0].VersionsURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/versions.json" {
+		t.Fatalf("VersionsURL = %q", entries[0].VersionsURL)
 	}
 	if entries[0].ReleaseNotesURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/RELEASE_NOTES.md" {
 		t.Fatalf("ReleaseNotesURL = %q", entries[0].ReleaseNotesURL)

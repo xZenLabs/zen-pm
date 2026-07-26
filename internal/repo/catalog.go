@@ -26,7 +26,7 @@ import (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url
 type CatalogEntry struct {
 	Repo                  string
 	Priority              int
@@ -59,6 +59,7 @@ type CatalogEntry struct {
 	Constraints           string
 	PluginModule          string
 	ReadmeURL             string
+	VersionsURL           string
 	PublishedAt           string
 	ReleaseNotesURL       string
 	PrereleaseNotesURL    string
@@ -119,6 +120,7 @@ func (e *CatalogEntry) serialize() string {
 		e.ReleaseNotesURL,
 		e.PrereleaseNotesURL,
 		e.PrereleaseVersion,
+		e.VersionsURL,
 	}, "|")
 }
 
@@ -237,6 +239,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 35 {
 		e.PrereleaseVersion = parts[34]
+	}
+	if len(parts) >= 36 {
+		e.VersionsURL = parts[35]
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -361,6 +366,7 @@ type manifestJSON struct {
 		SourceType            string          `json:"source_type,omitempty"`
 		SourceURL             string          `json:"source_url,omitempty"`
 		ReadmeURL             string          `json:"readme_url,omitempty"`
+		VersionsURL           string          `json:"versions_url,omitempty"`
 		ReleaseNotesURL       string          `json:"release_notes_url,omitempty"`
 		PrereleaseNotesURL    string          `json:"prerelease_notes_url,omitempty"`
 		PrereleaseVersion     string          `json:"prerelease_version,omitempty"`
@@ -476,6 +482,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			SourceType:            p.SourceType,
 			SourceURL:             resolveURL(repoURL, p.SourceURL),
 			ReadmeURL:             resolveURL(repoURL, p.ReadmeURL),
+			VersionsURL:           resolveURL(repoURL, strings.TrimSpace(p.VersionsURL)),
 			ReleaseNotesURL:       resolveURL(repoURL, p.ReleaseNotesURL),
 			PrereleaseNotesURL:    resolveURL(repoURL, p.PrereleaseNotesURL),
 			PrereleaseVersion:     strings.TrimSpace(p.PrereleaseVersion),

@@ -5,6 +5,7 @@ local M = {}
 
 -- Rendered via ZenPM's bundled Symbols Nerd Font subset.
 local nerd_icons = {
+    filter = "\u{F0232}",
     search = "\u{F0349}",
     sort = "\u{F04BA}",
     sort_asc = "\u{F15D}", -- mdi-sort-ascending

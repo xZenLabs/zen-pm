@@ -364,7 +364,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local iy = cy + Theme.scale(12)
     local show_featured_at_top = pkg.featured_image
         and not Models.is_font_package(pkg)
+        and not view.app.state.details_featured_expanded
         and (tonumber(scroll) or 0) <= 0
+    view.package_details_featured_visible = show_featured_at_top
     if show_featured_at_top then
         local art_h = m.featured_h - Theme.scale(118)
         local border = Theme.scale(2)

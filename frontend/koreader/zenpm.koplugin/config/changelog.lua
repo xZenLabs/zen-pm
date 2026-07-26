@@ -9,10 +9,12 @@
 -- },
 
 return {
-    ["0.2.451"] = {
-        "Initial release Kindle standalone + KOReader",
-        "Add beta package update setting",
-        "Show a Kindle UI notice before installing Kindle packages",
-        "Improve package update handling",
+    ["1.0.0"] = {
+        "Initial release"
+    },
+    ["1.1.0"] = {
+        "Add release notes",
+        "Scroll featured image up when scrolling package descriptions",
+        "Bug fixes"
     },
 }

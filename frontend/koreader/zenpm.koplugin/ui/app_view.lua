@@ -151,6 +151,14 @@ end
 
 function AppView:_scroll_list(steps, page_sized)
     local key = self.app:scroll_key()
+    if steps > 0
+        and self.package_details_featured_visible
+        and not self.app.state.details_featured_expanded then
+        self.app.state.details_featured_expanded = true
+        self.app.state.scroll[key] = 0
+        self:refresh()
+        return true
+    end
     local old = self.app.state.scroll[key] or 0
     local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
     if page_sized and self.list_bounds then
@@ -315,6 +323,7 @@ function AppView:paintTo(bb, x, y)
     self.scroll_step = nil
     self.scrollbar = nil
     self.koreader_menu_zone = nil
+    self.package_details_featured_visible = false
     local m = Theme.metrics()
     self.dimen = Geom:new{ x = x, y = y, w = m.screen_w, h = m.screen_h }
     P.rect(bb, x, y, m.screen_w, m.screen_h, Theme.bg)

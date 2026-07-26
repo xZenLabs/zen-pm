@@ -103,7 +103,11 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 		}
 	}
 	if assetURL == "" {
-		_, releaseAsset, err := releases.ResolveGitHubReleaseAsset(entry.Source, releaseTag, assetName)
+		versionsURL := strings.TrimSpace(entry.VersionsURL)
+		if versionsURL == "" {
+			return "", "", nil, fmt.Errorf("package %q has no versions metadata", entry.ID)
+		}
+		_, releaseAsset, err := releases.ResolveVersionsAsset(versionsURL, releaseTag, assetName)
 		if err != nil {
 			return "", "", nil, err
 		}

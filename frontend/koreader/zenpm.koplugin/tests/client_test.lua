@@ -67,6 +67,14 @@ client.request = function(_, method, path, body)
 end
 assert(client:get_package_release_notes("example package", true))
 
+client.request = function(_, method, path, body)
+    assert(method == "GET")
+    assert(path == "/packages?platform=koreader&beta=1")
+    assert(body == nil)
+    return true, {}
+end
+assert(client:list_packages("koreader", false, true))
+
 local requested_timeout
 
 client.request = function(_, method, path, body, timeout)
