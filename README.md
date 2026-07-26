@@ -24,7 +24,7 @@ ZenPM brings package discovery and lifecycle management to e-readers:
 | Track your setup | See installed packages and available updates in one place. |
 | Manage sources | Review the built-in repositories or add your own compatible repository. |
 | Queue changes | In the KOReader plugin, review several install, update, or removal actions before confirming them. |
-| Work safely | Operations are serialized, journaled, and performed by a local daemon bound only to the device. |
+| Work safely | Operations are serialized and performed by a local daemon bound only to the device. |
 
 On Kindle, ZenPM has a native WAF interface. In KOReader, ZenPM appears in the
 KOReader menu and keeps its managed backend and state in KOReader's settings

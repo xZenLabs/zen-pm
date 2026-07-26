@@ -23,6 +23,25 @@ func TestResolvePersistDirUsesPlatformDefaultWithoutExplicitHome(t *testing.T) {
 	}
 }
 
+func TestInitRemovesLegacyJournal(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	journalDir := filepath.Join(home, "journal")
+	if err := os.MkdirAll(journalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(journalDir, "install.tsv"), []byte("legacy journal"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_HOME", home)
+
+	if _, err := Init("host"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(journalDir); !os.IsNotExist(err) {
+		t.Fatalf("legacy journal directory still exists: %v", err)
+	}
+}
+
 func TestInitUsesConfiguredZenLabsRepoURL(t *testing.T) {
 	previousURL := DefaultZenLabsRepoURL
 	DefaultZenLabsRepoURL = "http://localhost:8000"

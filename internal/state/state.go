@@ -32,7 +32,6 @@ type State struct {
 	ScriptDir        string
 	TmpDir           string
 	LockDir          string
-	JournalDir       string
 	CABundle         string
 	LogFile          string
 	SeededRepoURL    string // non-empty only when the database was just created
@@ -79,6 +78,7 @@ func Init(platformName string) (*State, error) {
 
 	// Persistent state lives in a dot-directory so it survives app updates.
 	persistDir := resolvePersistDir(platformName, home, explicitHome)
+	cleanupLegacyJournal(home)
 
 	s := &State{
 		Home:             home,
@@ -87,14 +87,13 @@ func Init(platformName string) (*State, error) {
 		CacheDir:         filepath.Join(home, "cache"),
 		TmpDir:           filepath.Join(home, "tmp"),
 		LockDir:          filepath.Join(home, "locks"),
-		JournalDir:       filepath.Join(home, "journal"),
 		CABundle:         filepath.Join(home, "cacert.pem"),
 		LogFile:          filepath.Join(home, "ZenPM.log"),
 		kindleWAFAllowed: deviceplatform.KindleWAFAllowed(platformName),
 	}
 
 	for _, dir := range []string{
-		s.CacheDir, s.ScriptDir, s.TmpDir, s.LockDir, s.JournalDir,
+		s.CacheDir, s.ScriptDir, s.TmpDir, s.LockDir,
 		persistDir,
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -125,6 +124,21 @@ func Init(platformName string) (*State, error) {
 	cleanupStaleDirs(platformName, s.LockDir)
 
 	return s, nil
+}
+
+func cleanupLegacyJournal(home string) {
+	path := filepath.Join(home, "journal")
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		return
+	} else if err != nil {
+		StartupTrace(fmt.Sprintf("Legacy journal cleanup failed: %v", err))
+		return
+	}
+	if err := os.RemoveAll(path); err != nil {
+		StartupTrace(fmt.Sprintf("Legacy journal cleanup failed: %v", err))
+		return
+	}
+	StartupTrace("Legacy journal cleanup complete.")
 }
 
 func cleanupStaleDirs(platform, lockDir string) {
