@@ -1083,7 +1083,18 @@ function App:queue_result_text(batch)
     if failed == 0 then
         return string.format(_("Queue completed: %d succeeded."), succeeded)
     end
+    local failures = {}
+    for _, failure in ipairs(batch.failed) do
+        local entry = failure.entry or {}
+        local name = entry.name or entry.id or _("Package")
+        local detail = failure.detail
+        if not detail or detail == "" then
+            detail = _("Check the debug log for details.")
+        end
+        table.insert(failures, name .. ": " .. detail)
+    end
     return string.format(_("Queue completed: %d succeeded, %d failed."), succeeded, failed)
+        .. "\n\n" .. table.concat(failures, "\n\n")
 end
 
 function App:refresh_queue_package_state()

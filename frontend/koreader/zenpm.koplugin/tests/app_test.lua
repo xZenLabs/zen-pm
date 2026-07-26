@@ -425,6 +425,13 @@ assert(queued_operations[1].name == "Uninstall")
 assert(queued_operations[2].name == "Install")
 assert(queued_operations[3].name == "ZenPM")
 
+assert(App.queue_result_text({}, {
+    succeeded = {},
+    failed = {
+        { entry = { name = "Reader" }, detail = "download failed" },
+    },
+}) == "Queue completed: 0 succeeded, 1 failed.\n\nReader: download failed")
+
 local queued_self_entry = { name = "ZenPM", self_update = true }
 local queued_self_batch = {
     operations = { queued_self_entry },
