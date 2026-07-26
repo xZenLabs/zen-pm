@@ -14,6 +14,7 @@ return {
     },
     ["1.1.0"] = {
         "Add release notes",
+        "Add filter for installed packages",
         "Scroll featured image up when scrolling package descriptions",
         "Bug fixes"
     },
