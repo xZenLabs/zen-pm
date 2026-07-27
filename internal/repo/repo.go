@@ -261,7 +261,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 	out := make([]*CatalogEntry, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, &CatalogEntry{
+		entry := &CatalogEntry{
 			Repo: e.Repo, Priority: e.Priority, ID: e.ID, Name: e.Name, Version: e.Version,
 			Platforms: e.Platforms, IncompatiblePlatforms: e.IncompatiblePlatforms, Deps: e.Deps, Conflicts: e.Conflicts, InstallURL: e.InstallURL, UninstallURL: e.UninstallURL,
 			Size: e.Size, Description: e.Description, Author: e.Author, Tags: e.Tags,
@@ -270,7 +270,9 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
 			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
-		})
+		}
+		entry.ensurePluginModule()
+		out = append(out, entry)
 	}
 	return out
 }

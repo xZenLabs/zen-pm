@@ -24,4 +24,7 @@ return {
         "Fuzzy match assets that aren't exactly the same from release -> prerelease",
         "Better tab styling"
     },
+    ["1.1.2"] = {
+        "Fix incorrectly matched preinstalled plugin",
+    },
 }

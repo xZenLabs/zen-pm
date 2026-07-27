@@ -337,6 +337,31 @@ func TestApplyUpdateInfoRequiresKnownInstalledVersion(t *testing.T) {
 	}
 }
 
+func TestApplyUpdateInfoIgnoresTagCommitSuffixForSameRelease(t *testing.T) {
+	item := pkgJSON{
+		Version:      "v1.0.41-7779138817115c22c74fe1c0630436b1f0fb63ff",
+		InstalledVer: "1.0.41",
+	}
+	applyUpdateInfo(&item, false)
+	if item.UpdateAvail || item.LatestRelease != "" {
+		t.Fatalf("update info = %#v", item)
+	}
+}
+
+func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
+	for _, versions := range [][2]string{
+		{"1.0.0-alpha2", "1.0.0-alpha1"},
+		{"1.0.0-beta2", "1.0.0-beta1"},
+		{"1.0.0-rc2", "1.0.0-rc1"},
+	} {
+		item := pkgJSON{Version: versions[0], InstalledVer: versions[1]}
+		applyUpdateInfo(&item, false)
+		if !item.UpdateAvail || item.LatestRelease != versions[0] {
+			t.Errorf("latest %q, installed %q: update info = %#v", versions[0], versions[1], item)
+		}
+	}
+}
+
 func TestApplyUpdateInfoUsesNewerCatalogPrerelease(t *testing.T) {
 	item := pkgJSON{Version: "1.2.0", PrereleaseVersion: "1.3.0-beta.1", InstalledVer: "1.2.0"}
 	applyUpdateInfo(&item, true)

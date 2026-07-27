@@ -10,11 +10,15 @@ import (
 	"strings"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
+	"github.com/xZenLabs/zen-pm/internal/releases"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
-const koreaderPluginsScannedKey = "koreader_plugins_scanned"
+const (
+	koreaderPluginsScannedKey     = "koreader_plugins_scanned"
+	koreaderPluginsScannedVersion = "3"
+)
 
 // UnmanagedKOReaderPatch is a user patch found on disk without a ZenPM package
 // record. It deliberately has no catalog package ID.
@@ -60,7 +64,7 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 		if err != nil {
 			return result, fmt.Errorf("read KOReader plugin scan marker: %w", err)
 		}
-		if value != "" {
+		if value == koreaderPluginsScannedVersion {
 			result.Skipped = true
 			return result, nil
 		}
@@ -80,8 +84,12 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 		return result, fmt.Errorf("read installed packages: %w", err)
 	}
 	installedByID := make(map[string]state.InstalledEntry, len(installed))
+	installedByPath := make(map[string]state.InstalledEntry, len(installed))
 	for _, entry := range installed {
 		installedByID[entry.ID] = entry
+		if entry.InstallPath != "" {
+			installedByPath[filepath.Clean(entry.InstallPath)] = entry
+		}
 	}
 
 	pluginDirs, err := m.koreaderPluginDirs()
@@ -103,8 +111,17 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			}
 			result.Scanned++
 			pluginPath := filepath.Join(pluginDir, dir.Name())
-			pkg := byModule[module]
-			if pkg == nil {
+
+			version, err := koreaderPluginVersion(pluginPath)
+			if err != nil {
+				log.Warnf("Could not read version for KOReader plugin %s: %v", module, err)
+				version = "0.0.0"
+			}
+
+			candidates := byModule[module]
+			previousByPath, knownPath := installedByPath[filepath.Clean(pluginPath)]
+			pkg := matchingKOReaderPlugin(candidates, version, previousByPath, knownPath)
+			if pkg == nil && len(candidates) == 0 {
 				pkg = byID[module]
 			}
 
@@ -112,12 +129,28 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			if pkg != nil {
 				result.Matched++
 				id, name, repoName = pkg.ID, pkg.Name, pkg.Repo
+			} else if len(candidates) > 1 || byID[module] != nil {
+				id = "local-plugin:" + module
 			}
 
-			version, err := koreaderPluginVersion(pluginPath)
-			if err != nil {
-				log.Warnf("Could not read version for KOReader plugin %s: %v", module, err)
-				version = "0.0.0"
+			if pkg != nil && len(candidates) > 1 {
+				for _, candidate := range candidates {
+					if candidate.ID == pkg.ID {
+						continue
+					}
+					previous, exists := installedByID[candidate.ID]
+					if !exists {
+						continue
+					}
+					samePath := previous.InstallPath != "" && filepath.Clean(previous.InstallPath) == filepath.Clean(pluginPath)
+					if !samePath && (previous.InstallPath != "" || previous.Asset != "" || !sameKOReaderPluginVersion(version, previous.Version)) {
+						continue
+					}
+					if err := m.st.RemoveInstalled(candidate.ID); err != nil {
+						return result, fmt.Errorf("remove mismatched KOReader plugin %s: %w", candidate.ID, err)
+					}
+					delete(installedByID, candidate.ID)
+				}
 			}
 
 			previous, exists := installedByID[id]
@@ -154,7 +187,7 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 		}
 	}
 
-	if err := m.st.WriteValue(koreaderPluginsScannedKey, "1"); err != nil {
+	if err := m.st.WriteValue(koreaderPluginsScannedKey, koreaderPluginsScannedVersion); err != nil {
 		return result, fmt.Errorf("write KOReader plugin scan marker: %w", err)
 	}
 	return result, nil
@@ -234,21 +267,60 @@ func (m *Manager) UnmanagedKOReaderPatches() ([]UnmanagedKOReaderPatch, error) {
 	return patches, nil
 }
 
-func koreaderPluginCatalog(catalog []*repo.CatalogEntry) (map[string]*repo.CatalogEntry, map[string]*repo.CatalogEntry) {
-	byModule := make(map[string]*repo.CatalogEntry)
+func koreaderPluginCatalog(catalog []*repo.CatalogEntry) (map[string][]*repo.CatalogEntry, map[string]*repo.CatalogEntry) {
+	byModule := make(map[string][]*repo.CatalogEntry)
 	byID := make(map[string]*repo.CatalogEntry)
 	for _, entry := range catalog {
 		if !packageHasPlatform(entry, "koreader") || isPatchPackage(entry) {
 			continue
 		}
-		if module := strings.TrimSpace(entry.PluginModule); module != "" && byModule[module] == nil {
-			byModule[module] = entry
+		if module := strings.TrimSpace(entry.PluginModule); module != "" {
+			byModule[module] = append(byModule[module], entry)
 		}
 		if entry.ID != "" && byID[entry.ID] == nil {
 			byID[entry.ID] = entry
 		}
 	}
 	return byModule, byID
+}
+
+func matchingKOReaderPlugin(candidates []*repo.CatalogEntry, version string, previous state.InstalledEntry, knownPath bool) *repo.CatalogEntry {
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+
+	var versionMatch *repo.CatalogEntry
+	for _, entry := range candidates {
+		if !sameKOReaderPluginVersion(version, entry.Version) {
+			continue
+		}
+		if versionMatch != nil {
+			versionMatch = nil
+			break
+		}
+		versionMatch = entry
+	}
+	if versionMatch != nil {
+		return versionMatch
+	}
+
+	if knownPath {
+		for _, entry := range candidates {
+			if entry.ID == previous.ID {
+				return entry
+			}
+		}
+	}
+	return nil
+}
+
+func sameKOReaderPluginVersion(left, right string) bool {
+	base := func(version string) string {
+		version = releases.NormalizeVersion(version)
+		return strings.SplitN(version, "-", 2)[0]
+	}
+	left, right = base(left), base(right)
+	return left != "" && left != "0.0.0" && left == right
 }
 
 func koreaderPluginVersion(pluginPath string) (string, error) {

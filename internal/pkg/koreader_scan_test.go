@@ -49,8 +49,65 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 		t.Fatalf("installed = %#v, want matched and unmatched plugin directories", got)
 	}
 	marker, err := st.ReadValue(koreaderPluginsScannedKey)
-	if err != nil || marker != "1" {
-		t.Fatalf("scan marker = %q, %v; want 1, nil", marker, err)
+	if err != nil || marker != koreaderPluginsScannedVersion {
+		t.Fatalf("scan marker = %q, %v; want %s, nil", marker, err, koreaderPluginsScannedVersion)
+	}
+}
+
+func TestScanKOReaderPluginsMatchesSharedModuleByVersion(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
+		{ID: "zlibrary", Name: "OctoNezd Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+		{ID: "zlibrary-2", Name: "ZlibraryKO Zlibrary", Version: "1.0.41-7779138817115c22c74fe1c0630436b1f0fb63ff", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+	})
+	writeKOReaderPlugin(t, plugins, "zlibrary", `return { version = "1.0.41" }`)
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zlibrary", Name: "OctoNezd Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Asset: "zlibrary.koplugin.zip",
+		InstallPath: filepath.Join(plugins, "zlibrary.koplugin"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.ScanKOReaderPlugins(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Scanned != 1 || result.Matched != 1 || result.Added != 1 {
+		t.Fatalf("scan result = %+v", result)
+	}
+	if installed, version := st.IsInstalled("zlibrary-2"); !installed || version != "1.0.41" {
+		t.Fatalf("ZlibraryKO plugin = %t %q, want installed version 1.0.41", installed, version)
+	}
+	if installed, _ := st.IsInstalled("zlibrary"); installed {
+		t.Fatal("OctoNezd fork was incorrectly recorded as installed")
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" {
+		t.Fatalf("installed plugins = %#v, %v", installed, err)
+	}
+}
+
+func TestScanKOReaderPluginsDoesNotMatchSharedModuleWithoutIdentity(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
+		{ID: "zlibrary", Name: "OctoNezd Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+		{ID: "zlibrary-2", Name: "ZlibraryKO Zlibrary", Version: "1.0.41", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+	})
+	writeKOReaderPlugin(t, plugins, "zlibrary", `return { fullname = "Z-library" }`)
+
+	result, err := manager.ScanKOReaderPlugins(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != 0 || result.Added != 1 {
+		t.Fatalf("scan result = %+v", result)
+	}
+	if installed, _ := st.IsInstalled("zlibrary"); installed {
+		t.Fatal("ambiguous plugin was assigned to OctoNezd fork")
+	}
+	if installed, _ := st.IsInstalled("zlibrary-2"); installed {
+		t.Fatal("ambiguous plugin was assigned to ZlibraryKO fork")
+	}
+	if installed, version := st.IsInstalled("local-plugin:zlibrary"); !installed || version != "0.0.0" {
+		t.Fatalf("unmanaged Zlibrary plugin = %t %q, want installed unknown version", installed, version)
 	}
 }
 

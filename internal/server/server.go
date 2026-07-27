@@ -744,10 +744,32 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
 		return
 	}
 	item.LatestVersion = latest
+	if sameReleaseWithCommitSuffix(latest, item.InstalledVer) {
+		return
+	}
 	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer)
 	if item.UpdateAvail {
 		item.LatestRelease = latest
 	}
+}
+
+func sameReleaseWithCommitSuffix(latest, installed string) bool {
+	latest = releases.NormalizeVersion(latest)
+	installed = releases.NormalizeVersion(installed)
+	prefix := installed + "-"
+	if !strings.HasPrefix(latest, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(latest, prefix)
+	if len(suffix) != 40 {
+		return false
+	}
+	for _, digit := range suffix {
+		if !(digit >= '0' && digit <= '9') && !(digit >= 'a' && digit <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func prereleaseIsNewer(stable, prerelease string) bool {

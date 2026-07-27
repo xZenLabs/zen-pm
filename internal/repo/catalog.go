@@ -256,13 +256,18 @@ func (e *CatalogEntry) ensurePluginModule() {
 		return
 	}
 	asset := strings.TrimSpace(e.SourceAsset)
-	if asset == "" {
-		return
+	if asset != "" {
+		asset = filepath.Base(asset)
+		asset = strings.TrimSuffix(asset, ".zip")
+		if strings.HasSuffix(asset, ".koplugin") {
+			e.PluginModule = strings.TrimSuffix(asset, ".koplugin")
+			return
+		}
 	}
-	asset = filepath.Base(asset)
-	asset = strings.TrimSuffix(asset, ".zip")
-	if strings.HasSuffix(asset, ".koplugin") {
-		e.PluginModule = strings.TrimSuffix(asset, ".koplugin")
+
+	source := strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(e.Source), "/"), ".git")
+	if module := filepath.Base(source); strings.HasSuffix(module, ".koplugin") {
+		e.PluginModule = strings.TrimSuffix(module, ".koplugin")
 	}
 }
 
