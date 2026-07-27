@@ -756,8 +756,12 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
 func sameReleaseWithCommitSuffix(latest, installed string) bool {
 	latest = releases.NormalizeVersion(latest)
 	installed = releases.NormalizeVersion(installed)
-	suffix, found := strings.CutPrefix(latest, installed+"-")
-	if !found || len(suffix) != 40 {
+	prefix := installed + "-"
+	if !strings.HasPrefix(latest, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(latest, prefix)
+	if len(suffix) != 40 {
 		return false
 	}
 	for _, digit := range suffix {
