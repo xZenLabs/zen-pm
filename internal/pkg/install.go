@@ -171,6 +171,11 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (ret
 		}
 
 		selectedName, selectedArch := m.installedAsset(installEntry, override)
+		if genericInstaller == genericPluginInstaller {
+			if err := m.removeConflictingKOReaderPluginRecords(pkgID, installedPath, catalog); err != nil {
+				return err
+			}
+		}
 		_ = m.st.RemoveInstalled(pkgID)
 		if err := m.st.AppendInstalled(state.InstalledEntry{
 			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
@@ -207,6 +212,41 @@ func (m *Manager) installedDependencySet(installed []state.InstalledEntry) map[s
 		installedSet["kual"] = true
 	}
 	return installedSet
+}
+
+func (m *Manager) removeConflictingKOReaderPluginRecords(id, installPath string, catalog []*repo.CatalogEntry) error {
+	installPath = strings.TrimSpace(installPath)
+	if !strings.HasSuffix(filepath.Base(installPath), ".koplugin") {
+		return nil
+	}
+	installPath = filepath.Clean(installPath)
+	pluginName := filepath.Base(installPath)
+	conflictingIDs := make(map[string]bool)
+	for _, entry := range catalog {
+		if entry == nil || entry.ID == id || !isGenericKOReaderPlugin(entry) {
+			continue
+		}
+		if pluginTrackingName(entry, entry.SourceAsset) == pluginName {
+			conflictingIDs[entry.ID] = true
+		}
+	}
+	installed, err := m.st.ReadInstalled()
+	if err != nil {
+		return err
+	}
+	for _, entry := range installed {
+		if entry.ID == id {
+			continue
+		}
+		samePath := entry.InstallPath != "" && filepath.Clean(entry.InstallPath) == installPath
+		if !samePath && !conflictingIDs[entry.ID] {
+			continue
+		}
+		if err := m.st.RemoveInstalled(entry.ID); err != nil {
+			return fmt.Errorf("remove conflicting KOReader plugin %s: %w", entry.ID, err)
+		}
+	}
+	return nil
 }
 
 func (m *Manager) Uninstall(id, asset string) (retErr error) {

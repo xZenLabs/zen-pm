@@ -286,6 +286,37 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestParseZenPMCatalogDerivesPluginModuleFromSource(t *testing.T) {
+	manifest := manifestJSON{}
+	if err := json.Unmarshal([]byte(`{
+		"packages": [{
+			"id": "zlibrary-2",
+			"name": "Zlibrary",
+			"version": "1.0.41",
+			"platforms": ["koreader"],
+			"source": "https://github.com/ZlibraryKO/zlibrary.koplugin",
+			"source_asset": "zlibrary_plugin_v1.0.41.zip"
+		}]
+	}`), &manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	entries := parseZenPMCatalog("ZenLabs", "https://example.invalid/repo", 10, manifest)
+	if len(entries) != 1 || entries[0].PluginModule != "zlibrary" {
+		t.Fatalf("entries = %#v, want zlibrary plugin module", entries)
+	}
+}
+
+func TestFromStateCatalogDerivesMissingPluginModule(t *testing.T) {
+	entries := fromStateCatalog([]state.CatalogEntry{{
+		ID: "zlibrary-2", Platforms: []string{"koreader"},
+		Source: "https://github.com/ZlibraryKO/zlibrary.koplugin", SourceAsset: "zlibrary_plugin_v1.0.41.zip",
+	}})
+	if len(entries) != 1 || entries[0].PluginModule != "zlibrary" {
+		t.Fatalf("entries = %#v, want zlibrary plugin module", entries)
+	}
+}
+
 func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	manifest := manifestJSON{}
 	if err := json.Unmarshal([]byte(`{

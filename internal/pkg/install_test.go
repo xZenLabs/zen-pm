@@ -136,6 +136,90 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 }
 
+func TestInstallKOReaderPluginUnwrapsPluginsDirectory(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	plugins := filepath.Join(root, "plugins")
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	data := zipContents(t, map[string]string{
+		"plugins/zlibrary.koplugin/_meta.lua": `return { version = "1.0.41" }`,
+		"plugins/zlibrary.koplugin/main.lua":  "return {}\n",
+	})
+	version, path, err := (&Manager{st: st}).installKOReaderPlugin(&repo.CatalogEntry{
+		ID: "zlibrary-2", PluginModule: "zlibrary",
+	}, root, "zlibrary_plugin_v1.0.41.zip", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "1.0.41" {
+		t.Fatalf("installed version = %q, want 1.0.41", version)
+	}
+	destination := filepath.Join(plugins, "zlibrary.koplugin")
+	if path != destination {
+		t.Fatalf("installed path = %q, want %q", path, destination)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "_meta.lua")); err != nil {
+		t.Fatalf("plugin metadata missing at destination: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "zlibrary.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("nested plugin directory exists or could not be checked: %v", err)
+	}
+}
+
+func TestInstallGenericPluginReplacesConflictingPluginRecord(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
+	plugins := filepath.Join(koRoot, "plugins")
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	archive := zipContents(t, map[string]string{
+		"plugins/zlibrary.koplugin/_meta.lua": `return { version = "1.0.41" }`,
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/zlibrary.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(archive)
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "zlibrary", Name: "Old Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+		{ID: "zlibrary-2", Name: "ZlibraryKO", Version: "1.0.41", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary", Assets: `[{"arch":"any","asset":"zlibrary_plugin_v1.0.41.zip","url":"` + srv.URL + `/zlibrary.zip"}]`},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(plugins, "zlibrary.koplugin")
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "zlibrary", Name: "Old Zlibrary", Version: "1.1.0", Repo: "ZenLabs", InstallPath: destination}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Install("zlibrary-2"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" || installed[0].InstallPath != destination {
+		t.Fatalf("installed packages = %#v, %v", installed, err)
+	}
+}
+
 func TestRemoveKOReaderPluginResolvesRelativePluginDirectory(t *testing.T) {
 	root := t.TempDir()
 	plugin := filepath.Join(root, "plugins", "storefront.koplugin")

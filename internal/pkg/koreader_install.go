@@ -53,8 +53,8 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 
 	switch kind {
 	case genericPluginInstaller:
-		version, err := m.installKOReaderPlugin(entry, root, assetName, data)
-		return version, "", err
+		version, path, err := m.installKOReaderPlugin(entry, root, assetName, data)
+		return version, path, err
 	case genericPatchInstaller:
 		path, err := m.installKOReaderPatch(entry, root, assetName, data)
 		return "", path, err
@@ -165,16 +165,17 @@ func koreaderPatchDir(root string) string {
 	return filepath.Join(root, "patches")
 }
 
-func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, error) {
+func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, string, error) {
 	pluginsDir := koreaderPluginDir(root)
 	if info, err := os.Stat(pluginsDir); err != nil || !info.IsDir() {
-		return "", fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
+		return "", "", fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
 	}
 	stage, sourceDir, err := m.extractArchive(data)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer os.RemoveAll(stage)
+	sourceDir = pluginArchiveSource(sourceDir)
 
 	name := pluginTrackingName(entry, assetName)
 	if base := filepath.Base(sourceDir); strings.HasSuffix(base, ".koplugin") {
@@ -182,11 +183,35 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 	}
 	destination := filepath.Join(pluginsDir, name)
 	if err := replaceTree(sourceDir, destination); err != nil {
-		return "", err
+		return "", "", err
 	}
 	_ = os.RemoveAll(filepath.Join(destination, "__MACOSX"))
 	version, _ := koreaderPluginVersion(destination)
-	return version, nil
+	return version, destination, nil
+}
+
+func pluginArchiveSource(sourceDir string) string {
+	if strings.HasSuffix(filepath.Base(sourceDir), ".koplugin") {
+		return sourceDir
+	}
+	entries, err := os.ReadDir(sourceDir)
+	if err != nil {
+		return sourceDir
+	}
+	pluginDir := ""
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), ".koplugin") {
+			continue
+		}
+		if pluginDir != "" {
+			return sourceDir
+		}
+		pluginDir = filepath.Join(sourceDir, entry.Name())
+	}
+	if pluginDir != "" {
+		return pluginDir
+	}
+	return sourceDir
 }
 
 func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, error) {
