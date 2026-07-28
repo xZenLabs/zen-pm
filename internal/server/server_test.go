@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -31,6 +32,103 @@ func TestListenUnixBindsSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn.Close()
+}
+
+func TestListenAndServeUnixServesHealth(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	socketFile, err := os.CreateTemp("", "zenpm-*.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := socketFile.Name()
+	if err := socketFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.ListenAndServeUnix(path) }()
+
+	var conn net.Conn
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		conn, err = net.DialTimeout("unix", path, 50*time.Millisecond)
+		if err == nil {
+			break
+		}
+	}
+	if conn == nil {
+		t.Fatalf("dial Unix socket: %v", err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte("GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: http.MethodGet})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	response.Body.Close()
+
+	if err := srv.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-serveErr; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("socket remains after shutdown: %v", err)
+	}
+}
+
+func TestServerStopsWhenIdle(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	srv.IdleTimeout = 25 * time.Millisecond
+	srv.touch()
+	go srv.stopWhenIdle()
+
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("idle server did not stop")
+	}
+}
+
+func TestServerIdleTimeoutWaitsForBackgroundWork(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	srv.IdleTimeout = 25 * time.Millisecond
+	srv.touch()
+	srv.backgroundJobs.Add(1)
+	go srv.stopWhenIdle()
+
+	select {
+	case <-srv.done:
+		t.Fatal("server stopped while background work was active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	srv.backgroundJobs.Add(-1)
+	srv.touch()
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("server did not stop after background work completed")
+	}
 }
 
 func TestWrapAllowsUnixSocketRequest(t *testing.T) {
@@ -359,6 +457,14 @@ func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
 		if !item.UpdateAvail || item.LatestRelease != versions[0] {
 			t.Errorf("latest %q, installed %q: update info = %#v", versions[0], versions[1], item)
 		}
+	}
+}
+
+func TestApplyUpdateInfoDoesNotOfferSameVersionPrereleaseToStableInstall(t *testing.T) {
+	item := pkgJSON{Version: "2.5.4-beta2", InstalledVer: "2.5.4"}
+	applyUpdateInfo(&item, true)
+	if item.UpdateAvail {
+		t.Fatalf("update info = %#v, want no update", item)
 	}
 }
 

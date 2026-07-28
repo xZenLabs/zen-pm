@@ -857,10 +857,9 @@ var ZenUtils = (function () {
         }
     }
 
-    // Card-based scroll navigation — intercepts mousewheel to move one card per
-    // swipe, matching KindleForge behavior.  Native scroll on Kindle WAF is too
-    // sluggish and requires multiple swipes per item.
-    function setupCardScroll(scrollSelector, cardClass) {
+    // Card-based scroll navigation. Native scroll on Kindle WAF is too sluggish
+    // and requires multiple swipes per item.
+    function setupCardScroll(scrollSelector, cardClass, pageSized) {
         var cards = [];
         var cIndex = 0;
         var scrollEl = null;
@@ -915,13 +914,25 @@ var ZenUtils = (function () {
             return 0;
         }
 
+        function cardsPerPage(startIndex) {
+            if (!pageSized || !scrollEl || !cards[startIndex]) return 1;
+            var bottom = cards[startIndex].offsetTop + scrollEl.clientHeight;
+            var count = 0;
+            for (var i = startIndex; i < cards.length; i++) {
+                if (cards[i].offsetTop + cards[i].offsetHeight > bottom) break;
+                count++;
+            }
+            return Math.max(1, count);
+        }
+
         window.addEventListener("mousewheel", function (e) {
             if (cards.length === 0) return;
             e.preventDefault();
             suppressClicks(700);  // prevent accidental taps after scrolling
             var cur = currentCardIndex();
-            if (e.wheelDeltaY > 0) goCard(cur - 1);
-            else if (e.wheelDeltaY < 0) goCard(cur + 1);
+            var count = cardsPerPage(cur);
+            if (e.wheelDeltaY > 0) goCard(cur - count);
+            else if (e.wheelDeltaY < 0) goCard(cur + count);
         }, false);
 
         // Persist scroll position across page navigations so returning

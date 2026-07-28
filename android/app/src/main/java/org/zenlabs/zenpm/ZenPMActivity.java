@@ -28,6 +28,9 @@ public final class ZenPMActivity extends Activity {
             }
             CompanionLog.write(this, logHome, "Received companion update request.");
             ZenPMUpdater.start(this, logHome);
+        } else if (data != null && "stop".equals(data.getHost())) {
+            service.setAction(ZenPMService.ACTION_STOP);
+            startService(service);
         } else if (data != null && "start".equals(data.getHost())) {
             String logHome = data.getQueryParameter("home");
             String root = data.getQueryParameter("root");

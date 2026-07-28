@@ -234,7 +234,7 @@
         _inited = true;
         postLog("[installed] init");
         bindEvents();
-        cardScroll = setupCardScroll(".package-scroll", "package-card");
+        cardScroll = setupCardScroll(".package-scroll", "package-card", true);
         detectRuntime();
     }
 

@@ -21,13 +21,22 @@ import (
 // Version is injected when the Android shared library is built.
 var Version = "dev"
 
-var serverMu sync.Mutex
-var serverRunning bool
+const idleTimeout = 5 * time.Minute
 
-// Start launches the local HTTP API unless a running instance already owns it.
-func Start(home, logHome, koreaderRoot string, port int) {
+var (
+	serverMu      sync.Mutex
+	serverRunning bool
+	stopRequested bool
+	activeServer  *server.Server
+)
+
+// Run serves the companion API until it is stopped explicitly or has been idle
+// for idleTimeout. It is called from a Java worker thread, never Android's UI
+// thread.
+func Run(home, logHome, koreaderRoot, socketPath string) {
 	home = strings.TrimSpace(home)
-	if home == "" || port < 1 || port > 65535 {
+	socketPath = strings.TrimSpace(socketPath)
+	if home == "" || socketPath == "" {
 		return
 	}
 	serverMu.Lock()
@@ -37,20 +46,35 @@ func Start(home, logHome, koreaderRoot string, port int) {
 		return
 	}
 	serverRunning = true
+	stopRequested = false
 	_ = os.Setenv("ZENPM_PLATFORM", platform.AndroidKOReader)
 	_ = os.Setenv("ZENPM_HOME", home)
 	_ = os.Setenv("ZENPM_KOREADER_ROOT", strings.TrimSpace(koreaderRoot))
 	_ = os.Setenv("ZENPM_STARTUP_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
 	_ = os.Setenv("ZENPM_COMPANION_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
 	serverMu.Unlock()
-	writeCompanionLog(logHome, fmt.Sprintf("Native backend start accepted: goarch=%s port=%d.", runtime.GOARCH, port))
-	go serve(home, logHome, port)
+	writeCompanionLog(logHome, fmt.Sprintf("Native backend start accepted: goarch=%s socket=%s.", runtime.GOARCH, socketPath))
+	serve(home, logHome, socketPath)
 }
 
-func serve(home, logHome string, port int) {
+// Stop closes the active listener. A stop arriving while Run is initializing
+// is remembered so the listener is closed as soon as it is available.
+func Stop() {
+	serverMu.Lock()
+	stopRequested = true
+	srv := activeServer
+	serverMu.Unlock()
+	if srv != nil {
+		_ = srv.Close()
+	}
+}
+
+func serve(home, logHome, socketPath string) {
 	defer func() {
 		serverMu.Lock()
 		serverRunning = false
+		activeServer = nil
+		stopRequested = false
 		serverMu.Unlock()
 		writeCompanionLog(logHome, "Native backend server exited.")
 	}()
@@ -68,9 +92,17 @@ func serve(home, logHome string, port int) {
 	repos := repo.New(st)
 	pkgs := pkg.New(st, repos, platform.AndroidKOReader)
 	server.Version = Version
-	srv := server.New(st, repos, pkgs, port)
+	srv := server.New(st, repos, pkgs, 0)
 	srv.StartedAt = startedAt
-	if err := srv.ListenAndServe(); err != nil {
+	srv.IdleTimeout = idleTimeout
+	serverMu.Lock()
+	activeServer = srv
+	shouldStop := stopRequested
+	serverMu.Unlock()
+	if shouldStop {
+		_ = srv.Close()
+	}
+	if err := srv.ListenAndServeUnix(socketPath); err != nil {
 		log.Errorf("Server error: %v", err)
 		writeCompanionLog(logHome, fmt.Sprintf("Native backend stopped: %v", err))
 	}

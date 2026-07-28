@@ -26,9 +26,14 @@ func javaString(env *C.JNIEnv, value C.jstring) string {
 	return C.GoString(text)
 }
 
-//export Java_org_zenlabs_zenpm_ZenPMService_nativeStart
-func Java_org_zenlabs_zenpm_ZenPMService_nativeStart(env *C.JNIEnv, _ C.jclass, home C.jstring, logHome C.jstring, koreaderRoot C.jstring, port C.jint) {
-	androidbackend.Start(javaString(env, home), javaString(env, logHome), javaString(env, koreaderRoot), int(port))
+//export Java_org_zenlabs_zenpm_ZenPMService_nativeRun
+func Java_org_zenlabs_zenpm_ZenPMService_nativeRun(env *C.JNIEnv, _ C.jclass, home C.jstring, logHome C.jstring, koreaderRoot C.jstring, socketPath C.jstring) {
+	androidbackend.Run(javaString(env, home), javaString(env, logHome), javaString(env, koreaderRoot), javaString(env, socketPath))
+}
+
+//export Java_org_zenlabs_zenpm_ZenPMService_nativeStop
+func Java_org_zenlabs_zenpm_ZenPMService_nativeStop(_ *C.JNIEnv, _ C.jclass) {
+	androidbackend.Stop()
 }
 
 func main() {}

@@ -260,7 +260,7 @@
         _inited = true;
         bindEvents();
         ZenUtils.renderNavbar('sources');
-        cardScroll = ZenUtils.setupCardScroll(".source-details-scroll", "package-card");
+        cardScroll = ZenUtils.setupCardScroll(".source-details-scroll", "package-card", true);
         if (!sourceName) {
             el.hint.textContent = "No source selected.";
             return;

@@ -7,7 +7,8 @@ return {
 
     PORT = api_port,
     API_BASE = "http://127.0.0.1:" .. api_port,
-    POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
+    UNIX_SOCKET = "/tmp/zenpm.sock",
+    ANDROID_SOCKET = "@zenpm",
 
     REPO_ZENLABS_NAME = "ZenLabs",
     REPO_ZENLABS_DISPLAY = "ZenLabs Repo",

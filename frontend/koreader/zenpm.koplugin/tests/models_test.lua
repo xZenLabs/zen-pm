@@ -4,6 +4,7 @@ package.path = root .. "/?.lua;" .. package.path
 
 package.preload["constants"] = function()
     return {
+        PLUGIN_DIR = root,
         REPO_ZENLABS_NAME = "ZenLabs",
         REPO_ZENLABS_DISPLAY = "ZenLabs",
         REPO_KINDLEFORGE_NAME = "KindleForge",
@@ -53,6 +54,14 @@ assert(newest[1].id == "third" and newest[2].id == "second" and newest[3].id == 
 
 local oldest = Models.sort_packages(installed, "installed_at_asc")
 assert(oldest[1].id == "first" and oldest[2].id == "second" and oldest[3].id == "third")
+
+local updates = Models.sort_packages({
+    { id = "current", name = "Current" },
+    { id = "beta", name = "Beta", update_available = false },
+    { id = "zulu", name = "Zulu", update_available = true },
+    { id = "alpha", name = "Alpha", update_available = true },
+}, "update_available")
+assert(updates[1].id == "alpha" and updates[2].id == "zulu" and updates[3].id == "beta" and updates[4].id == "current")
 
 local published = {
     { id = "first", name = "First", published_at = "2026-07-21T10:00:00Z" },

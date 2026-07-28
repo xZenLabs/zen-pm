@@ -121,6 +121,9 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			candidates := byModule[module]
 			previousByPath, knownPath := installedByPath[filepath.Clean(pluginPath)]
 			pkg := matchingKOReaderPlugin(candidates, version, previousByPath, knownPath)
+			if pkg == nil {
+				pkg = matchingTrackedKOReaderPlugin(candidates, installedByID)
+			}
 			if pkg == nil && len(candidates) == 0 {
 				pkg = byID[module]
 			}
@@ -150,6 +153,22 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 						return result, fmt.Errorf("remove mismatched KOReader plugin %s: %w", candidate.ID, err)
 					}
 					delete(installedByID, candidate.ID)
+				}
+			}
+			if pkg != nil {
+				for staleID, stale := range installedByID {
+					if staleID == pkg.ID || !isUntrackedKOReaderPluginRecord(stale) {
+						continue
+					}
+					samePath := stale.InstallPath != "" && filepath.Clean(stale.InstallPath) == filepath.Clean(pluginPath)
+					sameAsset := strings.TrimSuffix(filepath.Base(strings.TrimSpace(stale.Asset)), ".zip") == dir.Name()
+					if !samePath && !sameAsset {
+						continue
+					}
+					if err := m.st.RemoveInstalled(staleID); err != nil {
+						return result, fmt.Errorf("remove untracked KOReader plugin %s: %w", staleID, err)
+					}
+					delete(installedByID, staleID)
 				}
 			}
 
@@ -312,6 +331,26 @@ func matchingKOReaderPlugin(candidates []*repo.CatalogEntry, version string, pre
 		}
 	}
 	return nil
+}
+
+func matchingTrackedKOReaderPlugin(candidates []*repo.CatalogEntry, installed map[string]state.InstalledEntry) *repo.CatalogEntry {
+	var match *repo.CatalogEntry
+	for _, entry := range candidates {
+		installedEntry, ok := installed[entry.ID]
+		if !ok || strings.TrimSpace(installedEntry.Asset) == "" {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = entry
+	}
+	return match
+}
+
+func isUntrackedKOReaderPluginRecord(entry state.InstalledEntry) bool {
+	return strings.HasPrefix(entry.ID, "local-plugin:") ||
+		(entry.Repo == "" && entry.Asset == "" && entry.InstallPath != "")
 }
 
 func sameKOReaderPluginVersion(left, right string) bool {

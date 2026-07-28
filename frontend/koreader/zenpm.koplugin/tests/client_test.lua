@@ -23,15 +23,10 @@ package.preload["constants"] = function()
     return {
         API_BASE = "http://127.0.0.1:18765",
         PLUGIN_DIR = root,
-        POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
+        UNIX_SOCKET = "/tmp/zenpm.sock",
+        ANDROID_SOCKET = "@zenpm",
     }
 end
-package.preload["device"] = function()
-    return {
-        isPocketBook = function() return true end,
-    }
-end
-
 local Client = require("client")
 local unix_request
 local client = Client:new({

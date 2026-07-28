@@ -27,4 +27,8 @@ return {
     ["1.1.2"] = {
         "Fix incorrectly matched preinstalled plugin",
     },
+    ["1.2.0"] = {
+        "Migrate from HTTP to UDS for all systems",
+        "Android performance improvements",
+    },
 }

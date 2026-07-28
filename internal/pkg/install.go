@@ -239,7 +239,8 @@ func (m *Manager) removeConflictingKOReaderPluginRecords(id, installPath string,
 			continue
 		}
 		samePath := entry.InstallPath != "" && filepath.Clean(entry.InstallPath) == installPath
-		if !samePath && !conflictingIDs[entry.ID] {
+		sameAsset := strings.TrimSuffix(filepath.Base(strings.TrimSpace(entry.Asset)), ".zip") == pluginName
+		if !samePath && !sameAsset && !conflictingIDs[entry.ID] {
 			continue
 		}
 		if err := m.st.RemoveInstalled(entry.ID); err != nil {

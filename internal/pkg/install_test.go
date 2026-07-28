@@ -220,6 +220,54 @@ func TestInstallGenericPluginReplacesConflictingPluginRecord(t *testing.T) {
 	}
 }
 
+func TestInstallGenericPluginReplacesUntrackedPluginRecordWithSameAsset(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	archive := zipContents(t, map[string]string{
+		"zlibrary.koplugin/_meta.lua": `return { version = "1.0.41" }`,
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/zlibrary.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(archive)
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zlibrary-2", Name: "ZlibraryKO", Version: "1.0.41", Repo: "ZenLabs",
+		Platforms: []string{"koreader"}, PluginModule: "zlibrary",
+		Assets: "[{\"arch\":\"any\",\"asset\":\"zlibrary_plugin_v1.0.41.zip\",\"url\":\"" + srv.URL + "/zlibrary.zip\"}]",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "local-plugin:zlibrary", Name: "zlibrary", Version: "1.0.0", Asset: "zlibrary.koplugin",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Install("zlibrary-2"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" {
+		t.Fatalf("installed packages = %#v, %v", installed, err)
+	}
+}
+
 func TestRemoveKOReaderPluginResolvesRelativePluginDirectory(t *testing.T) {
 	root := t.TempDir()
 	plugin := filepath.Join(root, "plugins", "storefront.koplugin")

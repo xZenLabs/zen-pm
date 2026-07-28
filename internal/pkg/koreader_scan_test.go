@@ -111,6 +111,36 @@ func TestScanKOReaderPluginsDoesNotMatchSharedModuleWithoutIdentity(t *testing.T
 	}
 }
 
+func TestScanKOReaderPluginsKeepsTrackedSharedModuleWithoutMetadata(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
+		{ID: "zlibrary", Name: "OctoNezd Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+		{ID: "zlibrary-2", Name: "ZlibraryKO Zlibrary", Version: "1.0.41", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+	})
+	pluginPath := writeKOReaderPlugin(t, plugins, "zlibrary", `return { fullname = "Z-library" }`)
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zlibrary-2", Name: "ZlibraryKO Zlibrary", Version: "1.0.41", Repo: "ZenLabs", Asset: "zlibrary_plugin_v1.0.41.zip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "local-plugin:zlibrary", Name: "zlibrary", InstallPath: filepath.Dir(pluginPath),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.ScanKOReaderPlugins(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != 1 {
+		t.Fatalf("scan result = %+v, want one catalog match", result)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" || installed[0].Version != "1.0.41" || installed[0].InstallPath != filepath.Dir(pluginPath) {
+		t.Fatalf("installed plugins = %#v, %v", installed, err)
+	}
+}
+
 func TestScanKOReaderPluginsReadsVersionFallbackFiles(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
 		{ID: "version-file", Name: "Version File", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "version-file"},

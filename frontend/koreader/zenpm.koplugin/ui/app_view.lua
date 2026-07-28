@@ -161,8 +161,8 @@ function AppView:_scroll_list(steps, page_sized)
         return true
     end
     local old = self.app.state.scroll[key] or 0
-    local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
-    if page_sized and self.list_bounds then
+    local delta = self.scroll_page_step or self.scroll_step or math.floor(Screen:getHeight() * 0.45)
+    if page_sized and not self.scroll_page_step and self.list_bounds then
         delta = math.floor(self.list_bounds.h * 0.9)
     end
     local new = math.max(0, math.min(old + steps * delta, self.max_scroll or 0))
@@ -322,6 +322,7 @@ function AppView:paintTo(bb, x, y)
     self.hitboxes = {}
     self.list_bounds = nil
     self.scroll_step = nil
+    self.scroll_page_step = nil
     self.scrollbar = nil
     self.koreader_menu_zone = nil
     self.package_details_featured_visible = false

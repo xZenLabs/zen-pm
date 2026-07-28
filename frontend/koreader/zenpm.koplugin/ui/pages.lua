@@ -104,7 +104,7 @@ function Pages.featured(view, bb, x, y, w, h, scroll)
     return Scroll.scrolled_list(view, bb, list, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, cy, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.featured(view, bb, pkg, x + pad, cy, w - pad * 2 - gutter, { height = card_h })
-    end)
+    end, true)
 end
 
 function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible, total, query)
@@ -130,7 +130,7 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
-    end)
+    end, true)
 end
 
 local function queue_action_text(action)
@@ -339,7 +339,7 @@ function Pages.source_details(view, bb, x, y, w, h, scroll)
     return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
-    end)
+    end, true)
 end
 
 function Pages.package_details(view, bb, x, y, w, h, scroll)

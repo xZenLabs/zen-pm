@@ -4,6 +4,7 @@ package.path = root .. "/?.lua;" .. package.path
 
 local settings = {}
 local modal_message
+local modal_seconds
 local modal_title
 local modal_rows
 local plugin_settings_prompt
@@ -14,6 +15,7 @@ package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function() return {} end
 package.preload["ui/uimanager"] = function()
     return {
+        show = function() end,
         nextTick = function(_, callback) callback() end,
         scheduleIn = function(_, _, callback) callback() end,
         forceRePaint = function() end,
@@ -41,7 +43,10 @@ end
 package.preload["ui/modals"] = function()
     return {
         info = function(message) modal_message = message end,
-        info_for = function(message) modal_message = message end,
+        info_for = function(message, seconds)
+            modal_message = message
+            modal_seconds = seconds
+        end,
         status = function() end,
         close_status = function() end,
         actions = function(title, rows)
@@ -269,6 +274,57 @@ local refreshed_app = {
 App.refresh_repos(refreshed_app)
 assert(next(refreshed_app.state.readme_cache) == nil)
 
+local open_refreshes = 0
+local open_catalog_reloads = 0
+local opened_app = {
+    backend_ready = true,
+    view = {},
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
+    client = {
+        refresh_repos = function()
+            open_refreshes = open_refreshes + 1
+            return true
+        end,
+    },
+    run_update_task = function(_, task, _, callback)
+        local called, ok = task()
+        callback(true, called, ok)
+    end,
+    load_packages = function() end,
+    load_repos = function() end,
+    reload_current_page = function() open_catalog_reloads = open_catalog_reloads + 1 end,
+}
+App.refresh_catalog_on_open(opened_app)
+assert(open_refreshes == 1)
+assert(next(opened_app.state.readme_cache) == nil)
+assert(open_catalog_reloads == 1)
+
+local shown_catalog_refreshes = 0
+App.show({
+    view = {},
+    backend_ready = true,
+    state = { active_tab = "home" },
+    intercept_koreader_exit = function() end,
+    finish_deferred_font_uninstalls = function() end,
+    navigate = function() end,
+    schedule_plugin_scan_after_open = function() end,
+    refresh_catalog_on_open = function() shown_catalog_refreshes = shown_catalog_refreshes + 1 end,
+})
+assert(shown_catalog_refreshes == 1)
+
+local started_catalog_refreshes = 0
+App.backend_started({
+    state = {},
+    finish_deferred_font_uninstalls = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+    schedule_plugin_scan_after_open = function() end,
+    refresh_catalog_on_open = function() started_catalog_refreshes = started_catalog_refreshes + 1 end,
+}, {})
+assert(started_catalog_refreshes == 1)
+
 local update_result
 local trapper_required = false
 package.preload["ui/trapper"] = function()
@@ -424,6 +480,28 @@ assert(package_modify_callbacks.downgrade)
 assert(package_modify_callbacks.uninstall)
 package_modify_callbacks.update()
 assert(regular_zenpm_action == "update")
+
+local reader_settings = {}
+_G.G_reader_settings = {
+    readSetting = function(_, key) return reader_settings[key] end,
+    saveSetting = function(_, key, value) reader_settings[key] = value end,
+    flush = function() end,
+}
+local toggle_done = false
+App.toggle_enable({
+    package_disabled = function() return false end,
+}, {
+    id = "example",
+    name = "Example plugin",
+    plugin_module = "example",
+}, "plugin", function()
+    toggle_done = true
+end)
+assert(reader_settings.plugins_disabled.example == true)
+assert(modal_message == "Disabled Example plugin")
+assert(modal_seconds == 2)
+assert(toggle_done)
+_G.G_reader_settings = nil
 
 local queued_operations
 local queue_app = {
@@ -590,5 +668,18 @@ assert(modal_rows[1].text == "All categories")
 assert(modal_rows[2].text == "Fonts (2)")
 modal_rows[2].callback()
 assert(selected_category == "fonts")
+
+local android_stops = 0
+local closing_app = {
+    backend_ready = true,
+    daemon = {
+        is_android = function() return true end,
+        stop_standalone_backend = function() android_stops = android_stops + 1 end,
+    },
+    restore_koreader_exit = function() end,
+}
+App.close(closing_app)
+assert(android_stops == 1)
+assert(not closing_app.backend_ready)
 
 print("app tests passed")

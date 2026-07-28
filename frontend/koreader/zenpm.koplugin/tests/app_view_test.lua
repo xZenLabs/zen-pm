@@ -42,6 +42,7 @@ local details_view = {
     },
     package_details_featured_visible = true,
     scroll_step = 10,
+    scroll_page_step = 40,
     max_scroll = 100,
     refresh = function() refreshes = refreshes + 1 end,
 }
@@ -51,6 +52,6 @@ assert(details_view.app.state.details_featured_expanded)
 assert(details_view.app.state.scroll["package:demo:readme"] == 0)
 assert(refreshes == 1)
 assert(AppView._scroll_list(details_view, 1) == true)
-assert(details_view.app.state.scroll["package:demo:readme"] == 10)
+assert(details_view.app.state.scroll["package:demo:readme"] == 40)
 
 print("app view tests passed")

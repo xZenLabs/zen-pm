@@ -7,7 +7,8 @@ package.preload["gettext"] = function() return function(value) return value end 
 local constants = {
     PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin",
     PORT = 18765,
-    POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
+    UNIX_SOCKET = "/tmp/zenpm.sock",
+    ANDROID_SOCKET = "@zenpm",
 }
 package.preload["constants"] = function() return constants end
 local datastorage = {
@@ -59,38 +60,12 @@ ereader.plugin_version = function() return "1.2.3" end
 assert(ereader:expected_plugin_asset() == "ZenPM-koreader-ereader-1.2.3.zip")
 assert(ereader:bundled_backend_candidates()[1] == "/mnt/us/koreader/plugins/zenpm.koplugin/backend/zenpm-hf")
 
-local socket = require("socket")
-local original_tcp = socket.tcp
 local original_execute = os.execute
-local loopback_commands = {}
-local generic_probe_called = false
-socket.tcp = function()
-    generic_probe_called = true
-end
-os.execute = function(command)
-    table.insert(loopback_commands, command)
-    return 0
-end
-assert(ereader:wait_for_loopback())
-assert(not generic_probe_called)
-assert(#loopback_commands == 0)
-
 local pocketbook = Daemon:new()
 pocketbook.detect_platform = function() return "ereader" end
 pocketbook.is_pocketbook = function() return true end
 pocketbook.detect_abi = function() return "hf" end
 assert(pocketbook:ereader_backend_suffix() == "sf")
-socket.tcp = function()
-    error("PocketBook should not probe TCP loopback")
-end
-os.execute = function(command)
-    table.insert(loopback_commands, command)
-    return 0
-end
-assert(pocketbook:wait_for_loopback())
-socket.tcp = original_tcp
-os.execute = original_execute
-assert(#loopback_commands == 0)
 
 constants.PLUGIN_DIR = "/mnt/ext1/applications/koreader/plugins-user/zenpm.koplugin"
 local user_plugin = Daemon:new()
@@ -105,34 +80,35 @@ local source_file = assert(io.open(source_path, "wb"))
 source_file:write("backend")
 source_file:close()
 
-local tcp_backend = Daemon:new()
-tcp_backend.detect_platform = function() return "ereader" end
-tcp_backend.wait_for_loopback = function() return true end
-tcp_backend.find_backend = function() return source_path end
-tcp_backend.log_cli = function() end
-local tcp_start_commands = {}
+local unix_backend = Daemon:new()
+unix_backend.detect_platform = function() return "ereader" end
+unix_backend.find_backend = function() return source_path end
+unix_backend.log_cli = function() end
+local unix_start_commands = {}
 os.execute = function(command)
-    table.insert(tcp_start_commands, command)
+    table.insert(unix_start_commands, command)
     return 0
 end
-assert(tcp_backend:start(true))
+assert(unix_backend:start(true))
 os.execute = original_execute
-assert(#tcp_start_commands == 1)
-assert(tcp_start_commands[1]:find("serve --port 18765", 1, true))
+assert(#unix_start_commands == 1)
+assert(unix_start_commands[1]:find("serve --socket '/tmp/zenpm.sock'", 1, true))
 
 local stopped_commands = {}
+local socket = require("socket")
 socket.sleep = function() end
 os.execute = function(command)
     table.insert(stopped_commands, command)
     return 0
 end
-tcp_backend.standalone_backend = function() return source_path end
-tcp_backend.standalone_pid_file = function() return "" end
-tcp_backend.bundled_backend_candidates = function() return {} end
-tcp_backend:stop_standalone_backend()
+unix_backend.standalone_backend = function() return source_path end
+unix_backend.standalone_pid_file = function() return "" end
+unix_backend.bundled_backend_candidates = function() return {} end
+unix_backend:stop_standalone_backend()
 os.execute = original_execute
 assert(table.concat(stopped_commands, "\n"):find("serve %-%-port 18765"))
 assert(table.concat(stopped_commands, "\n"):find("serve %-%-port 8080"))
+assert(table.concat(stopped_commands, "\n"):find("serve %-%-socket /tmp/zenpm%.sock"))
 
 local pocketbook_backend = Daemon:new()
 pocketbook_backend.ensure_runtime_dirs = function() return false, nil end
@@ -156,7 +132,6 @@ assert(pocketbook_backend:installed_backend_version() == "1.2.3")
 local start_commands = {}
 local start_logs = {}
 pocketbook_backend.detect_platform = function() return "ereader" end
-pocketbook_backend.wait_for_loopback = function() return true end
 pocketbook_backend.bundled_backend_dir = function()
     return assert(source_path:match("^(.*)/[^/]+$"))
 end
@@ -241,5 +216,15 @@ assert(#android_commands == 1)
 local android_command = android_commands[1]
 assert(android_command:find("/system/bin/am start -W -n org.zenlabs.zenpm/.ZenPMActivity -a android.intent.action.VIEW -d 'zenpm://start?home=%2Fstorage%2Femulated%2F0%2FZenPM&root=%2Fstorage%2Femulated%2F0%2Fkoreader'", 1, true))
 assert(android_command:find("--es zenpm_log_home '/storage/emulated/0/ZenPM'", 1, true))
+
+local android_stop_commands = {}
+os.execute = function(command)
+    table.insert(android_stop_commands, command)
+    return 0
+end
+android_daemon:stop_standalone_backend()
+os.execute = original_execute
+assert(#android_stop_commands == 1)
+assert(android_stop_commands[1]:find("zenpm://stop", 1, true))
 
 print("daemon tests passed")

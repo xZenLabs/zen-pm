@@ -289,6 +289,13 @@ func NormalizeVersion(value string) string {
 func VersionGreater(a, b string) bool {
 	a = NormalizeVersion(a)
 	b = NormalizeVersion(b)
+	if versionBase(a) == versionBase(b) {
+		aPrerelease := strings.Contains(a, "-")
+		bPrerelease := strings.Contains(b, "-")
+		if aPrerelease != bPrerelease {
+			return !aPrerelease
+		}
+	}
 	an := versionNumbers(a)
 	bn := versionNumbers(b)
 	if len(an) > 0 || len(bn) > 0 {

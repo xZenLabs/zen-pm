@@ -1308,11 +1308,29 @@ function App:show()
         self:finish_deferred_font_uninstalls()
         self:navigate(self.state.active_tab or "home")
         self:schedule_plugin_scan_after_open()
+        self:refresh_catalog_on_open()
     else
         self.t_open = socket.gettime()
         self:set_loading(_("Loading packages, please wait"))
         self:start_backend_then_reload()
     end
+end
+
+function App:refresh_catalog_on_open()
+    if self.catalog_refreshing or not self.backend_ready or not self.view then return end
+    self.catalog_refreshing = true
+    self:run_update_task(function()
+        return pcall(self.client.refresh_repos, self.client)
+    end, nil, function(completed, called, ok)
+        self.catalog_refreshing = false
+        if not completed or not called or not ok or not self.view then return end
+        self.state.readme_cache = {}
+        self.image_files = {}
+        Images.invalidate_cache()
+        self:load_packages(false, true)
+        self:load_repos(true)
+        self:reload_current_page()
+    end)
 end
 
 function App:intercept_koreader_exit()
@@ -1341,6 +1359,10 @@ end
 
 function App:close()
     self:restore_koreader_exit()
+    if self.daemon and type(self.daemon.is_android) == "function" and self.daemon:is_android() then
+        self.daemon:stop_standalone_backend()
+        self.backend_ready = false
+    end
     if self.view then
         local view = self.view
         local dimen = view.dimen
@@ -1454,6 +1476,7 @@ function App:backend_started(data, on_ready)
         self:refresh()
     end
     self:schedule_plugin_scan_after_open()
+    self:refresh_catalog_on_open()
 end
 
 function App:backend_failed(message)
@@ -2273,6 +2296,12 @@ function App:prompt_sort(kind)
         }
         if kind == "installed" then
             table.insert(rows, {
+                icon = "update",
+                text = _("Update available"),
+                checked_func = selected("update_available"),
+                callback = function() self:set_sort(kind, "update_available") end,
+            })
+            table.insert(rows, {
                 icon = "date",
                 text = _("Installed date (newest first)"),
                 checked_func = selected("installed_at_desc"),
@@ -2419,7 +2448,7 @@ function App:perform_package_action(pkg, on_done)
             end or nil,
             disabled = is_koplugin and is_plugin_disabled(pkg) or nil,
             enable_disable = is_koplugin and function()
-                self:confirm_toggle_enable(pkg, "plugin", on_done)
+                self:toggle_enable(pkg, "plugin", on_done)
             end or nil,
             downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
@@ -2442,7 +2471,7 @@ function App:show_unmanaged_patch_modify(pkg, on_done)
         manage_only = true,
         disabled = is_patch_disabled(pkg),
         enable_disable = function()
-            self:confirm_toggle_enable(pkg, "patch", on_done)
+            self:toggle_enable(pkg, "patch", on_done)
         end,
         uninstall = function()
             self:confirm_remove_unmanaged_patch(asset, on_done)
@@ -2459,7 +2488,7 @@ function App:show_patch_modify(pkg, on_done)
         end or nil,
         disabled = is_patch_disabled(pkg),
         enable_disable = function()
-            self:confirm_toggle_enable(pkg, "patch", on_done)
+            self:toggle_enable(pkg, "patch", on_done)
         end,
         uninstall = function()
             self:confirm_patch_item_action(pkg, "uninstall", asset, on_done)
@@ -2481,9 +2510,8 @@ function App:package_disabled(pkg)
 end
 
 -- Toggle enable/disable natively (settings flag for plugins, file rename for
--- patches). No backend call — the change is local — so on success we prompt a
--- restart, which is when KOReader actually applies plugin/patch state.
-function App:confirm_toggle_enable(pkg, kind, on_done)
+-- patches). No backend call is needed; KOReader applies the change on restart.
+function App:toggle_enable(pkg, kind, on_done)
     if self.busy then
         Modals.info(_("Another operation is in progress. Please wait."))
         return
@@ -2491,29 +2519,20 @@ function App:confirm_toggle_enable(pkg, kind, on_done)
     local disabled = self:package_disabled(pkg)
     local name = Models.package_display_name(pkg, _("Package"))
     local verb = disabled and _("enable") or _("disable")
-    local label = disabled and _("Enable") or _("Disable")
-    Modals.confirm(
-        _("Are you sure you want to ") .. verb .. " " .. name .. "?",
-        label,
-        function()
-            local ok, err
-            if kind == "patch" then
-                ok, err = set_patch_disabled(pkg.patch_asset, not disabled)
-            else
-                ok, err = set_plugin_disabled(pkg, not disabled)
-            end
-            if not ok then
-                Modals.info_for(_("Could not ") .. verb .. " " .. name .. ": " .. tostring(err),
-                    Constants.PACKAGE_NOTICE_SECONDS)
-                return
-            end
-            local done = disabled and _("enabled") or _("disabled")
-            Modals.restart_koreader(
-                name .. " " .. done .. _(" successfully.\n\nRestart KOReader to apply the change."),
-                function() self:restart_koreader() end)
-            if on_done then on_done() end
-        end
-    )
+    local ok, err
+    if kind == "patch" then
+        ok, err = set_patch_disabled(pkg.patch_asset, not disabled)
+    else
+        ok, err = set_plugin_disabled(pkg, not disabled)
+    end
+    if not ok then
+        Modals.info_for(_("Could not ") .. verb .. " " .. name .. ": " .. tostring(err),
+            Constants.PACKAGE_NOTICE_SECONDS)
+        return
+    end
+    local done = disabled and _("Enabled") or _("Disabled")
+    Modals.info_for(done .. " " .. name, 2)
+    if on_done then on_done() end
 end
 
 function App:confirm_patch_item_action(pkg, action, asset, on_done)

@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -32,7 +34,21 @@ type Server struct {
 	pkgs       *pkg.Manager
 	port       int
 	unixSocket bool
-	StartedAt  time.Time
+
+	// IdleTimeout stops an otherwise idle server. It is used by the Android
+	// companion so its foreground service does not remain alive indefinitely.
+	IdleTimeout time.Duration
+
+	mu             sync.Mutex
+	httpServer     *http.Server
+	listener       net.Listener
+	closed         bool
+	done           chan struct{}
+	closeDone      sync.Once
+	activeRequests atomic.Int32
+	backgroundJobs atomic.Int32
+	lastActivity   atomic.Int64
+	StartedAt      time.Time
 }
 
 type pkgJSON struct {
@@ -83,7 +99,7 @@ type pkgJSON struct {
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
-	return &Server{st: st, repos: repos, pkgs: pkgs, port: port}
+	return &Server{st: st, repos: repos, pkgs: pkgs, port: port, done: make(chan struct{})}
 }
 
 func (s *Server) ListenAndServe() error {
@@ -106,13 +122,15 @@ func (s *Server) ListenAndServeUnix(path string) error {
 	if errors.Is(err, errServerAlreadyRunning) {
 		return nil
 	}
-	if bound {
+	if bound && !isAbstractUnixSocket(path) {
 		_ = os.Remove(path)
 	}
 	return err
 }
 
 func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) error {
+	s.touch()
+	defer s.signalDone()
 	state.StartupTrace("HTTP server: configuring routes.")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.wrap(s.handleHealth))
@@ -135,18 +153,18 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	catalog, needsRefresh := s.initialCatalogState()
 	state.StartupTrace("HTTP server: catalog state ready.")
 	if needsRefresh {
-		go func() {
+		s.runBackground(func() {
 			if err := s.repos.Refresh(); err != nil {
 				log.Warnf("Initial refresh failed: %v", err)
 				return
 			}
 			s.autoScanKOReaderPlugins()
-		}()
+		})
 	} else {
 		s.autoScanKOReaderPlugins()
-		go func() {
+		s.runBackground(func() {
 			s.repos.CacheInstalledUninstallScripts(catalog)
-		}()
+		})
 	}
 
 	// Keep the catalog fresh in the background so the client never has to fetch
@@ -154,9 +172,26 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	go s.periodicRefresh()
 
 	state.StartupTrace("HTTP server: binding " + addr + ".")
+	httpServer := &http.Server{Handler: mux}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.httpServer = httpServer
+	s.mu.Unlock()
+
 	ln, err := bind()
 	if err != nil {
 		return err
+	}
+	s.mu.Lock()
+	s.listener = ln
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
+		_ = ln.Close()
+		return nil
 	}
 	state.StartupTrace("HTTP server: listening on " + addr + ".")
 	if !s.StartedAt.IsZero() {
@@ -164,7 +199,14 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	} else {
 		log.Infof("ZenPM server listening on %s", addr)
 	}
-	return http.Serve(ln, mux)
+	if s.IdleTimeout > 0 {
+		go s.stopWhenIdle()
+	}
+	err = httpServer.Serve(ln)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 var errServerAlreadyRunning = errors.New("ZenPM server already running")
@@ -201,6 +243,13 @@ func (s *Server) listenUnix(path string) (net.Listener, error) {
 	if path == "" {
 		return nil, errors.New("Unix socket path is empty")
 	}
+	if isAbstractUnixSocket(path) {
+		ln, err := net.Listen("unix", path)
+		if err != nil {
+			return nil, fmt.Errorf("listen unix:%s: %w", path, err)
+		}
+		return ln, nil
+	}
 	if info, err := os.Lstat(path); err == nil {
 		if info.Mode()&os.ModeSocket == 0 {
 			return nil, fmt.Errorf("listen unix:%s: existing path is not a socket", path)
@@ -228,6 +277,87 @@ func (s *Server) listenUnix(path string) (net.Listener, error) {
 		return nil, fmt.Errorf("secure Unix socket %s: %w", path, err)
 	}
 	return ln, nil
+}
+
+func isAbstractUnixSocket(path string) bool {
+	return strings.HasPrefix(path, "@")
+}
+
+// Close stops a running server and any idle/background bookkeeping attached to
+// it. It is safe to call before the listener is fully initialized.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	httpServer := s.httpServer
+	listener := s.listener
+	s.mu.Unlock()
+	s.signalDone()
+	if httpServer != nil {
+		err := httpServer.Close()
+		if err == nil || errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+	if listener != nil {
+		return listener.Close()
+	}
+	return nil
+}
+
+func (s *Server) signalDone() {
+	s.closeDone.Do(func() {
+		if s.done == nil {
+			s.done = make(chan struct{})
+		}
+		close(s.done)
+	})
+}
+
+func (s *Server) touch() {
+	s.lastActivity.Store(time.Now().UnixNano())
+}
+
+func (s *Server) runBackground(work func()) {
+	s.backgroundJobs.Add(1)
+	s.touch()
+	go func() {
+		defer func() {
+			s.backgroundJobs.Add(-1)
+			s.touch()
+		}()
+		work()
+	}()
+}
+
+func (s *Server) stopWhenIdle() {
+	interval := s.IdleTimeout / 10
+	if interval < 25*time.Millisecond {
+		interval = 25 * time.Millisecond
+	}
+	if interval > 5*time.Second {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			lastActivity := time.Unix(0, s.lastActivity.Load())
+			if s.activeRequests.Load() != 0 || s.backgroundJobs.Load() != 0 || time.Since(lastActivity) < s.IdleTimeout {
+				continue
+			}
+			log.Infof("ZenPM server idle for %s — stopping", s.IdleTimeout)
+			_ = s.Close()
+			return
+		}
+	}
 }
 
 // daemonAlreadyRunning probes /health to confirm a live ZenPM daemon owns addr,
@@ -271,10 +401,17 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 func (s *Server) periodicRefresh() {
 	ticker := time.NewTicker(catalogMaxAge)
 	defer ticker.Stop()
-	for range ticker.C {
-		log.Info("Periodic catalog refresh")
-		if err := s.repos.Refresh(); err != nil {
-			log.Warnf("Periodic refresh failed: %v", err)
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			log.Info("Periodic catalog refresh")
+			s.runBackground(func() {
+				if err := s.repos.Refresh(); err != nil {
+					log.Warnf("Periodic refresh failed: %v", err)
+				}
+			})
 		}
 	}
 }
@@ -342,6 +479,12 @@ func (rec *responseRecorder) errorDetail() string {
 // wrap adds CORS headers, enforces local-only access, and logs every request.
 func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		s.activeRequests.Add(1)
+		s.touch()
+		defer func() {
+			s.activeRequests.Add(-1)
+			s.touch()
+		}()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -851,7 +994,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 
 	// Fire async; the WAF polls /log after a delay.
 	log.Infof("Package %s: starting %s", id, action)
-	go func() {
+	s.runBackground(func() {
 		var err error
 		if action == "install" {
 			if releaseTag != "" {
@@ -869,7 +1012,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Infof("Package %s: %s complete", id, action)
 		}
-	}()
+	})
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
@@ -883,13 +1026,13 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("Updating all installed packages")
-	go func() {
+	s.runBackground(func() {
 		if err := s.pkgs.Update(""); err != nil {
 			log.Errorf("Update all packages failed: %v", err)
 			return
 		}
 		log.Info("Update all packages complete")
-	}()
+	})
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 

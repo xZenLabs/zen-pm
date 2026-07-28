@@ -10,7 +10,6 @@ local ok_https, https = pcall(require, "ssl.https")
 local ok_socketutil, socketutil = pcall(require, "socketutil")
 local ok_logger, logger = pcall(require, "logger")
 local ok_android = pcall(require, "android")
-local ok_device, Device = pcall(require, "device")
 
 local Client = {}
 local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
@@ -65,11 +64,8 @@ end
 function Client:new(opts)
     opts = opts or {}
     local unix_socket = opts.unix_socket_path
-    if unix_socket == nil and ok_device and Device and type(Device.isPocketBook) == "function" then
-        local ok, is_pocketbook = pcall(Device.isPocketBook, Device)
-        if ok and is_pocketbook then
-            unix_socket = Constants.POCKETBOOK_SOCKET
-        end
+    if unix_socket == nil then
+        unix_socket = ok_android and Constants.ANDROID_SOCKET or Constants.UNIX_SOCKET
     end
     local o = {
         base_url = opts.base_url or Constants.API_BASE,
