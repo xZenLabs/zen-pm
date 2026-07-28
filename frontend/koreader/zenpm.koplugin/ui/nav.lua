@@ -68,7 +68,11 @@ function Nav.draw(view, bb, x, y, w, h)
                 P.center_text_box(bb, tostring(updates), badge_x, badge_y - Theme.scale(3), badge_s, badge_s, "tiny", { bold = true, color = Theme.bg, face = badge_face })
             end
         end
-        P.hit(view, tx, y, tw, h, function() view.app:navigate(tab.id) end, "tab:" .. tab.id)
+        local callback = function() view.app:navigate(tab.id) end
+        P.hit(view, tx, y, tw, h, callback, "tab:" .. tab.id)
+        if P.focus_target(view, "tab:" .. tab.id, tx, y, tw, h, callback, { focus_type = "tab" }) then
+            P.focus_outline(bb, tx, y, tw, h)
+        end
     end
 end
 
@@ -81,7 +85,9 @@ function Nav.draw_queue_banner(view, bb, x, y, w, h)
     local label = count == 1 and _("1 package queued") or string.format(_("%d packages queued"), count)
     P.vcenter_text(bb, label, x + pad, y, w - pad * 2 - chevron_s, h, "small", { bold = true })
     P.image(bb, Images.asset("chevron.up.svg"), x + w - pad - chevron_s, y + math.floor((h - chevron_s) / 2), chevron_s, chevron_s, { is_icon = true })
-    P.hit(view, x, y, w, h, function() view.app:show_queue() end, "queue-banner")
+    local callback = function() view.app:show_queue() end
+    P.hit(view, x, y, w, h, callback, "queue-banner")
+    P.focus_control(view, bb, "queue-banner", x, y, w, h, callback, { focus_type = "queue_banner" })
 end
 
 return Nav

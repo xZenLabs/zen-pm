@@ -32,7 +32,7 @@ func Java_org_zenlabs_zenpm_ZenPMService_nativeRun(env *C.JNIEnv, _ C.jclass, ho
 }
 
 //export Java_org_zenlabs_zenpm_ZenPMService_nativeStop
-func Java_org_zenlabs_zenpm_ZenPMService_nativeStop(_ *C.JNIEnv, _ C.jclass) {
+func Java_org_zenlabs_zenpm_ZenPMService_nativeStop(env *C.JNIEnv, clazz C.jclass) {
 	androidbackend.Stop()
 }
 

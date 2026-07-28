@@ -75,16 +75,20 @@ function Pages.error(view, bb, x, y, w, h, message)
     end
     P.box(bb, x + pad, button_y, button_w, button_h, { background = Theme.button_bg, border_color = Theme.button_bg, radius = math.floor(button_h / 2) })
     P.center_text_box(bb, _("Retry"), x + pad, button_y, button_w, button_h, "small", { bold = true, color = Theme.button_text })
-    P.hit(view, x + pad, button_y, button_w, button_h, function()
+    local retry_callback = function()
         view.app:start_backend_then_reload()
-    end, "retry-backend")
+    end
+    P.hit(view, x + pad, button_y, button_w, button_h, retry_callback, "retry-backend")
+    P.focus_control(view, bb, "retry-backend", x + pad, button_y, button_w, button_h, retry_callback, { inverse = true })
 
     local quit_x = x + pad + button_w + gap
     P.box(bb, quit_x, button_y, button_w, button_h, { background = Theme.button_bg, border_color = Theme.button_bg, radius = math.floor(button_h / 2) })
     P.center_text_box(bb, _("Quit"), quit_x, button_y, button_w, button_h, "small", { bold = true, color = Theme.button_text })
-    P.hit(view, quit_x, button_y, button_w, button_h, function()
+    local quit_callback = function()
         view.app:quit()
-    end, "quit")
+    end
+    P.hit(view, quit_x, button_y, button_w, button_h, quit_callback, "quit")
+    P.focus_control(view, bb, "quit", quit_x, button_y, button_w, button_h, quit_callback, { inverse = true })
     Scroll.set_list_bounds(view, x, y, w, h, h)
 end
 
@@ -101,9 +105,14 @@ function Pages.featured(view, bb, x, y, w, h, scroll)
     end
     local bottom_inset = Theme.scale(12)
     local card_h = math.max(1, math.floor((list_h - bottom_inset - m.card_gap) / 2))
-    return Scroll.scrolled_list(view, bb, list, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, cy, scrollable)
+    return Scroll.scrolled_list(view, bb, list, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, cy, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.featured(view, bb, pkg, x + pad, cy, w - pad * 2 - gutter, { height = card_h })
+        Cards.featured(view, bb, pkg, x + pad, cy, w - pad * 2 - gutter, {
+            height = card_h,
+            focus_group = "featured",
+            focus_index = index,
+            focus_count = count,
+        })
     end, true)
 end
 
@@ -127,9 +136,14 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
+        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
+            height = card_h,
+            focus_group = kind,
+            focus_index = index,
+            focus_count = count,
+        })
     end, true)
 end
 
@@ -185,7 +199,7 @@ function Pages.queue(view, bb, x, y, w, h, scroll)
         return 0
     end
     local row_h = compact_row_height(list_h, m.card_gap)
-    return Scroll.scrolled_list(view, bb, entries, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(entry, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, entries, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(entry, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
         local row_x = x + pad
         local row_w = w - pad * 2 - gutter
@@ -199,6 +213,16 @@ function Pages.queue(view, bb, x, y, w, h, scroll)
             right_icon = Images.asset(queue_action_icon(entry.action)),
             callback = function() view.app:show_queue_entry_modify(entry) end,
             hit_id = "queue-entry:" .. tostring(entry.key),
+            focus = {
+                id = "queue-entry:" .. tostring(entry.key),
+                focus_type = "queue_entry",
+                focus_column = "main",
+                focus_content = true,
+                focus_primary = true,
+                list_group = "queue",
+                list_index = index,
+                list_count = count,
+            },
         })
     end)
 end
@@ -214,8 +238,12 @@ function Pages.sources(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, m.repo_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, repos, x, list_y, w, list_h, scroll, m.repo_h, m.card_gap, function(repo, row_y)
-        Cards.source(view, bb, repo, x + pad, row_y, w - pad * 2)
+    return Scroll.scrolled_list(view, bb, repos, x, list_y, w, list_h, scroll, m.repo_h, m.card_gap, function(repo, row_y, _scrollable, index, count)
+        Cards.source(view, bb, repo, x + pad, row_y, w - pad * 2, {
+            focus_group = "sources",
+            focus_index = index,
+            focus_count = count,
+        })
     end)
 end
 
@@ -234,9 +262,21 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
         return 0
     end
     local row_h = compact_row_height(list_h, m.card_gap)
-    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, { height = row_h })
+        Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, {
+            height = row_h,
+            focus = {
+                id = "category:" .. tostring(category.id),
+                focus_type = "category",
+                focus_column = "main",
+                focus_content = true,
+                focus_primary = true,
+                list_group = "categories",
+                list_index = index,
+                list_count = count,
+            },
+        })
     end)
 end
 
@@ -300,7 +340,7 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
     end
     local list_y = y + Theme.scale(8)
     local list_h = h - Theme.scale(16)
-    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
         local row_x = x + pad
         local row_w = w - pad * 2 - gutter
@@ -320,6 +360,15 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             P.vcenter_text(bb, right, right_x, row_y, right_size.w, row_h, "small", { bold = true, color = Theme.ink })
         end
         P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
+        P.focus_control(view, bb, "setting:" .. row.text, row_x, row_y, row_w, row_h, row.callback, {
+            focus_type = "setting",
+            focus_column = "main",
+            focus_content = true,
+            focus_primary = true,
+            list_group = "settings",
+            list_index = index,
+            list_count = count,
+        })
     end)
 end
 
@@ -336,9 +385,14 @@ function Pages.source_details(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable)
+    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, { height = card_h })
+        Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
+            height = card_h,
+            focus_group = "source",
+            focus_index = index,
+            focus_count = count,
+        })
     end, true)
 end
 
@@ -379,6 +433,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         second_line = _("By ") .. I18n.dynamic_or(pkg.author, "?"),
         text_gap = Theme.scale(6),
         border = false,
+        focus_group = "package_details",
+        focus_index = 1,
+        focus_count = 1,
     })
     local card_bottom = iy + summary_h
     local description_y = card_bottom + Theme.scale(18)
@@ -436,7 +493,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local tab_h = Theme.scale(38)
         local gap = Theme.scale(8)
         local tab_w = math.floor((inner_w - gap * (#tabs - 1)) / #tabs)
-        local function draw_tab(id, label, tx, tw)
+        local function draw_tab(index, id, label, tx, tw)
             local selected = details_tab == id
             P.box(bb, tx, iy, tw, tab_h, {
                 background = selected and Theme.ink or Theme.panel,
@@ -446,14 +503,21 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
             P.center_text_box(bb, label, tx, iy, tw, tab_h, "small", {
                 color = selected and Theme.button_text or Theme.ink,
             })
-            P.hit(view, tx, iy, tw, tab_h, function()
+            local callback = function()
                 view.app:set_package_details_tab(id)
-            end, "details-tab:" .. id)
+            end
+            local focus_id = "details-tab:" .. id
+            P.hit(view, tx, iy, tw, tab_h, callback, focus_id)
+            P.focus_control(view, bb, focus_id, tx, iy, tw, tab_h, callback, {
+                focus_type = "details_tab",
+                focus_column = index,
+                inverse = selected,
+            })
         end
         local tab_x = inner_x
         for index, tab in ipairs(tabs) do
             local width = index == #tabs and inner_x + inner_w - tab_x or tab_w
-            draw_tab(tab.id, tab.label, tab_x, width)
+            draw_tab(index, tab.id, tab.label, tab_x, width)
             tab_x = tab_x + width + gap
         end
         iy = iy + tab_h + Theme.scale(14)
@@ -467,7 +531,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local gap = Theme.scale(8)
         local row_h = patch_row_height(content_h, gap)
         local list_w = inner_w
-        local max_scroll = Scroll.scrolled_list(view, bb, assets, inner_x, iy, list_w, content_h, scroll, row_h, gap, function(asset, row_y)
+        local max_scroll = Scroll.scrolled_list(view, bb, assets, inner_x, iy, list_w, content_h, scroll, row_h, gap, function(asset, row_y, _scrollable, index, count)
             local gutter = Theme.scale(30)
             local row_w = list_w - gutter
             P.box(bb, inner_x, row_y, row_w, row_h)
@@ -483,11 +547,22 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
             if meta ~= "" then
                 P.text(bb, meta, text_x, row_y + Theme.scale(32), text_w, "tiny", { color = Theme.muted })
             end
-            P.hit(view, inner_x, row_y, row_w, row_h, function()
+            local callback = function()
                 view.app:confirm_package_asset_action(pkg, asset, function()
                     view.app:reload_current_page()
                 end)
-            end, "patch:" .. tostring(asset.asset or ""))
+            end
+            local focus_id = "patch:" .. tostring(asset.asset or "")
+            P.hit(view, inner_x, row_y, row_w, row_h, callback, focus_id)
+            P.focus_control(view, bb, focus_id, inner_x, row_y, row_w, row_h, callback, {
+                focus_type = "patch",
+                focus_column = "main",
+                focus_content = true,
+                focus_primary = true,
+                list_group = "patches",
+                list_index = index,
+                list_count = count,
+            })
         end)
         return max_scroll
     end
@@ -540,6 +615,10 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local viewport_h = math.max(1, content_h - viewport_inset * 2)
     local max_scroll = MarkdownRenderer.render(view, bb, content_blocks, content_link_base_url, content_image_base_url, inner_x, viewport_y, paragraph_w, viewport_h, scroll)
     Scroll.set_list_bounds(view, inner_x, viewport_y, inner_w, viewport_h, Theme.scale(96))
+    P.focus_control(view, bb, "details-content", inner_x, viewport_y, inner_w, viewport_h, nil, {
+        focus_type = "scroll_content",
+        focus_content = true,
+    })
     return max_scroll
 end
 

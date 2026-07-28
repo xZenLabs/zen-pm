@@ -192,9 +192,10 @@ function Scroll.scrolled_list(view, bb, items, x, y, w, h, scroll, item_h, gap, 
     end
     local scrollable = max_scroll > 0
     local cy = y - scroll
-    for _, item in ipairs(items or {}) do
+    local count = #(items or {})
+    for index, item in ipairs(items or {}) do
         if cy >= y and cy + item_h <= y + h then
-            draw_item(item, cy, scrollable)
+            draw_item(item, cy, scrollable, index, count)
         end
         cy = cy + item_h + gap
     end

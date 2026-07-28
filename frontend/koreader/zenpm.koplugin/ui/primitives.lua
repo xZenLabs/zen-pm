@@ -497,6 +497,53 @@ function P.hit(app, x, y, w, h, callback, label)
     })
 end
 
+-- ZenPM is drawn directly instead of using KOReader's focusable widget tree.
+-- Keep the small focus model here, beside hitboxes, so controls can support
+-- physical D-pads without changing their touch behaviour.
+function P.focus_target(view, id, x, y, w, h, callback, opts)
+    if not view.focus_enabled then
+        return false
+    end
+    opts = opts or {}
+    local target = {
+        id = id,
+        x = x, y = y, w = w, h = h,
+        callback = callback,
+    }
+    for key, value in pairs(opts) do
+        target[key] = value
+    end
+    table.insert(view.focus_targets, target)
+    if view.focus_pending
+        and view.focus_pending.list_group == target.list_group
+        and view.focus_pending.list_index == target.list_index
+        and view.focus_pending.focus_column == target.focus_column then
+        view.focus_key = id
+        view.focus_pending = nil
+    end
+    return view.focus_key == id
+end
+
+function P.focus_control(view, bb, id, x, y, w, h, callback, opts)
+    opts = opts or {}
+    opts.focus_type = opts.focus_type or "control"
+    if P.focus_target(view, id, x, y, w, h, callback, opts) then
+        P.focus_outline(bb, x, y, w, h, opts.inverse)
+        return true
+    end
+    return false
+end
+
+function P.focus_outline(bb, x, y, w, h, inverse)
+    if inverse then
+        local size = Theme.scale(2)
+        local gap = math.max(size + 1, Theme.scale(4))
+        P.stroke(bb, x - gap, y - gap, w + gap * 2, h + gap * 2, size, Theme.ink)
+        return
+    end
+    P.stroke(bb, x, y, w, h, Theme.scale(4), Theme.ink)
+end
+
 function P.contains(box, x, y)
     return x >= box.x and x <= box.x + box.w and y >= box.y and y <= box.y + box.h
 end
