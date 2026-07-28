@@ -3,11 +3,13 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. root .. "/ui/?.lua;" .. package.path
 
 local has_keys = false
+local has_keyboard = false
 local has_dpad = false
 local scheduled
 package.preload["device"] = function()
     return {
         hasKeys = function() return has_keys end,
+        hasKeyboard = function() return has_keyboard end,
         hasDPad = function() return has_dpad end,
         screen = { getWidth = function() return 1 end, getHeight = function() return 1 end },
     }
@@ -52,6 +54,13 @@ assert(key_view.key_events.ZenPMFocusUp)
 assert(key_view.key_events.ZenPMFocusConfirm)
 has_keys = false
 has_dpad = false
+
+has_keyboard = true
+local keyboard_view = setmetatable({}, { __index = AppView })
+AppView.init(keyboard_view)
+assert(keyboard_view.focus_enabled == true)
+assert(keyboard_view.key_events.ZenPMFocusDown)
+has_keyboard = false
 
 assert(AppView.onClose(view) == true)
 assert(closed == 1)
@@ -137,29 +146,41 @@ assert(scrolling_focus.focus_pending.list_index == 2)
 local detail_refreshes = 0
 local details_focus = {
     app = {
-        state = { active_tab = "search", scroll = { details = 0 } },
+        state = { active_tab = "search", details_tab = "readme", scroll = { details = 0 } },
         scroll_key = function() return "details" end,
     },
-    focus_key = "details-tab:readme",
+    focus_key = "package:details",
     focus_targets = {
         { id = "back", x = 0, y = 0, w = 10, h = 10, focus_type = "control" },
+        { id = "package:details", x = 0, y = 10, w = 100, h = 10, focus_type = "package", focus_column = "main", focus_content = true, list_group = "package_details", list_index = 1, list_count = 1 },
         { id = "details-tab:readme", x = 0, y = 20, w = 40, h = 10, focus_type = "details_tab" },
         { id = "details-tab:release_notes", x = 50, y = 20, w = 40, h = 10, focus_type = "details_tab" },
         { id = "details-content", x = 0, y = 40, w = 100, h = 40, focus_type = "scroll_content", focus_content = true },
     },
     scroll_step = 10,
+    scroll_page_step = 40,
     max_scroll = 10,
     refresh = function() detail_refreshes = detail_refreshes + 1 end,
 }
 setmetatable(details_focus, { __index = AppView })
+details_focus.focus_targets[4].callback = function()
+    details_focus.app.state.details_tab = "release_notes"
+end
+assert(AppView.onZenPMFocusMove(details_focus, { 0, 1 }) == true)
+assert(details_focus.focus_key == "details-tab:readme")
 assert(AppView.onZenPMFocusMove(details_focus, { 1, 0 }) == true)
 assert(details_focus.focus_key == "details-tab:release_notes")
+assert(AppView.onZenPMFocusConfirm(details_focus) == true)
 assert(AppView.onZenPMFocusMove(details_focus, { 0, 1 }) == true)
 assert(details_focus.focus_key == "details-content")
 assert(AppView.onZenPMFocusMove(details_focus, { 0, 1 }) == true)
 assert(details_focus.app.state.scroll.details == 10)
 assert(AppView.onZenPMFocusMove(details_focus, { 0, -1 }) == true)
 assert(details_focus.app.state.scroll.details == 0)
+details_focus.max_scroll = 100
+assert(AppView.onZenPMScroll(details_focus, 1) == true)
+assert(details_focus.app.state.scroll.details == 40)
+details_focus.app.state.scroll.details = 0
 assert(AppView.onZenPMFocusMove(details_focus, { 0, -1 }) == true)
 assert(details_focus.focus_key == "details-tab:release_notes")
 assert(detail_refreshes >= 5)

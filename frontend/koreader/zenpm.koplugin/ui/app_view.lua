@@ -32,10 +32,14 @@ local AppView = InputContainer:extend{
     stop_events_propagation = true,
 }
 
+local function supports_focus_navigation()
+    return Device:hasKeys() or Device:hasKeyboard()
+end
+
 function AppView:init()
     self.hitboxes = {}
     self.focus_targets = {}
-    self.focus_enabled = Device:hasKeys()
+    self.focus_enabled = supports_focus_navigation()
     self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
     self.ges_events = {
         TapZenPM = {
@@ -63,7 +67,7 @@ function AppView:init()
             },
         },
     }
-    if Device:hasKeys() then
+    if self.focus_enabled then
         self.key_events = {
             ZenPMPageForward = { { Input.group.PgFwd }, event = "ZenPMScroll", args = 1 },
             ZenPMPageBack = { { Input.group.PgBack }, event = "ZenPMScroll", args = -1 },
@@ -206,6 +210,19 @@ function AppView:_focus_first_content()
     return target and self:_set_focus(target.id) or false
 end
 
+function AppView:_focus_package_details_tab()
+    local selected_tab = "details-tab:" .. tostring(self.app.state.details_tab or "readme")
+    return self:_set_focus(selected_tab)
+end
+
+function AppView:_focus_package_details_body()
+    if self:_focus_package_details_tab() then return true end
+    local content = self:_find_focus_target(function(candidate)
+        return candidate.id == "details-content"
+    end)
+    return content and self:_set_focus(content.id) or false
+end
+
 function AppView:_move_spatial_focus(target, dx, dy)
     if dx == 0 and dy == 0 then
         return false
@@ -289,6 +306,9 @@ function AppView:onZenPMFocusMove(args)
         if self:_scroll_list(dy) then
             return true
         end
+        if target.id == "details-content" and dy < 0 and self:_focus_package_details_tab() then
+            return true
+        end
         return self:_move_spatial_focus(target, dx, dy)
     end
 
@@ -307,6 +327,9 @@ function AppView:onZenPMFocusMove(args)
             return true
         end
         if dy > 0 then
+            if target.list_group == "package_details" and self:_focus_package_details_body() then
+                return true
+            end
             local queue_banner = self:_find_focus_target(function(candidate)
                 return candidate.focus_type == "queue_banner"
             end)

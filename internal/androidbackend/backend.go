@@ -33,10 +33,9 @@ var (
 // Run serves the companion API until it is stopped explicitly or has been idle
 // for idleTimeout. It is called from a Java worker thread, never Android's UI
 // thread.
-func Run(home, logHome, koreaderRoot, socketPath string) {
+func Run(home, logHome, koreaderRoot string, port int) {
 	home = strings.TrimSpace(home)
-	socketPath = strings.TrimSpace(socketPath)
-	if home == "" || socketPath == "" {
+	if home == "" || port < 1 || port > 65535 {
 		return
 	}
 	serverMu.Lock()
@@ -53,8 +52,8 @@ func Run(home, logHome, koreaderRoot, socketPath string) {
 	_ = os.Setenv("ZENPM_STARTUP_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
 	_ = os.Setenv("ZENPM_COMPANION_LOG", strings.TrimSpace(logHome)+"/android-companion.log")
 	serverMu.Unlock()
-	writeCompanionLog(logHome, fmt.Sprintf("Native backend start accepted: goarch=%s socket=%s.", runtime.GOARCH, socketPath))
-	serve(home, logHome, socketPath)
+	writeCompanionLog(logHome, fmt.Sprintf("Native backend start accepted: goarch=%s port=%d.", runtime.GOARCH, port))
+	serve(home, logHome, port)
 }
 
 // Stop closes the active listener. A stop arriving while Run is initializing
@@ -69,7 +68,7 @@ func Stop() {
 	}
 }
 
-func serve(home, logHome, socketPath string) {
+func serve(home, logHome string, port int) {
 	defer func() {
 		serverMu.Lock()
 		serverRunning = false
@@ -92,7 +91,7 @@ func serve(home, logHome, socketPath string) {
 	repos := repo.New(st)
 	pkgs := pkg.New(st, repos, platform.AndroidKOReader)
 	server.Version = Version
-	srv := server.New(st, repos, pkgs, 0)
+	srv := server.New(st, repos, pkgs, port)
 	srv.StartedAt = startedAt
 	srv.IdleTimeout = idleTimeout
 	serverMu.Lock()
@@ -102,7 +101,7 @@ func serve(home, logHome, socketPath string) {
 	if shouldStop {
 		_ = srv.Close()
 	}
-	if err := srv.ListenAndServeUnix(socketPath); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Errorf("Server error: %v", err)
 		writeCompanionLog(logHome, fmt.Sprintf("Native backend stopped: %v", err))
 	}

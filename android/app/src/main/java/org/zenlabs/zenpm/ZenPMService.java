@@ -13,8 +13,8 @@ import java.util.Arrays;
 public final class ZenPMService extends Service {
     private static final String CHANNEL_ID = "zenpm_backend";
     private static final int NOTIFICATION_ID = 1;
+    private static final int LOOPBACK_PORT = 18765;
     static final String ACTION_STOP = "org.zenlabs.zenpm.action.STOP";
-    private static final String SOCKET_PATH = "@zenpm";
     private static boolean nativeLoaded;
     private static String nativeLoadError;
     private Thread backendThread;
@@ -29,7 +29,7 @@ public final class ZenPMService extends Service {
             nativeLoadError = error.toString();
         }
     }
-    private static native void nativeRun(String home, String logHome, String koreaderRoot, String socketPath);
+    private static native void nativeRun(String home, String logHome, String koreaderRoot, int port);
     private static native void nativeStop();
 
     private static final class BackendConfig {
@@ -116,7 +116,7 @@ public final class ZenPMService extends Service {
                 while (true) {
                     CompanionLog.write(ZenPMService.this, config.logHome,
                         "Starting native backend. " + abiInfo());
-                    nativeRun(config.home, config.logHome, config.koreaderRoot, SOCKET_PATH);
+                    nativeRun(config.home, config.logHome, config.koreaderRoot, LOOPBACK_PORT);
 
                     synchronized (ZenPMService.this) {
                         if (pendingStart != null) {

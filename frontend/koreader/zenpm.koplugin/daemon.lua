@@ -222,9 +222,6 @@ function Daemon:is_pocketbook()
 end
 
 function Daemon:unix_socket_path()
-    if self:is_android() then
-        return Constants.ANDROID_SOCKET
-    end
     return Constants.UNIX_SOCKET
 end
 

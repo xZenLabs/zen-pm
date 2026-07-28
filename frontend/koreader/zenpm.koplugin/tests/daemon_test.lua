@@ -8,7 +8,6 @@ local constants = {
     PLUGIN_DIR = "/mnt/us/koreader/plugins/zenpm.koplugin",
     PORT = 18765,
     UNIX_SOCKET = "/tmp/zenpm.sock",
-    ANDROID_SOCKET = "@zenpm",
 }
 package.preload["constants"] = function() return constants end
 local datastorage = {

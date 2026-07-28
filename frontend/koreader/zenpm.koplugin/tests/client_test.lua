@@ -24,7 +24,6 @@ package.preload["constants"] = function()
         API_BASE = "http://127.0.0.1:18765",
         PLUGIN_DIR = root,
         UNIX_SOCKET = "/tmp/zenpm.sock",
-        ANDROID_SOCKET = "@zenpm",
     }
 end
 local Client = require("client")

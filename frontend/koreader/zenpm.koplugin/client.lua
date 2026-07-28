@@ -64,8 +64,8 @@ end
 function Client:new(opts)
     opts = opts or {}
     local unix_socket = opts.unix_socket_path
-    if unix_socket == nil then
-        unix_socket = ok_android and Constants.ANDROID_SOCKET or Constants.UNIX_SOCKET
+    if unix_socket == nil and not ok_android then
+        unix_socket = Constants.UNIX_SOCKET
     end
     local o = {
         base_url = opts.base_url or Constants.API_BASE,
