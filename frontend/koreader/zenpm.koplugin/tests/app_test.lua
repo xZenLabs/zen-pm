@@ -5,6 +5,10 @@ package.path = root .. "/?.lua;" .. package.path
 local settings = {}
 local modal_message
 local modal_seconds
+local restart_message
+local restart_callback
+local restart_actions = {}
+local status_message
 local modal_title
 local modal_rows
 local plugin_settings_prompt
@@ -12,13 +16,16 @@ local package_modify_callbacks
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 package.preload["socket"] = function() return {} end
-package.preload["ui/event"] = function() return {} end
+package.preload["ui/event"] = function()
+    return { new = function(_, name) return name end }
+end
 package.preload["ui/uimanager"] = function()
     return {
         show = function() end,
         nextTick = function(_, callback) callback() end,
         scheduleIn = function(_, _, callback) callback() end,
-        forceRePaint = function() end,
+        forceRePaint = function() table.insert(restart_actions, "paint") end,
+        broadcastEvent = function(_, event) table.insert(restart_actions, event) end,
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
@@ -47,7 +54,11 @@ package.preload["ui/modals"] = function()
             modal_message = message
             modal_seconds = seconds
         end,
-        status = function() end,
+        restart_koreader = function(message, callback)
+            restart_message = message
+            restart_callback = callback
+        end,
+        status = function(message) status_message = message end,
         close_status = function() end,
         actions = function(title, rows)
             modal_title = title
@@ -488,8 +499,13 @@ _G.G_reader_settings = {
     flush = function() end,
 }
 local toggle_done = false
+modal_message = nil
+modal_seconds = nil
+restart_message = nil
+restart_callback = nil
 App.toggle_enable({
     package_disabled = function() return false end,
+    restart_koreader = App.restart_koreader,
 }, {
     id = "example",
     name = "Example plugin",
@@ -498,9 +514,17 @@ App.toggle_enable({
     toggle_done = true
 end)
 assert(reader_settings.plugins_disabled.example == true)
-assert(modal_message == "Disabled Example plugin")
-assert(modal_seconds == 2)
+assert(restart_message == "Restart KOReader to apply the changes.")
+assert(modal_message == nil)
+assert(modal_seconds == nil)
 assert(toggle_done)
+assert(type(restart_callback) == "function")
+restart_actions = {}
+status_message = nil
+restart_callback()
+assert(status_message == "Restarting...")
+assert(restart_actions[1] == "paint")
+assert(restart_actions[2] == "Restart")
 _G.G_reader_settings = nil
 
 local queued_operations

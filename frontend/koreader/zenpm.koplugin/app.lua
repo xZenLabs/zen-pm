@@ -1380,6 +1380,7 @@ end
 
 function App:restart_koreader()
     Modals.status(_("Restarting..."))
+    UIManager:forceRePaint()
     UIManager:nextTick(function()
         UIManager:broadcastEvent(Event:new("Restart"))
     end)
@@ -2530,9 +2531,10 @@ function App:toggle_enable(pkg, kind, on_done)
             Constants.PACKAGE_NOTICE_SECONDS)
         return
     end
-    local done = disabled and _("Enabled") or _("Disabled")
-    Modals.info_for(done .. " " .. name, 2)
     if on_done then on_done() end
+    Modals.restart_koreader(_("Restart KOReader to apply the changes."), function()
+        self:restart_koreader()
+    end)
 end
 
 function App:confirm_patch_item_action(pkg, action, asset, on_done)
