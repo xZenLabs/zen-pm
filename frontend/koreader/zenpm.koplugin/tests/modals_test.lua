@@ -69,6 +69,7 @@ package.preload["ui/widget/textwidget"] = function() return {} end
 package.preload["ui/uimanager"] = function()
     return {
         show = function(_, dialog) shown_dialog = dialog end,
+        close = function(_, dialog) dialog:onCloseWidget() end,
         nextTick = function(_, callback) callback() end,
     }
 end
@@ -125,7 +126,7 @@ Modals.search("Search packages", "needle", "Search...", function(text)
     cleared_search = text
 end)
 shown_dialog.input_text = ""
-shown_dialog:onCloseWidget()
+assert(shown_dialog:onCloseDialog())
 assert(shown_dialog.base_closed)
 assert(cleared_search == "")
 

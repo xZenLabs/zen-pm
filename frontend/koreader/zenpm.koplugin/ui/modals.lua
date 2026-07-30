@@ -203,6 +203,10 @@ function Modals.search(title, input, hint, callback)
             UIManager:nextTick(function() callback("") end)
         end
     end
+    function dialog:onCloseDialog()
+        UIManager:close(self)
+        return true
+    end
     function dialog:onTap(arg, ges)
         if ges.pos:notIntersectWith(self.dialog_frame.dimen) then
             UIManager:close(self)

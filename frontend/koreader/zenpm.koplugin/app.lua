@@ -1740,8 +1740,8 @@ function App:reset_scroll(key)
     self.state.scroll[key or self:scroll_key()] = 0
 end
 
-function App:navigate(tab_id)
-    self._full_refresh = true
+function App:navigate(tab_id, full_refresh)
+    self._full_refresh = full_refresh ~= false
     if tab_id == "home" then
         self:show_featured()
     elseif tab_id == "categories" then
@@ -1766,7 +1766,7 @@ function App:reload_current_page()
     elseif self.state.page == "source_details" and self.state.current_repo then
         self:show_source_details(self.state.current_repo.name)
     else
-        self:navigate(self.state.active_tab or "home")
+        self:navigate(self.state.active_tab or "home", false)
     end
 end
 

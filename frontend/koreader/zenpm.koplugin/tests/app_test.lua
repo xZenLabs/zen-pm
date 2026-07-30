@@ -319,6 +319,32 @@ assert(open_refreshes == 1)
 assert(next(opened_app.state.readme_cache) == nil)
 assert(open_catalog_reloads == 1)
 
+local reload_tab
+local reload_full_refresh
+App.reload_current_page({
+    state = { page = "home", active_tab = "home" },
+    navigate = function(_, tab, full_refresh)
+        reload_tab = tab
+        reload_full_refresh = full_refresh
+    end,
+})
+assert(reload_tab == "home")
+assert(reload_full_refresh == false)
+
+local navigation_refreshes = {}
+local navigation_app = {
+    view = {
+        refresh = function(_, full_refresh)
+            table.insert(navigation_refreshes, full_refresh)
+        end,
+    },
+    show_featured = function(self) App.refresh(self) end,
+}
+App.navigate(navigation_app, "home")
+App.navigate(navigation_app, "home", false)
+assert(navigation_refreshes[1] == true)
+assert(navigation_refreshes[2] == false)
+
 local shown_catalog_refreshes = 0
 App.show({
     view = {},
