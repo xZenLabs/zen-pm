@@ -1,4 +1,5 @@
 local ButtonDialog = require("ui/widget/buttondialog")
+local CheckButton = require("ui/widget/checkbutton")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Font = require("ui/font")
 local Geom = require("ui/geometry")
@@ -336,16 +337,25 @@ function Modals.plugin_settings_cleanup(text, callback)
 end
 
 function Modals.restart_koreader(text, restart_callback, restart_later_callback)
-    UIManager:show(ConfirmBox:new{
+    local dialog
+    local reopen_checkbox
+    dialog = ConfirmBox:new{
         text = text,
         ok_text = _("Restart now"),
         cancel_text = _("Restart later"),
         ok_callback = function()
             logger.info("ZenPM: requesting KOReader restart")
-            restart_callback()
+            restart_callback(reopen_checkbox.checked)
         end,
         cancel_callback = restart_later_callback,
-    })
+    }
+    reopen_checkbox = CheckButton:new{
+        text = _("Open ZenPM after restart"),
+        checked = false,
+        parent = dialog,
+    }
+    dialog:addWidget(reopen_checkbox)
+    UIManager:show(dialog)
     Modals.close_status()
 end
 

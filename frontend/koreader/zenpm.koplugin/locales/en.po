@@ -465,6 +465,9 @@ msgstr "Only show installable packages"
 msgid "Open ZenPM"
 msgstr "Open ZenPM"
 
+msgid "Open ZenPM after restart"
+msgstr "Open ZenPM after restart"
+
 msgid "Package"
 msgstr "Package"
 

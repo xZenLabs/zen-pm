@@ -384,7 +384,9 @@ end
 
 function AppView:tap_in_koreader_menu_zone(ges)
     local pos = ges and ges.pos
-    return pos and self.koreader_menu_zone and P.contains(self.koreader_menu_zone, pos.x, pos.y)
+    return pos and self.koreader_menu_zone
+        and P.contains(self.koreader_menu_zone, pos.x, pos.y)
+        and not (self.koreader_menu_tap_guard and P.contains(self.koreader_menu_tap_guard, pos.x, pos.y))
 end
 
 function AppView:tap_should_pass_to_koreader_menu(ges)
@@ -616,6 +618,7 @@ function AppView:paintTo(bb, x, y)
     self.scroll_page_step = nil
     self.scrollbar = nil
     self.koreader_menu_zone = nil
+    self.koreader_menu_tap_guard = nil
     self.package_details_featured_visible = false
     local m = Theme.metrics()
     self.dimen = Geom:new{ x = x, y = y, w = m.screen_w, h = m.screen_h }

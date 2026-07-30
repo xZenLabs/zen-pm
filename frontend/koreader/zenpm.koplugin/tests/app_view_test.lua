@@ -35,7 +35,13 @@ end
 package.preload["ui/header"] = function() return {} end
 package.preload["i18n"] = function() return {} end
 package.preload["ui/nav"] = function() return {} end
-package.preload["ui/primitives"] = function() return {} end
+package.preload["ui/primitives"] = function()
+    return {
+        contains = function(box, x, y)
+            return x >= box.x and x < box.x + box.w and y >= box.y and y < box.y + box.h
+        end,
+    }
+end
 package.preload["ui/pages"] = function() return {} end
 package.preload["ui/scroll"] = function() return {} end
 package.preload["ui/theme"] = function() return {} end
@@ -64,6 +70,18 @@ has_keyboard = false
 
 assert(AppView.onClose(view) == true)
 assert(closed == 1)
+
+_G.G_reader_settings = {
+    readSetting = function() return "tap" end,
+}
+local menu_tap_view = {
+    koreader_menu_zone = { x = 0, y = 0, w = 100, h = 50 },
+    koreader_menu_tap_guard = { x = 70, y = 0, w = 30, h = 50 },
+}
+setmetatable(menu_tap_view, { __index = AppView })
+assert(AppView.tap_should_pass_to_koreader_menu(menu_tap_view, { pos = { x = 60, y = 20 } }))
+assert(not AppView.tap_should_pass_to_koreader_menu(menu_tap_view, { pos = { x = 80, y = 20 } }))
+_G.G_reader_settings = nil
 
 local refreshes = 0
 local details_view = {

@@ -1,4 +1,5 @@
 local Dispatcher = require("dispatcher")
+local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
@@ -92,6 +93,9 @@ function ZenPM:init()
     elseif err then
         daemon:log_cli("CLI setup failed: " .. tostring(err))
     end
+    UIManager:nextTick(function()
+        Launcher.open_after_restart(self)
+    end)
 end
 
 function ZenPM:onOpenZenPM()

@@ -71,6 +71,12 @@ function App.save_setting(key, value)
     settings:flush()
 end
 
+function App.consume_reopen_after_restart()
+    if not App.load_setting("reopen_after_restart", false) then return false end
+    App.save_setting("reopen_after_restart", false)
+    return true
+end
+
 function App:defer_font_uninstall(pkg, asset)
     local pending = App.load_setting("pending_font_uninstalls", {})
     if type(pending) ~= "table" then pending = {} end
@@ -1143,8 +1149,8 @@ function App:finish_queue_batch(batch)
         self.state.queue_running = false
         self:refresh()
         if batch.prompt_restart then
-            Modals.restart_koreader(result .. "\n\n" .. _("Restart KOReader to apply the changes."), function()
-                self:restart_koreader()
+            Modals.restart_koreader(result .. "\n\n" .. _("Restart KOReader to apply the changes."), function(reopen_after_restart)
+                self:restart_koreader(reopen_after_restart)
             end, queue_completed and function()
                 self:close_queue()
             end or nil)
@@ -1396,7 +1402,8 @@ function App:quit()
     self:close()
 end
 
-function App:restart_koreader()
+function App:restart_koreader(reopen_after_restart)
+    App.save_setting("reopen_after_restart", reopen_after_restart == true)
     Modals.status(_("Restarting..."))
     UIManager:forceRePaint()
     UIManager:nextTick(function()
@@ -2554,8 +2561,8 @@ function App:toggle_enable(pkg, kind, on_done)
         return
     end
     if on_done then on_done() end
-    Modals.restart_koreader(_("Restart KOReader to apply the changes."), function()
-        self:restart_koreader()
+    Modals.restart_koreader(_("Restart KOReader to apply the changes."), function(reopen_after_restart)
+        self:restart_koreader(reopen_after_restart)
     end)
 end
 
@@ -2981,8 +2988,8 @@ function App:poll_package_action(op, attempt)
                     if op.is_patch or op.action == "uninstall" then
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
-                    Modals.restart_koreader(op.name .. " " .. done .. tail, function()
-                        self:restart_koreader()
+                    Modals.restart_koreader(op.name .. " " .. done .. tail, function(reopen_after_restart)
+                        self:restart_koreader(reopen_after_restart)
                     end)
                 else
                     Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
@@ -3357,7 +3364,7 @@ function App:apply_update(release_tag, on_result)
         end
         Modals.restart_koreader(
             _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
-            function() self:restart_koreader() end)
+            function(reopen_after_restart) self:restart_koreader(reopen_after_restart) end)
     end)
 end
 

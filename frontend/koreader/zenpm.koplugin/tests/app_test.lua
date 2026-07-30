@@ -580,6 +580,13 @@ restart_callback()
 assert(status_message == "Restarting...")
 assert(restart_actions[1] == "paint")
 assert(restart_actions[2] == "Restart")
+assert(settings.reopen_after_restart == false)
+restart_actions = {}
+App.restart_koreader({}, true)
+assert(settings.reopen_after_restart == true)
+assert(App.consume_reopen_after_restart())
+assert(settings.reopen_after_restart == false)
+assert(not App.consume_reopen_after_restart())
 _G.G_reader_settings = nil
 
 local queued_operations

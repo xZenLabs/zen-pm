@@ -21,6 +21,12 @@ function Launcher.open(plugin)
     return true
 end
 
+function Launcher.open_after_restart(plugin)
+    local App = require("app")
+    if not App.consume_reopen_after_restart() then return false end
+    return Launcher.open(plugin)
+end
+
 function Launcher.quit()
     if Launcher.app then
         Launcher.app:close()
