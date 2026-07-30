@@ -9,6 +9,7 @@ local restart_message
 local restart_callback
 local restart_actions = {}
 local status_message
+local queued_ticks
 local modal_title
 local modal_rows
 local plugin_settings_prompt
@@ -22,7 +23,13 @@ end
 package.preload["ui/uimanager"] = function()
     return {
         show = function() end,
-        nextTick = function(_, callback) callback() end,
+        nextTick = function(_, callback)
+            if queued_ticks then
+                table.insert(queued_ticks, callback)
+            else
+                callback()
+            end
+        end,
         scheduleIn = function(_, _, callback) callback() end,
         forceRePaint = function() table.insert(restart_actions, "paint") end,
         broadcastEvent = function(_, event) table.insert(restart_actions, event) end,
@@ -614,11 +621,19 @@ assert(toggle_done)
 assert(type(restart_callback) == "function")
 restart_actions = {}
 status_message = nil
+queued_ticks = {}
 restart_callback()
 assert(status_message == "Restarting...")
 assert(restart_actions[1] == "paint")
+assert(restart_actions[2] == nil)
+assert(#queued_ticks == 1)
+table.remove(queued_ticks, 1)()
+assert(restart_actions[2] == nil)
+assert(#queued_ticks == 1)
+table.remove(queued_ticks, 1)()
 assert(restart_actions[2] == "Restart")
 assert(settings.reopen_after_restart == false)
+queued_ticks = nil
 restart_actions = {}
 App.restart_koreader({}, true)
 assert(settings.reopen_after_restart == true)

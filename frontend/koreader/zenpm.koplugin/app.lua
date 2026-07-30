@@ -1423,7 +1423,9 @@ function App:restart_koreader(reopen_after_restart)
     Modals.status(_("Restarting..."))
     UIManager:forceRePaint()
     UIManager:nextTick(function()
-        UIManager:broadcastEvent(Event:new("Restart"))
+        UIManager:nextTick(function()
+            UIManager:broadcastEvent(Event:new("Restart"))
+        end)
     end)
 end
 
