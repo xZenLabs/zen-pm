@@ -146,7 +146,7 @@ assert(scrolling_focus.focus_pending.list_index == 2)
 local detail_refreshes = 0
 local details_focus = {
     app = {
-        state = { active_tab = "search", details_tab = "readme", scroll = { details = 0 } },
+        state = { page = "package_details", active_tab = "search", details_tab = "readme", scroll = { details = 0 } },
         scroll_key = function() return "details" end,
     },
     focus_key = "package:details",
@@ -158,8 +158,8 @@ local details_focus = {
         { id = "details-content", x = 0, y = 40, w = 100, h = 40, focus_type = "scroll_content", focus_content = true },
     },
     scroll_step = 10,
-    scroll_page_step = 40,
-    max_scroll = 10,
+    list_bounds = { x = 0, y = 40, w = 100, h = 40 },
+    max_scroll = 100,
     refresh = function() detail_refreshes = detail_refreshes + 1 end,
 }
 setmetatable(details_focus, { __index = AppView })
@@ -174,12 +174,11 @@ assert(AppView.onZenPMFocusConfirm(details_focus) == true)
 assert(AppView.onZenPMFocusMove(details_focus, { 0, 1 }) == true)
 assert(details_focus.focus_key == "details-content")
 assert(AppView.onZenPMFocusMove(details_focus, { 0, 1 }) == true)
-assert(details_focus.app.state.scroll.details == 10)
+assert(details_focus.app.state.scroll.details == 36)
 assert(AppView.onZenPMFocusMove(details_focus, { 0, -1 }) == true)
 assert(details_focus.app.state.scroll.details == 0)
-details_focus.max_scroll = 100
 assert(AppView.onZenPMScroll(details_focus, 1) == true)
-assert(details_focus.app.state.scroll.details == 40)
+assert(details_focus.app.state.scroll.details == 36)
 details_focus.app.state.scroll.details = 0
 assert(AppView.onZenPMFocusMove(details_focus, { 0, -1 }) == true)
 assert(details_focus.focus_key == "details-tab:release_notes")

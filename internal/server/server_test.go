@@ -332,7 +332,7 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := st.AppendInstalled(state.InstalledEntry{
-		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", Asset: "pkg-armv7.zip", InstalledAt: "2026-07-24T12:00:00Z",
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", Asset: "pkg-armv7.zip", UpdateIgnored: true, InstalledAt: "2026-07-24T12:00:00Z",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -346,8 +346,32 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
 		t.Fatal(err)
 	}
-	if len(packages) != 1 || packages[0].InstalledAsset != "pkg-armv7.zip" || packages[0].InstalledAt != "2026-07-24T12:00:00Z" || !packages[0].UpdateAvail || packages[0].LatestVersion != "1.1.0" {
+	if len(packages) != 1 || packages[0].InstalledAsset != "pkg-armv7.zip" || packages[0].InstalledAt != "2026-07-24T12:00:00Z" || !packages[0].UpdateIgnored || !packages[0].UpdateAvail || packages[0].LatestVersion != "1.1.0" {
 		t.Fatalf("packages = %#v", packages)
+	}
+}
+
+func TestPackageUpdateIgnoredStoresInstalledPackagePreference(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, nil, nil, 0)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/packages/pkg/update-ignored", strings.NewReader(`{"update_ignored":true}`))
+	srv.handlePackageAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || !installed[0].UpdateIgnored {
+		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 }
 

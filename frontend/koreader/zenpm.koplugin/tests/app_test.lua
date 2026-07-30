@@ -471,9 +471,11 @@ App.confirm_package_version({
 assert(selected_zenpm_release == "v1.2.3")
 
 local regular_zenpm_action
+local ignored_updates_toggled = 0
 App.perform_package_action({
     state = { page = "installed", active_tab = "installed" },
     package_icon_file = function() return nil end,
+    toggle_package_updates = function() ignored_updates_toggled = ignored_updates_toggled + 1 end,
     confirm_package_action = function(_, _, action) regular_zenpm_action = action end,
 }, {
     id = "zenpm-koreader",
@@ -486,11 +488,64 @@ App.perform_package_action({
 })
 assert(package_modify_callbacks.info)
 assert(package_modify_callbacks.update)
+assert(package_modify_callbacks.toggle_updates)
+assert(not package_modify_callbacks.updates_ignored)
 assert(package_modify_callbacks.enable_disable)
 assert(package_modify_callbacks.downgrade)
 assert(package_modify_callbacks.uninstall)
 package_modify_callbacks.update()
 assert(regular_zenpm_action == "update")
+package_modify_callbacks.toggle_updates()
+assert(ignored_updates_toggled == 1)
+
+local ignored_refreshes = 0
+local ignored_pkg = { id = "Reader", installed = true, update_available = true }
+local ignored_requests = {}
+local ignored_app = {
+    state = {
+        packages = { ignored_pkg },
+    },
+    client = {
+        set_package_updates_ignored = function(_, id, ignored)
+            table.insert(ignored_requests, { id = id, ignored = ignored })
+            return true
+        end,
+    },
+    refresh = function() ignored_refreshes = ignored_refreshes + 1 end,
+}
+App.toggle_package_updates(ignored_app, ignored_pkg)
+assert(ignored_pkg.update_ignored == true)
+assert(ignored_requests[1].id == "Reader" and ignored_requests[1].ignored == true)
+assert(App.installed_update_count(ignored_app) == 0)
+App.toggle_package_updates(ignored_app, ignored_pkg)
+assert(ignored_pkg.update_ignored == false)
+assert(ignored_requests[2].id == "Reader" and ignored_requests[2].ignored == false)
+assert(App.installed_update_count(ignored_app) == 1)
+assert(ignored_refreshes == 2)
+
+local bulk_queued = {}
+local bulk_app = {
+    state = {
+        queue_running = false,
+        queue = {},
+        packages = {
+            { id = "ignored", installed = true, update_available = true, update_ignored = true },
+            { id = "active", installed = true, update_available = true },
+        },
+    },
+    client = {
+        get_package_assets = function() return true, {} end,
+    },
+    queue_package_action = function(_, pkg, action)
+        table.insert(bulk_queued, pkg.id .. ":" .. action)
+        return true
+    end,
+    refresh = function() end,
+}
+assert(App.installed_update_count(bulk_app) == 1)
+App.queue_all_updates(bulk_app)
+assert(#bulk_queued == 1)
+assert(bulk_queued[1] == "active:update")
 
 local reader_settings = {}
 _G.G_reader_settings = {

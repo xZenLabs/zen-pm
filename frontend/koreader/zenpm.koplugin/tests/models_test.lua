@@ -60,8 +60,9 @@ local updates = Models.sort_packages({
     { id = "beta", name = "Beta", update_available = false },
     { id = "zulu", name = "Zulu", update_available = true },
     { id = "alpha", name = "Alpha", update_available = true },
+    { id = "ignored", name = "Aardvark", update_available = true, update_ignored = true },
 }, "update_available")
-assert(updates[1].id == "alpha" and updates[2].id == "zulu" and updates[3].id == "beta" and updates[4].id == "current")
+assert(updates[1].id == "alpha" and updates[2].id == "zulu" and updates[3].id == "ignored" and updates[4].id == "beta" and updates[5].id == "current")
 
 local published = {
     { id = "first", name = "First", published_at = "2026-07-21T10:00:00Z" },

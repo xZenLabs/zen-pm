@@ -81,7 +81,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if len(repos) != 1 || !hasRepo(repos, DefaultZenLabsRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("repos = %#v", repos)
 	}
-	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo"}); err != nil {
+	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo", UpdateIgnored: true}); err != nil {
 		t.Fatal(err)
 	}
 	ok, version := st.IsInstalled("pkg")
@@ -96,8 +96,15 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 		t.Fatalf("updated IsInstalled = %v, %q", ok, version)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" || installed[0].InstallPath != "/opt/pkg" {
+	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" || installed[0].InstallPath != "/opt/pkg" || !installed[0].UpdateIgnored {
 		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	if err := st.SetInstalledUpdateIgnored("pkg", false); err != nil {
+		t.Fatal(err)
+	}
+	installed, err = st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored {
+		t.Fatalf("installed after clearing ignored updates = %#v, %v", installed, err)
 	}
 	if err := st.AppendInstalledPatchFile(PatchFileEntry{PackageID: "patches", Asset: "patch.lua", Name: "Patch", Version: "1.0.0", Repo: "repo", InstallPath: "/opt/patches/patch.lua"}); err != nil {
 		t.Fatal(err)
@@ -246,6 +253,51 @@ func TestSQLiteStoreAddsSourceAssetColumnToExistingCatalogTable(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].SourceAsset != "pkg.zip" || catalog[0].SourceType != "release" || catalog[0].SourceURL != "https://example.invalid/source.zip" || catalog[0].Stars != "42" {
 		t.Fatalf("catalog = %#v", catalog)
+	}
+}
+
+func TestSQLiteStoreAddsUpdateIgnoredColumnToExistingInstalledPackages(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	stateDir := filepath.Join(home, "state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(stateDir, "zenpm.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE installed_packages (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		version TEXT NOT NULL,
+		repo TEXT NOT NULL,
+		asset TEXT NOT NULL DEFAULT '',
+		asset_arch TEXT NOT NULL DEFAULT '',
+		install_path TEXT NOT NULL DEFAULT '',
+		installed_at TEXT NOT NULL
+	)`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO installed_packages(id, name, version, repo, installed_at) VALUES('pkg', 'Package', '1.0.0', 'repo', '2026-07-29T00:00:00Z')`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("ZENPM_HOME", home)
+	st, err := Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetInstalledUpdateIgnored("pkg", true); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || !installed[0].UpdateIgnored {
+		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 }
 

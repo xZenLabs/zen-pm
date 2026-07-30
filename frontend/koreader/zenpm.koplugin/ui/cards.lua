@@ -136,12 +136,12 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
-    local update_action = not queued and pkg.installed and pkg.update_available
+    local update_action = not queued and pkg.installed and pkg.update_available and not pkg.update_ignored
     local action_icon = queued and Images.asset(queued_action_icon(queued))
         or (update_action and Images.asset("upgrade.svg") or nil)
     local action_text_size = P.text_size(action_text, Theme.scale(256), "small", { bold = true })
     local action_w = math.max(opts.action_w or m.action_w, action_text_size.w + Theme.scale(24))
-    local action_icon_size = (queued or (pkg.installed and pkg.update_available)) and Theme.font_scale(24) or Theme.font_scale(18)
+    local action_icon_size = (queued or update_action) and Theme.font_scale(24) or Theme.font_scale(18)
     if action_icon then
         action_w = action_w + action_icon_size + Theme.font_scale(4)
     end
@@ -262,13 +262,22 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
 
     if pkg.installed then
         local check = Theme.font_scale(20)
-        local cx = x + w - check - Theme.scale(6)
-        local cy = y + Theme.scale(5)
-        if not P.image(bb, Images.asset("checkmark.svg"), cx, cy, check, check, { is_icon = true }) then
-            P.center_text(bb, "v", cx, cy + Theme.scale(2), check, "small", { bold = true, color = ink })
+        local gap = Theme.scale(12)
+        local status_w = check + (pkg.update_ignored and check + gap or 0)
+        local status_x = x + w - status_w - Theme.scale(6)
+        local status_y = y + Theme.scale(5)
+        local check_x = status_x + status_w - check
+        if pkg.update_ignored then
+            P.image(bb, Images.asset("sync_off.svg"), status_x, status_y, check, check, { is_icon = true })
+        end
+        if not P.image(bb, Images.asset("checkmark.svg"), check_x, status_y, check, check, { is_icon = true }) then
+            P.center_text(bb, "v", check_x, status_y + Theme.scale(2), check, "small", { bold = true, color = ink })
         end
         if disabled then
-            P.dim(bb, cx, cy, check, check)
+            P.dim(bb, check_x, status_y, check, check)
+            if pkg.update_ignored then
+                P.dim(bb, status_x, status_y, check, check)
+            end
         end
     elseif should_show_stars(view, pkg) then
         local star = Theme.font_scale(20)

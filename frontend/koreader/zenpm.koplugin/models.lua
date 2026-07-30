@@ -207,8 +207,8 @@ function Models.sort_packages(packages, sort_key)
         elseif sort_key == "name_desc" then
             return compare_text(b, a)
         elseif sort_key == "update_available" then
-            local a_update = a.update_available == true
-            local b_update = b.update_available == true
+            local a_update = a.update_available == true and not a.update_ignored
+            local b_update = b.update_available == true and not b.update_ignored
             if a_update ~= b_update then
                 return a_update
             end

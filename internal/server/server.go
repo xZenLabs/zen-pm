@@ -69,6 +69,7 @@ type pkgJSON struct {
 	InstalledVer          string            `json:"installed_version,omitempty"`
 	InstalledAt           string            `json:"installed_at,omitempty"`
 	InstalledAsset        string            `json:"installed_asset,omitempty"`
+	UpdateIgnored         bool              `json:"update_ignored,omitempty"`
 	InstalledAssets       []string          `json:"installed_assets,omitempty"`
 	InstalledAssetDates   map[string]string `json:"installed_asset_dates,omitempty"`
 	UnmanagedPatch        bool              `json:"unmanaged_patch,omitempty"`
@@ -755,11 +756,13 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	installedVersion := make(map[string]string, len(installed))
 	installedAt := make(map[string]string, len(installed))
 	installedAsset := make(map[string]string, len(installed))
+	updateIgnored := make(map[string]bool, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
 		installedVersion[e.ID] = e.Version
 		installedAt[e.ID] = e.InstalledAt
 		installedAsset[e.ID] = e.Asset
+		updateIgnored[e.ID] = e.UpdateIgnored
 	}
 
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
@@ -824,6 +827,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
+			item.UpdateIgnored = updateIgnored[e.ID]
 			applyUpdateInfo(&item, allowPrerelease)
 		}
 		result = append(result, item)
@@ -842,6 +846,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 				InstalledVer:   e.Version,
 				InstalledAt:    e.InstalledAt,
 				InstalledAsset: e.Asset,
+				UpdateIgnored:  e.UpdateIgnored,
 				Platforms:      platformList,
 			}
 			result = append(result, item)
@@ -972,6 +977,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		s.handlePackageReleases(w, r, id)
 		return
 	}
+	if action == "update-ignored" {
+		s.handlePackageUpdateIgnored(w, r, id)
+		return
+	}
 	if action != "install" && action != "reinstall" && action != "uninstall" {
 		http.Error(w, "unknown action: "+action, http.StatusBadRequest)
 		return
@@ -1015,6 +1024,25 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) handlePackageUpdateIgnored(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		UpdateIgnored *bool `json:"update_ignored"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UpdateIgnored == nil {
+		http.Error(w, "update_ignored required", http.StatusBadRequest)
+		return
+	}
+	if err := s.st.SetInstalledUpdateIgnored(id, *body.UpdateIgnored); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "update_ignored": *body.UpdateIgnored})
 }
 
 // handlePackageUpdate starts an update of every installed package. Like the

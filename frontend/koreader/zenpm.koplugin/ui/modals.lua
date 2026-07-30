@@ -189,6 +189,13 @@ function Modals.package_modify(pkg, callbacks)
     if callbacks.update then
         add_button("update", _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""), callbacks.update)
     end
+    if callbacks.toggle_updates then
+        add_button(
+            callbacks.updates_ignored and "allow_updates" or "ignore_updates",
+            callbacks.updates_ignored and _("Allow updates") or _("Ignore updates"),
+            callbacks.toggle_updates
+        )
+    end
     if not callbacks.manage_only and callbacks.downgrade then
         add_button("downgrade", _("Change version"), callbacks.downgrade)
     end

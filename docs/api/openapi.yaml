@@ -409,6 +409,34 @@ paths:
           $ref: "#/components/responses/TextError"
         "405":
           $ref: "#/components/responses/TextError"
+  /packages/{id}/update-ignored:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    post:
+      tags:
+        - Packages
+      summary: Set whether bulk updates ignore an installed package
+      operationId: setPackageUpdateIgnored
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - update_ignored
+              properties:
+                update_ignored:
+                  type: boolean
+      responses:
+        "200":
+          description: The installed package preference was saved.
+        "400":
+          $ref: "#/components/responses/TextError"
+        "404":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
   /log:
     get:
       tags:
@@ -819,6 +847,9 @@ components:
         update_available:
           type: boolean
           description: True when `latest_version` is newer than `installed_version`.
+        update_ignored:
+          type: boolean
+          description: True when bulk updates should skip this installed package.
         icon_url:
           type: string
           format: uri

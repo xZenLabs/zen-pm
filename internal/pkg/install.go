@@ -824,6 +824,10 @@ func (m *Manager) Update(id string) error {
 		if id != "" && e.ID != id {
 			continue
 		}
+		if id == "" && e.UpdateIgnored {
+			log.Infof("Package %s has updates ignored, skipping", e.ID)
+			continue
+		}
 		latest, ok := byID[e.ID]
 		if !ok {
 			log.Warnf("Package %s not in any repo, skipping", e.ID)

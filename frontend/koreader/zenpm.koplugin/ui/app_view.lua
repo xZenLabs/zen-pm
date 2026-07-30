@@ -447,7 +447,11 @@ function AppView:_scroll_list(steps, page_sized)
     end
     local old = self.app.state.scroll[key] or 0
     local delta = self.scroll_page_step or self.scroll_step or math.floor(Screen:getHeight() * 0.45)
-    if page_sized and not self.scroll_page_step and self.list_bounds then
+    local details_paged = self.app.state.page == "package_details"
+        and self.app.state.details_tab ~= "patches"
+    if details_paged and self.list_bounds then
+        delta = math.floor(self.list_bounds.h * 0.9)
+    elseif page_sized and not self.scroll_page_step and self.list_bounds then
         delta = math.floor(self.list_bounds.h * 0.9)
     end
     local new = math.max(0, math.min(old + steps * delta, self.max_scroll or 0))

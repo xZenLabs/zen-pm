@@ -681,10 +681,28 @@ function App:queue_count()
     return #(self.state.queue or {})
 end
 
+function App:toggle_package_updates(pkg)
+    local id = Util.trim(tostring(pkg and (pkg.id or pkg.name) or ""))
+    if id == "" then return end
+    local ignored = not pkg.update_ignored
+    local ok, detail = self.client:set_package_updates_ignored(id, ignored)
+    if not ok then
+        Modals.info(_("Could not update the package preference: ") .. tostring(detail or _("request failed")))
+        return
+    end
+    for _, candidate in ipairs(self.state.packages or {}) do
+        if tostring(candidate.id or candidate.name or "") == id then
+            candidate.update_ignored = ignored
+        end
+    end
+    if pkg then pkg.update_ignored = ignored end
+    self:refresh()
+end
+
 function App:installed_update_count()
     local count = 0
     for _, pkg in ipairs(self.state.packages or {}) do
-        if pkg.installed and pkg.update_available then
+        if pkg.installed and pkg.update_available and not pkg.update_ignored then
             count = count + 1
         end
     end
@@ -717,7 +735,7 @@ function App:queue_all_updates()
             finish()
             return
         end
-        if pkg.installed and pkg.update_available then
+        if pkg.installed and pkg.update_available and not pkg.update_ignored then
             local key = queue_key(pkg.id or pkg.name, nil)
             if not queued[key] then
                 if is_zenpm_package(pkg) then
@@ -2447,6 +2465,10 @@ function App:perform_package_action(pkg, on_done)
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)
             end or nil,
+            updates_ignored = pkg.update_ignored == true,
+            toggle_updates = function()
+                self:toggle_package_updates(pkg)
+            end,
             disabled = is_koplugin and is_plugin_disabled(pkg) or nil,
             enable_disable = is_koplugin and function()
                 self:toggle_enable(pkg, "plugin", on_done)
