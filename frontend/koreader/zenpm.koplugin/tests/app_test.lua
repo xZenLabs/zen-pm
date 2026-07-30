@@ -498,6 +498,44 @@ assert(regular_zenpm_action == "update")
 package_modify_callbacks.toggle_updates()
 assert(ignored_updates_toggled == 1)
 
+local queued_updates_toggled = 0
+local removed_queued_updates = {}
+local queue_modify_app = {
+    state = { queue_running = false },
+    package_icon_file = function() return nil end,
+    toggle_package_updates = function() queued_updates_toggled = queued_updates_toggled + 1 return true end,
+    remove_queue_entry = function(_, entry)
+        table.insert(removed_queued_updates, entry)
+        return false
+    end,
+    refresh = function() end,
+}
+local queued_update_entry = {
+    action = "update",
+    pkg = { id = "Reader", installed = true, update_available = true },
+}
+App.show_queue_entry_modify(queue_modify_app, queued_update_entry)
+assert(package_modify_callbacks.remove_queue)
+assert(package_modify_callbacks.toggle_updates)
+assert(not package_modify_callbacks.updates_ignored)
+package_modify_callbacks.toggle_updates()
+assert(queued_updates_toggled == 1)
+assert(removed_queued_updates[1] == queued_update_entry)
+
+package_modify_callbacks = nil
+local queued_self_update_entry = {
+    action = "update",
+    self_update = true,
+    pkg = { id = "zenpm", name = "ZenPM", installed = true },
+}
+App.show_queue_entry_modify(queue_modify_app, queued_self_update_entry)
+assert(package_modify_callbacks.remove_queue)
+assert(package_modify_callbacks.toggle_updates)
+assert(not package_modify_callbacks.updates_ignored)
+package_modify_callbacks.toggle_updates()
+assert(queued_updates_toggled == 2)
+assert(removed_queued_updates[2] == queued_self_update_entry)
+
 local ignored_refreshes = 0
 local ignored_pkg = { id = "Reader", installed = true, update_available = true }
 local ignored_requests = {}

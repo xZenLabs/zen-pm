@@ -689,12 +689,12 @@ end
 
 function App:toggle_package_updates(pkg)
     local id = Util.trim(tostring(pkg and (pkg.id or pkg.name) or ""))
-    if id == "" then return end
+    if id == "" then return false end
     local ignored = not pkg.update_ignored
     local ok, detail = self.client:set_package_updates_ignored(id, ignored)
     if not ok then
         Modals.info(_("Could not update the package preference: ") .. tostring(detail or _("request failed")))
-        return
+        return false
     end
     for _, candidate in ipairs(self.state.packages or {}) do
         if tostring(candidate.id or candidate.name or "") == id then
@@ -703,6 +703,7 @@ function App:toggle_package_updates(pkg)
     end
     if pkg then pkg.update_ignored = ignored end
     self:refresh()
+    return true
 end
 
 function App:installed_update_count()
@@ -1052,9 +1053,21 @@ function App:show_queue_entry_modify(entry)
     if self.state.queue_running or not entry or not entry.pkg then return end
     local pkg = entry.pkg
     local remove_queue = function() self:confirm_remove_queue_entry(entry) end
+    local toggle_queued_update = function()
+        local was_ignored = pkg.update_ignored == true
+        if not self:toggle_package_updates(pkg) or was_ignored then return end
+        if self:remove_queue_entry(entry) and self.state.page == "queue" then
+            self:close_queue()
+        else
+            self:refresh()
+        end
+    end
     if entry.self_update or entry.self_reinstall then
-        Modals.actions(Models.package_display_name(pkg, _("ZenPM")), {
-            { text = _("Remove from queue"), callback = remove_queue },
+        Modals.package_modify(pkg, {
+            title_icon = self:package_icon_file(pkg),
+            remove_queue = remove_queue,
+            updates_ignored = entry.self_update and pkg.update_ignored == true or nil,
+            toggle_updates = entry.self_update and toggle_queued_update or nil,
         })
         return
     end
@@ -1086,12 +1099,15 @@ function App:show_queue_entry_modify(entry)
         Modals.actions(Models.package_display_name(pkg, _("Package")), actions)
         return
     end
+    local queued_update = entry.action == "update"
     Modals.package_modify(pkg, {
         title_icon = self:package_icon_file(pkg),
         remove_queue = remove_queue,
         update = entry.action ~= "update" and pkg.update_available and function()
             self:confirm_package_action(pkg, "update")
         end or nil,
+        updates_ignored = queued_update and pkg.update_ignored == true or nil,
+        toggle_updates = queued_update and toggle_queued_update or nil,
             downgrade = Models.has_version_history(pkg) and function()
                 self:prompt_package_versions(pkg)
             end or nil,

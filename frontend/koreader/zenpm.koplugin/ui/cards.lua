@@ -58,13 +58,21 @@ local function package_author_text(pkg)
     return Util.trim(I18n.dynamic_or(pkg and pkg.author, ""))
 end
 
+local function is_zenpm_package(pkg)
+    if type(pkg) ~= "table" then return false end
+    local module = Util.trim(tostring(pkg.plugin_module or "")):lower()
+    local id = Util.trim(tostring(pkg.id or "")):lower()
+    return module == "zenpm" or id == "zenpm" or id == "zenpm-koreader"
+end
+
 local function queued_action(view, pkg)
     local id = pkg and (pkg.id or pkg.name)
     if not id then return nil end
     local asset = Models.is_patch_package(pkg) and pkg.patch_asset or nil
     local key = tostring(id) .. "\0" .. tostring(asset or "")
     for _, entry in ipairs(view.app.state.queue or {}) do
-        if entry.key == key then
+        local self_update = entry.self_update or entry.self_reinstall
+        if (self_update and is_zenpm_package(pkg)) or entry.key == key then
             return entry.action
         end
     end

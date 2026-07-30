@@ -8,6 +8,7 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconWidget = require("ui/widget/iconwidget")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local InputText = require("ui/widget/inputtext")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -21,6 +22,43 @@ local _ = require("gettext")
 local Modals = {}
 local status_modal = nil
 local ok_android = pcall(require, "android")
+
+local ClearableInputText = InputText:extend{}
+
+function ClearableInputText:init()
+    InputText.init(self)
+    self.clear_icon = IconWidget:new{
+        file = Images.asset("close.svg"),
+        width = Screen:scaleBySize(24),
+        height = Screen:scaleBySize(24),
+    }
+end
+
+function ClearableInputText:paintTo(bb, x, y)
+    InputText.paintTo(self, bb, x, y)
+    local field = self._frame_textwidget.dimen
+    local icon_size = self.clear_icon:getSize()
+    local inset = Screen:scaleBySize(8)
+    self.clear_icon:paintTo(
+        bb,
+        field.x + field.w - icon_size.w - inset,
+        field.y + math.floor((field.h - icon_size.h) / 2)
+    )
+end
+
+function ClearableInputText:onTapTextBox(arg, ges)
+    local field = self._frame_textwidget.dimen
+    if field and ges.pos.x >= field.x + field.w - Screen:scaleBySize(48) then
+        self:setText("")
+        return true
+    end
+    return InputText.onTapTextBox(self, arg, ges)
+end
+
+function ClearableInputText:onCloseWidget()
+    self.clear_icon:free()
+    InputText.onCloseWidget(self)
+end
 
 local function show_input_dialog(dialog)
     UIManager:show(dialog)
@@ -133,15 +171,14 @@ end
 
 function Modals.search(title, input, hint, callback)
     local dialog
+    local initial_input = input or ""
+    local search_submitted = false
     dialog = InputDialog:new{
         title = title,
-        input = input or "",
+        input = initial_input,
         input_hint = hint,
         keyboard_visible = not ok_android,
-        title_bar_left_icon = "close",
-        title_bar_left_icon_tap_callback = function()
-            UIManager:close(dialog)
-        end,
+        inputtext_class = ClearableInputText,
         buttons = {
             {
                 {
@@ -149,6 +186,7 @@ function Modals.search(title, input, hint, callback)
                     is_enter_default = true,
                     callback = function()
                         local text = dialog:getInputText()
+                        search_submitted = true
                         UIManager:close(dialog)
                         callback(text)
                     end,
@@ -156,6 +194,15 @@ function Modals.search(title, input, hint, callback)
             },
         },
     }
+    function dialog:onCloseWidget()
+        local should_clear = not search_submitted
+            and initial_input ~= ""
+            and self:getInputText() == ""
+        InputDialog.onCloseWidget(self)
+        if should_clear then
+            UIManager:nextTick(function() callback("") end)
+        end
+    end
     function dialog:onTap(arg, ges)
         if ges.pos:notIntersectWith(self.dialog_frame.dimen) then
             UIManager:close(self)
