@@ -415,7 +415,7 @@ paths:
     post:
       tags:
         - Packages
-      summary: Set whether bulk updates ignore an installed package
+      summary: Set whether updates ignore an installed package or its current version
       operationId: setPackageUpdateIgnored
       requestBody:
         required: true
@@ -428,6 +428,10 @@ paths:
               properties:
                 update_ignored:
                   type: boolean
+                  description: Set true to ignore all updates, or false to allow them.
+                update_ignored_version:
+                  type: string
+                  description: Suppress only this offered update version. `update_ignored` must be false.
       responses:
         "200":
           description: The installed package preference was saved.
@@ -849,7 +853,7 @@ components:
           description: True when `latest_version` is newer than `installed_version`.
         update_ignored:
           type: boolean
-          description: True when bulk updates should skip this installed package.
+          description: True when the current offered update is suppressed.
         icon_url:
           type: string
           format: uri

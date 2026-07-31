@@ -317,10 +317,14 @@ function Client:package_action(id, action, asset, release)
     return self:request("POST", path, nil)
 end
 
-function Client:set_package_updates_ignored(id, ignored)
-    return self:request("POST", "/packages/" .. url_encode(id) .. "/update-ignored", {
+function Client:set_package_updates_ignored(id, ignored, ignored_version)
+    local body = {
         update_ignored = ignored == true,
-    })
+    }
+    if ignored_version ~= nil then
+        body.update_ignored_version = tostring(ignored_version)
+    end
+    return self:request("POST", "/packages/" .. url_encode(id) .. "/update-ignored", body)
 end
 
 function Client:update_all_packages()

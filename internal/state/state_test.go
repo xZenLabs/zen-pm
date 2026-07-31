@@ -106,6 +106,13 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored {
 		t.Fatalf("installed after clearing ignored updates = %#v, %v", installed, err)
 	}
+	if err := st.SetInstalledUpdateIgnoredVersion("pkg", "1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err = st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored || installed[0].UpdateIgnoredVersion != "1.2.0" {
+		t.Fatalf("installed after ignoring one update version = %#v, %v", installed, err)
+	}
 	if err := st.AppendInstalledPatchFile(PatchFileEntry{PackageID: "patches", Asset: "patch.lua", Name: "Patch", Version: "1.0.0", Repo: "repo", InstallPath: "/opt/patches/patch.lua"}); err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +263,7 @@ func TestSQLiteStoreAddsSourceAssetColumnToExistingCatalogTable(t *testing.T) {
 	}
 }
 
-func TestSQLiteStoreAddsUpdateIgnoredColumnToExistingInstalledPackages(t *testing.T) {
+func TestSQLiteStoreAddsUpdateIgnoreColumnsToExistingInstalledPackages(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	stateDir := filepath.Join(home, "state")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -292,11 +299,11 @@ func TestSQLiteStoreAddsUpdateIgnoredColumnToExistingInstalledPackages(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetInstalledUpdateIgnored("pkg", true); err != nil {
+	if err := st.SetInstalledUpdateIgnoredVersion("pkg", "1.1.0"); err != nil {
 		t.Fatal(err)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || !installed[0].UpdateIgnored {
+	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored || installed[0].UpdateIgnoredVersion != "1.1.0" {
 		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 }

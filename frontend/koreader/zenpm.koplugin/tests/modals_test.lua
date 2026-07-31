@@ -21,6 +21,7 @@ package.preload["ui/widget/confirmbox"] = function()
             function options:addWidget(widget)
                 self.checkbox = widget
             end
+            function options:onCloseWidget() end
             return options
         end,
     }
@@ -81,7 +82,11 @@ package.preload["device"] = function()
         },
     }
 end
-package.preload["models"] = function() return {} end
+package.preload["models"] = function()
+    return {
+        package_display_name = function(pkg) return pkg.name end,
+    }
+end
 package.preload["ui/inline_icon_map"] = function()
     return {
         label = function(_, text) return text end,
@@ -129,5 +134,23 @@ shown_dialog.input_text = ""
 assert(shown_dialog:onCloseDialog())
 assert(shown_dialog.base_closed)
 assert(cleared_search == "")
+
+local ignored_all = false
+local ignored_version = false
+Modals.ignore_updates({ name = "Package" }, function()
+    ignored_all = true
+end, function()
+    ignored_version = true
+end)
+assert(shown_dialog.modal)
+assert(shown_dialog.dismissable == true)
+assert(shown_dialog.text == "Ignore updates for Package?")
+assert(shown_dialog.ok_text == "Always ignore")
+assert(shown_dialog.cancel_text == "Only this version")
+shown_dialog:onClose()
+assert(not ignored_version and not ignored_all)
+shown_dialog.cancel_callback()
+shown_dialog.ok_callback()
+assert(ignored_version and ignored_all)
 
 print("modals tests passed")

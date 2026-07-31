@@ -66,6 +66,7 @@ func (s *sqliteStore) migrate() error {
 			asset_arch TEXT NOT NULL DEFAULT '',
 			install_path TEXT NOT NULL DEFAULT '',
 			update_ignored INTEGER NOT NULL DEFAULT 0,
+			update_ignored_version TEXT NOT NULL DEFAULT '',
 			installed_at TEXT NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS installed_patch_files (
@@ -137,6 +138,9 @@ func (s *sqliteStore) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("installed_packages", "update_ignored", "update_ignored INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("installed_packages", "update_ignored_version", "update_ignored_version TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("installed_patch_files", "install_path", "install_path TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -354,7 +358,7 @@ func (s *sqliteStore) WriteRepos(repos []RepoEntry) error {
 }
 
 func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
-	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, install_path, update_ignored, installed_at FROM installed_packages ORDER BY name, id`)
+	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, install_path, update_ignored, update_ignored_version, installed_at FROM installed_packages ORDER BY name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +366,7 @@ func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
 	var entries []InstalledEntry
 	for rows.Next() {
 		var e InstalledEntry
-		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstallPath, &e.UpdateIgnored, &e.InstalledAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstallPath, &e.UpdateIgnored, &e.UpdateIgnoredVersion, &e.InstalledAt); err != nil {
 			return nil, err
 		}
 		if e.Name == "" {
@@ -381,18 +385,37 @@ func (s *sqliteStore) AppendInstalled(e InstalledEntry) error {
 		e.Name = e.ID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO installed_packages(id, name, version, repo, asset, asset_arch, install_path, update_ignored, installed_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO installed_packages(id, name, version, repo, asset, asset_arch, install_path, update_ignored, update_ignored_version, installed_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		 name = excluded.name, version = excluded.version, repo = excluded.repo, asset = excluded.asset,
 		 asset_arch = excluded.asset_arch, install_path = excluded.install_path, installed_at = excluded.installed_at`,
-		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstallPath, e.UpdateIgnored, e.InstalledAt,
+		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstallPath, e.UpdateIgnored, e.UpdateIgnoredVersion, e.InstalledAt,
 	)
 	return err
 }
 
 func (s *sqliteStore) SetInstalledUpdateIgnored(id string, ignored bool) error {
-	result, err := s.db.Exec(`UPDATE installed_packages SET update_ignored = ? WHERE id = ?`, ignored, id)
+	result, err := s.db.Exec(`UPDATE installed_packages SET update_ignored = ?, update_ignored_version = '' WHERE id = ?`, ignored, id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("installed package %q not found", id)
+	}
+	return nil
+}
+
+func (s *sqliteStore) SetInstalledUpdateIgnoredVersion(id, version string) error {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return fmt.Errorf("ignored update version required")
+	}
+	result, err := s.db.Exec(`UPDATE installed_packages SET update_ignored = 0, update_ignored_version = ? WHERE id = ?`, version, id)
 	if err != nil {
 		return err
 	}

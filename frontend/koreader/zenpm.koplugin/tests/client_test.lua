@@ -90,6 +90,15 @@ client.request = function(_, method, path, body)
 end
 assert(client:set_package_updates_ignored("example package", true))
 
+client.request = function(_, method, path, body)
+    assert(method == "POST")
+    assert(path == "/packages/example%20package/update-ignored")
+    assert(body.update_ignored == false)
+    assert(body.update_ignored_version == "1.2.0")
+    return true, {}
+end
+assert(client:set_package_updates_ignored("example package", false, "1.2.0"))
+
 local requested_timeout
 
 client.request = function(_, method, path, body, timeout)

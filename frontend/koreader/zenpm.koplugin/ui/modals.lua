@@ -129,6 +129,27 @@ function Modals.confirm(text, ok_text, ok_callback, close_before_callback)
     Modals.close_status()
 end
 
+function Modals.ignore_updates(pkg, ignore_all_callback, ignore_version_callback)
+    local dialog = ConfirmBox:new{
+        modal = true,
+        dismissable = true,
+        text = string.format(
+            _("Ignore updates for %s?"),
+            Models.package_display_name(pkg, _("Package"))
+        ),
+        ok_text = _("Always ignore"),
+        cancel_text = _("Only this version"),
+        ok_callback = ignore_all_callback,
+        cancel_callback = ignore_version_callback,
+    }
+    function dialog:onClose()
+        UIManager:close(self)
+        return true
+    end
+    UIManager:show(dialog)
+    Modals.close_status()
+end
+
 function Modals.input(title, input, hint, ok_text, callback, clear_callback)
     local dialog
     local buttons = {

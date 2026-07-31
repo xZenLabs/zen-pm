@@ -757,12 +757,14 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	installedAt := make(map[string]string, len(installed))
 	installedAsset := make(map[string]string, len(installed))
 	updateIgnored := make(map[string]bool, len(installed))
+	updateIgnoredVersion := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
 		installedVersion[e.ID] = e.Version
 		installedAt[e.ID] = e.InstalledAt
 		installedAsset[e.ID] = e.Asset
 		updateIgnored[e.ID] = e.UpdateIgnored
+		updateIgnoredVersion[e.ID] = e.UpdateIgnoredVersion
 	}
 
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
@@ -827,8 +829,11 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
-			item.UpdateIgnored = updateIgnored[e.ID]
 			applyUpdateInfo(&item, allowPrerelease)
+			item.UpdateIgnored = updateIgnored[e.ID]
+			if item.UpdateAvail && updateIgnoredVersion[e.ID] == item.LatestVersion {
+				item.UpdateIgnored = true
+			}
 		}
 		result = append(result, item)
 	}
@@ -1032,9 +1037,29 @@ func (s *Server) handlePackageUpdateIgnored(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var body struct {
-		UpdateIgnored *bool `json:"update_ignored"`
+		UpdateIgnored        *bool   `json:"update_ignored"`
+		UpdateIgnoredVersion *string `json:"update_ignored_version"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UpdateIgnored == nil {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "update_ignored required", http.StatusBadRequest)
+		return
+	}
+	if body.UpdateIgnoredVersion != nil {
+		version := strings.TrimSpace(*body.UpdateIgnoredVersion)
+		if version == "" || body.UpdateIgnored == nil || *body.UpdateIgnored {
+			http.Error(w, "valid update_ignored_version required", http.StatusBadRequest)
+			return
+		}
+		if err := s.st.SetInstalledUpdateIgnoredVersion(id, version); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok": true, "update_ignored": true, "update_ignored_version": version,
+		})
+		return
+	}
+	if body.UpdateIgnored == nil {
 		http.Error(w, "update_ignored required", http.StatusBadRequest)
 		return
 	}

@@ -14,6 +14,7 @@ local modal_title
 local modal_rows
 local plugin_settings_prompt
 local package_modify_callbacks
+local ignore_updates_prompt
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 package.preload["socket"] = function() return {} end
@@ -73,6 +74,13 @@ package.preload["ui/modals"] = function()
         end,
         package_modify = function(_, callbacks)
             package_modify_callbacks = callbacks
+        end,
+        ignore_updates = function(pkg, ignore_all_callback, ignore_version_callback)
+            ignore_updates_prompt = {
+                pkg = pkg,
+                ignore_all_callback = ignore_all_callback,
+                ignore_version_callback = ignore_version_callback,
+            }
         end,
         plugin_settings_cleanup = function(message, callback)
             plugin_settings_prompt = message
@@ -508,7 +516,7 @@ local ignored_updates_toggled = 0
 App.perform_package_action({
     state = { page = "installed", active_tab = "installed" },
     package_icon_file = function() return nil end,
-    toggle_package_updates = function() ignored_updates_toggled = ignored_updates_toggled + 1 end,
+    prompt_package_updates = function() ignored_updates_toggled = ignored_updates_toggled + 1 end,
     confirm_package_action = function(_, _, action) regular_zenpm_action = action end,
 }, {
     id = "zenpm-koreader",
@@ -536,7 +544,11 @@ local removed_queued_updates = {}
 local queue_modify_app = {
     state = { queue_running = false },
     package_icon_file = function() return nil end,
-    toggle_package_updates = function() queued_updates_toggled = queued_updates_toggled + 1 return true end,
+    prompt_package_updates = function(_, _, ignored_callback)
+        queued_updates_toggled = queued_updates_toggled + 1
+        ignored_callback()
+        return true
+    end,
     remove_queue_entry = function(_, entry)
         table.insert(removed_queued_updates, entry)
         return false
@@ -593,6 +605,25 @@ assert(ignored_pkg.update_ignored == false)
 assert(ignored_requests[2].id == "Reader" and ignored_requests[2].ignored == false)
 assert(App.installed_update_count(ignored_app) == 1)
 assert(ignored_refreshes == 2)
+
+local prompted_updates = {}
+local prompt_pkg = { id = "Reader", installed = true, update_available = true, latest_version = "1.1.0" }
+local prompt_app = {
+    set_package_updates_ignored = function(_, pkg, ignored, ignored_version)
+        table.insert(prompted_updates, { pkg = pkg, ignored = ignored, ignored_version = ignored_version })
+        return true
+    end,
+}
+local prompt_callbacks = 0
+App.prompt_package_updates(prompt_app, prompt_pkg, function() prompt_callbacks = prompt_callbacks + 1 end)
+assert(ignore_updates_prompt.pkg == prompt_pkg)
+ignore_updates_prompt.ignore_version_callback()
+assert(prompted_updates[1].ignored == false and prompted_updates[1].ignored_version == "1.1.0")
+assert(prompt_callbacks == 1)
+App.prompt_package_updates(prompt_app, prompt_pkg, function() prompt_callbacks = prompt_callbacks + 1 end)
+ignore_updates_prompt.ignore_all_callback()
+assert(prompted_updates[2].ignored == true and prompted_updates[2].ignored_version == nil)
+assert(prompt_callbacks == 2)
 
 local bulk_queued = {}
 local bulk_app = {

@@ -687,22 +687,57 @@ function App:queue_count()
     return #(self.state.queue or {})
 end
 
-function App:toggle_package_updates(pkg)
+function App:set_package_updates_ignored(pkg, ignored, ignored_version)
     local id = Util.trim(tostring(pkg and (pkg.id or pkg.name) or ""))
     if id == "" then return false end
-    local ignored = not pkg.update_ignored
-    local ok, detail = self.client:set_package_updates_ignored(id, ignored)
+    ignored_version = ignored_version and Util.trim(tostring(ignored_version)) or nil
+    if ignored_version == "" then ignored_version = nil end
+    local ok, detail = self.client:set_package_updates_ignored(id, ignored, ignored_version)
     if not ok then
         Modals.info(_("Could not update the package preference: ") .. tostring(detail or _("request failed")))
         return false
     end
     for _, candidate in ipairs(self.state.packages or {}) do
         if tostring(candidate.id or candidate.name or "") == id then
-            candidate.update_ignored = ignored
+            candidate.update_ignored = ignored == true
+                or (ignored_version ~= nil and tostring(candidate.latest_version or "") == ignored_version)
         end
     end
-    if pkg then pkg.update_ignored = ignored end
+    if pkg then
+        pkg.update_ignored = ignored == true
+            or (ignored_version ~= nil and tostring(pkg.latest_version or "") == ignored_version)
+    end
     self:refresh()
+    return true
+end
+
+function App:toggle_package_updates(pkg)
+    local setter = self.set_package_updates_ignored or App.set_package_updates_ignored
+    return setter(self, pkg, not pkg.update_ignored)
+end
+
+function App:prompt_package_updates(pkg, ignored_callback)
+    if pkg.update_ignored then
+        return self:toggle_package_updates(pkg)
+    end
+    local version = Util.trim(tostring(pkg.latest_version or ""))
+    if not pkg.update_available or version == "" then
+        local ignored = self:toggle_package_updates(pkg)
+        if ignored and ignored_callback then ignored_callback() end
+        return ignored
+    end
+    Modals.ignore_updates(pkg,
+        function()
+            if self:set_package_updates_ignored(pkg, true) and ignored_callback then
+                ignored_callback()
+            end
+        end,
+        function()
+            if self:set_package_updates_ignored(pkg, false, version) and ignored_callback then
+                ignored_callback()
+            end
+        end
+    )
     return true
 end
 
@@ -1054,13 +1089,13 @@ function App:show_queue_entry_modify(entry)
     local pkg = entry.pkg
     local remove_queue = function() self:confirm_remove_queue_entry(entry) end
     local toggle_queued_update = function()
-        local was_ignored = pkg.update_ignored == true
-        if not self:toggle_package_updates(pkg) or was_ignored then return end
-        if self:remove_queue_entry(entry) and self.state.page == "queue" then
-            self:close_queue()
-        else
-            self:refresh()
-        end
+        self:prompt_package_updates(pkg, function()
+            if self:remove_queue_entry(entry) and self.state.page == "queue" then
+                self:close_queue()
+            else
+                self:refresh()
+            end
+        end)
     end
     if entry.self_update or entry.self_reinstall then
         Modals.package_modify(pkg, {
@@ -2492,7 +2527,7 @@ function App:perform_package_action(pkg, on_done)
             end or nil,
             updates_ignored = pkg.update_ignored == true,
             toggle_updates = function()
-                self:toggle_package_updates(pkg)
+                self:prompt_package_updates(pkg)
             end,
             disabled = is_koplugin and is_plugin_disabled(pkg) or nil,
             enable_disable = is_koplugin and function()

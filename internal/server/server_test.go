@@ -373,6 +373,62 @@ func TestPackageUpdateIgnoredStoresInstalledPackagePreference(t *testing.T) {
 	if err != nil || len(installed) != 1 || !installed[0].UpdateIgnored {
 		t.Fatalf("installed = %#v, %v", installed, err)
 	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/packages/pkg/update-ignored", strings.NewReader(`{"update_ignored":false,"update_ignored_version":"1.1.0"}`))
+	srv.handlePackageAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	installed, err = st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored || installed[0].UpdateIgnoredVersion != "1.1.0" {
+		t.Fatalf("installed after version preference = %#v, %v", installed, err)
+	}
+}
+
+func TestPackageListIgnoresOnlySelectedUpdateVersion(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "ZenLabs", InstallURL: "install.sh", Platforms: []string{"host"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", UpdateIgnoredVersion: "1.1.0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	list := func() pkgJSON {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/packages?platform=host", nil)
+		srv.handlePackageList(rec, req)
+		var packages []pkgJSON
+		if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+			t.Fatal(err)
+		}
+		if len(packages) != 1 {
+			t.Fatalf("packages = %#v", packages)
+		}
+		return packages[0]
+	}
+	if item := list(); !item.UpdateAvail || !item.UpdateIgnored || item.LatestVersion != "1.1.0" {
+		t.Fatalf("ignored version item = %#v", item)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.2.0", Repo: "ZenLabs", InstallURL: "install.sh", Platforms: []string{"host"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if item := list(); !item.UpdateAvail || item.UpdateIgnored || item.LatestVersion != "1.2.0" {
+		t.Fatalf("next version item = %#v", item)
+	}
 }
 
 func TestPackageListIncludesInstalledPackageMissingFromCatalog(t *testing.T) {

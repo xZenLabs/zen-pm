@@ -1297,3 +1297,31 @@ func TestUpdateSkipsIgnoredInstalledPackages(t *testing.T) {
 		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 }
+
+func TestUpdateSkipsOnlyMatchingIgnoredUpdateVersion(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "2.0.0", Repo: "ZenLabs", InstallURL: "https://example.invalid/install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", UpdateIgnoredVersion: "2.0.0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Update(""); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Version != "1.0.0" || installed[0].UpdateIgnoredVersion != "2.0.0" {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+}

@@ -45,6 +45,7 @@ type Store interface {
 	ReadInstalled() ([]InstalledEntry, error)
 	AppendInstalled(InstalledEntry) error
 	SetInstalledUpdateIgnored(id string, ignored bool) error
+	SetInstalledUpdateIgnoredVersion(id, version string) error
 	RemoveInstalled(string) error
 	IsInstalled(string) (bool, string)
 	ReadInstalledPatchFiles() ([]PatchFileEntry, error)
@@ -331,15 +332,16 @@ func safePackageID(id string) string {
 // Format: id|version|repo|installed_at|name
 // The name field was added later; old entries have only 4 fields.
 type InstalledEntry struct {
-	ID            string
-	Name          string // display name (falls back to ID if empty)
-	Version       string
-	Repo          string
-	Asset         string // selected release asset, empty when ZenPM did not install it
-	AssetArch     string // selected release asset architecture
-	InstallPath   string // native install location, when ZenPM needs it for removal
-	UpdateIgnored bool   // excludes this installed package from bulk updates
-	InstalledAt   string
+	ID                   string
+	Name                 string // display name (falls back to ID if empty)
+	Version              string
+	Repo                 string
+	Asset                string // selected release asset, empty when ZenPM did not install it
+	AssetArch            string // selected release asset architecture
+	InstallPath          string // native install location, when ZenPM needs it for removal
+	UpdateIgnored        bool   // excludes this installed package from bulk updates
+	UpdateIgnoredVersion string // suppresses only this offered update version
+	InstalledAt          string
 }
 
 // PatchFileEntry represents one installed patch file within a patch package.
@@ -363,6 +365,10 @@ func (s *State) AppendInstalled(e InstalledEntry) error {
 
 func (s *State) SetInstalledUpdateIgnored(id string, ignored bool) error {
 	return s.store.SetInstalledUpdateIgnored(id, ignored)
+}
+
+func (s *State) SetInstalledUpdateIgnoredVersion(id, version string) error {
+	return s.store.SetInstalledUpdateIgnoredVersion(id, version)
 }
 
 func (s *State) RemoveInstalled(id string) error {
