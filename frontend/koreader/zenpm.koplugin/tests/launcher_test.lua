@@ -6,6 +6,13 @@ local shown = 0
 local reopen_after_restart = false
 package.preload["app"] = function()
     return {
+        new = function()
+            return {}
+        end,
+    }
+end
+package.preload["zenpm_app"] = function()
+    return {
         consume_reopen_after_restart = function() return reopen_after_restart end,
         new = function()
             return {
