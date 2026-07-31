@@ -69,6 +69,8 @@ function AppView:init()
     }
     if self.focus_enabled then
         self.key_events = {
+            ZenPMBack = { { Input.group.Back } },
+            ZenPMShowActions = { { "Menu" } },
             ZenPMPageForward = { { Input.group.PgFwd }, event = "ZenPMScroll", args = 1 },
             ZenPMPageBack = { { Input.group.PgBack }, event = "ZenPMScroll", args = -1 },
         }
@@ -350,6 +352,16 @@ function AppView:onZenPMFocusConfirm()
         return false
     end
     target.callback()
+    return true
+end
+
+function AppView:onZenPMBack()
+    self.app:go_back()
+    return true
+end
+
+function AppView:onZenPMShowActions()
+    self.app:show_actions()
     return true
 end
 

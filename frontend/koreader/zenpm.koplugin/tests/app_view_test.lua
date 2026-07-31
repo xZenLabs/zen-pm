@@ -14,7 +14,9 @@ package.preload["device"] = function()
         screen = { getWidth = function() return 1 end, getHeight = function() return 1 end },
     }
 end
-package.preload["device/input"] = function() return { group = {} } end
+package.preload["device/input"] = function()
+    return { group = { Back = "Back", PgBack = "PgBack", PgFwd = "PgFwd" } }
+end
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 package.preload["ui/gesturerange"] = function() return { new = function(_, value) return value end } end
 package.preload["ui/widget/container/inputcontainer"] = function()
@@ -56,6 +58,8 @@ has_dpad = false
 local key_view = setmetatable({}, { __index = AppView })
 AppView.init(key_view)
 assert(key_view.focus_enabled == true)
+assert(key_view.key_events.ZenPMBack[1][1] == "Back")
+assert(key_view.key_events.ZenPMShowActions[1][1] == "Menu")
 assert(key_view.key_events.ZenPMFocusUp)
 assert(key_view.key_events.ZenPMFocusConfirm)
 has_keys = false
@@ -70,6 +74,19 @@ has_keyboard = false
 
 assert(AppView.onClose(view) == true)
 assert(closed == 1)
+
+local hardware_actions = 0
+local hardware_backs = 0
+local hardware_view = {
+    app = {
+        go_back = function() hardware_backs = hardware_backs + 1 end,
+        show_actions = function() hardware_actions = hardware_actions + 1 end,
+    },
+}
+assert(AppView.onZenPMBack(hardware_view) == true)
+assert(AppView.onZenPMShowActions(hardware_view) == true)
+assert(hardware_backs == 1)
+assert(hardware_actions == 1)
 
 _G.G_reader_settings = {
     readSetting = function() return "tap" end,

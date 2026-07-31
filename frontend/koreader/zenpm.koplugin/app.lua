@@ -2255,6 +2255,23 @@ function App:go_back_from_details()
     self:navigate(self.state.details_from or "search")
 end
 
+function App:go_back()
+    local page = self.state.page
+    if page == "category_details" then
+        self:show_categories()
+    elseif page == "source_details" then
+        self:show_sources()
+    elseif page == "package_details" then
+        self:go_back_from_details()
+    elseif page == "queue" then
+        self:close_queue()
+    elseif page == "settings" then
+        self:close_settings()
+    else
+        self:quit()
+    end
+end
+
 function App:show_debug()
     self.state.page = "debug"
     self.state.active_tab = "debug"

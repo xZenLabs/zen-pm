@@ -174,8 +174,15 @@ run_dev() {
                     -e "tell (first process whose unix id is $reader_pid)" \
                     -e 'if not (exists window 1) then error "KOReader window not ready"' \
                     -e 'set visible to true' \
+                    -e 'repeat 3 times' \
                     -e 'set frontmost to true' \
                     -e 'perform action "AXRaise" of window 1' \
+                    -e 'try' \
+                    -e 'set value of attribute "AXMain" of window 1 to true' \
+                    -e 'set value of attribute "AXFocused" of window 1 to true' \
+                    -e 'end try' \
+                    -e 'delay 0.25' \
+                    -e 'end repeat' \
                     -e 'end tell' \
                     -e 'end tell' \
                     >/dev/null 2>&1 && return
@@ -193,6 +200,37 @@ run_dev() {
         kill "$parent_pid" 2>/dev/null || true
     }
 
+    set_dev_reopen_flag() {
+        target_machine=$(clang -dumpmachine)
+        settings_dir="$KOREADER_DIR/koreader-emulator-$target_machine-debug/koreader/settings/ZenPM"
+        config_file="$settings_dir/config.lua"
+        updated_config="$DEV_BUILD_DIR/config.lua"
+        mkdir -p "$settings_dir"
+
+        if [ ! -f "$config_file" ]; then
+            printf '%s\n' \
+                'return {' \
+                '    ["reopen_after_restart"] = true,' \
+                '}' > "$updated_config"
+        elif ! awk '
+            /^[[:space:]]*\["reopen_after_restart"\][[:space:]]*=/ {
+                print "    [\"reopen_after_restart\"] = true,"
+                found = 1
+                next
+            }
+            !found && /^}[[:space:]]*$/ {
+                print "    [\"reopen_after_restart\"] = true,"
+                found = 1
+            }
+            { print }
+            END { if (!found) exit 1 }
+        ' "$config_file" > "$updated_config"; then
+            echo "Could not update ZenPM emulator settings: $config_file" >&2
+            exit 1
+        fi
+        mv "$updated_config" "$config_file"
+    }
+
     if [ -f "$DEV_PID_FILE" ]; then
         kodev_pid=$(cat "$DEV_PID_FILE")
         case "$kodev_pid" in
@@ -205,6 +243,8 @@ run_dev() {
                 ;;
         esac
     fi
+
+    set_dev_reopen_flag
 
     cd "$KOREADER_DIR"
     printf '%s\n' "$$" > "$DEV_PID_FILE"

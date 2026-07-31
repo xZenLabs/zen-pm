@@ -63,6 +63,9 @@ msgstr "Are you sure you want to "
 msgid "Are you sure you want to clear the queue?"
 msgstr "Are you sure you want to clear the queue?"
 
+msgid "Are you sure you want to exit ZenPM?"
+msgstr "Are you sure you want to exit ZenPM?"
+
 msgid "Are you sure you want to perform all queued actions?"
 msgstr "Are you sure you want to perform all queued actions?"
 

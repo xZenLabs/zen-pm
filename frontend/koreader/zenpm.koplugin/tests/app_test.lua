@@ -15,6 +15,9 @@ local modal_rows
 local plugin_settings_prompt
 local package_modify_callbacks
 local ignore_updates_prompt
+local confirm_message
+local confirm_ok_text
+local confirm_callback
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 package.preload["socket"] = function() return {} end
@@ -68,6 +71,11 @@ package.preload["ui/modals"] = function()
         end,
         status = function(message) status_message = message end,
         close_status = function() end,
+        confirm = function(message, ok_text, callback)
+            confirm_message = message
+            confirm_ok_text = ok_text
+            confirm_callback = callback
+        end,
         actions = function(title, rows)
             modal_title = title
             modal_rows = rows
@@ -338,6 +346,32 @@ App.reload_current_page({
 })
 assert(reload_tab == "home")
 assert(reload_full_refresh == false)
+
+local back_routes = {
+    category_details = "show_categories",
+    source_details = "show_sources",
+    package_details = "go_back_from_details",
+    queue = "close_queue",
+    settings = "close_settings",
+}
+for page, method in pairs(back_routes) do
+    local calls = 0
+    local back_app = { state = { page = page } }
+    back_app[method] = function() calls = calls + 1 end
+    App.go_back(back_app)
+    assert(calls == 1)
+end
+
+local quit_calls = 0
+App.go_back({
+    state = { page = "home" },
+    quit = function() quit_calls = quit_calls + 1 end,
+})
+assert(confirm_message == "Are you sure you want to exit ZenPM?")
+assert(confirm_ok_text == "Quit")
+assert(quit_calls == 0)
+confirm_callback()
+assert(quit_calls == 1)
 
 local navigation_refreshes = {}
 local navigation_app = {
