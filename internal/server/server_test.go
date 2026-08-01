@@ -18,6 +18,28 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
+type fakeReadmeImagePreparer struct {
+	refs     map[string]string
+	markdown string
+	baseURL  string
+	started  chan struct{}
+	release  chan struct{}
+	finished chan struct{}
+}
+
+func (f *fakeReadmeImagePreparer) References(markdown, baseURL string) map[string]string {
+	f.markdown = markdown
+	f.baseURL = baseURL
+	return f.refs
+}
+
+func (f *fakeReadmeImagePreparer) Prepare(refs map[string]string) error {
+	close(f.started)
+	<-f.release
+	close(f.finished)
+	return nil
+}
+
 func TestListenUnixBindsSocket(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "zenpm.sock")
 	srv := &Server{}
@@ -872,21 +894,45 @@ func TestHandlePackageReadmeReturnsMarkdownAndBaseURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := New(st, repo.New(st), pkg.New(st, repo.New(st), "host"), 0)
+	imageURL := "https://github.com/owner/reader/raw/HEAD/logo.png"
+	imageRef := filepath.Join(st.CacheDir, "readme-images", "logo.ref")
+	preparer := &fakeReadmeImagePreparer{
+		refs:     map[string]string{imageURL: imageRef},
+		started:  make(chan struct{}),
+		release:  make(chan struct{}),
+		finished: make(chan struct{}),
+	}
+	srv.readmeImages = preparer
 	rec := httptest.NewRecorder()
 	srv.handlePackageReadme(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/readme", nil), "reader")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	var response struct {
-		Readme        string `json:"readme"`
-		ReadmeBaseURL string `json:"readme_base_url"`
-		ImageBaseURL  string `json:"readme_image_base_url"`
+		Readme        string            `json:"readme"`
+		ReadmeBaseURL string            `json:"readme_base_url"`
+		ImageBaseURL  string            `json:"readme_image_base_url"`
+		ImageRefs     map[string]string `json:"readme_image_refs"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
 	if response.Readme != "# Reader\n\n![Logo](logo.png)" || response.ReadmeBaseURL != readmeServer.URL+"/docs/" || response.ImageBaseURL != "https://github.com/owner/reader/raw/HEAD/" {
 		t.Fatalf("response = %#v", response)
+	}
+	if response.ImageRefs[imageURL] != imageRef || preparer.markdown != response.Readme || preparer.baseURL != response.ImageBaseURL {
+		t.Fatalf("image preparation metadata = %#v / %#v", response.ImageRefs, preparer)
+	}
+	select {
+	case <-preparer.started:
+	case <-time.After(time.Second):
+		t.Fatal("README image preparation did not start")
+	}
+	close(preparer.release)
+	select {
+	case <-preparer.finished:
+	case <-time.After(time.Second):
+		t.Fatal("README image preparation did not finish")
 	}
 }
 

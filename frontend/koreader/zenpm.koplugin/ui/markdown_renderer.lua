@@ -3,6 +3,7 @@ local Markdown = require("ui/markdown")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
 local UIManager = require("ui/uimanager")
+local Util = require("zenpm_util")
 local ok_logger, logger = pcall(require, "logger")
 
 local Renderer = {}
@@ -10,6 +11,8 @@ local Renderer = {}
 local PTF_HEADER = "\u{FFF1}"
 local PTF_BOLD_START = "\u{FFF2}"
 local PTF_BOLD_END = "\u{FFF3}"
+local PREPARED_IMAGE_POLL_SECONDS = 0.2
+local PREPARED_IMAGE_POLL_LIMIT = 150
 
 local function log_image(view, url, status, detail)
     if not (ok_logger and logger and logger.info) then return end
@@ -119,6 +122,75 @@ local function fallback_text_entry(text, width)
     }
 end
 
+local function prepared_image_file(ref)
+    local file = io.open(tostring(ref or ""), "r")
+    if not file then
+        return nil, false, true
+    end
+    local value = Util.trim(file:read("*l") or "")
+    file:close()
+    if value == "failed" then
+        return nil, true, false
+    end
+    local path, width, height = value:match("^(.-)\t(%d+)\t(%d+)$")
+    path = path or value
+    if path ~= "" and Util.path_exists(path) then
+        return path, false, false, tonumber(width), tonumber(height)
+    end
+    return nil, false, true
+end
+
+local function prepared_image_dimensions(width, height, max_width, max_height)
+    if not width or not height or width <= 0 or height <= 0 then return nil end
+    local scale = math.min(1, max_width / width, max_height / height)
+    return math.max(1, math.floor(width * scale + 0.5)),
+        math.max(1, math.floor(height * scale + 0.5))
+end
+
+local function queue_prepared_image_poll(view, ref)
+    local state = view._readme_image_poll
+    if not state then
+        state = { refs = {}, attempts = 0, scheduled = false }
+        view._readme_image_poll = state
+    end
+    state.refs[ref] = true
+    if state.scheduled then return end
+
+    local poll
+    poll = function()
+        state.scheduled = true
+        UIManager:scheduleIn(PREPARED_IMAGE_POLL_SECONDS, function()
+            state.scheduled = false
+            if view.app.state.page and view.app.state.page ~= "package_details" then
+                state.refs = {}
+                state.attempts = 0
+                return
+            end
+            state.attempts = state.attempts + 1
+            local changed = false
+            local pending = false
+            for pending_ref in pairs(state.refs) do
+                local _, _, is_pending = prepared_image_file(pending_ref)
+                if is_pending then
+                    pending = true
+                else
+                    state.refs[pending_ref] = nil
+                    changed = true
+                end
+            end
+            if changed then
+                view.app:refresh()
+            elseif pending and state.attempts < PREPARED_IMAGE_POLL_LIMIT then
+                poll()
+            else
+                state.refs = {}
+                state.attempts = 0
+            end
+        end)
+    end
+    poll()
+end
+
 local function table_row(cells, base_url, column_width, bold)
     local row = { cells = {}, bold = bold }
     local row_height = 1
@@ -158,7 +230,7 @@ local function add_table(layout, block, base_url, width)
     })
 end
 
-local function image_entry(view, block, image_base_url, width)
+local function image_entry(view, block, image_base_url, width, image_refs)
     if not view.app.state.show_readme_images then
         local alt = block.alt ~= "" and block.alt or "Image"
         return fallback_text_entry("[Image: " .. alt .. "]", width)
@@ -168,15 +240,35 @@ local function image_entry(view, block, image_base_url, width)
         log_image(view, block.url, "skipped", "resolved=" .. url)
         return fallback_text_entry(block.alt ~= "" and block.alt or block.url, width)
     end
-    local file, failed = view.app:cached_image_file(url)
+    local ref = type(image_refs) == "table" and image_refs[url] or nil
+    local file, failed, backend_pending, prepared_width, prepared_height
+    if type(ref) == "string" and ref ~= "" then
+        file, failed, backend_pending, prepared_width, prepared_height = prepared_image_file(ref)
+        if backend_pending then
+            log_image(view, url, "preparing")
+            queue_prepared_image_poll(view, ref)
+        end
+    else
+        file, failed = view.app:cached_image_file(url)
+    end
     if failed then
         log_image(view, url, "unavailable")
         return fallback_text_entry(block.alt ~= "" and block.alt or url, width)
     end
     if not file then
-        return { kind = "image_pending", url = url, alt = block.alt, h = Theme.scale(150) }
+        return {
+            kind = "image_pending",
+            url = url,
+            alt = block.alt,
+            h = Theme.scale(150),
+            backend_managed = backend_pending,
+        }
     end
-    local image_w, image_h = P.image_dimensions(file, width, Theme.scale(240))
+    local image_w, image_h = prepared_image_dimensions(
+        prepared_width, prepared_height, width, Theme.scale(240))
+    if not image_w then
+        image_w, image_h = P.image_dimensions(file, width, Theme.scale(240))
+    end
     if not image_w then
         log_image(view, url, "unreadable", "file=" .. file)
         return fallback_text_entry(block.alt ~= "" and block.alt or url, width)
@@ -185,14 +277,15 @@ local function image_entry(view, block, image_base_url, width)
     return { kind = "image", file = file, alt = block.alt, w = image_w, h = image_h }
 end
 
-function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width, height, scroll)
+function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width, height, scroll, image_refs)
     local gap = Theme.scale(10)
     local layout = {}
     for _, block in ipairs(blocks) do
         if block.kind == "rule" then
             table.insert(layout, { kind = "rule", h = Theme.scale(1) })
         elseif block.kind == "image" then
-            table.insert(layout, image_entry(view, block, image_base_url, width))
+            local entry = image_entry(view, block, image_base_url, width, image_refs)
+            table.insert(layout, entry)
         elseif block.kind == "table" then
             add_table(layout, block, base_url, width)
         else
@@ -217,8 +310,10 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
             if entry.kind == "rule" then
                 P.rect(bb, x, visible_y, width, visible_h, Theme.soft)
             elseif entry.kind == "image_pending" then
-                log_image(view, entry.url, "queued")
-                view.app:queue_readme_image(entry.url)
+                if not entry.backend_managed then
+                    log_image(view, entry.url, "queued")
+                    view.app:queue_readme_image(entry.url)
+                end
                 if entry.alt and entry.alt ~= "" then
                     P.paragraph(bb, entry.alt, x, visible_y, width, visible_h, "small", { color = Theme.muted })
                 end

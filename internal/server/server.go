@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/maintenance"
 	"github.com/xZenLabs/zen-pm/internal/pkg"
 	"github.com/xZenLabs/zen-pm/internal/platform"
+	"github.com/xZenLabs/zen-pm/internal/readmeimages"
 	"github.com/xZenLabs/zen-pm/internal/releases"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
@@ -49,6 +51,12 @@ type Server struct {
 	backgroundJobs atomic.Int32
 	lastActivity   atomic.Int64
 	StartedAt      time.Time
+	readmeImages   readmeImagePreparer
+}
+
+type readmeImagePreparer interface {
+	References(markdown, baseURL string) map[string]string
+	Prepare(refs map[string]string) error
 }
 
 type pkgJSON struct {
@@ -100,7 +108,11 @@ type pkgJSON struct {
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
-	return &Server{st: st, repos: repos, pkgs: pkgs, port: port, done: make(chan struct{})}
+	srv := &Server{st: st, repos: repos, pkgs: pkgs, port: port, done: make(chan struct{})}
+	if st != nil {
+		srv.readmeImages = readmeimages.New(filepath.Join(st.CacheDir, "readme-images"))
+	}
+	return srv
 }
 
 func (s *Server) ListenAndServe() error {
@@ -1144,11 +1156,24 @@ func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id 
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
+	response := map[string]interface{}{
 		"readme":                document.Readme,
 		"readme_base_url":       document.BaseURL,
 		"readme_image_base_url": imageBaseURL,
-	})
+	}
+	var refs map[string]string
+	if s.readmeImages != nil {
+		refs = s.readmeImages.References(document.Readme, imageBaseURL)
+		response["readme_image_refs"] = refs
+	}
+	writeJSON(w, http.StatusOK, response)
+	if len(refs) > 0 {
+		s.runBackground(func() {
+			if err := s.readmeImages.Prepare(refs); err != nil {
+				log.Warnf("Could not prepare README images for %s: %v", id, err)
+			}
+		})
+	}
 }
 
 func (s *Server) packageReleaseNotesMetadata(id string, prerelease bool) (string, string, string, error) {

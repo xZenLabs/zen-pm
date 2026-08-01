@@ -581,6 +581,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         content_link_base_url = readme_base_url
     end
     local content_image_base_url = pkg.readme_image_base_url
+    local content_image_refs = pkg.readme_image_refs
     if not content_image_base_url or content_image_base_url == "" then
         content_image_base_url = Markdown.public_image_base_url(pkg.source)
     end
@@ -616,10 +617,11 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         if content_image_base_url == "" then
             content_image_base_url = content_link_base_url
         end
+        content_image_refs = nil
     end
     local viewport_y = iy + viewport_inset
     local viewport_h = math.max(1, content_h - viewport_inset * 2)
-    local max_scroll = MarkdownRenderer.render(view, bb, content_blocks, content_link_base_url, content_image_base_url, inner_x, viewport_y, paragraph_w, viewport_h, scroll)
+    local max_scroll = MarkdownRenderer.render(view, bb, content_blocks, content_link_base_url, content_image_base_url, inner_x, viewport_y, paragraph_w, viewport_h, scroll, content_image_refs)
     Scroll.set_list_bounds(view, inner_x, viewport_y, inner_w, viewport_h, Theme.scale(96))
     P.focus_control(view, bb, "details-content", inner_x, viewport_y, inner_w, viewport_h, nil, {
         focus_type = "scroll_content",

@@ -351,6 +351,7 @@ paths:
                   - readme
                   - readme_base_url
                   - readme_image_base_url
+                  - readme_image_refs
                 properties:
                   readme:
                     type: string
@@ -360,6 +361,11 @@ paths:
                   readme_image_base_url:
                     type: string
                     format: uri
+                  readme_image_refs:
+                    type: object
+                    description: Maps resolved README image URLs to local ref files. Each ref is written asynchronously with either the prepared image path or `failed`.
+                    additionalProperties:
+                      type: string
         "404":
           $ref: "#/components/responses/TextError"
         "502":

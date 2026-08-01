@@ -2172,6 +2172,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
                     readme = data.readme,
                     base_url = data.readme_base_url,
                     image_base_url = data.readme_image_base_url,
+                    image_refs = data.readme_image_refs,
                 }
                 self.state.readme_cache[cache_key] = cached
             elseif not readme_ok then
@@ -2186,6 +2187,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             pkg.readme = cached.readme
             pkg.readme_base_url = cached.base_url
             pkg.readme_image_base_url = cached.image_base_url
+            pkg.readme_image_refs = cached.image_refs
             pkg.readme_error_code = cached.error_code
         end
     end
