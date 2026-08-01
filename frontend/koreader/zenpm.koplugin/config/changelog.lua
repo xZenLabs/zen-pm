@@ -29,8 +29,9 @@ return {
     },
     ["1.2.0"] = {
         "Migrate from HTTP server to UDS for all systems",
+        "README performance + layout improvements",
         "Add non-touch support",
-        "Add ignored updates",
+        "Add option to ignore updates for package",
         "Add re-open ZenPM on reboot option",
         "Remove confirmation for enable/disable",
         "Fix clear search term",

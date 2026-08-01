@@ -208,9 +208,10 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local verify_gap = Theme.font_scale(5)
     local meta_w = text_w - verify_size - verify_gap
 
-    local rows = {
-        { text = title, w = text_w, role = title_role, bold = true },
-    }
+    local rows = {}
+    if opts.show_title ~= false then
+        table.insert(rows, { text = title, w = text_w, role = title_role, bold = true })
+    end
     if author ~= "" then
         table.insert(rows, { text = author, w = text_w, role = body_role })
     end

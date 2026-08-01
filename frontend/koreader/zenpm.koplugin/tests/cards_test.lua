@@ -79,4 +79,26 @@ Cards.package({
 }, 0, 0, 300, { compact = true })
 
 assert(painted_text[#painted_text] == "Queued")
+
+painted_text = {}
+Cards.package({
+    app = {
+        state = { active_tab = "installed", queue = {} },
+        package_disabled = function() return false end,
+        package_icon_file = function() return "zenpm.svg" end,
+        perform_package_action = function() end,
+        show_package_details = function() end,
+    },
+}, {}, {
+    id = "zenpm-koreader",
+    name = "ZenPM",
+    author = "Zen Labs",
+    version = "1.0.0",
+    repo = "ZenLabs",
+}, 0, 0, 300, { height = 92, show_title = false, second_line = "By Zen Labs" })
+
+for _, text in ipairs(painted_text) do
+    assert(text ~= "ZenPM")
+end
+assert(painted_text[1] == "By Zen Labs")
 print("cards tests passed")

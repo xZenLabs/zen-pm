@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -79,5 +80,31 @@ func TestPrepareDownloadsResizesAndCachesRasterImage(t *testing.T) {
 	}
 	if downloads != 1 {
 		t.Fatalf("downloads = %d, want cached image to avoid second request", downloads)
+	}
+}
+
+func TestPrepareReportsEveryFailureInURLOrder(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	cache := New(t.TempDir())
+	cache.client = server.Client()
+	cache.allowUnsafe = true
+	refs := map[string]string{
+		server.URL + "/second.png": filepath.Join(cache.dir, "second.ref"),
+		server.URL + "/first.png":  filepath.Join(cache.dir, "first.ref"),
+	}
+	err := cache.Prepare(refs)
+	if err == nil {
+		t.Fatal("Prepare() error = nil")
+	}
+	want := strings.Join([]string{
+		server.URL + "/first.png: download returned HTTP 503",
+		server.URL + "/second.png: download returned HTTP 503",
+	}, "\n")
+	if err.Error() != want {
+		t.Fatalf("Prepare() error = %q, want %q", err, want)
 	}
 }

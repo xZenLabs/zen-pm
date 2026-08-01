@@ -433,9 +433,10 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         P.rect(bb, panel_x + Theme.scale(2), iy, panel_w - Theme.scale(4), Theme.scale(1), Theme.border)
         iy = iy + Theme.scale(10)
     end
-    local summary_h = m.card_h
+    local summary_h = Theme.scale(92)
     Cards.package(view, bb, pkg, inner_x, iy, inner_w, {
         height = summary_h,
+        show_title = false,
         second_line = _("By ") .. I18n.dynamic_or(pkg.author, "?"),
         text_gap = Theme.scale(6),
         border = false,
