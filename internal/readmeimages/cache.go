@@ -3,6 +3,7 @@ package readmeimages
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -174,7 +175,7 @@ func (c *Cache) Prepare(refs map[string]string) error {
 	for i, err := range failures {
 		messages[i] = err.Error()
 	}
-	return fmt.Errorf("%s", strings.Join(messages, "\n"))
+	return errors.New(strings.Join(messages, "\n"))
 }
 
 func (c *Cache) claim(rawURL, ref string) bool {

@@ -574,7 +574,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         return max_scroll
     end
     local viewport_inset = Theme.scale(6)
-    local paragraph_w = inner_w - Theme.scale(12)
+    local paragraph_w = inner_w - Theme.scale(24)
     local readme_base_url = pkg.readme_base_url or Markdown.base_url(pkg.readme_url)
     local content_blocks = readme_blocks
     local content_link_base_url = Markdown.source_base_url(pkg.source)
