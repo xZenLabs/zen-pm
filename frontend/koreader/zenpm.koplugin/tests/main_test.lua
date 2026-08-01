@@ -5,6 +5,7 @@ local stopped = 0
 local uninstalled = 0
 local scheduled
 local reopened
+local actions = {}
 
 package.preload["i18n"] = function()
     return {
@@ -12,7 +13,13 @@ package.preload["i18n"] = function()
         uninstall = function() uninstalled = uninstalled + 1 end,
     }
 end
-package.preload["dispatcher"] = function() return { registerAction = function() end } end
+package.preload["dispatcher"] = function()
+    return {
+        registerAction = function(_, name, action)
+            actions[name] = action
+        end,
+    }
+end
 package.preload["ui/uimanager"] = function()
     return { nextTick = function(_, callback) scheduled = callback end }
 end
@@ -53,6 +60,8 @@ local ZenPM = dofile(root .. "/main.lua")
 dofile = original_dofile
 ZenPM.ui = { menu = { registerToMainMenu = function() end } }
 ZenPM:init()
+assert(actions.zenpm.title == "ZenPM: Open")
+assert(actions.zenpm_update_all.title == "ZenPM: Update All")
 assert(scheduled)
 scheduled()
 assert(reopened == ZenPM)

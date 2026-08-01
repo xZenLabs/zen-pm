@@ -65,6 +65,7 @@ package.preload["ui/modals"] = function()
             modal_message = message
             modal_seconds = seconds
         end,
+        notice = function(message) modal_message = message end,
         restart_koreader = function(message, callback)
             restart_message = message
             restart_callback = callback
@@ -197,6 +198,23 @@ App.toggle_beta_updates(app)
 
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
+
+local cli_installs = 0
+local cli_app = {
+    daemon = {
+        install_cli_wrapper = function()
+            cli_installs = cli_installs + 1
+            return true
+        end,
+    },
+}
+App.install_cli(cli_app)
+assert(cli_installs == 1)
+assert(modal_message == "ZenPM command-line interface installed.")
+
+cli_app.daemon.install_cli_wrapper = function() return false end
+App.install_cli(cli_app)
+assert(modal_message == "Could not install the ZenPM command-line wrapper.")
 
 local zenpm_package = { id = "zenpm-koreader" }
 assert(App.package_icon_file({}, zenpm_package) == "assets/zenpm.svg")
@@ -466,6 +484,32 @@ local self_action_app = {
 App.start_package_action(self_action_app, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 1)
 
+local scriptlet_action
+local scriptlet_asset_requests = 0
+local scriptlet_app = {
+    client = {
+        get_package_assets = function()
+            scriptlet_asset_requests = scriptlet_asset_requests + 1
+            return true, {}
+        end,
+    },
+    queue_package_action = function(_, _, action, asset, opts)
+        scriptlet_action = { action = action, asset = asset, opts = opts }
+    end,
+}
+local scriptlet = {
+    id = "kindle-browser",
+    platforms = { "kindle" },
+    versions_url = "https://repo.example/packages/kindle/browser/versions.json",
+}
+App.start_package_action(scriptlet_app, scriptlet, "install")
+assert(scriptlet_asset_requests == 0)
+assert(scriptlet_action.action == "install")
+assert(scriptlet_action.asset == nil)
+
+local scriptlet_entry = App.queue_entry_for({}, scriptlet, "update", nil, { release = "1.0.1" })
+assert(scriptlet_entry.release == nil)
+
 App.queue_package_action({
     state = { queue_running = false },
     queue_self_update = function() self_update_queued = self_update_queued + 1 return true end,
@@ -537,6 +581,30 @@ assert(updated_scan_calls == 1)
 assert(updated_backend_restarts == 1)
 assert(updated_result[1] == true and updated_result[2] == "1.2.4-beta3")
 
+local persisted_update_failure
+local failed_update_result
+App.apply_update({
+    state = { beta_updates = false },
+    daemon = {
+        is_android = function() return false end,
+    },
+    client = {
+        post_log = function(_, message)
+            persisted_update_failure = message
+            return true
+        end,
+    },
+    run_update_task = function(_, _, _, callback)
+        callback(true, true, false, "attempt to call a nil value")
+    end,
+}, function(...)
+    failed_update_result = { ... }
+end)
+assert(failed_update_result[1] == false)
+assert(failed_update_result[2] == "Update failed: attempt to call a nil value")
+assert(persisted_update_failure == "ZenPM update failed: attempt to call a nil value")
+assert(logged_warnings[#logged_warnings] == persisted_update_failure)
+
 local selected_zenpm_release
 App.confirm_package_version({
     queue_self_reinstall = function(_, _, release)
@@ -544,6 +612,14 @@ App.confirm_package_version({
     end,
 }, { id = "zenpm-koreader", installed = true }, "v1.2.3", "reinstall")
 assert(selected_zenpm_release == "v1.2.3")
+
+local scriptlet_install_action
+App.perform_package_action({
+    state = {},
+    confirm_package_action = function(_, _, action) scriptlet_install_action = action end,
+    prompt_default_package_version = function() error("scriptlets must not open the version picker") end,
+}, scriptlet)
+assert(scriptlet_install_action == "install")
 
 local regular_zenpm_action
 local ignored_updates_toggled = 0

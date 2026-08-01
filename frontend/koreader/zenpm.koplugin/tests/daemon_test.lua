@@ -150,13 +150,17 @@ assert(start_logs[1]:find("starting backend " .. source_path, 1, true))
 assert(start_logs[1]:find("abi=sf", 1, true))
 
 local no_wrapper = Daemon:new()
+local automatic_cli_installations = 0
 no_wrapper.ensure_runtime_dirs = function() return false, nil end
 no_wrapper.bundled_backend = function() return source_path end
 no_wrapper.standalone_backend_dir = function() return source_path .. ".backend" end
 no_wrapper.bundled_backend_version = function() return "1.2.3" end
 no_wrapper.desired_marker = function() return "marker\n" end
 no_wrapper.bundled_backend_companions = function() return {} end
-no_wrapper.install_cli_wrapper = function() return false end
+no_wrapper.install_cli_wrapper = function()
+    automatic_cli_installations = automatic_cli_installations + 1
+    return true
+end
 no_wrapper.log_cli = function() end
 no_wrapper.stop_standalone_backend = function() end
 
@@ -167,6 +171,7 @@ installed_backend:close()
 
 changed, prepare_err = no_wrapper:ensure_backend_files()
 assert(not changed and not prepare_err)
+assert(automatic_cli_installations == 0)
 
 os.remove(source_path)
 os.remove(no_wrapper:standalone_backend())

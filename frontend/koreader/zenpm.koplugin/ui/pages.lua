@@ -338,6 +338,12 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:install_to_kindle_homepage() end,
         })
     end
+    if not view.app.daemon:is_android() and not view.app.daemon:is_pocketbook() then
+        table.insert(rows, 2, {
+            text = _("Install command-line interface"),
+            callback = function() view.app:install_cli() end,
+        })
+    end
     local list_y = y + Theme.scale(8)
     local list_h = h - Theme.scale(16)
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable, index, count)

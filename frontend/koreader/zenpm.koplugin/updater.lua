@@ -173,7 +173,9 @@ local function request(url, sink, method)
     local response = {}
     local started_at = socket.gettime()
     log_info("GitHub request started", method or "GET", url)
-    if ok_socketutil then
+    local manages_socket_timeout = ok_socketutil and type(socketutil) == "table"
+        and type(socketutil.set_timeout) == "function" and type(socketutil.reset_timeout) == "function"
+    if manages_socket_timeout then
         socketutil:set_timeout(10, 30)
     end
     local ok, code, headers, status = https.request{
@@ -182,7 +184,7 @@ local function request(url, sink, method)
         headers = { ["User-Agent"] = "zenpm.koplugin" },
         sink = sink or ltn12.sink.table(response),
     }
-    if ok_socketutil then
+    if manages_socket_timeout then
         socketutil:reset_timeout()
     end
     local elapsed_ms = math.floor((socket.gettime() - started_at) * 1000)

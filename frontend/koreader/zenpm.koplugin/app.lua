@@ -38,6 +38,21 @@ local function log_content_load_error(content, package_id, detail, status_code)
     logger.warn(message .. ": " .. tostring(detail or "request failed"))
 end
 
+local function log_update_failure(app, detail)
+    local message = "ZenPM update failed: " .. tostring(detail or "unknown error")
+    if ok_logger and logger and logger.warn then
+        logger.warn(message)
+    end
+    local persisted = false
+    if app.client and type(app.client.post_log) == "function" then
+        local called, ok = pcall(app.client.post_log, app.client, message)
+        persisted = called and ok == true
+    end
+    if not persisted and app.daemon and type(app.daemon.log_cli) == "function" then
+        pcall(app.daemon.log_cli, app.daemon, message)
+    end
+end
+
 -- Persist UI preferences in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
 local config_settings = nil
@@ -850,7 +865,9 @@ function App:queue_entry_for(pkg, action, asset, opts)
         name = display_name,
         action = action,
         asset = asset,
-        release = opts.release,
+        -- Kindle-only packages run repository scripts; a release tag would
+        -- incorrectly force GitHub release resolution.
+        release = not package_is_kindle_only(pkg) and opts.release or nil,
         is_patch = is_patch,
         prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
@@ -1143,9 +1160,9 @@ function App:show_queue_entry_modify(entry)
         end or nil,
         updates_ignored = queued_update and pkg.update_ignored == true or nil,
         toggle_updates = queued_update and toggle_queued_update or nil,
-            downgrade = Models.has_version_history(pkg) and function()
-                self:prompt_package_versions(pkg)
-            end or nil,
+        downgrade = Models.has_version_history(pkg) and not package_is_kindle_only(pkg) and function()
+            self:prompt_package_versions(pkg)
+        end or nil,
         uninstall = entry.action ~= "uninstall" and function()
             self:confirm_package_action(pkg, "uninstall")
         end or nil,
@@ -2513,6 +2530,14 @@ function App:confirm_remove_source(name)
     end)
 end
 
+function App:install_cli()
+    if self.daemon:install_cli_wrapper() then
+        Modals.notice(_("ZenPM command-line interface installed."))
+    else
+        Modals.info(_("Could not install the ZenPM command-line wrapper."))
+    end
+end
+
 function App:perform_package_action(pkg, on_done)
     if self.busy then
         Modals.info(_("Another operation is in progress. Please wait."))
@@ -2550,14 +2575,16 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg) and function()
+            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+                and not package_is_kindle_only(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg) then
+    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+        and not package_is_kindle_only(pkg) then
         self:prompt_default_package_version(pkg, on_done, "install")
     else
         self:confirm_package_action(pkg, "install", on_done)
@@ -2809,9 +2836,9 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action_installs_package(action) then
-        -- Fonts use the catalog's explicit ZIP URL. Cached release assets do
-        -- not describe installable font builds, so never invoke either chooser.
-        if Models.is_font_package(pkg) then
+        -- Fonts use an explicit catalog ZIP, while Kindle-only packages run
+        -- repository scripts. Neither needs a cached release asset.
+        if Models.is_font_package(pkg) or package_is_kindle_only(pkg) then
             self:queue_package_action(pkg, action, nil, opts)
             return
         end
@@ -3336,10 +3363,12 @@ function App:start_update()
             return
         end
         if not called then
+            log_update_failure(self, ok)
             Modals.info(_("Update failed: ") .. tostring(ok))
             return
         end
         if not ok then
+            log_update_failure(self, result)
             Modals.info(_("Update failed: ") .. tostring(result))
             return
         end
@@ -3367,6 +3396,7 @@ function App:apply_update(release_tag, on_result)
         local started, err = self.daemon:request_android_update()
         if not started then
             local message = _("Companion update failed to start: ") .. tostring(err)
+            log_update_failure(self, message)
             if on_result then
                 on_result(false, message)
             else
@@ -3394,11 +3424,13 @@ function App:apply_update(release_tag, on_result)
         end
         if not called then
             local message = _("Update failed: ") .. tostring(ok)
+            log_update_failure(self, ok)
             if on_result then on_result(false, message) else Modals.info(message) end
             return
         end
         if not ok then
             local message = _("Update failed: ") .. tostring(result)
+            log_update_failure(self, result)
             if on_result then on_result(false, message) else Modals.info(message) end
             return
         end

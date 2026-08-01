@@ -751,9 +751,6 @@ function Daemon:ensure_backend_files()
         for _, companion in ipairs(self:bundled_backend_companions(source)) do
             os.execute("chmod +x " .. Util.sh_quote(backend_dir .. "/" .. basename(companion)))
         end
-        if not self:install_cli_wrapper() then
-            self:log_cli("continuing without the optional command-line wrapper")
-        end
         self.backend_path = backend
         return false, nil
     end
@@ -775,9 +772,6 @@ function Daemon:ensure_backend_files()
     end
     write_text(self:standalone_backend_dir() .. "/VERSION", self:bundled_backend_version() .. "\n")
     write_text(self:standalone_marker(), marker)
-    if not self:install_cli_wrapper() then
-        self:log_cli("continuing without the optional command-line wrapper")
-    end
     self.backend_path = backend
     self:stop_standalone_backend()
     return true, nil

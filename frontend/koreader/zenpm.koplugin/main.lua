@@ -68,13 +68,13 @@ function ZenPM:onDispatcherRegisterActions()
     Dispatcher:registerAction("zenpm", {
         category = "none",
         event = "OpenZenPM",
-        title = _("Open ZenPM"),
+        title = _("ZenPM: Open"),
         general = true,
     })
     Dispatcher:registerAction("zenpm_update_all", {
         category = "none",
         event = "UpdateAllZenPMPlugins",
-        title = _("Update All"),
+        title = _("ZenPM: Update All"),
         general = true,
     })
 end

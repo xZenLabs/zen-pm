@@ -34,6 +34,8 @@ local requested_url
 package.preload["ffi/archiver"] = function() return {} end
 package.preload["json"] = function() return { decode = function() return releases end } end
 package.preload["socket"] = function() return { gettime = function() return 0 end } end
+-- Some KOReader builds expose socketutil without the timeout helpers.
+package.preload["socketutil"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["constants"] = function() return {} end
 package.preload["zenpm_util"] = function() return { path_exists = function() return false end } end
