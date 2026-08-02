@@ -173,6 +173,43 @@ func TestInstallKOReaderPluginUnwrapsPluginsDirectory(t *testing.T) {
 	}
 }
 
+func TestReplaceTreeStagesBeforeRemovingExistingPlugin(t *testing.T) {
+	root := t.TempDir()
+	destination := filepath.Join(root, "plugins", "zen_ui.koplugin")
+	font := filepath.Join(destination, "fonts", "ZenUI.ttf")
+	if err := os.MkdirAll(filepath.Dir(font), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(font, []byte("installed font"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := replaceTree(filepath.Join(root, "missing-update"), destination)
+	if err == nil {
+		t.Fatal("replaceTree succeeded with a missing update tree")
+	}
+	if data, readErr := os.ReadFile(font); readErr != nil || string(data) != "installed font" {
+		t.Fatalf("installed plugin changed before the replacement was ready: %q, %v", data, readErr)
+	}
+
+	update := filepath.Join(root, "update")
+	if err := os.MkdirAll(update, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(update, "main.lua"), []byte("return {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceTree(update, destination); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "main.lua")); err != nil {
+		t.Fatalf("updated plugin missing: %v", err)
+	}
+	if _, err := os.Stat(font); !os.IsNotExist(err) {
+		t.Fatalf("old non-empty font tree remains after update: %v", err)
+	}
+}
+
 func TestInstallGenericPluginReplacesConflictingPluginRecord(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

@@ -643,9 +643,41 @@ func extractZip(data []byte, destination string) error {
 }
 
 func replaceTree(source, destination string) error {
-	if err := os.RemoveAll(destination); err != nil {
+	stage, err := os.MkdirTemp(filepath.Dir(destination), ".zenpm-install-*")
+	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(stage)
+	if err := os.Chmod(stage, 0755); err != nil {
+		return err
+	}
+	backup := stage + ".backup"
+
+	if err := copyTree(source, stage); err != nil {
+		return err
+	}
+
+	hadDestination := false
+	if err := os.Rename(destination, backup); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+	} else {
+		hadDestination = true
+	}
+	if err := os.Rename(stage, destination); err != nil {
+		if hadDestination {
+			if restoreErr := os.Rename(backup, destination); restoreErr != nil {
+				return fmt.Errorf("replace tree: %v; restore previous tree: %w", err, restoreErr)
+			}
+		}
+		return err
+	}
+	_ = os.RemoveAll(backup)
+	return nil
+}
+
+func copyTree(source, destination string) error {
 	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
