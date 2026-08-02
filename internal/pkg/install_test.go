@@ -401,6 +401,33 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 	}
 }
 
+func TestDownloadInstallAssetUsesSourceURLForRequestedSourceRelease(t *testing.T) {
+	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("source zip contents"))
+	}))
+	defer assetServer.Close()
+	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"releases":[]}`))
+	}))
+	defer versionsServer.Close()
+	entry := &repo.CatalogEntry{
+		ID:          "koinsight",
+		Platforms:   []string{"koreader"},
+		Source:      "https://github.com/Ko-Insight/KoInsight",
+		SourceType:  "source",
+		SourceURL:   assetServer.URL,
+		VersionsURL: versionsServer.URL,
+	}
+
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "", "0.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != ".koplugin.zip" || gotURL != assetServer.URL || string(data) != "source zip contents" {
+		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	}
+}
+
 func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID:       "font-cartisse",
