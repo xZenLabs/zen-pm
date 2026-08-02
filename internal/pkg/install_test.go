@@ -438,13 +438,17 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 	}
 }
 
-func TestDownloadInstallAssetUsesSourceURLForRequestedSourceRelease(t *testing.T) {
+func TestDownloadInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("source zip contents"))
+		if r.URL.Path != "/release.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte("release source zip contents"))
 	}))
 	defer assetServer.Close()
 	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"releases":[]}`))
+		_, _ = w.Write([]byte(`{"releases":[{"tag_name":"v0.2.3","assets":[{"name":"source-code.zip","url":"` + assetServer.URL + `/release.zip"}]}]}`))
 	}))
 	defer versionsServer.Close()
 	entry := &repo.CatalogEntry{
@@ -452,15 +456,37 @@ func TestDownloadInstallAssetUsesSourceURLForRequestedSourceRelease(t *testing.T
 		Platforms:   []string{"koreader"},
 		Source:      "https://github.com/Ko-Insight/KoInsight",
 		SourceType:  "source",
-		SourceURL:   assetServer.URL,
+		SourceURL:   assetServer.URL + "/branch.zip",
 		VersionsURL: versionsServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "", "0.2.3")
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "source-code.zip", "v0.2.3")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != ".koplugin.zip" || gotURL != assetServer.URL || string(data) != "source zip contents" {
+	if name != "source-code.zip" || gotURL != assetServer.URL+"/release.zip" || string(data) != "release source zip contents" {
+		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	}
+}
+
+func TestDownloadInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
+	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("current source zip contents"))
+	}))
+	defer assetServer.Close()
+	entry := &repo.CatalogEntry{
+		ID:         "koinsight",
+		Platforms:  []string{"koreader"},
+		Source:     "https://github.com/Ko-Insight/KoInsight",
+		SourceType: "source",
+		SourceURL:  assetServer.URL,
+	}
+
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != ".koplugin.zip" || gotURL != assetServer.URL || string(data) != "current source zip contents" {
 		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
 	}
 }

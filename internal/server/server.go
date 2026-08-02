@@ -1101,17 +1101,17 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageVersionsURL(id string) (string, error) {
+func (s *Server) packageReleaseMetadata(id string) (string, string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			return strings.TrimSpace(entry.VersionsURL), nil
+			return strings.TrimSpace(entry.VersionsURL), strings.ToLower(strings.TrimSpace(entry.SourceType)), nil
 		}
 	}
-	return "", fmt.Errorf("package %q not found", id)
+	return "", "", fmt.Errorf("package %q not found", id)
 }
 
 func (s *Server) packageReadmeMetadata(id string) (string, string, error) {
@@ -1228,7 +1228,7 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	versionsURL, err := s.packageVersionsURL(id)
+	versionsURL, sourceType, err := s.packageReleaseMetadata(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -1240,6 +1240,22 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	if sourceType == "source" {
+		installable := make([]releases.Release, 0, len(items))
+		for _, item := range items {
+			assets := make([]releases.ReleaseAsset, 0, len(item.Assets))
+			for _, asset := range item.Assets {
+				if strings.TrimSpace(asset.Name) != "" && strings.TrimSpace(asset.URL) != "" {
+					assets = append(assets, asset)
+				}
+			}
+			if len(assets) > 0 {
+				item.Assets = assets
+				installable = append(installable, item)
+			}
+		}
+		items = installable
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"releases": items})
 }

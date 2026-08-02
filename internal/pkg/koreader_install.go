@@ -89,8 +89,18 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 		assetName = ".koplugin.zip"
 	}
 
+	if assetURL == "" && usesSourcePackage(entry) && strings.TrimSpace(releaseTag) != "" && strings.TrimSpace(entry.VersionsURL) != "" {
+		items, err := releases.FetchVersions(entry.VersionsURL)
+		if err != nil {
+			return "", "", nil, err
+		}
+		if _, releaseAsset, err := releases.FindVersionsAsset(items, releaseTag, assetName); err == nil {
+			assetName = releaseAsset.Name
+			assetURL = releaseAsset.URL
+		}
+	}
 	if assetURL == "" && usesSourcePackage(entry) {
-		if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
+		if strings.TrimSpace(releaseTag) == "" && strings.HasSuffix(strings.ToLower(assetName), ".lua") {
 			if repository, ok := releases.GitHubRepository(entry.Source); ok {
 				assetURL = "https://raw.githubusercontent.com/" + repository + "/HEAD/" + url.PathEscape(assetName)
 			}

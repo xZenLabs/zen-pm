@@ -96,6 +96,12 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 	if err != nil {
 		return result, err
 	}
+	scannedDirs := make(map[string]bool, len(pluginDirs))
+	foundPaths := make(map[string]bool)
+	foundIDs := make(map[string]bool)
+	for _, pluginDir := range pluginDirs {
+		scannedDirs[filepath.Clean(pluginDir)] = true
+	}
 	for _, pluginDir := range pluginDirs {
 		entries, err := os.ReadDir(pluginDir)
 		if err != nil {
@@ -111,6 +117,7 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			}
 			result.Scanned++
 			pluginPath := filepath.Join(pluginDir, dir.Name())
+			foundPaths[filepath.Clean(pluginPath)] = true
 
 			version, err := koreaderPluginVersion(pluginPath)
 			if err != nil {
@@ -135,6 +142,7 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			} else if len(candidates) > 1 || byID[module] != nil {
 				id = "local-plugin:" + module
 			}
+			foundIDs[id] = true
 
 			if pkg != nil && len(candidates) > 1 {
 				for _, candidate := range candidates {
@@ -203,6 +211,15 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			}
 			result.Added++
 			installedByID[id] = current
+		}
+	}
+	for _, entry := range installed {
+		path := filepath.Clean(entry.InstallPath)
+		if foundIDs[entry.ID] || foundPaths[path] || !strings.HasSuffix(filepath.Base(path), ".koplugin") || !scannedDirs[filepath.Dir(path)] {
+			continue
+		}
+		if err := m.st.RemoveInstalled(entry.ID); err != nil {
+			return result, fmt.Errorf("remove missing KOReader plugin %s: %w", entry.ID, err)
 		}
 	}
 

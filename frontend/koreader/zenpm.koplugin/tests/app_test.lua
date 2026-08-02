@@ -236,6 +236,26 @@ local zenpm_versions = App.load_package_releases({
 }, zenpm_package)
 assert(release_requests == 1)
 
+local source_fallback_action
+App.prompt_latest_package_build({
+    state = { beta_updates = false },
+    load_package_releases = App.load_package_releases,
+    client = {
+        get_package_releases = function()
+            return true, { releases = {} }
+        end,
+    },
+    queue_package_action = function(_, _, action, asset)
+        source_fallback_action = { action = action, asset = asset }
+    end,
+}, {
+    id = "source-only",
+    source_type = "source",
+    versions_url = "https://repo.example/source-only/versions.json",
+}, nil, "install")
+assert(source_fallback_action.action == "install")
+assert(source_fallback_action.asset == nil)
+
 local failed_release_app = {
     state = {
         beta_updates = false,

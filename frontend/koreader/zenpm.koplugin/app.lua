@@ -261,6 +261,10 @@ local function package_id(pkg)
     return Util.trim(tostring(pkg and (pkg.id or pkg.name) or "")):lower()
 end
 
+local function package_uses_source(pkg)
+    return Util.trim(tostring(pkg and pkg.source_type or "")):lower() == "source"
+end
+
 local function action_present(action)
     if action == "update" then
         return _("update")
@@ -836,7 +840,7 @@ function App:queue_all_updates()
                 end
                 if self:queue_package_action(pkg, "update", asset, {
                     silent = true,
-                    release = pkg.latest_release,
+                    release = not package_uses_source(pkg) and pkg.latest_release or nil,
                 }) then
                     added = added + 1
                     kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
@@ -2690,7 +2694,7 @@ function App:confirm_remove_unmanaged_patch(asset, on_done)
     )
 end
 
--- Show installable cached releases for a package. Each version maps to an
+-- Show installable releases for a package. Each version maps to an
 -- update/reinstall/downgrade action based on its relation to the installed
 -- version. Prereleases are hidden unless the user enabled ZenPM beta updates.
 -- The list is paged VERSIONS_PER_PAGE at a time in the UI.
@@ -2703,7 +2707,7 @@ local function version_action(current, tag)
     return "reinstall"
 end
 
-function App:load_package_releases(pkg)
+function App:load_package_releases(pkg, allow_empty)
     Modals.status(_("Loading available versions..."))
     local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
     Modals.close_status()
@@ -2719,28 +2723,39 @@ function App:load_package_releases(pkg)
         end
     end
     if #releases == 0 then
+        if allow_empty then return releases end
         Modals.info(_("No installable versions were found."))
         return nil
     end
     return releases
 end
 
-function App:prompt_package_versions(pkg, on_done)
+function App:prompt_package_versions(pkg, on_done, fallback_action)
     local current = pkg.installed and (pkg.installed_version or pkg.version or "") or ""
-    local releases = self:load_package_releases(pkg)
+    local source_fallback = fallback_action and package_uses_source(pkg)
+    local releases = self:load_package_releases(pkg, source_fallback)
     if not releases then return end
+    if #releases == 0 then
+        self:queue_package_action(pkg, fallback_action, nil, nil)
+        return
+    end
     self:show_versions_page(pkg, releases, current, 1, on_done)
 end
 
 function App:prompt_latest_package_build(pkg, on_done, action)
-    local releases = self:load_package_releases(pkg)
+    local source_fallback = package_uses_source(pkg)
+    local releases = self:load_package_releases(pkg, source_fallback)
     if not releases then return end
+    if #releases == 0 then
+        self:queue_package_action(pkg, action or "install", nil, nil)
+        return
+    end
     self:choose_version_release(pkg, releases[1], action or "install", on_done)
 end
 
 function App:prompt_default_package_version(pkg, on_done, action)
     if self.state.manual_version_picker then
-        self:prompt_package_versions(pkg, on_done)
+        self:prompt_package_versions(pkg, on_done, action)
         return
     end
     self:prompt_latest_package_build(pkg, on_done, action)
@@ -2819,6 +2834,7 @@ end
 
 function App:confirm_package_action(pkg, action, on_done)
     local opts = action == "update" and pkg.latest_release and not Models.is_font_package(pkg)
+        and not package_uses_source(pkg)
         and { release = pkg.latest_release } or nil
     self:start_package_action(pkg, action, on_done, opts)
 end

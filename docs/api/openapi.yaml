@@ -377,7 +377,7 @@ paths:
       tags:
         - Packages
       summary: List recent installable releases
-      description: Returns the releases cached at the package's repository-hosted `versions_url`. Returns an empty array when that field is absent or the file is blank or not found; GitHub is never queried as a fallback.
+      description: Returns releases from the package's repository-hosted `versions_url`. Source packages may use generated source archives as release assets; for those packages, releases without usable assets are omitted so installation can fall back to the current `source_url`.
       operationId: listPackageReleases
       responses:
         "200":

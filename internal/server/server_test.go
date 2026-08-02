@@ -848,6 +848,56 @@ func TestHandlePackageReleasesUsesVersionsURL(t *testing.T) {
 	}
 }
 
+func TestHandlePackageReleasesUsesSourceAssetsFromVersionsURL(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"releases":[
+			{"tag_name":"v0.2.3","name":"v0.2.3","assets":[{"name":"source-code.zip","url":"https://api.github.com/repos/Ko-Insight/KoInsight/zipball/v0.2.3"}]},
+			{"tag_name":"v0.2.2","name":"v0.2.2","assets":[]}
+		]}`))
+	}))
+	defer versionsServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "koinsight", Name: "KoInsight", Repo: "ZenLabs",
+		SourceType: "source", SourceURL: "https://codeload.github.com/Ko-Insight/KoInsight/zip/refs/heads/master",
+		VersionsURL: versionsServer.URL,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageReleases(rec, httptest.NewRequest(http.MethodGet, "/packages/koinsight/releases", nil), "koinsight")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Releases []struct {
+			TagName string `json:"tag_name"`
+			Assets  []struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			} `json:"assets"`
+		} `json:"releases"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Releases) != 1 || response.Releases[0].TagName != "v0.2.3" || len(response.Releases[0].Assets) != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+	asset := response.Releases[0].Assets[0]
+	if asset.Name != "source-code.zip" || asset.URL != "https://api.github.com/repos/Ko-Insight/KoInsight/zipball/v0.2.3" {
+		t.Fatalf("source asset = %#v", asset)
+	}
+}
+
 func TestPackageReadmeURLRequiresHostedMetadata(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

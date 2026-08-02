@@ -52,9 +52,12 @@ Example:
 
 `versions_url` points to a JSON object with a `releases` array. Each release
 contains `tag_name`, optional `name` and `prerelease`, plus `assets` with
-`name`, `url`, optional `size`, and optional `digest`. Clients must treat a
-missing, empty, or not-found versions file as an empty version history and
-must not query the upstream source as a fallback.
+`name`, `url`, optional `size`, and optional `digest`. For packages with
+`source_type: "source"`, these assets may be generated source archives such as
+GitHub's `zipball` URLs. When a source package has no releases with usable
+assets, installation falls back to the package's current `source_url`. Other
+packages treat a missing, empty, or not-found versions file as an empty version
+history.
 
 `platforms` are required compatibility capabilities, not alternatives. For
 example, `["kindle", "koreader"]` is shown only when both Kindle and KOReader

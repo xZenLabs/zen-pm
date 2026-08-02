@@ -191,6 +191,35 @@ func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *tes
 	}
 }
 
+func TestScanKOReaderPluginsRemovesPreviouslyScannedPluginMissingFromDisk(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}})
+	writeKOReaderPlugin(t, plugins, "reader", `return { version = "1.2.3" }`)
+	if _, err := manager.ScanKOReaderPlugins(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "host-package", Name: "Host Package", Version: "1.0.0", Repo: "ZenLabs", InstallPath: "/opt/host-package",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(plugins, "reader.koplugin")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ScanKOReaderPlugins(true); err != nil {
+		t.Fatal(err)
+	}
+
+	if installed, _ := st.IsInstalled("reader"); installed {
+		t.Fatal("manually removed plugin remains installed")
+	}
+	if installed, _ := st.IsInstalled("host-package"); !installed {
+		t.Fatal("non-plugin package was removed during plugin scan")
+	}
+}
+
 func TestUninstallUnmatchedKOReaderPluginRemovesDetectedDirectory(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
 		ID: "local-plugin", Name: "Different Host Package", Repo: "ZenLabs", Platforms: []string{"host"},
