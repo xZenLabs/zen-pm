@@ -595,6 +595,9 @@ func (m *Manager) baseScriptEnv(id string) map[string]string {
 	env := map[string]string{
 		"ZENPM_PACKAGE_ID": id,
 	}
+	if m.plat == platform.Kindle {
+		env["ZENPM_USE_GO_CURL"] = "1"
+	}
 	if m.st != nil {
 		caBundle := m.st.CABundle
 		if m.plat == platform.Kindle && m.st.RSACABundle != "" {

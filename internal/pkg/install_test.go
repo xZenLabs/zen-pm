@@ -75,6 +75,9 @@ func TestKindleScriptEnvUsesRSACABundle(t *testing.T) {
 	if got := env["SSL_CERT_FILE"]; got != st.RSACABundle {
 		t.Fatalf("SSL_CERT_FILE = %q, want %q", got, st.RSACABundle)
 	}
+	if got := env["ZENPM_USE_GO_CURL"]; got != "1" {
+		t.Fatalf("ZENPM_USE_GO_CURL = %q, want 1", got)
+	}
 }
 
 func TestNonKindleScriptEnvUsesFullCABundle(t *testing.T) {
@@ -82,6 +85,9 @@ func TestNonKindleScriptEnvUsesFullCABundle(t *testing.T) {
 	env := (&Manager{st: st, plat: platform.Kobo}).baseScriptEnv("package")
 	if got := env["CURL_CA_BUNDLE"]; got != st.CABundle {
 		t.Fatalf("CURL_CA_BUNDLE = %q, want %q", got, st.CABundle)
+	}
+	if got := env["ZENPM_USE_GO_CURL"]; got != "" {
+		t.Fatalf("ZENPM_USE_GO_CURL = %q, want empty", got)
 	}
 }
 
