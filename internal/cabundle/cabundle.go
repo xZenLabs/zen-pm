@@ -3,10 +3,13 @@
 package cabundle
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -82,6 +85,38 @@ treGCc=
 // cannot parse EC public keys. GitHub serves an RSA chain rooted at USERTrust
 // RSA to clients without ECC support; repo.zen-labs.org uses ISRG Root X1.
 const rsaPEMData = `-----BEGIN CERTIFICATE-----
+MIIFijCCA3KgAwIBAgIQdY39i658BwD6qSWn4cetFDANBgkqhkiG9w0BAQwFADBf
+MQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQD
+Ey1TZWN0aWdvIFB1YmxpYyBTZXJ2ZXIgQXV0aGVudGljYXRpb24gUm9vdCBSNDYw
+HhcNMjEwMzIyMDAwMDAwWhcNNDYwMzIxMjM1OTU5WjBfMQswCQYDVQQGEwJHQjEY
+MBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1TZWN0aWdvIFB1Ymxp
+YyBTZXJ2ZXIgQXV0aGVudGljYXRpb24gUm9vdCBSNDYwggIiMA0GCSqGSIb3DQEB
+AQUAA4ICDwAwggIKAoICAQCTvtU2UnXYASOgHEdCSe5jtrch/cSV1UgrJnwUUxDa
+ef0rty2k1Cz66jLdScK5vQ9IPXtamFSvnl0xdE8H/FAh3aTPaE8bEmNtJZlMKpnz
+SDBh+oF8HqcIStw+KxwfGExxqjWMrfhu6DtK2eWUAtaJhBOqbchPM8xQljeSM9xf
+iOefVNlI8JhD1mb9nxc4Q8UBUQvX4yMPFF1bFOdLvt30yNoDN9HWOaEhUTCDsG3X
+ME6WW5HwcCSrv0WBZEMNvSE6Lzzpng3LILVCJ8zab5vuZDCQOc2TZYEhMbUjUDM3
+IuM47fgxMMxF/mL50V0yeUKH32rMVhlATc6qu/m1dkmU8Sf4kaWD5QazYw6A3OAS
+VYCmO2a0OYctyPDQ0RTp5A1NDvZdV3LFOxxHVp3i1fuBYYzMTYCQNFu31xR13NgE
+SJ/AwSiItOkcyqex8Va3e0lMWeUgFaiEAin6OJRpmkkGj80feRQXEgyDet4fsZfu
++Zd4KKTIRJLpfSYFplhym3kT2BFfrsU4YjRosoYwjviQYZ4ybPUHNs2iTG7sijbt
+8uaZFURww3y8nDnAtOFr94MlI1fZEoDlSfB1D++N6xybVCi0ITz8fAr/73trdf+L
+HaAZBav6+CuBQug4urv7qv094PPK306Xlynt8xhW6aWWrL3DkJiy4Pmi1KZHQ3xt
+zwIDAQABo0IwQDAdBgNVHQ4EFgQUVnNYZJX5khqwEioEYnmhQBWIIUkwDgYDVR0P
+AQH/BAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggIBAC9c
+mTz8Bl6MlC5w6tIyMY208FHVvArzZJ8HXtXBc2hkeqK5Duj5XYUtqDdFqij0lgVQ
+YKlJfp/imTYpE0RHap1VIDzYm/EDMrraQKFz6oOht0SmDpkBm+S8f74TlH7Kph52
+gDY9hAaLMyZlbcp+nv4fjFg4exqDsQ+8FxG75gbMY/qB8oFM2gsQa6H61SilzwZA
+Fv97fRheORKkU55+MkIQpiGRqRxOF3yEvJ+M0ejf5lG5Nkc/kLnHvALcWxxPDkjB
+JYOcCj+esQMzEhonrPcibCTRAUH4WAP+JWgiH5paPHxsnnVI84HxZmduTILA7rpX
+DhjvLpr3Etiga+kFpaHpaPi8TD8SHkXoUsCjvxInebnMMTzD9joiFgOgyY9mpFui
+TdaBJQbpdqQACj7LzTWb4OE4y2BThihCQRxEV+ioratF4yUQvNs+ZUH7G6aXD+u5
+dHn5HrwdVw1Hr8Mvn4dGp+smWg9WY7ViYG4A++MnESLn/pmPNPW56MORcr3Ywx65
+LvKRRFHQV80MNNVIIb/bE/FmJUNS0nAiNs2fxBx1IK1jcmMGDw4nztJqDby1ORrp
+0XZ60Vzk50lJLVU3aPAaOpg+VBeHVOmmJ1CJeyAvP/+/oYtKR5j/K3tJPsMpRmAY
+QqszKbrAKbkTidOIijlBO8n9pu0f9GBj39ItVQGL
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
 MIIF3jCCA8agAwIBAgIQAf1tMPyjylGoG7xkDjUDLTANBgkqhkiG9w0BAQwFADCB
 iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl
 cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV
@@ -157,12 +192,75 @@ func WriteFile(path string) error {
 	return os.WriteFile(path, []byte(pemData), 0644)
 }
 
-// WriteRSAFile writes the RSA-only bundle used by legacy Kindle package scripts.
+var systemCertFiles = []string{
+	"/etc/ssl/certs/ca-certificates.crt",
+	"/etc/pki/tls/certs/ca-bundle.crt",
+	"/etc/ssl/ca-bundle.pem",
+	"/etc/pki/tls/cacert.pem",
+	"/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+	"/etc/ssl/cert.pem",
+}
+
+var systemCertDirectories = []string{
+	"/etc/ssl/certs",
+	"/etc/pki/tls/certs",
+}
+
+// WriteRSAFile writes the RSA-only bundle used by legacy Kindle package
+// scripts. CURL_CA_BUNDLE replaces curl's system trust store, so preserve all
+// compatible system roots in addition to ZenPM's bundled roots.
 func WriteRSAFile(path string) error {
-	if current, err := os.ReadFile(path); err == nil && string(current) == rsaPEMData {
+	return writeRSAFile(path, []byte(rsaPEMData), systemCertFiles, systemCertDirectories)
+}
+
+func writeRSAFile(path string, bundled []byte, files, directories []string) error {
+	var output bytes.Buffer
+	seen := make(map[string]struct{})
+	appendRSACertificates(&output, seen, bundled)
+	for _, certFile := range files {
+		if data, err := os.ReadFile(certFile); err == nil {
+			appendRSACertificates(&output, seen, data)
+		}
+	}
+	for _, directory := range directories {
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if data, err := os.ReadFile(filepath.Join(directory, entry.Name())); err == nil {
+				appendRSACertificates(&output, seen, data)
+			}
+		}
+	}
+	data := output.Bytes()
+	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, data) {
 		return nil
 	}
-	return os.WriteFile(path, []byte(rsaPEMData), 0644)
+	return os.WriteFile(path, data, 0644)
+}
+
+func appendRSACertificates(output *bytes.Buffer, seen map[string]struct{}, data []byte) {
+	for len(data) > 0 {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			return
+		}
+		data = rest
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil || cert.PublicKeyAlgorithm != x509.RSA {
+			continue
+		}
+		key := string(block.Bytes)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		_ = pem.Encode(output, &pem.Block{Type: "CERTIFICATE", Bytes: block.Bytes})
+	}
 }
 
 // Client returns an HTTP client that trusts the system roots plus the bundled
