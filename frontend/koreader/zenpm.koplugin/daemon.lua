@@ -221,6 +221,10 @@ function Daemon:is_pocketbook()
     return path_exists("/ebrmain")
 end
 
+function Daemon:unix_socket_path()
+    return Constants.UNIX_SOCKET
+end
+
 function Daemon:platform_filter()
     local platform = self:detect_platform()
     if platform == "host" or platform == "android" then
@@ -497,32 +501,6 @@ function Daemon:backend_not_started_error()
     return message
 end
 
-function Daemon:loopback_ready()
-    local probe = socket.tcp()
-    if not probe then
-        return false
-    end
-    local ready = probe:bind("127.0.0.1", 0)
-    probe:close()
-    return ready and true or false
-end
-
-function Daemon:wait_for_loopback()
-    local platform = self:detect_platform()
-    if platform ~= "kobo" then
-        return true
-    end
-    -- Kobo can launch KOReader before loopback is configured.
-    os.execute("ifconfig lo 127.0.0.1 >/dev/null 2>&1")
-    for _ = 1, 20 do
-        if self:loopback_ready() then
-            return true
-        end
-        socket.sleep(0.5)
-    end
-    return false, _("Local network is not ready. Please wait a moment and try again.")
-end
-
 -- uname output never changes within a session; cache the two reads on self.
 function Daemon:uname_kernel()
     if self._uname_kernel == nil then
@@ -668,32 +646,56 @@ function Daemon:ensure_runtime_dirs()
 end
 
 function Daemon:stop_standalone_backend()
+    if self:is_android() then
+        self:stop_android_backend()
+        return
+    end
     local pid = read_text(self:standalone_pid_file())
     if pid ~= "" and pid:match("^%d+$") then
         os.execute("kill " .. pid .. " >/dev/null 2>&1")
     end
     self:stop_tcp_backend(self:standalone_backend())
-    os.execute("pkill -f " .. Util.sh_quote(self:standalone_backend() .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
+    self:stop_socket_backend(self:standalone_backend())
     for _, candidate in ipairs(self:bundled_backend_candidates()) do
         self:stop_tcp_backend(candidate)
-        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
+        self:stop_socket_backend(candidate)
     end
     socket.sleep(0.8)
 end
 
 function Daemon:stop_known_backends()
     self:stop_standalone_backend()
+    if self:is_android() then
+        return
+    end
     for _, candidate in ipairs(self:candidate_backends()) do
         self:stop_tcp_backend(candidate)
-        os.execute("pkill -f " .. Util.sh_quote(candidate .. " serve --socket " .. Constants.POCKETBOOK_SOCKET) .. " >/dev/null 2>&1")
+        self:stop_socket_backend(candidate)
     end
     socket.sleep(0.8)
+end
+
+function Daemon:stop_socket_backend(backend)
+    os.execute("pkill -f " .. Util.sh_quote(backend .. " serve --socket " .. self:unix_socket_path()) .. " >/dev/null 2>&1")
 end
 
 function Daemon:stop_tcp_backend(backend)
     for _, port in ipairs({ Constants.PORT, legacy_tcp_port }) do
         os.execute("pkill -f " .. Util.sh_quote(backend .. " serve --port " .. port) .. " >/dev/null 2>&1")
     end
+end
+
+function Daemon:stop_android_backend()
+    local uri = "zenpm://stop"
+    if android and type(android.openLink) == "function" then
+        local called, opened = pcall(android.openLink, uri)
+        if called and opened then
+            return true
+        end
+    end
+    local cmd = "/system/bin/am start -W -n org.zenlabs.zenpm/.ZenPMActivity"
+        .. " -a android.intent.action.VIEW -d " .. Util.sh_quote(uri)
+    return os.execute(cmd) == 0
 end
 
 function Daemon:health_matches(data)
@@ -749,9 +751,6 @@ function Daemon:ensure_backend_files()
         for _, companion in ipairs(self:bundled_backend_companions(source)) do
             os.execute("chmod +x " .. Util.sh_quote(backend_dir .. "/" .. basename(companion)))
         end
-        if not self:install_cli_wrapper() then
-            self:log_cli("continuing without the optional command-line wrapper")
-        end
         self.backend_path = backend
         return false, nil
     end
@@ -773,9 +772,6 @@ function Daemon:ensure_backend_files()
     end
     write_text(self:standalone_backend_dir() .. "/VERSION", self:bundled_backend_version() .. "\n")
     write_text(self:standalone_marker(), marker)
-    if not self:install_cli_wrapper() then
-        self:log_cli("continuing without the optional command-line wrapper")
-    end
     self.backend_path = backend
     self:stop_standalone_backend()
     return true, nil
@@ -859,11 +855,6 @@ function Daemon:start(prepared)
         end
         return true
     end
-    local loopback_ready, loopback_err = self:wait_for_loopback()
-    if not loopback_ready then
-        self:log_cli("backend start blocked: " .. tostring(loopback_err))
-        return false, loopback_err
-    end
     if changed then
         self.backend_path = self:standalone_backend()
     end
@@ -906,10 +897,7 @@ function Daemon:start(prepared)
     self:log_cli("starting backend " .. backend
         .. " platform=" .. platform
         .. " abi=" .. self:ereader_backend_suffix())
-    local serve_args = " serve --port " .. Constants.PORT
-    if self:is_pocketbook() then
-        serve_args = " serve --socket " .. Util.sh_quote(Constants.POCKETBOOK_SOCKET)
-    end
+    local serve_args = " serve --socket " .. Util.sh_quote(self:unix_socket_path())
     -- Some Android e-reader shells do not provide nohup. Ignore SIGHUP with
     -- POSIX shell built-ins instead, while keeping the daemon detached from
     -- KOReader's stdout/stderr.

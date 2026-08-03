@@ -26,6 +26,13 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
+	if os.Args[1] == "script-curl" {
+		if err := runScriptCurl(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "curl: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	plat := platform.Detect()
 	initStart := time.Now()
@@ -77,7 +84,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  update  [id]")
 	fmt.Fprintln(os.Stderr, "  doctor")
 	fmt.Fprintln(os.Stderr, "  logs    [--tail N]")
-	fmt.Fprintln(os.Stderr, "  serve   [--port PORT] [--socket PATH]")
+	fmt.Fprintln(os.Stderr, "  serve   [--socket PATH | --port PORT]")
 	fmt.Fprintln(os.Stderr, "  maintenance update|uninstall [--parent-pid PID] [--remove-settings]")
 }
 
@@ -287,21 +294,28 @@ func runLogs(st *state.State, args []string) {
 }
 
 func runServe(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, startedAt time.Time, args []string) {
-	port := 18765
-	socketPath := ""
+	port := 0
+	socketPath := "/tmp/zenpm.sock"
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	fs.IntVar(&port, "port", 18765, "port to bind on 127.0.0.1")
-	fs.StringVar(&socketPath, "socket", "", "Unix socket path (instead of TCP)")
+	fs.IntVar(&port, "port", 0, "TCP port to bind on 127.0.0.1")
+	fs.StringVar(&socketPath, "socket", "/tmp/zenpm.sock", "Unix socket path")
 	fs.Parse(args)
+	socketSet := false
+	fs.Visit(func(option *flag.Flag) {
+		socketSet = socketSet || option.Name == "socket"
+	})
+	if port > 0 && socketSet {
+		die("--port and --socket cannot be used together")
+	}
 
 	server.Version = version
 	srv := server.New(st, repos, pkgs, port)
 	srv.StartedAt = startedAt
 	var err error
-	if socketPath != "" {
-		err = srv.ListenAndServeUnix(socketPath)
-	} else {
+	if port > 0 {
 		err = srv.ListenAndServe()
+	} else {
+		err = srv.ListenAndServeUnix(socketPath)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)

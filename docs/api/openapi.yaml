@@ -351,6 +351,7 @@ paths:
                   - readme
                   - readme_base_url
                   - readme_image_base_url
+                  - readme_image_refs
                 properties:
                   readme:
                     type: string
@@ -360,6 +361,11 @@ paths:
                   readme_image_base_url:
                     type: string
                     format: uri
+                  readme_image_refs:
+                    type: object
+                    description: Maps resolved README image URLs to local ref files. Each ref is written asynchronously with either the prepared image path or `failed`.
+                    additionalProperties:
+                      type: string
         "404":
           $ref: "#/components/responses/TextError"
         "502":
@@ -371,7 +377,7 @@ paths:
       tags:
         - Packages
       summary: List recent installable releases
-      description: Returns the releases cached at the package's repository-hosted `versions_url`. Returns an empty array when that field is absent or the file is blank or not found; GitHub is never queried as a fallback.
+      description: Returns releases from the package's repository-hosted `versions_url`. Source packages may use generated source archives as release assets; for those packages, releases without usable assets are omitted so installation can fall back to the current `source_url`.
       operationId: listPackageReleases
       responses:
         "200":
@@ -406,6 +412,38 @@ paths:
         "202":
           $ref: "#/components/responses/Started"
         "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /packages/{id}/update-ignored:
+    parameters:
+      - $ref: "#/components/parameters/PackageId"
+    post:
+      tags:
+        - Packages
+      summary: Set whether updates ignore an installed package or its current version
+      operationId: setPackageUpdateIgnored
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - update_ignored
+              properties:
+                update_ignored:
+                  type: boolean
+                  description: Set true to ignore all updates, or false to allow them.
+                update_ignored_version:
+                  type: string
+                  description: Suppress only this offered update version. `update_ignored` must be false.
+      responses:
+        "200":
+          description: The installed package preference was saved.
+        "400":
+          $ref: "#/components/responses/TextError"
+        "404":
           $ref: "#/components/responses/TextError"
         "405":
           $ref: "#/components/responses/TextError"
@@ -819,6 +857,9 @@ components:
         update_available:
           type: boolean
           description: True when `latest_version` is newer than `installed_version`.
+        update_ignored:
+          type: boolean
+          description: True when the current offered update is suppressed.
         icon_url:
           type: string
           format: uri

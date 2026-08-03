@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -17,6 +18,28 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
+type fakeReadmeImagePreparer struct {
+	refs     map[string]string
+	markdown string
+	baseURL  string
+	started  chan struct{}
+	release  chan struct{}
+	finished chan struct{}
+}
+
+func (f *fakeReadmeImagePreparer) References(markdown, baseURL string) map[string]string {
+	f.markdown = markdown
+	f.baseURL = baseURL
+	return f.refs
+}
+
+func (f *fakeReadmeImagePreparer) Prepare(refs map[string]string) error {
+	close(f.started)
+	<-f.release
+	close(f.finished)
+	return nil
+}
+
 func TestListenUnixBindsSocket(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "zenpm.sock")
 	srv := &Server{}
@@ -31,6 +54,103 @@ func TestListenUnixBindsSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn.Close()
+}
+
+func TestListenAndServeUnixServesHealth(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	socketFile, err := os.CreateTemp("", "zenpm-*.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := socketFile.Name()
+	if err := socketFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.ListenAndServeUnix(path) }()
+
+	var conn net.Conn
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		conn, err = net.DialTimeout("unix", path, 50*time.Millisecond)
+		if err == nil {
+			break
+		}
+	}
+	if conn == nil {
+		t.Fatalf("dial Unix socket: %v", err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte("GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: http.MethodGet})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	response.Body.Close()
+
+	if err := srv.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-serveErr; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("socket remains after shutdown: %v", err)
+	}
+}
+
+func TestServerStopsWhenIdle(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	srv.IdleTimeout = 25 * time.Millisecond
+	srv.touch()
+	go srv.stopWhenIdle()
+
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("idle server did not stop")
+	}
+}
+
+func TestServerIdleTimeoutWaitsForBackgroundWork(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	srv.IdleTimeout = 25 * time.Millisecond
+	srv.touch()
+	srv.backgroundJobs.Add(1)
+	go srv.stopWhenIdle()
+
+	select {
+	case <-srv.done:
+		t.Fatal("server stopped while background work was active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	srv.backgroundJobs.Add(-1)
+	srv.touch()
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("server did not stop after background work completed")
+	}
 }
 
 func TestWrapAllowsUnixSocketRequest(t *testing.T) {
@@ -234,7 +354,7 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := st.AppendInstalled(state.InstalledEntry{
-		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", Asset: "pkg-armv7.zip", InstalledAt: "2026-07-24T12:00:00Z",
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", Asset: "pkg-armv7.zip", UpdateIgnored: true, InstalledAt: "2026-07-24T12:00:00Z",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -248,8 +368,88 @@ func TestPackageListIncludesInstalledAsset(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
 		t.Fatal(err)
 	}
-	if len(packages) != 1 || packages[0].InstalledAsset != "pkg-armv7.zip" || packages[0].InstalledAt != "2026-07-24T12:00:00Z" || !packages[0].UpdateAvail || packages[0].LatestVersion != "1.1.0" {
+	if len(packages) != 1 || packages[0].InstalledAsset != "pkg-armv7.zip" || packages[0].InstalledAt != "2026-07-24T12:00:00Z" || !packages[0].UpdateIgnored || !packages[0].UpdateAvail || packages[0].LatestVersion != "1.1.0" {
 		t.Fatalf("packages = %#v", packages)
+	}
+}
+
+func TestPackageUpdateIgnoredStoresInstalledPackagePreference(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, nil, nil, 0)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/packages/pkg/update-ignored", strings.NewReader(`{"update_ignored":true}`))
+	srv.handlePackageAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || !installed[0].UpdateIgnored {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/packages/pkg/update-ignored", strings.NewReader(`{"update_ignored":false,"update_ignored_version":"1.1.0"}`))
+	srv.handlePackageAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	installed, err = st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored || installed[0].UpdateIgnoredVersion != "1.1.0" {
+		t.Fatalf("installed after version preference = %#v, %v", installed, err)
+	}
+}
+
+func TestPackageListIgnoresOnlySelectedUpdateVersion(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.1.0", Repo: "ZenLabs", InstallURL: "install.sh", Platforms: []string{"host"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", UpdateIgnoredVersion: "1.1.0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	list := func() pkgJSON {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/packages?platform=host", nil)
+		srv.handlePackageList(rec, req)
+		var packages []pkgJSON
+		if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+			t.Fatal(err)
+		}
+		if len(packages) != 1 {
+			t.Fatalf("packages = %#v", packages)
+		}
+		return packages[0]
+	}
+	if item := list(); !item.UpdateAvail || !item.UpdateIgnored || item.LatestVersion != "1.1.0" {
+		t.Fatalf("ignored version item = %#v", item)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "1.2.0", Repo: "ZenLabs", InstallURL: "install.sh", Platforms: []string{"host"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if item := list(); !item.UpdateAvail || item.UpdateIgnored || item.LatestVersion != "1.2.0" {
+		t.Fatalf("next version item = %#v", item)
 	}
 }
 
@@ -359,6 +559,14 @@ func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
 		if !item.UpdateAvail || item.LatestRelease != versions[0] {
 			t.Errorf("latest %q, installed %q: update info = %#v", versions[0], versions[1], item)
 		}
+	}
+}
+
+func TestApplyUpdateInfoDoesNotOfferSameVersionPrereleaseToStableInstall(t *testing.T) {
+	item := pkgJSON{Version: "2.5.4-beta2", InstalledVer: "2.5.4"}
+	applyUpdateInfo(&item, true)
+	if item.UpdateAvail {
+		t.Fatalf("update info = %#v, want no update", item)
 	}
 }
 
@@ -640,6 +848,56 @@ func TestHandlePackageReleasesUsesVersionsURL(t *testing.T) {
 	}
 }
 
+func TestHandlePackageReleasesUsesSourceAssetsFromVersionsURL(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"releases":[
+			{"tag_name":"v0.2.3","name":"v0.2.3","assets":[{"name":"source-code.zip","url":"https://api.github.com/repos/Ko-Insight/KoInsight/zipball/v0.2.3"}]},
+			{"tag_name":"v0.2.2","name":"v0.2.2","assets":[]}
+		]}`))
+	}))
+	defer versionsServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "koinsight", Name: "KoInsight", Repo: "ZenLabs",
+		SourceType: "source", SourceURL: "https://codeload.github.com/Ko-Insight/KoInsight/zip/refs/heads/master",
+		VersionsURL: versionsServer.URL,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageReleases(rec, httptest.NewRequest(http.MethodGet, "/packages/koinsight/releases", nil), "koinsight")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Releases []struct {
+			TagName string `json:"tag_name"`
+			Assets  []struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			} `json:"assets"`
+		} `json:"releases"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Releases) != 1 || response.Releases[0].TagName != "v0.2.3" || len(response.Releases[0].Assets) != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+	asset := response.Releases[0].Assets[0]
+	if asset.Name != "source-code.zip" || asset.URL != "https://api.github.com/repos/Ko-Insight/KoInsight/zipball/v0.2.3" {
+		t.Fatalf("source asset = %#v", asset)
+	}
+}
+
 func TestPackageReadmeURLRequiresHostedMetadata(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -686,21 +944,45 @@ func TestHandlePackageReadmeReturnsMarkdownAndBaseURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := New(st, repo.New(st), pkg.New(st, repo.New(st), "host"), 0)
+	imageURL := "https://github.com/owner/reader/raw/HEAD/logo.png"
+	imageRef := filepath.Join(st.CacheDir, "readme-images", "logo.ref")
+	preparer := &fakeReadmeImagePreparer{
+		refs:     map[string]string{imageURL: imageRef},
+		started:  make(chan struct{}),
+		release:  make(chan struct{}),
+		finished: make(chan struct{}),
+	}
+	srv.readmeImages = preparer
 	rec := httptest.NewRecorder()
 	srv.handlePackageReadme(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/readme", nil), "reader")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	var response struct {
-		Readme        string `json:"readme"`
-		ReadmeBaseURL string `json:"readme_base_url"`
-		ImageBaseURL  string `json:"readme_image_base_url"`
+		Readme        string            `json:"readme"`
+		ReadmeBaseURL string            `json:"readme_base_url"`
+		ImageBaseURL  string            `json:"readme_image_base_url"`
+		ImageRefs     map[string]string `json:"readme_image_refs"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
 	if response.Readme != "# Reader\n\n![Logo](logo.png)" || response.ReadmeBaseURL != readmeServer.URL+"/docs/" || response.ImageBaseURL != "https://github.com/owner/reader/raw/HEAD/" {
 		t.Fatalf("response = %#v", response)
+	}
+	if response.ImageRefs[imageURL] != imageRef || preparer.markdown != response.Readme || preparer.baseURL != response.ImageBaseURL {
+		t.Fatalf("image preparation metadata = %#v / %#v", response.ImageRefs, preparer)
+	}
+	select {
+	case <-preparer.started:
+	case <-time.After(time.Second):
+		t.Fatal("README image preparation did not start")
+	}
+	close(preparer.release)
+	select {
+	case <-preparer.finished:
+	case <-time.After(time.Second):
+		t.Fatal("README image preparation did not finish")
 	}
 }
 

@@ -1,4 +1,5 @@
 local ButtonDialog = require("ui/widget/buttondialog")
+local CheckButton = require("ui/widget/checkbutton")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Font = require("ui/font")
 local Geom = require("ui/geometry")
@@ -7,6 +8,7 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconWidget = require("ui/widget/iconwidget")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local InputText = require("ui/widget/inputtext")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -20,6 +22,43 @@ local _ = require("gettext")
 local Modals = {}
 local status_modal = nil
 local ok_android = pcall(require, "android")
+
+local ClearableInputText = InputText:extend{}
+
+function ClearableInputText:init()
+    InputText.init(self)
+    self.clear_icon = IconWidget:new{
+        file = Images.asset("close.svg"),
+        width = Screen:scaleBySize(24),
+        height = Screen:scaleBySize(24),
+    }
+end
+
+function ClearableInputText:paintTo(bb, x, y)
+    InputText.paintTo(self, bb, x, y)
+    local field = self._frame_textwidget.dimen
+    local icon_size = self.clear_icon:getSize()
+    local inset = Screen:scaleBySize(8)
+    self.clear_icon:paintTo(
+        bb,
+        field.x + field.w - icon_size.w - inset,
+        field.y + math.floor((field.h - icon_size.h) / 2)
+    )
+end
+
+function ClearableInputText:onTapTextBox(arg, ges)
+    local field = self._frame_textwidget.dimen
+    if field and ges.pos.x >= field.x + field.w - Screen:scaleBySize(48) then
+        self:setText("")
+        return true
+    end
+    return InputText.onTapTextBox(self, arg, ges)
+end
+
+function ClearableInputText:onCloseWidget()
+    self.clear_icon:free()
+    InputText.onCloseWidget(self)
+end
 
 local function show_input_dialog(dialog)
     UIManager:show(dialog)
@@ -90,6 +129,27 @@ function Modals.confirm(text, ok_text, ok_callback, close_before_callback)
     Modals.close_status()
 end
 
+function Modals.ignore_updates(pkg, ignore_all_callback, ignore_version_callback)
+    local dialog = ConfirmBox:new{
+        modal = true,
+        dismissable = true,
+        text = string.format(
+            _("Ignore updates for %s?"),
+            Models.package_display_name(pkg, _("Package"))
+        ),
+        ok_text = _("Always ignore"),
+        cancel_text = _("Only this version"),
+        ok_callback = ignore_all_callback,
+        cancel_callback = ignore_version_callback,
+    }
+    function dialog:onClose()
+        UIManager:close(self)
+        return true
+    end
+    UIManager:show(dialog)
+    Modals.close_status()
+end
+
 function Modals.input(title, input, hint, ok_text, callback, clear_callback)
     local dialog
     local buttons = {
@@ -132,15 +192,14 @@ end
 
 function Modals.search(title, input, hint, callback)
     local dialog
+    local initial_input = input or ""
+    local search_submitted = false
     dialog = InputDialog:new{
         title = title,
-        input = input or "",
+        input = initial_input,
         input_hint = hint,
         keyboard_visible = not ok_android,
-        title_bar_left_icon = "close",
-        title_bar_left_icon_tap_callback = function()
-            UIManager:close(dialog)
-        end,
+        inputtext_class = ClearableInputText,
         buttons = {
             {
                 {
@@ -148,6 +207,7 @@ function Modals.search(title, input, hint, callback)
                     is_enter_default = true,
                     callback = function()
                         local text = dialog:getInputText()
+                        search_submitted = true
                         UIManager:close(dialog)
                         callback(text)
                     end,
@@ -155,6 +215,19 @@ function Modals.search(title, input, hint, callback)
             },
         },
     }
+    function dialog:onCloseWidget()
+        local should_clear = not search_submitted
+            and initial_input ~= ""
+            and self:getInputText() == ""
+        InputDialog.onCloseWidget(self)
+        if should_clear then
+            UIManager:nextTick(function() callback("") end)
+        end
+    end
+    function dialog:onCloseDialog()
+        UIManager:close(self)
+        return true
+    end
     function dialog:onTap(arg, ges)
         if ges.pos:notIntersectWith(self.dialog_frame.dimen) then
             UIManager:close(self)
@@ -188,6 +261,13 @@ function Modals.package_modify(pkg, callbacks)
     end
     if callbacks.update then
         add_button("update", _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""), callbacks.update)
+    end
+    if callbacks.toggle_updates then
+        add_button(
+            callbacks.updates_ignored and "allow_updates" or "ignore_updates",
+            callbacks.updates_ignored and _("Allow updates") or _("Ignore updates"),
+            callbacks.toggle_updates
+        )
     end
     if not callbacks.manage_only and callbacks.downgrade then
         add_button("downgrade", _("Change version"), callbacks.downgrade)
@@ -329,16 +409,25 @@ function Modals.plugin_settings_cleanup(text, callback)
 end
 
 function Modals.restart_koreader(text, restart_callback, restart_later_callback)
-    UIManager:show(ConfirmBox:new{
+    local dialog
+    local reopen_checkbox
+    dialog = ConfirmBox:new{
         text = text,
         ok_text = _("Restart now"),
         cancel_text = _("Restart later"),
         ok_callback = function()
             logger.info("ZenPM: requesting KOReader restart")
-            restart_callback()
+            restart_callback(reopen_checkbox.checked)
         end,
         cancel_callback = restart_later_callback,
-    })
+    }
+    reopen_checkbox = CheckButton:new{
+        text = _("Open ZenPM after restart"),
+        checked = false,
+        parent = dialog,
+    }
+    dialog:addWidget(reopen_checkbox)
+    UIManager:show(dialog)
     Modals.close_status()
 end
 

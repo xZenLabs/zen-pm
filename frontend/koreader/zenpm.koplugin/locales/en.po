@@ -63,6 +63,9 @@ msgstr "Are you sure you want to "
 msgid "Are you sure you want to clear the queue?"
 msgstr "Are you sure you want to clear the queue?"
 
+msgid "Are you sure you want to exit ZenPM?"
+msgstr "Are you sure you want to exit ZenPM?"
+
 msgid "Are you sure you want to perform all queued actions?"
 msgstr "Are you sure you want to perform all queued actions?"
 
@@ -327,6 +330,9 @@ msgstr "Install anyway?"
 msgid "Install to Kindle homepage"
 msgstr "Install to Kindle homepage"
 
+msgid "Install command-line interface"
+msgstr "Install command-line interface"
+
 msgid "Installed"
 msgstr "Installed"
 
@@ -462,8 +468,8 @@ msgstr "OK"
 msgid "Only show installable packages"
 msgstr "Only show installable packages"
 
-msgid "Open ZenPM"
-msgstr "Open ZenPM"
+msgid "Open ZenPM after restart"
+msgstr "Open ZenPM after restart"
 
 msgid "Package"
 msgstr "Package"
@@ -759,6 +765,12 @@ msgstr "Zen UI is installed. Most patches should not be used with Zen UI."
 msgid "ZenPM"
 msgstr "ZenPM"
 
+msgid "ZenPM: Open"
+msgstr "ZenPM: Open"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM: Update All"
+
 msgid "ZenPM Android companion could not start its updater."
 msgstr "ZenPM Android companion could not start its updater."
 
@@ -776,6 +788,9 @@ msgstr "ZenPM backend did not start. Ensure you used the correct ZenPM version f
 
 msgid "ZenPM bug reporter"
 msgstr "ZenPM bug reporter"
+
+msgid "ZenPM command-line interface installed."
+msgstr "ZenPM command-line interface installed."
 
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion is checking for an update."

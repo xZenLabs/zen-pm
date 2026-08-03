@@ -66,6 +66,31 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	}
 }
 
+func TestKindleScriptEnvUsesRSACABundle(t *testing.T) {
+	st := &state.State{CABundle: "/tmp/cacert.pem", RSACABundle: "/tmp/cacert-rsa.pem"}
+	env := (&Manager{st: st, plat: platform.Kindle}).baseScriptEnv("package")
+	if got := env["CURL_CA_BUNDLE"]; got != st.RSACABundle {
+		t.Fatalf("CURL_CA_BUNDLE = %q, want %q", got, st.RSACABundle)
+	}
+	if got := env["SSL_CERT_FILE"]; got != st.RSACABundle {
+		t.Fatalf("SSL_CERT_FILE = %q, want %q", got, st.RSACABundle)
+	}
+	if got := env["ZENPM_USE_GO_CURL"]; got != "1" {
+		t.Fatalf("ZENPM_USE_GO_CURL = %q, want 1", got)
+	}
+}
+
+func TestNonKindleScriptEnvUsesFullCABundle(t *testing.T) {
+	st := &state.State{CABundle: "/tmp/cacert.pem", RSACABundle: "/tmp/cacert-rsa.pem"}
+	env := (&Manager{st: st, plat: platform.Kobo}).baseScriptEnv("package")
+	if got := env["CURL_CA_BUNDLE"]; got != st.CABundle {
+		t.Fatalf("CURL_CA_BUNDLE = %q, want %q", got, st.CABundle)
+	}
+	if got := env["ZENPM_USE_GO_CURL"]; got != "" {
+		t.Fatalf("ZENPM_USE_GO_CURL = %q, want empty", got)
+	}
+}
+
 func TestInstallGenericPluginNatively(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -173,6 +198,43 @@ func TestInstallKOReaderPluginUnwrapsPluginsDirectory(t *testing.T) {
 	}
 }
 
+func TestReplaceTreeStagesBeforeRemovingExistingPlugin(t *testing.T) {
+	root := t.TempDir()
+	destination := filepath.Join(root, "plugins", "zen_ui.koplugin")
+	font := filepath.Join(destination, "fonts", "ZenUI.ttf")
+	if err := os.MkdirAll(filepath.Dir(font), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(font, []byte("installed font"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := replaceTree(filepath.Join(root, "missing-update"), destination)
+	if err == nil {
+		t.Fatal("replaceTree succeeded with a missing update tree")
+	}
+	if data, readErr := os.ReadFile(font); readErr != nil || string(data) != "installed font" {
+		t.Fatalf("installed plugin changed before the replacement was ready: %q, %v", data, readErr)
+	}
+
+	update := filepath.Join(root, "update")
+	if err := os.MkdirAll(update, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(update, "main.lua"), []byte("return {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceTree(update, destination); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "main.lua")); err != nil {
+		t.Fatalf("updated plugin missing: %v", err)
+	}
+	if _, err := os.Stat(font); !os.IsNotExist(err) {
+		t.Fatalf("old non-empty font tree remains after update: %v", err)
+	}
+}
+
 func TestInstallGenericPluginReplacesConflictingPluginRecord(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -216,6 +278,54 @@ func TestInstallGenericPluginReplacesConflictingPluginRecord(t *testing.T) {
 	}
 	installed, err := st.ReadInstalled()
 	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" || installed[0].InstallPath != destination {
+		t.Fatalf("installed packages = %#v, %v", installed, err)
+	}
+}
+
+func TestInstallGenericPluginReplacesUntrackedPluginRecordWithSameAsset(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	archive := zipContents(t, map[string]string{
+		"zlibrary.koplugin/_meta.lua": `return { version = "1.0.41" }`,
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/zlibrary.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(archive)
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zlibrary-2", Name: "ZlibraryKO", Version: "1.0.41", Repo: "ZenLabs",
+		Platforms: []string{"koreader"}, PluginModule: "zlibrary",
+		Assets: "[{\"arch\":\"any\",\"asset\":\"zlibrary_plugin_v1.0.41.zip\",\"url\":\"" + srv.URL + "/zlibrary.zip\"}]",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "local-plugin:zlibrary", Name: "zlibrary", Version: "1.0.0", Asset: "zlibrary.koplugin",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Install("zlibrary-2"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" {
 		t.Fatalf("installed packages = %#v, %v", installed, err)
 	}
 }
@@ -349,6 +459,59 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if name != "rakuyomi-kindlehf-v1.40.0-pre.zip" || gotURL != assetServer.URL || string(data) != "zip contents" {
+		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	}
+}
+
+func TestDownloadInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testing.T) {
+	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/release.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte("release source zip contents"))
+	}))
+	defer assetServer.Close()
+	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"releases":[{"tag_name":"v0.2.3","assets":[{"name":"source-code.zip","url":"` + assetServer.URL + `/release.zip"}]}]}`))
+	}))
+	defer versionsServer.Close()
+	entry := &repo.CatalogEntry{
+		ID:          "koinsight",
+		Platforms:   []string{"koreader"},
+		Source:      "https://github.com/Ko-Insight/KoInsight",
+		SourceType:  "source",
+		SourceURL:   assetServer.URL + "/branch.zip",
+		VersionsURL: versionsServer.URL,
+	}
+
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "source-code.zip", "v0.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "source-code.zip" || gotURL != assetServer.URL+"/release.zip" || string(data) != "release source zip contents" {
+		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	}
+}
+
+func TestDownloadInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
+	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("current source zip contents"))
+	}))
+	defer assetServer.Close()
+	entry := &repo.CatalogEntry{
+		ID:         "koinsight",
+		Platforms:  []string{"koreader"},
+		Source:     "https://github.com/Ko-Insight/KoInsight",
+		SourceType: "source",
+		SourceURL:  assetServer.URL,
+	}
+
+	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != ".koplugin.zip" || gotURL != assetServer.URL || string(data) != "current source zip contents" {
 		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
 	}
 }
@@ -1219,5 +1382,61 @@ func TestDisplayVersionDoesNotDoublePrefix(t *testing.T) {
 		if got := displayVersion(input); got != want {
 			t.Fatalf("displayVersion(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestUpdateSkipsIgnoredInstalledPackages(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "2.0.0", Repo: "ZenLabs", InstallURL: "https://example.invalid/install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", UpdateIgnored: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Update(""); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Version != "1.0.0" || !installed[0].UpdateIgnored {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+}
+
+func TestUpdateSkipsOnlyMatchingIgnoredUpdateVersion(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "pkg", Name: "Package", Version: "2.0.0", Repo: "ZenLabs", InstallURL: "https://example.invalid/install.sh",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", UpdateIgnoredVersion: "2.0.0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Update(""); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Version != "1.0.0" || installed[0].UpdateIgnoredVersion != "2.0.0" {
+		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 }

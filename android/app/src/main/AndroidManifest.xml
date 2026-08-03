@@ -18,6 +18,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="zenpm" android:host="start" />
+                <data android:scheme="zenpm" android:host="stop" />
                 <data android:scheme="zenpm" android:host="update" />
             </intent-filter>
         </activity>

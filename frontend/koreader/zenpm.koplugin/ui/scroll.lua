@@ -1,7 +1,7 @@
 -- Scrollable list rendering and scrollbar interaction for AppView.
 -- All functions take the AppView instance so they can read/write its shared
--- per-paint state: list_bounds, scroll_step, scrollbar (drag geometry) and
--- max_scroll.
+-- per-paint state: list_bounds, scroll_step, scroll_page_step, scrollbar
+-- (drag geometry) and max_scroll.
 
 local Device = require("device")
 
@@ -15,7 +15,7 @@ local Scroll = {}
 -- Snap a scroll offset to whole-item steps and clamp to [0, max_scroll]. The
 -- list cull in scrolled_list only draws rows fully inside the viewport, so an
 -- off-grid offset clips the top/bottom row and leaves a blank band. Snapping
--- keeps every offset aligned to the item grid (matching swipe navigation).
+-- keeps every offset aligned to the item grid.
 local function snap_scroll(value, step, max_scroll)
     if step and step > 0 then
         value = math.floor(value / step + 0.5) * step
@@ -91,10 +91,9 @@ function Scroll.draw_scrollbar(view, bb, max_scroll, scroll)
 end
 
 -- Map an absolute screen Y to a scroll offset using the captured scrollbar
--- geometry, then store it. The offset is snapped to whole-item steps so a
--- drag scrolls in the same increments as a swipe (one list item at a time),
--- which also keeps the rendered offset aligned to the item grid. Returns true
--- if the scroll position changed.
+-- geometry, then store it. The offset is snapped to whole-item steps, keeping
+-- a scrollbar drag aligned to the item grid even when page swipes advance
+-- several rows. Returns true if the scroll position changed.
 function Scroll.apply_y(view, pos_y)
     local sb = view.scrollbar
     if not sb or sb.travel <= 0 then
@@ -166,7 +165,7 @@ function Scroll.paint_drag_thumb(view, pos_y)
     return rects
 end
 
-function Scroll.scrolled_list(view, bb, items, x, y, w, h, scroll, item_h, gap, draw_item)
+function Scroll.scrolled_list(view, bb, items, x, y, w, h, scroll, item_h, gap, draw_item, page_sized)
     Scroll.set_list_bounds(view, x, y, w, h, item_h + gap)
     P.rect(bb, x, y, w, h, Theme.bg)
     local total_h = 0
@@ -177,6 +176,12 @@ function Scroll.scrolled_list(view, bb, items, x, y, w, h, scroll, item_h, gap, 
         total_h = total_h - gap
     end
     local step = item_h + gap
+    if page_sized then
+        -- The last visible item has no trailing gap, so include it when
+        -- calculating how many complete rows fit in the viewport.
+        local rows = math.max(1, math.floor((h + gap) / step))
+        view.scroll_page_step = rows * step
+    end
     local max_scroll = math.max(0, total_h - h)
     if max_scroll > 0 then
         max_scroll = math.ceil(max_scroll / step) * step
@@ -187,9 +192,10 @@ function Scroll.scrolled_list(view, bb, items, x, y, w, h, scroll, item_h, gap, 
     end
     local scrollable = max_scroll > 0
     local cy = y - scroll
-    for _, item in ipairs(items or {}) do
+    local count = #(items or {})
+    for index, item in ipairs(items or {}) do
         if cy >= y and cy + item_h <= y + h then
-            draw_item(item, cy, scrollable)
+            draw_item(item, cy, scrollable, index, count)
         end
         cy = cy + item_h + gap
     end

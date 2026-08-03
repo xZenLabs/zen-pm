@@ -38,6 +38,21 @@ local function log_content_load_error(content, package_id, detail, status_code)
     logger.warn(message .. ": " .. tostring(detail or "request failed"))
 end
 
+local function log_update_failure(app, detail)
+    local message = "ZenPM update failed: " .. tostring(detail or "unknown error")
+    if ok_logger and logger and logger.warn then
+        logger.warn(message)
+    end
+    local persisted = false
+    if app.client and type(app.client.post_log) == "function" then
+        local called, ok = pcall(app.client.post_log, app.client, message)
+        persisted = called and ok == true
+    end
+    if not persisted and app.daemon and type(app.daemon.log_cli) == "function" then
+        pcall(app.daemon.log_cli, app.daemon, message)
+    end
+end
+
 -- Persist UI preferences in our own config file inside
 -- the ZenPM state dir, kept separate from KOReader's global settings.
 local config_settings = nil
@@ -69,6 +84,12 @@ function App.save_setting(key, value)
     if not settings then return end
     settings:saveSetting(key, value)
     settings:flush()
+end
+
+function App.consume_reopen_after_restart()
+    if not App.load_setting("reopen_after_restart", false) then return false end
+    App.save_setting("reopen_after_restart", false)
+    return true
 end
 
 function App:defer_font_uninstall(pkg, asset)
@@ -238,6 +259,10 @@ end
 
 local function package_id(pkg)
     return Util.trim(tostring(pkg and (pkg.id or pkg.name) or "")):lower()
+end
+
+local function package_uses_source(pkg)
+    return Util.trim(tostring(pkg and pkg.source_type or "")):lower() == "source"
 end
 
 local function action_present(action)
@@ -681,10 +706,64 @@ function App:queue_count()
     return #(self.state.queue or {})
 end
 
+function App:set_package_updates_ignored(pkg, ignored, ignored_version)
+    local id = Util.trim(tostring(pkg and (pkg.id or pkg.name) or ""))
+    if id == "" then return false end
+    ignored_version = ignored_version and Util.trim(tostring(ignored_version)) or nil
+    if ignored_version == "" then ignored_version = nil end
+    local ok, detail = self.client:set_package_updates_ignored(id, ignored, ignored_version)
+    if not ok then
+        Modals.info(_("Could not update the package preference: ") .. tostring(detail or _("request failed")))
+        return false
+    end
+    for _, candidate in ipairs(self.state.packages or {}) do
+        if tostring(candidate.id or candidate.name or "") == id then
+            candidate.update_ignored = ignored == true
+                or (ignored_version ~= nil and tostring(candidate.latest_version or "") == ignored_version)
+        end
+    end
+    if pkg then
+        pkg.update_ignored = ignored == true
+            or (ignored_version ~= nil and tostring(pkg.latest_version or "") == ignored_version)
+    end
+    self:refresh()
+    return true
+end
+
+function App:toggle_package_updates(pkg)
+    local setter = self.set_package_updates_ignored or App.set_package_updates_ignored
+    return setter(self, pkg, not pkg.update_ignored)
+end
+
+function App:prompt_package_updates(pkg, ignored_callback)
+    if pkg.update_ignored then
+        return self:toggle_package_updates(pkg)
+    end
+    local version = Util.trim(tostring(pkg.latest_version or ""))
+    if not pkg.update_available or version == "" then
+        local ignored = self:toggle_package_updates(pkg)
+        if ignored and ignored_callback then ignored_callback() end
+        return ignored
+    end
+    Modals.ignore_updates(pkg,
+        function()
+            if self:set_package_updates_ignored(pkg, true) and ignored_callback then
+                ignored_callback()
+            end
+        end,
+        function()
+            if self:set_package_updates_ignored(pkg, false, version) and ignored_callback then
+                ignored_callback()
+            end
+        end
+    )
+    return true
+end
+
 function App:installed_update_count()
     local count = 0
     for _, pkg in ipairs(self.state.packages or {}) do
-        if pkg.installed and pkg.update_available then
+        if pkg.installed and pkg.update_available and not pkg.update_ignored then
             count = count + 1
         end
     end
@@ -717,7 +796,7 @@ function App:queue_all_updates()
             finish()
             return
         end
-        if pkg.installed and pkg.update_available then
+        if pkg.installed and pkg.update_available and not pkg.update_ignored then
             local key = queue_key(pkg.id or pkg.name, nil)
             if not queued[key] then
                 if is_zenpm_package(pkg) then
@@ -761,7 +840,7 @@ function App:queue_all_updates()
                 end
                 if self:queue_package_action(pkg, "update", asset, {
                     silent = true,
-                    release = pkg.latest_release,
+                    release = not package_uses_source(pkg) and pkg.latest_release or nil,
                 }) then
                     added = added + 1
                     kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
@@ -790,7 +869,9 @@ function App:queue_entry_for(pkg, action, asset, opts)
         name = display_name,
         action = action,
         asset = asset,
-        release = opts.release,
+        -- Kindle-only packages run repository scripts; a release tag would
+        -- incorrectly force GitHub release resolution.
+        release = not package_is_kindle_only(pkg) and opts.release or nil,
         is_patch = is_patch,
         prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
@@ -1028,9 +1109,21 @@ function App:show_queue_entry_modify(entry)
     if self.state.queue_running or not entry or not entry.pkg then return end
     local pkg = entry.pkg
     local remove_queue = function() self:confirm_remove_queue_entry(entry) end
+    local toggle_queued_update = function()
+        self:prompt_package_updates(pkg, function()
+            if self:remove_queue_entry(entry) and self.state.page == "queue" then
+                self:close_queue()
+            else
+                self:refresh()
+            end
+        end)
+    end
     if entry.self_update or entry.self_reinstall then
-        Modals.actions(Models.package_display_name(pkg, _("ZenPM")), {
-            { text = _("Remove from queue"), callback = remove_queue },
+        Modals.package_modify(pkg, {
+            title_icon = self:package_icon_file(pkg),
+            remove_queue = remove_queue,
+            updates_ignored = entry.self_update and pkg.update_ignored == true or nil,
+            toggle_updates = entry.self_update and toggle_queued_update or nil,
         })
         return
     end
@@ -1062,15 +1155,18 @@ function App:show_queue_entry_modify(entry)
         Modals.actions(Models.package_display_name(pkg, _("Package")), actions)
         return
     end
+    local queued_update = entry.action == "update"
     Modals.package_modify(pkg, {
         title_icon = self:package_icon_file(pkg),
         remove_queue = remove_queue,
         update = entry.action ~= "update" and pkg.update_available and function()
             self:confirm_package_action(pkg, "update")
         end or nil,
-            downgrade = Models.has_version_history(pkg) and function()
-                self:prompt_package_versions(pkg)
-            end or nil,
+        updates_ignored = queued_update and pkg.update_ignored == true or nil,
+        toggle_updates = queued_update and toggle_queued_update or nil,
+        downgrade = Models.has_version_history(pkg) and not package_is_kindle_only(pkg) and function()
+            self:prompt_package_versions(pkg)
+        end or nil,
         uninstall = entry.action ~= "uninstall" and function()
             self:confirm_package_action(pkg, "uninstall")
         end or nil,
@@ -1125,8 +1221,8 @@ function App:finish_queue_batch(batch)
         self.state.queue_running = false
         self:refresh()
         if batch.prompt_restart then
-            Modals.restart_koreader(result .. "\n\n" .. _("Restart KOReader to apply the changes."), function()
-                self:restart_koreader()
+            Modals.restart_koreader(result .. "\n\n" .. _("Restart KOReader to apply the changes."), function(reopen_after_restart)
+                self:restart_koreader(reopen_after_restart)
             end, queue_completed and function()
                 self:close_queue()
             end or nil)
@@ -1308,11 +1404,29 @@ function App:show()
         self:finish_deferred_font_uninstalls()
         self:navigate(self.state.active_tab or "home")
         self:schedule_plugin_scan_after_open()
+        self:refresh_catalog_on_open()
     else
         self.t_open = socket.gettime()
         self:set_loading(_("Loading packages, please wait"))
         self:start_backend_then_reload()
     end
+end
+
+function App:refresh_catalog_on_open()
+    if self.catalog_refreshing or not self.backend_ready or not self.view then return end
+    self.catalog_refreshing = true
+    self:run_update_task(function()
+        return pcall(self.client.refresh_repos, self.client)
+    end, nil, function(completed, called, ok)
+        self.catalog_refreshing = false
+        if not completed or not called or not ok or not self.view then return end
+        self.state.readme_cache = {}
+        self.image_files = {}
+        Images.invalidate_cache()
+        self:load_packages(false, true)
+        self:load_repos(true)
+        self:reload_current_page()
+    end)
 end
 
 function App:intercept_koreader_exit()
@@ -1341,6 +1455,10 @@ end
 
 function App:close()
     self:restore_koreader_exit()
+    if self.daemon and type(self.daemon.is_android) == "function" and self.daemon:is_android() then
+        self.daemon:stop_standalone_backend()
+        self.backend_ready = false
+    end
     if self.view then
         local view = self.view
         local dimen = view.dimen
@@ -1356,10 +1474,14 @@ function App:quit()
     self:close()
 end
 
-function App:restart_koreader()
+function App:restart_koreader(reopen_after_restart)
+    App.save_setting("reopen_after_restart", reopen_after_restart == true)
     Modals.status(_("Restarting..."))
+    UIManager:forceRePaint()
     UIManager:nextTick(function()
-        UIManager:broadcastEvent(Event:new("Restart"))
+        UIManager:nextTick(function()
+            UIManager:broadcastEvent(Event:new("Restart"))
+        end)
     end)
 end
 
@@ -1454,6 +1576,7 @@ function App:backend_started(data, on_ready)
         self:refresh()
     end
     self:schedule_plugin_scan_after_open()
+    self:refresh_catalog_on_open()
 end
 
 function App:backend_failed(message)
@@ -1673,8 +1796,8 @@ function App:reset_scroll(key)
     self.state.scroll[key or self:scroll_key()] = 0
 end
 
-function App:navigate(tab_id)
-    self._full_refresh = true
+function App:navigate(tab_id, full_refresh)
+    self._full_refresh = full_refresh ~= false
     if tab_id == "home" then
         self:show_featured()
     elseif tab_id == "categories" then
@@ -1699,7 +1822,7 @@ function App:reload_current_page()
     elseif self.state.page == "source_details" and self.state.current_repo then
         self:show_source_details(self.state.current_repo.name)
     else
-        self:navigate(self.state.active_tab or "home")
+        self:navigate(self.state.active_tab or "home", false)
     end
 end
 
@@ -2053,6 +2176,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
                     readme = data.readme,
                     base_url = data.readme_base_url,
                     image_base_url = data.readme_image_base_url,
+                    image_refs = data.readme_image_refs,
                 }
                 self.state.readme_cache[cache_key] = cached
             elseif not readme_ok then
@@ -2067,6 +2191,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             pkg.readme = cached.readme
             pkg.readme_base_url = cached.base_url
             pkg.readme_image_base_url = cached.image_base_url
+            pkg.readme_image_refs = cached.image_refs
             pkg.readme_error_code = cached.error_code
         end
     end
@@ -2151,6 +2276,23 @@ function App:go_back_from_details()
         end
     end
     self:navigate(self.state.details_from or "search")
+end
+
+function App:go_back()
+    local page = self.state.page
+    if page == "category_details" then
+        self:show_categories()
+    elseif page == "source_details" then
+        self:show_sources()
+    elseif page == "package_details" then
+        self:go_back_from_details()
+    elseif page == "queue" then
+        self:close_queue()
+    elseif page == "settings" then
+        self:close_settings()
+    else
+        self:quit()
+    end
 end
 
 function App:show_debug()
@@ -2273,6 +2415,12 @@ function App:prompt_sort(kind)
         }
         if kind == "installed" then
             table.insert(rows, {
+                icon = "update",
+                text = _("Update available"),
+                checked_func = selected("update_available"),
+                callback = function() self:set_sort(kind, "update_available") end,
+            })
+            table.insert(rows, {
                 icon = "date",
                 text = _("Installed date (newest first)"),
                 checked_func = selected("installed_at_desc"),
@@ -2388,6 +2536,14 @@ function App:confirm_remove_source(name)
     end)
 end
 
+function App:install_cli()
+    if self.daemon:install_cli_wrapper() then
+        Modals.notice(_("ZenPM command-line interface installed."))
+    else
+        Modals.info(_("Could not install the ZenPM command-line wrapper."))
+    end
+end
+
 function App:perform_package_action(pkg, on_done)
     if self.busy then
         Modals.info(_("Another operation is in progress. Please wait."))
@@ -2417,18 +2573,24 @@ function App:perform_package_action(pkg, on_done)
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)
             end or nil,
+            updates_ignored = pkg.update_ignored == true,
+            toggle_updates = function()
+                self:prompt_package_updates(pkg)
+            end,
             disabled = is_koplugin and is_plugin_disabled(pkg) or nil,
             enable_disable = is_koplugin and function()
-                self:confirm_toggle_enable(pkg, "plugin", on_done)
+                self:toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg) and function()
+            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+                and not package_is_kindle_only(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg) then
+    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+        and not package_is_kindle_only(pkg) then
         self:prompt_default_package_version(pkg, on_done, "install")
     else
         self:confirm_package_action(pkg, "install", on_done)
@@ -2442,7 +2604,7 @@ function App:show_unmanaged_patch_modify(pkg, on_done)
         manage_only = true,
         disabled = is_patch_disabled(pkg),
         enable_disable = function()
-            self:confirm_toggle_enable(pkg, "patch", on_done)
+            self:toggle_enable(pkg, "patch", on_done)
         end,
         uninstall = function()
             self:confirm_remove_unmanaged_patch(asset, on_done)
@@ -2459,7 +2621,7 @@ function App:show_patch_modify(pkg, on_done)
         end or nil,
         disabled = is_patch_disabled(pkg),
         enable_disable = function()
-            self:confirm_toggle_enable(pkg, "patch", on_done)
+            self:toggle_enable(pkg, "patch", on_done)
         end,
         uninstall = function()
             self:confirm_patch_item_action(pkg, "uninstall", asset, on_done)
@@ -2481,9 +2643,8 @@ function App:package_disabled(pkg)
 end
 
 -- Toggle enable/disable natively (settings flag for plugins, file rename for
--- patches). No backend call — the change is local — so on success we prompt a
--- restart, which is when KOReader actually applies plugin/patch state.
-function App:confirm_toggle_enable(pkg, kind, on_done)
+-- patches). No backend call is needed; KOReader applies the change on restart.
+function App:toggle_enable(pkg, kind, on_done)
     if self.busy then
         Modals.info(_("Another operation is in progress. Please wait."))
         return
@@ -2491,29 +2652,21 @@ function App:confirm_toggle_enable(pkg, kind, on_done)
     local disabled = self:package_disabled(pkg)
     local name = Models.package_display_name(pkg, _("Package"))
     local verb = disabled and _("enable") or _("disable")
-    local label = disabled and _("Enable") or _("Disable")
-    Modals.confirm(
-        _("Are you sure you want to ") .. verb .. " " .. name .. "?",
-        label,
-        function()
-            local ok, err
-            if kind == "patch" then
-                ok, err = set_patch_disabled(pkg.patch_asset, not disabled)
-            else
-                ok, err = set_plugin_disabled(pkg, not disabled)
-            end
-            if not ok then
-                Modals.info_for(_("Could not ") .. verb .. " " .. name .. ": " .. tostring(err),
-                    Constants.PACKAGE_NOTICE_SECONDS)
-                return
-            end
-            local done = disabled and _("enabled") or _("disabled")
-            Modals.restart_koreader(
-                name .. " " .. done .. _(" successfully.\n\nRestart KOReader to apply the change."),
-                function() self:restart_koreader() end)
-            if on_done then on_done() end
-        end
-    )
+    local ok, err
+    if kind == "patch" then
+        ok, err = set_patch_disabled(pkg.patch_asset, not disabled)
+    else
+        ok, err = set_plugin_disabled(pkg, not disabled)
+    end
+    if not ok then
+        Modals.info_for(_("Could not ") .. verb .. " " .. name .. ": " .. tostring(err),
+            Constants.PACKAGE_NOTICE_SECONDS)
+        return
+    end
+    if on_done then on_done() end
+    Modals.restart_koreader(_("Restart KOReader to apply the changes."), function(reopen_after_restart)
+        self:restart_koreader(reopen_after_restart)
+    end)
 end
 
 function App:confirm_patch_item_action(pkg, action, asset, on_done)
@@ -2541,7 +2694,7 @@ function App:confirm_remove_unmanaged_patch(asset, on_done)
     )
 end
 
--- Show installable cached releases for a package. Each version maps to an
+-- Show installable releases for a package. Each version maps to an
 -- update/reinstall/downgrade action based on its relation to the installed
 -- version. Prereleases are hidden unless the user enabled ZenPM beta updates.
 -- The list is paged VERSIONS_PER_PAGE at a time in the UI.
@@ -2554,7 +2707,7 @@ local function version_action(current, tag)
     return "reinstall"
 end
 
-function App:load_package_releases(pkg)
+function App:load_package_releases(pkg, allow_empty)
     Modals.status(_("Loading available versions..."))
     local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
     Modals.close_status()
@@ -2570,28 +2723,39 @@ function App:load_package_releases(pkg)
         end
     end
     if #releases == 0 then
+        if allow_empty then return releases end
         Modals.info(_("No installable versions were found."))
         return nil
     end
     return releases
 end
 
-function App:prompt_package_versions(pkg, on_done)
+function App:prompt_package_versions(pkg, on_done, fallback_action)
     local current = pkg.installed and (pkg.installed_version or pkg.version or "") or ""
-    local releases = self:load_package_releases(pkg)
+    local source_fallback = fallback_action and package_uses_source(pkg)
+    local releases = self:load_package_releases(pkg, source_fallback)
     if not releases then return end
+    if #releases == 0 then
+        self:queue_package_action(pkg, fallback_action, nil, nil)
+        return
+    end
     self:show_versions_page(pkg, releases, current, 1, on_done)
 end
 
 function App:prompt_latest_package_build(pkg, on_done, action)
-    local releases = self:load_package_releases(pkg)
+    local source_fallback = package_uses_source(pkg)
+    local releases = self:load_package_releases(pkg, source_fallback)
     if not releases then return end
+    if #releases == 0 then
+        self:queue_package_action(pkg, action or "install", nil, nil)
+        return
+    end
     self:choose_version_release(pkg, releases[1], action or "install", on_done)
 end
 
 function App:prompt_default_package_version(pkg, on_done, action)
     if self.state.manual_version_picker then
-        self:prompt_package_versions(pkg, on_done)
+        self:prompt_package_versions(pkg, on_done, action)
         return
     end
     self:prompt_latest_package_build(pkg, on_done, action)
@@ -2670,6 +2834,7 @@ end
 
 function App:confirm_package_action(pkg, action, on_done)
     local opts = action == "update" and pkg.latest_release and not Models.is_font_package(pkg)
+        and not package_uses_source(pkg)
         and { release = pkg.latest_release } or nil
     self:start_package_action(pkg, action, on_done, opts)
 end
@@ -2689,9 +2854,9 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action_installs_package(action) then
-        -- Fonts use the catalog's explicit ZIP URL. Cached release assets do
-        -- not describe installable font builds, so never invoke either chooser.
-        if Models.is_font_package(pkg) then
+        -- Fonts use an explicit catalog ZIP, while Kindle-only packages run
+        -- repository scripts. Neither needs a cached release asset.
+        if Models.is_font_package(pkg) or package_is_kindle_only(pkg) then
             self:queue_package_action(pkg, action, nil, opts)
             return
         end
@@ -2938,8 +3103,8 @@ function App:poll_package_action(op, attempt)
                     if op.is_patch or op.action == "uninstall" then
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
-                    Modals.restart_koreader(op.name .. " " .. done .. tail, function()
-                        self:restart_koreader()
+                    Modals.restart_koreader(op.name .. " " .. done .. tail, function(reopen_after_restart)
+                        self:restart_koreader(reopen_after_restart)
                     end)
                 else
                     Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
@@ -3216,10 +3381,12 @@ function App:start_update()
             return
         end
         if not called then
+            log_update_failure(self, ok)
             Modals.info(_("Update failed: ") .. tostring(ok))
             return
         end
         if not ok then
+            log_update_failure(self, result)
             Modals.info(_("Update failed: ") .. tostring(result))
             return
         end
@@ -3247,6 +3414,7 @@ function App:apply_update(release_tag, on_result)
         local started, err = self.daemon:request_android_update()
         if not started then
             local message = _("Companion update failed to start: ") .. tostring(err)
+            log_update_failure(self, message)
             if on_result then
                 on_result(false, message)
             else
@@ -3274,11 +3442,13 @@ function App:apply_update(release_tag, on_result)
         end
         if not called then
             local message = _("Update failed: ") .. tostring(ok)
+            log_update_failure(self, ok)
             if on_result then on_result(false, message) else Modals.info(message) end
             return
         end
         if not ok then
             local message = _("Update failed: ") .. tostring(result)
+            log_update_failure(self, result)
             if on_result then on_result(false, message) else Modals.info(message) end
             return
         end
@@ -3314,7 +3484,7 @@ function App:apply_update(release_tag, on_result)
         end
         Modals.restart_koreader(
             _("ZenPM updated to v") .. tostring(result) .. _(".\n\nRestart KOReader to use the new version."),
-            function() self:restart_koreader() end)
+            function(reopen_after_restart) self:restart_koreader(reopen_after_restart) end)
     end)
 end
 

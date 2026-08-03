@@ -61,14 +61,19 @@ func decodeVersions(data []byte) ([]Release, error) {
 
 // ResolveVersionsAsset finds an asset in a repository-generated versions file.
 func ResolveVersionsAsset(versionsURL, tag, asset string) (Release, ReleaseAsset, error) {
+	items, err := FetchVersions(versionsURL)
+	if err != nil {
+		return Release{}, ReleaseAsset{}, err
+	}
+	return FindVersionsAsset(items, tag, asset)
+}
+
+// FindVersionsAsset finds an asset in already-fetched versions metadata.
+func FindVersionsAsset(items []Release, tag, asset string) (Release, ReleaseAsset, error) {
 	tag = strings.TrimSpace(tag)
 	asset = strings.TrimSpace(asset)
 	if asset == "" {
 		return Release{}, ReleaseAsset{}, fmt.Errorf("release asset name is required")
-	}
-	items, err := FetchVersions(versionsURL)
-	if err != nil {
-		return Release{}, ReleaseAsset{}, err
 	}
 	for _, release := range items {
 		if tag != "" && release.TagName != tag && NormalizeVersion(release.TagName) != NormalizeVersion(tag) {

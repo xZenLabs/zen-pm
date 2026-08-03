@@ -4,19 +4,39 @@ package.path = root .. "/?.lua;" .. package.path
 
 local settings = {}
 local modal_message
+local modal_seconds
+local restart_message
+local restart_callback
+local restart_actions = {}
+local status_message
+local queued_ticks
 local modal_title
 local modal_rows
 local plugin_settings_prompt
 local package_modify_callbacks
+local ignore_updates_prompt
+local confirm_message
+local confirm_ok_text
+local confirm_callback
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 package.preload["socket"] = function() return {} end
-package.preload["ui/event"] = function() return {} end
+package.preload["ui/event"] = function()
+    return { new = function(_, name) return name end }
+end
 package.preload["ui/uimanager"] = function()
     return {
-        nextTick = function(_, callback) callback() end,
+        show = function() end,
+        nextTick = function(_, callback)
+            if queued_ticks then
+                table.insert(queued_ticks, callback)
+            else
+                callback()
+            end
+        end,
         scheduleIn = function(_, _, callback) callback() end,
-        forceRePaint = function() end,
+        forceRePaint = function() table.insert(restart_actions, "paint") end,
+        broadcastEvent = function(_, event) table.insert(restart_actions, event) end,
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
@@ -41,15 +61,35 @@ end
 package.preload["ui/modals"] = function()
     return {
         info = function(message) modal_message = message end,
-        info_for = function(message) modal_message = message end,
-        status = function() end,
+        info_for = function(message, seconds)
+            modal_message = message
+            modal_seconds = seconds
+        end,
+        notice = function(message) modal_message = message end,
+        restart_koreader = function(message, callback)
+            restart_message = message
+            restart_callback = callback
+        end,
+        status = function(message) status_message = message end,
         close_status = function() end,
+        confirm = function(message, ok_text, callback)
+            confirm_message = message
+            confirm_ok_text = ok_text
+            confirm_callback = callback
+        end,
         actions = function(title, rows)
             modal_title = title
             modal_rows = rows
         end,
         package_modify = function(_, callbacks)
             package_modify_callbacks = callbacks
+        end,
+        ignore_updates = function(pkg, ignore_all_callback, ignore_version_callback)
+            ignore_updates_prompt = {
+                pkg = pkg,
+                ignore_all_callback = ignore_all_callback,
+                ignore_version_callback = ignore_version_callback,
+            }
         end,
         plugin_settings_cleanup = function(message, callback)
             plugin_settings_prompt = message
@@ -159,6 +199,23 @@ App.toggle_beta_updates(app)
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
 
+local cli_installs = 0
+local cli_app = {
+    daemon = {
+        install_cli_wrapper = function()
+            cli_installs = cli_installs + 1
+            return true
+        end,
+    },
+}
+App.install_cli(cli_app)
+assert(cli_installs == 1)
+assert(modal_message == "ZenPM command-line interface installed.")
+
+cli_app.daemon.install_cli_wrapper = function() return false end
+App.install_cli(cli_app)
+assert(modal_message == "Could not install the ZenPM command-line wrapper.")
+
 local zenpm_package = { id = "zenpm-koreader" }
 assert(App.package_icon_file({}, zenpm_package) == "assets/zenpm.svg")
 
@@ -178,6 +235,26 @@ local zenpm_versions = App.load_package_releases({
     },
 }, zenpm_package)
 assert(release_requests == 1)
+
+local source_fallback_action
+App.prompt_latest_package_build({
+    state = { beta_updates = false },
+    load_package_releases = App.load_package_releases,
+    client = {
+        get_package_releases = function()
+            return true, { releases = {} }
+        end,
+    },
+    queue_package_action = function(_, _, action, asset)
+        source_fallback_action = { action = action, asset = asset }
+    end,
+}, {
+    id = "source-only",
+    source_type = "source",
+    versions_url = "https://repo.example/source-only/versions.json",
+}, nil, "install")
+assert(source_fallback_action.action == "install")
+assert(source_fallback_action.asset == nil)
 
 local failed_release_app = {
     state = {
@@ -269,6 +346,109 @@ local refreshed_app = {
 App.refresh_repos(refreshed_app)
 assert(next(refreshed_app.state.readme_cache) == nil)
 
+local open_refreshes = 0
+local open_catalog_reloads = 0
+local opened_app = {
+    backend_ready = true,
+    view = {},
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
+    client = {
+        refresh_repos = function()
+            open_refreshes = open_refreshes + 1
+            return true
+        end,
+    },
+    run_update_task = function(_, task, _, callback)
+        local called, ok = task()
+        callback(true, called, ok)
+    end,
+    load_packages = function() end,
+    load_repos = function() end,
+    reload_current_page = function() open_catalog_reloads = open_catalog_reloads + 1 end,
+}
+App.refresh_catalog_on_open(opened_app)
+assert(open_refreshes == 1)
+assert(next(opened_app.state.readme_cache) == nil)
+assert(open_catalog_reloads == 1)
+
+local reload_tab
+local reload_full_refresh
+App.reload_current_page({
+    state = { page = "home", active_tab = "home" },
+    navigate = function(_, tab, full_refresh)
+        reload_tab = tab
+        reload_full_refresh = full_refresh
+    end,
+})
+assert(reload_tab == "home")
+assert(reload_full_refresh == false)
+
+local back_routes = {
+    category_details = "show_categories",
+    source_details = "show_sources",
+    package_details = "go_back_from_details",
+    queue = "close_queue",
+    settings = "close_settings",
+}
+for page, method in pairs(back_routes) do
+    local calls = 0
+    local back_app = { state = { page = page } }
+    back_app[method] = function() calls = calls + 1 end
+    App.go_back(back_app)
+    assert(calls == 1)
+end
+
+local quit_calls = 0
+App.go_back({
+    state = { page = "home" },
+    quit = function() quit_calls = quit_calls + 1 end,
+})
+assert(confirm_message == "Are you sure you want to exit ZenPM?")
+assert(confirm_ok_text == "Quit")
+assert(quit_calls == 0)
+confirm_callback()
+assert(quit_calls == 1)
+
+local navigation_refreshes = {}
+local navigation_app = {
+    view = {
+        refresh = function(_, full_refresh)
+            table.insert(navigation_refreshes, full_refresh)
+        end,
+    },
+    show_featured = function(self) App.refresh(self) end,
+}
+App.navigate(navigation_app, "home")
+App.navigate(navigation_app, "home", false)
+assert(navigation_refreshes[1] == true)
+assert(navigation_refreshes[2] == false)
+
+local shown_catalog_refreshes = 0
+App.show({
+    view = {},
+    backend_ready = true,
+    state = { active_tab = "home" },
+    intercept_koreader_exit = function() end,
+    finish_deferred_font_uninstalls = function() end,
+    navigate = function() end,
+    schedule_plugin_scan_after_open = function() end,
+    refresh_catalog_on_open = function() shown_catalog_refreshes = shown_catalog_refreshes + 1 end,
+})
+assert(shown_catalog_refreshes == 1)
+
+local started_catalog_refreshes = 0
+App.backend_started({
+    state = {},
+    finish_deferred_font_uninstalls = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+    schedule_plugin_scan_after_open = function() end,
+    refresh_catalog_on_open = function() started_catalog_refreshes = started_catalog_refreshes + 1 end,
+}, {})
+assert(started_catalog_refreshes == 1)
+
 local update_result
 local trapper_required = false
 package.preload["ui/trapper"] = function()
@@ -323,6 +503,32 @@ local self_action_app = {
 }
 App.start_package_action(self_action_app, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 1)
+
+local scriptlet_action
+local scriptlet_asset_requests = 0
+local scriptlet_app = {
+    client = {
+        get_package_assets = function()
+            scriptlet_asset_requests = scriptlet_asset_requests + 1
+            return true, {}
+        end,
+    },
+    queue_package_action = function(_, _, action, asset, opts)
+        scriptlet_action = { action = action, asset = asset, opts = opts }
+    end,
+}
+local scriptlet = {
+    id = "kindle-browser",
+    platforms = { "kindle" },
+    versions_url = "https://repo.example/packages/kindle/browser/versions.json",
+}
+App.start_package_action(scriptlet_app, scriptlet, "install")
+assert(scriptlet_asset_requests == 0)
+assert(scriptlet_action.action == "install")
+assert(scriptlet_action.asset == nil)
+
+local scriptlet_entry = App.queue_entry_for({}, scriptlet, "update", nil, { release = "1.0.1" })
+assert(scriptlet_entry.release == nil)
 
 App.queue_package_action({
     state = { queue_running = false },
@@ -395,6 +601,30 @@ assert(updated_scan_calls == 1)
 assert(updated_backend_restarts == 1)
 assert(updated_result[1] == true and updated_result[2] == "1.2.4-beta3")
 
+local persisted_update_failure
+local failed_update_result
+App.apply_update({
+    state = { beta_updates = false },
+    daemon = {
+        is_android = function() return false end,
+    },
+    client = {
+        post_log = function(_, message)
+            persisted_update_failure = message
+            return true
+        end,
+    },
+    run_update_task = function(_, _, _, callback)
+        callback(true, true, false, "attempt to call a nil value")
+    end,
+}, function(...)
+    failed_update_result = { ... }
+end)
+assert(failed_update_result[1] == false)
+assert(failed_update_result[2] == "Update failed: attempt to call a nil value")
+assert(persisted_update_failure == "ZenPM update failed: attempt to call a nil value")
+assert(logged_warnings[#logged_warnings] == persisted_update_failure)
+
 local selected_zenpm_release
 App.confirm_package_version({
     queue_self_reinstall = function(_, _, release)
@@ -403,10 +633,20 @@ App.confirm_package_version({
 }, { id = "zenpm-koreader", installed = true }, "v1.2.3", "reinstall")
 assert(selected_zenpm_release == "v1.2.3")
 
+local scriptlet_install_action
+App.perform_package_action({
+    state = {},
+    confirm_package_action = function(_, _, action) scriptlet_install_action = action end,
+    prompt_default_package_version = function() error("scriptlets must not open the version picker") end,
+}, scriptlet)
+assert(scriptlet_install_action == "install")
+
 local regular_zenpm_action
+local ignored_updates_toggled = 0
 App.perform_package_action({
     state = { page = "installed", active_tab = "installed" },
     package_icon_file = function() return nil end,
+    prompt_package_updates = function() ignored_updates_toggled = ignored_updates_toggled + 1 end,
     confirm_package_action = function(_, _, action) regular_zenpm_action = action end,
 }, {
     id = "zenpm-koreader",
@@ -419,11 +659,175 @@ App.perform_package_action({
 })
 assert(package_modify_callbacks.info)
 assert(package_modify_callbacks.update)
+assert(package_modify_callbacks.toggle_updates)
+assert(not package_modify_callbacks.updates_ignored)
 assert(package_modify_callbacks.enable_disable)
 assert(package_modify_callbacks.downgrade)
 assert(package_modify_callbacks.uninstall)
 package_modify_callbacks.update()
 assert(regular_zenpm_action == "update")
+package_modify_callbacks.toggle_updates()
+assert(ignored_updates_toggled == 1)
+
+local queued_updates_toggled = 0
+local removed_queued_updates = {}
+local queue_modify_app = {
+    state = { queue_running = false },
+    package_icon_file = function() return nil end,
+    prompt_package_updates = function(_, _, ignored_callback)
+        queued_updates_toggled = queued_updates_toggled + 1
+        ignored_callback()
+        return true
+    end,
+    remove_queue_entry = function(_, entry)
+        table.insert(removed_queued_updates, entry)
+        return false
+    end,
+    refresh = function() end,
+}
+local queued_update_entry = {
+    action = "update",
+    pkg = { id = "Reader", installed = true, update_available = true },
+}
+App.show_queue_entry_modify(queue_modify_app, queued_update_entry)
+assert(package_modify_callbacks.remove_queue)
+assert(package_modify_callbacks.toggle_updates)
+assert(not package_modify_callbacks.updates_ignored)
+package_modify_callbacks.toggle_updates()
+assert(queued_updates_toggled == 1)
+assert(removed_queued_updates[1] == queued_update_entry)
+
+package_modify_callbacks = nil
+local queued_self_update_entry = {
+    action = "update",
+    self_update = true,
+    pkg = { id = "zenpm", name = "ZenPM", installed = true },
+}
+App.show_queue_entry_modify(queue_modify_app, queued_self_update_entry)
+assert(package_modify_callbacks.remove_queue)
+assert(package_modify_callbacks.toggle_updates)
+assert(not package_modify_callbacks.updates_ignored)
+package_modify_callbacks.toggle_updates()
+assert(queued_updates_toggled == 2)
+assert(removed_queued_updates[2] == queued_self_update_entry)
+
+local ignored_refreshes = 0
+local ignored_pkg = { id = "Reader", installed = true, update_available = true }
+local ignored_requests = {}
+local ignored_app = {
+    state = {
+        packages = { ignored_pkg },
+    },
+    client = {
+        set_package_updates_ignored = function(_, id, ignored)
+            table.insert(ignored_requests, { id = id, ignored = ignored })
+            return true
+        end,
+    },
+    refresh = function() ignored_refreshes = ignored_refreshes + 1 end,
+}
+App.toggle_package_updates(ignored_app, ignored_pkg)
+assert(ignored_pkg.update_ignored == true)
+assert(ignored_requests[1].id == "Reader" and ignored_requests[1].ignored == true)
+assert(App.installed_update_count(ignored_app) == 0)
+App.toggle_package_updates(ignored_app, ignored_pkg)
+assert(ignored_pkg.update_ignored == false)
+assert(ignored_requests[2].id == "Reader" and ignored_requests[2].ignored == false)
+assert(App.installed_update_count(ignored_app) == 1)
+assert(ignored_refreshes == 2)
+
+local prompted_updates = {}
+local prompt_pkg = { id = "Reader", installed = true, update_available = true, latest_version = "1.1.0" }
+local prompt_app = {
+    set_package_updates_ignored = function(_, pkg, ignored, ignored_version)
+        table.insert(prompted_updates, { pkg = pkg, ignored = ignored, ignored_version = ignored_version })
+        return true
+    end,
+}
+local prompt_callbacks = 0
+App.prompt_package_updates(prompt_app, prompt_pkg, function() prompt_callbacks = prompt_callbacks + 1 end)
+assert(ignore_updates_prompt.pkg == prompt_pkg)
+ignore_updates_prompt.ignore_version_callback()
+assert(prompted_updates[1].ignored == false and prompted_updates[1].ignored_version == "1.1.0")
+assert(prompt_callbacks == 1)
+App.prompt_package_updates(prompt_app, prompt_pkg, function() prompt_callbacks = prompt_callbacks + 1 end)
+ignore_updates_prompt.ignore_all_callback()
+assert(prompted_updates[2].ignored == true and prompted_updates[2].ignored_version == nil)
+assert(prompt_callbacks == 2)
+
+local bulk_queued = {}
+local bulk_app = {
+    state = {
+        queue_running = false,
+        queue = {},
+        packages = {
+            { id = "ignored", installed = true, update_available = true, update_ignored = true },
+            { id = "active", installed = true, update_available = true },
+        },
+    },
+    client = {
+        get_package_assets = function() return true, {} end,
+    },
+    queue_package_action = function(_, pkg, action)
+        table.insert(bulk_queued, pkg.id .. ":" .. action)
+        return true
+    end,
+    refresh = function() end,
+}
+assert(App.installed_update_count(bulk_app) == 1)
+App.queue_all_updates(bulk_app)
+assert(#bulk_queued == 1)
+assert(bulk_queued[1] == "active:update")
+
+local reader_settings = {}
+_G.G_reader_settings = {
+    readSetting = function(_, key) return reader_settings[key] end,
+    saveSetting = function(_, key, value) reader_settings[key] = value end,
+    flush = function() end,
+}
+local toggle_done = false
+modal_message = nil
+modal_seconds = nil
+restart_message = nil
+restart_callback = nil
+App.toggle_enable({
+    package_disabled = function() return false end,
+    restart_koreader = App.restart_koreader,
+}, {
+    id = "example",
+    name = "Example plugin",
+    plugin_module = "example",
+}, "plugin", function()
+    toggle_done = true
+end)
+assert(reader_settings.plugins_disabled.example == true)
+assert(restart_message == "Restart KOReader to apply the changes.")
+assert(modal_message == nil)
+assert(modal_seconds == nil)
+assert(toggle_done)
+assert(type(restart_callback) == "function")
+restart_actions = {}
+status_message = nil
+queued_ticks = {}
+restart_callback()
+assert(status_message == "Restarting...")
+assert(restart_actions[1] == "paint")
+assert(restart_actions[2] == nil)
+assert(#queued_ticks == 1)
+table.remove(queued_ticks, 1)()
+assert(restart_actions[2] == nil)
+assert(#queued_ticks == 1)
+table.remove(queued_ticks, 1)()
+assert(restart_actions[2] == "Restart")
+assert(settings.reopen_after_restart == false)
+queued_ticks = nil
+restart_actions = {}
+App.restart_koreader({}, true)
+assert(settings.reopen_after_restart == true)
+assert(App.consume_reopen_after_restart())
+assert(settings.reopen_after_restart == false)
+assert(not App.consume_reopen_after_restart())
+_G.G_reader_settings = nil
 
 local queued_operations
 local queue_app = {
@@ -590,5 +994,18 @@ assert(modal_rows[1].text == "All categories")
 assert(modal_rows[2].text == "Fonts (2)")
 modal_rows[2].callback()
 assert(selected_category == "fonts")
+
+local android_stops = 0
+local closing_app = {
+    backend_ready = true,
+    daemon = {
+        is_android = function() return true end,
+        stop_standalone_backend = function() android_stops = android_stops + 1 end,
+    },
+    restore_koreader_exit = function() end,
+}
+App.close(closing_app)
+assert(android_stops == 1)
+assert(not closing_app.backend_ready)
 
 print("app tests passed")

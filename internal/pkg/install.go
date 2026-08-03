@@ -239,7 +239,8 @@ func (m *Manager) removeConflictingKOReaderPluginRecords(id, installPath string,
 			continue
 		}
 		samePath := entry.InstallPath != "" && filepath.Clean(entry.InstallPath) == installPath
-		if !samePath && !conflictingIDs[entry.ID] {
+		sameAsset := strings.TrimSuffix(filepath.Base(strings.TrimSpace(entry.Asset)), ".zip") == pluginName
+		if !samePath && !sameAsset && !conflictingIDs[entry.ID] {
 			continue
 		}
 		if err := m.st.RemoveInstalled(entry.ID); err != nil {
@@ -594,9 +595,18 @@ func (m *Manager) baseScriptEnv(id string) map[string]string {
 	env := map[string]string{
 		"ZENPM_PACKAGE_ID": id,
 	}
-	if m.st != nil && m.st.CABundle != "" {
-		env["CURL_CA_BUNDLE"] = m.st.CABundle
-		env["SSL_CERT_FILE"] = m.st.CABundle
+	if m.plat == platform.Kindle {
+		env["ZENPM_USE_GO_CURL"] = "1"
+	}
+	if m.st != nil {
+		caBundle := m.st.CABundle
+		if m.plat == platform.Kindle && m.st.RSACABundle != "" {
+			caBundle = m.st.RSACABundle
+		}
+		if caBundle != "" {
+			env["CURL_CA_BUNDLE"] = caBundle
+			env["SSL_CERT_FILE"] = caBundle
+		}
 	}
 	addKOReaderEnv(env, m.plat)
 	return env
@@ -830,6 +840,10 @@ func (m *Manager) Update(id string) error {
 		}
 		latestVersion := latest.Version
 		if releases.VersionGreater(latestVersion, e.Version) {
+			if id == "" && (e.UpdateIgnored || e.UpdateIgnoredVersion == latestVersion) {
+				log.Infof("Package %s has updates ignored, skipping", e.ID)
+				continue
+			}
 			log.Infof("Updating %s: %s -> %s", e.ID, e.Version, latestVersion)
 			if err := m.Install(e.ID); err != nil {
 				return err

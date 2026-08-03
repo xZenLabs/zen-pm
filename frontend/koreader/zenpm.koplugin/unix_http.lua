@@ -88,12 +88,23 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
     local function exchange()
         local address = ffi.new("struct sockaddr_un")
         local path_capacity = ffi.sizeof(address.sun_path)
-        if #socket_path >= path_capacity then
+        local abstract = socket_path:sub(1, 1) == "@"
+        local path_length = abstract and #socket_path or #socket_path + 1
+        if path_length > path_capacity then
             error("Unix socket path is too long")
         end
         address.sun_family = UnixHTTP.AF_UNIX
-        ffi.copy(address.sun_path, socket_path)
-        if C.connect(fd, ffi.cast("const struct sockaddr *", address), ffi.sizeof(address)) ~= 0 then
+        local address_length = ffi.sizeof(address)
+        if abstract then
+            -- Go maps an address beginning with @ to Linux's abstract Unix
+            -- namespace. Its leading NUL is not representable in a Lua path.
+            address.sun_path[0] = 0
+            ffi.copy(address.sun_path + 1, socket_path:sub(2), #socket_path - 1)
+            address_length = ffi.offsetof("struct sockaddr_un", "sun_path") + path_length
+        else
+            ffi.copy(address.sun_path, socket_path)
+        end
+        if C.connect(fd, ffi.cast("const struct sockaddr *", address), address_length) ~= 0 then
             error("connect: " .. strerror())
         end
 

@@ -58,13 +58,21 @@ local function package_author_text(pkg)
     return Util.trim(I18n.dynamic_or(pkg and pkg.author, ""))
 end
 
+local function is_zenpm_package(pkg)
+    if type(pkg) ~= "table" then return false end
+    local module = Util.trim(tostring(pkg.plugin_module or "")):lower()
+    local id = Util.trim(tostring(pkg.id or "")):lower()
+    return module == "zenpm" or id == "zenpm" or id == "zenpm-koreader"
+end
+
 local function queued_action(view, pkg)
     local id = pkg and (pkg.id or pkg.name)
     if not id then return nil end
     local asset = Models.is_patch_package(pkg) and pkg.patch_asset or nil
     local key = tostring(id) .. "\0" .. tostring(asset or "")
     for _, entry in ipairs(view.app.state.queue or {}) do
-        if entry.key == key then
+        local self_update = entry.self_update or entry.self_reinstall
+        if (self_update and is_zenpm_package(pkg)) or entry.key == key then
             return entry.action
         end
     end
@@ -92,7 +100,7 @@ local function package_version_repo_text(pkg)
     return table.concat(parts, " • ")
 end
 
-local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size, invert_icon)
+local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size, invert_icon, focus)
     P.box(bb, x, y, w, h, { background = Theme.button_bg, border_size = 2, border_color = Theme.button_bg, radius = math.floor(h / 2) })
     if icon then
         icon_size = icon_size or Theme.font_scale(18)
@@ -109,6 +117,10 @@ local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size
         P.center_text_box(bb, text, x, y, w, h, "small", { bold = true, color = Theme.button_text })
     end
     P.hit(view, x, y, w, h, callback, text)
+    if focus then
+        focus.inverse = true
+        P.focus_control(view, bb, focus.id, x, y, w, h, callback, focus)
+    end
 end
 
 local function package_icon_zoom(value, source)
@@ -132,12 +144,12 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
-    local update_action = not queued and pkg.installed and pkg.update_available
+    local update_action = not queued and pkg.installed and pkg.update_available and not pkg.update_ignored
     local action_icon = queued and Images.asset(queued_action_icon(queued))
         or (update_action and Images.asset("upgrade.svg") or nil)
     local action_text_size = P.text_size(action_text, Theme.scale(256), "small", { bold = true })
     local action_w = math.max(opts.action_w or m.action_w, action_text_size.w + Theme.scale(24))
-    local action_icon_size = (queued or (pkg.installed and pkg.update_available)) and Theme.font_scale(24) or Theme.font_scale(18)
+    local action_icon_size = (queued or update_action) and Theme.font_scale(24) or Theme.font_scale(18)
     if action_icon then
         action_w = action_w + action_icon_size + Theme.font_scale(4)
     end
@@ -157,6 +169,13 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local text_w = action_x - text_x - Theme.scale(8)
     local disabled = pkg.installed and view.app:package_disabled(pkg)
     local ink = disabled and Theme.muted or nil
+    local id = tostring(pkg.id or pkg.name or "")
+    local asset = tostring(pkg.patch_asset or "")
+    local focus_key = "package:" .. id .. ":" .. asset
+    local action_focus_key = "package-action:" .. id .. ":" .. asset
+    local function show_details()
+        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
+    end
 
     if icon_w > 0 then
         local ix = x + pad
@@ -189,9 +208,10 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local verify_gap = Theme.font_scale(5)
     local meta_w = text_w - verify_size - verify_gap
 
-    local rows = {
-        { text = title, w = text_w, role = title_role, bold = true },
-    }
+    local rows = {}
+    if opts.show_title ~= false then
+        table.insert(rows, { text = title, w = text_w, role = title_role, bold = true })
+    end
     if author ~= "" then
         table.insert(rows, { text = author, w = text_w, role = body_role })
     end
@@ -251,13 +271,22 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
 
     if pkg.installed then
         local check = Theme.font_scale(20)
-        local cx = x + w - check - Theme.scale(6)
-        local cy = y + Theme.scale(5)
-        if not P.image(bb, Images.asset("checkmark.svg"), cx, cy, check, check, { is_icon = true }) then
-            P.center_text(bb, "v", cx, cy + Theme.scale(2), check, "small", { bold = true, color = ink })
+        local gap = Theme.scale(12)
+        local status_w = check + (pkg.update_ignored and check + gap or 0)
+        local status_x = x + w - status_w - Theme.scale(6)
+        local status_y = y + Theme.scale(5)
+        local check_x = status_x + status_w - check
+        if pkg.update_ignored then
+            P.image(bb, Images.asset("sync_off.svg"), status_x, status_y, check, check, { is_icon = true })
+        end
+        if not P.image(bb, Images.asset("checkmark.svg"), check_x, status_y, check, check, { is_icon = true }) then
+            P.center_text(bb, "v", check_x, status_y + Theme.scale(2), check, "small", { bold = true, color = ink })
         end
         if disabled then
-            P.dim(bb, cx, cy, check, check)
+            P.dim(bb, check_x, status_y, check, check)
+            if pkg.update_ignored then
+                P.dim(bb, status_x, status_y, check, check)
+            end
         end
     elseif should_show_stars(view, pkg) then
         local star = Theme.font_scale(20)
@@ -276,10 +305,29 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
         end)
-    end, action_icon, action_icon_size, queued ~= nil or update_action)
-    P.hit(view, x, y, action_x - x, h, function()
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
-    end, "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))
+    end, action_icon, action_icon_size, queued ~= nil or update_action, {
+        id = action_focus_key,
+        focus_type = "package_action",
+        focus_column = "action",
+        focus_content = true,
+        list_group = opts.focus_group,
+        list_index = opts.focus_index,
+        list_count = opts.focus_count,
+    })
+    P.hit(view, x, y, action_x - x, h, show_details,
+        "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))
+    local focus_box = opts.focus_box or { x = x, y = y, w = w, h = h }
+    if P.focus_target(view, focus_key, focus_box.x, focus_box.y, focus_box.w, focus_box.h, show_details, {
+        focus_type = "package",
+        focus_column = "main",
+        focus_content = true,
+        focus_primary = true,
+        list_group = opts.focus_group,
+        list_index = opts.focus_index,
+        list_count = opts.focus_count,
+    }) then
+        P.focus_outline(bb, focus_box.x, focus_box.y, focus_box.w, focus_box.h)
+    end
     return h
 end
 
@@ -310,13 +358,18 @@ function Cards.featured(view, bb, pkg, x, y, w, opts)
         action_w = Theme.scale(104),
         action_h = Theme.scale(42),
         border = false,
+        focus_box = { x = x, y = y, w = w, h = h },
+        focus_group = opts.focus_group,
+        focus_index = opts.focus_index,
+        focus_count = opts.focus_count,
     })
     return h
 end
 
-function Cards.source(view, bb, repo, x, y, w)
+function Cards.source(view, bb, repo, x, y, w, opts)
+    opts = opts or {}
     local m = Theme.metrics()
-    local h = m.repo_h
+    local h = opts.height or m.repo_h
     P.box(bb, x, y, w, h)
     local pad = Theme.scale(10)
     local icon = Theme.scale(62)
@@ -337,14 +390,35 @@ function Cards.source(view, bb, repo, x, y, w)
     draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + verify_gap, text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
     P.text(bb, ellipsize(repo.url or "", 54), text_x, url_y, text_w, "small")
 
+    local id = tostring(repo.name or "")
+    local source_key = "source:" .. id
+    local remove_key = "source-action:" .. id
+    local function show_details()
+        view.app:show_source_details(repo.name)
+    end
     if action_w > 0 then
         action_pill(view, bb, _("Remove"), x + w - action_w - pad, y + math.floor((h - m.action_h) / 2), action_w, m.action_h, function()
             view.app:confirm_remove_source(repo.name)
-        end)
+        end, nil, nil, nil, {
+            id = remove_key,
+            focus_type = "source_action",
+            focus_column = "action",
+            focus_content = true,
+            list_group = opts.focus_group,
+            list_index = opts.focus_index,
+            list_count = opts.focus_count,
+        })
     end
-    P.hit(view, x, y, w - action_w - pad, h, function()
-        view.app:show_source_details(repo.name)
-    end, "source:" .. tostring(repo.name))
+    P.hit(view, x, y, w - action_w - pad, h, show_details, source_key)
+    P.focus_control(view, bb, source_key, x, y, w, h, show_details, {
+        focus_type = "source",
+        focus_column = "main",
+        focus_content = true,
+        focus_primary = true,
+        list_group = opts.focus_group,
+        list_index = opts.focus_index,
+        list_count = opts.focus_count,
+    })
     return h
 end
 
@@ -381,6 +455,9 @@ function Cards.compact(view, bb, x, y, w, opts)
     end
 
     P.hit(view, x, y, w, h, opts.callback, opts.hit_id)
+    if opts.focus then
+        P.focus_control(view, bb, opts.focus.id, x, y, w, h, opts.callback, opts.focus)
+    end
     return h
 end
 
@@ -394,6 +471,7 @@ function Cards.category(view, bb, category, x, y, w, opts)
         subtitle = tostring(category.count or 0) .. " " .. _("packages"),
         callback = function() view.app:show_category_details(category.id) end,
         hit_id = "category:" .. tostring(category.id),
+        focus = opts.focus,
     })
 end
 

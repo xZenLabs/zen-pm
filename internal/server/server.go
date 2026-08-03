@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/maintenance"
 	"github.com/xZenLabs/zen-pm/internal/pkg"
 	"github.com/xZenLabs/zen-pm/internal/platform"
+	"github.com/xZenLabs/zen-pm/internal/readmeimages"
 	"github.com/xZenLabs/zen-pm/internal/releases"
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
@@ -32,7 +36,27 @@ type Server struct {
 	pkgs       *pkg.Manager
 	port       int
 	unixSocket bool
-	StartedAt  time.Time
+
+	// IdleTimeout stops an otherwise idle server. It is used by the Android
+	// companion so its foreground service does not remain alive indefinitely.
+	IdleTimeout time.Duration
+
+	mu             sync.Mutex
+	httpServer     *http.Server
+	listener       net.Listener
+	closed         bool
+	done           chan struct{}
+	closeDone      sync.Once
+	activeRequests atomic.Int32
+	backgroundJobs atomic.Int32
+	lastActivity   atomic.Int64
+	StartedAt      time.Time
+	readmeImages   readmeImagePreparer
+}
+
+type readmeImagePreparer interface {
+	References(markdown, baseURL string) map[string]string
+	Prepare(refs map[string]string) error
 }
 
 type pkgJSON struct {
@@ -53,6 +77,7 @@ type pkgJSON struct {
 	InstalledVer          string            `json:"installed_version,omitempty"`
 	InstalledAt           string            `json:"installed_at,omitempty"`
 	InstalledAsset        string            `json:"installed_asset,omitempty"`
+	UpdateIgnored         bool              `json:"update_ignored,omitempty"`
 	InstalledAssets       []string          `json:"installed_assets,omitempty"`
 	InstalledAssetDates   map[string]string `json:"installed_asset_dates,omitempty"`
 	UnmanagedPatch        bool              `json:"unmanaged_patch,omitempty"`
@@ -83,7 +108,11 @@ type pkgJSON struct {
 }
 
 func New(st *state.State, repos *repo.Manager, pkgs *pkg.Manager, port int) *Server {
-	return &Server{st: st, repos: repos, pkgs: pkgs, port: port}
+	srv := &Server{st: st, repos: repos, pkgs: pkgs, port: port, done: make(chan struct{})}
+	if st != nil {
+		srv.readmeImages = readmeimages.New(filepath.Join(st.CacheDir, "readme-images"))
+	}
+	return srv
 }
 
 func (s *Server) ListenAndServe() error {
@@ -106,13 +135,15 @@ func (s *Server) ListenAndServeUnix(path string) error {
 	if errors.Is(err, errServerAlreadyRunning) {
 		return nil
 	}
-	if bound {
+	if bound && !isAbstractUnixSocket(path) {
 		_ = os.Remove(path)
 	}
 	return err
 }
 
 func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) error {
+	s.touch()
+	defer s.signalDone()
 	state.StartupTrace("HTTP server: configuring routes.")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.wrap(s.handleHealth))
@@ -135,18 +166,18 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	catalog, needsRefresh := s.initialCatalogState()
 	state.StartupTrace("HTTP server: catalog state ready.")
 	if needsRefresh {
-		go func() {
+		s.runBackground(func() {
 			if err := s.repos.Refresh(); err != nil {
 				log.Warnf("Initial refresh failed: %v", err)
 				return
 			}
 			s.autoScanKOReaderPlugins()
-		}()
+		})
 	} else {
 		s.autoScanKOReaderPlugins()
-		go func() {
+		s.runBackground(func() {
 			s.repos.CacheInstalledUninstallScripts(catalog)
-		}()
+		})
 	}
 
 	// Keep the catalog fresh in the background so the client never has to fetch
@@ -154,9 +185,26 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	go s.periodicRefresh()
 
 	state.StartupTrace("HTTP server: binding " + addr + ".")
+	httpServer := &http.Server{Handler: mux}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.httpServer = httpServer
+	s.mu.Unlock()
+
 	ln, err := bind()
 	if err != nil {
 		return err
+	}
+	s.mu.Lock()
+	s.listener = ln
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
+		_ = ln.Close()
+		return nil
 	}
 	state.StartupTrace("HTTP server: listening on " + addr + ".")
 	if !s.StartedAt.IsZero() {
@@ -164,7 +212,14 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	} else {
 		log.Infof("ZenPM server listening on %s", addr)
 	}
-	return http.Serve(ln, mux)
+	if s.IdleTimeout > 0 {
+		go s.stopWhenIdle()
+	}
+	err = httpServer.Serve(ln)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 var errServerAlreadyRunning = errors.New("ZenPM server already running")
@@ -201,6 +256,13 @@ func (s *Server) listenUnix(path string) (net.Listener, error) {
 	if path == "" {
 		return nil, errors.New("Unix socket path is empty")
 	}
+	if isAbstractUnixSocket(path) {
+		ln, err := net.Listen("unix", path)
+		if err != nil {
+			return nil, fmt.Errorf("listen unix:%s: %w", path, err)
+		}
+		return ln, nil
+	}
 	if info, err := os.Lstat(path); err == nil {
 		if info.Mode()&os.ModeSocket == 0 {
 			return nil, fmt.Errorf("listen unix:%s: existing path is not a socket", path)
@@ -228,6 +290,87 @@ func (s *Server) listenUnix(path string) (net.Listener, error) {
 		return nil, fmt.Errorf("secure Unix socket %s: %w", path, err)
 	}
 	return ln, nil
+}
+
+func isAbstractUnixSocket(path string) bool {
+	return strings.HasPrefix(path, "@")
+}
+
+// Close stops a running server and any idle/background bookkeeping attached to
+// it. It is safe to call before the listener is fully initialized.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	httpServer := s.httpServer
+	listener := s.listener
+	s.mu.Unlock()
+	s.signalDone()
+	if httpServer != nil {
+		err := httpServer.Close()
+		if err == nil || errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+	if listener != nil {
+		return listener.Close()
+	}
+	return nil
+}
+
+func (s *Server) signalDone() {
+	s.closeDone.Do(func() {
+		if s.done == nil {
+			s.done = make(chan struct{})
+		}
+		close(s.done)
+	})
+}
+
+func (s *Server) touch() {
+	s.lastActivity.Store(time.Now().UnixNano())
+}
+
+func (s *Server) runBackground(work func()) {
+	s.backgroundJobs.Add(1)
+	s.touch()
+	go func() {
+		defer func() {
+			s.backgroundJobs.Add(-1)
+			s.touch()
+		}()
+		work()
+	}()
+}
+
+func (s *Server) stopWhenIdle() {
+	interval := s.IdleTimeout / 10
+	if interval < 25*time.Millisecond {
+		interval = 25 * time.Millisecond
+	}
+	if interval > 5*time.Second {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			lastActivity := time.Unix(0, s.lastActivity.Load())
+			if s.activeRequests.Load() != 0 || s.backgroundJobs.Load() != 0 || time.Since(lastActivity) < s.IdleTimeout {
+				continue
+			}
+			log.Infof("ZenPM server idle for %s — stopping", s.IdleTimeout)
+			_ = s.Close()
+			return
+		}
+	}
 }
 
 // daemonAlreadyRunning probes /health to confirm a live ZenPM daemon owns addr,
@@ -271,10 +414,17 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 func (s *Server) periodicRefresh() {
 	ticker := time.NewTicker(catalogMaxAge)
 	defer ticker.Stop()
-	for range ticker.C {
-		log.Info("Periodic catalog refresh")
-		if err := s.repos.Refresh(); err != nil {
-			log.Warnf("Periodic refresh failed: %v", err)
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			log.Info("Periodic catalog refresh")
+			s.runBackground(func() {
+				if err := s.repos.Refresh(); err != nil {
+					log.Warnf("Periodic refresh failed: %v", err)
+				}
+			})
 		}
 	}
 }
@@ -342,6 +492,12 @@ func (rec *responseRecorder) errorDetail() string {
 // wrap adds CORS headers, enforces local-only access, and logs every request.
 func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		s.activeRequests.Add(1)
+		s.touch()
+		defer func() {
+			s.activeRequests.Add(-1)
+			s.touch()
+		}()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -612,11 +768,15 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	installedVersion := make(map[string]string, len(installed))
 	installedAt := make(map[string]string, len(installed))
 	installedAsset := make(map[string]string, len(installed))
+	updateIgnored := make(map[string]bool, len(installed))
+	updateIgnoredVersion := make(map[string]string, len(installed))
 	for _, e := range installed {
 		installedSet[e.ID] = true
 		installedVersion[e.ID] = e.Version
 		installedAt[e.ID] = e.InstalledAt
 		installedAsset[e.ID] = e.Asset
+		updateIgnored[e.ID] = e.UpdateIgnored
+		updateIgnoredVersion[e.ID] = e.UpdateIgnoredVersion
 	}
 
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
@@ -682,6 +842,10 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
 			applyUpdateInfo(&item, allowPrerelease)
+			item.UpdateIgnored = updateIgnored[e.ID]
+			if item.UpdateAvail && updateIgnoredVersion[e.ID] == item.LatestVersion {
+				item.UpdateIgnored = true
+			}
 		}
 		result = append(result, item)
 	}
@@ -699,6 +863,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 				InstalledVer:   e.Version,
 				InstalledAt:    e.InstalledAt,
 				InstalledAsset: e.Asset,
+				UpdateIgnored:  e.UpdateIgnored,
 				Platforms:      platformList,
 			}
 			result = append(result, item)
@@ -829,6 +994,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		s.handlePackageReleases(w, r, id)
 		return
 	}
+	if action == "update-ignored" {
+		s.handlePackageUpdateIgnored(w, r, id)
+		return
+	}
 	if action != "install" && action != "reinstall" && action != "uninstall" {
 		http.Error(w, "unknown action: "+action, http.StatusBadRequest)
 		return
@@ -851,7 +1020,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 
 	// Fire async; the WAF polls /log after a delay.
 	log.Infof("Package %s: starting %s", id, action)
-	go func() {
+	s.runBackground(func() {
 		var err error
 		if action == "install" {
 			if releaseTag != "" {
@@ -869,9 +1038,48 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Infof("Package %s: %s complete", id, action)
 		}
-	}()
+	})
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) handlePackageUpdateIgnored(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		UpdateIgnored        *bool   `json:"update_ignored"`
+		UpdateIgnoredVersion *string `json:"update_ignored_version"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "update_ignored required", http.StatusBadRequest)
+		return
+	}
+	if body.UpdateIgnoredVersion != nil {
+		version := strings.TrimSpace(*body.UpdateIgnoredVersion)
+		if version == "" || body.UpdateIgnored == nil || *body.UpdateIgnored {
+			http.Error(w, "valid update_ignored_version required", http.StatusBadRequest)
+			return
+		}
+		if err := s.st.SetInstalledUpdateIgnoredVersion(id, version); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok": true, "update_ignored": true, "update_ignored_version": version,
+		})
+		return
+	}
+	if body.UpdateIgnored == nil {
+		http.Error(w, "update_ignored required", http.StatusBadRequest)
+		return
+	}
+	if err := s.st.SetInstalledUpdateIgnored(id, *body.UpdateIgnored); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "update_ignored": *body.UpdateIgnored})
 }
 
 // handlePackageUpdate starts an update of every installed package. Like the
@@ -883,27 +1091,27 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("Updating all installed packages")
-	go func() {
+	s.runBackground(func() {
 		if err := s.pkgs.Update(""); err != nil {
 			log.Errorf("Update all packages failed: %v", err)
 			return
 		}
 		log.Info("Update all packages complete")
-	}()
+	})
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageVersionsURL(id string) (string, error) {
+func (s *Server) packageReleaseMetadata(id string) (string, string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			return strings.TrimSpace(entry.VersionsURL), nil
+			return strings.TrimSpace(entry.VersionsURL), strings.ToLower(strings.TrimSpace(entry.SourceType)), nil
 		}
 	}
-	return "", fmt.Errorf("package %q not found", id)
+	return "", "", fmt.Errorf("package %q not found", id)
 }
 
 func (s *Server) packageReadmeMetadata(id string) (string, string, error) {
@@ -948,11 +1156,24 @@ func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id 
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
+	response := map[string]interface{}{
 		"readme":                document.Readme,
 		"readme_base_url":       document.BaseURL,
 		"readme_image_base_url": imageBaseURL,
-	})
+	}
+	var refs map[string]string
+	if s.readmeImages != nil {
+		refs = s.readmeImages.References(document.Readme, imageBaseURL)
+		response["readme_image_refs"] = refs
+	}
+	writeJSON(w, http.StatusOK, response)
+	if len(refs) > 0 {
+		s.runBackground(func() {
+			if err := s.readmeImages.Prepare(refs); err != nil {
+				log.Warnf("Could not prepare README images for %s: %v", id, err)
+			}
+		})
+	}
 }
 
 func (s *Server) packageReleaseNotesMetadata(id string, prerelease bool) (string, string, string, error) {
@@ -1007,7 +1228,7 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	versionsURL, err := s.packageVersionsURL(id)
+	versionsURL, sourceType, err := s.packageReleaseMetadata(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -1019,6 +1240,22 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	if sourceType == "source" {
+		installable := make([]releases.Release, 0, len(items))
+		for _, item := range items {
+			assets := make([]releases.ReleaseAsset, 0, len(item.Assets))
+			for _, asset := range item.Assets {
+				if strings.TrimSpace(asset.Name) != "" && strings.TrimSpace(asset.URL) != "" {
+					assets = append(assets, asset)
+				}
+			}
+			if len(assets) > 0 {
+				item.Assets = assets
+				installable = append(installable, item)
+			}
+		}
+		items = installable
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"releases": items})
 }

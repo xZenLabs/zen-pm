@@ -89,8 +89,18 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 		assetName = ".koplugin.zip"
 	}
 
-	if assetURL == "" && releaseTag == "" && usesSourcePackage(entry) {
-		if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
+	if assetURL == "" && usesSourcePackage(entry) && strings.TrimSpace(releaseTag) != "" && strings.TrimSpace(entry.VersionsURL) != "" {
+		items, err := releases.FetchVersions(entry.VersionsURL)
+		if err != nil {
+			return "", "", nil, err
+		}
+		if _, releaseAsset, err := releases.FindVersionsAsset(items, releaseTag, assetName); err == nil {
+			assetName = releaseAsset.Name
+			assetURL = releaseAsset.URL
+		}
+	}
+	if assetURL == "" && usesSourcePackage(entry) {
+		if strings.TrimSpace(releaseTag) == "" && strings.HasSuffix(strings.ToLower(assetName), ".lua") {
 			if repository, ok := releases.GitHubRepository(entry.Source); ok {
 				assetURL = "https://raw.githubusercontent.com/" + repository + "/HEAD/" + url.PathEscape(assetName)
 			}
@@ -643,9 +653,41 @@ func extractZip(data []byte, destination string) error {
 }
 
 func replaceTree(source, destination string) error {
-	if err := os.RemoveAll(destination); err != nil {
+	stage, err := os.MkdirTemp(filepath.Dir(destination), ".zenpm-install-*")
+	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(stage)
+	if err := os.Chmod(stage, 0755); err != nil {
+		return err
+	}
+	backup := stage + ".backup"
+
+	if err := copyTree(source, stage); err != nil {
+		return err
+	}
+
+	hadDestination := false
+	if err := os.Rename(destination, backup); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+	} else {
+		hadDestination = true
+	}
+	if err := os.Rename(stage, destination); err != nil {
+		if hadDestination {
+			if restoreErr := os.Rename(backup, destination); restoreErr != nil {
+				return fmt.Errorf("replace tree: %v; restore previous tree: %w", err, restoreErr)
+			}
+		}
+		return err
+	}
+	_ = os.RemoveAll(backup)
+	return nil
+}
+
+func copyTree(source, destination string) error {
 	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err

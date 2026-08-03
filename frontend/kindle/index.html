@@ -437,7 +437,7 @@
                 if (_inited) return;
                 _inited = true;
                 installFeaturedScrollGuard();
-                featuredScroll = ZenUtils.setupCardScroll(".featured-scroll", "featured-card");
+                featuredScroll = ZenUtils.setupCardScroll(".featured-scroll", "featured-card", true);
                 window.addEventListener("resize", function () {
                     sizeFeaturedCards();
                     if (featuredScroll) featuredScroll.rebuild();

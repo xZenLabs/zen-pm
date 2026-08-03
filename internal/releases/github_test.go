@@ -201,3 +201,34 @@ func TestLatestGitHubReleaseRespectsPrereleaseSetting(t *testing.T) {
 		t.Fatalf("beta tag = %q, want v2.5.3-beta3", beta.TagName)
 	}
 }
+
+func TestVersionGreaterPrefersStableOverSameVersionPrerelease(t *testing.T) {
+	if VersionGreater("2.5.4-beta2", "2.5.4") {
+		t.Fatal("2.5.4-beta2 ranked above 2.5.4")
+	}
+	if !VersionGreater("2.5.4", "2.5.4-beta2") {
+		t.Fatal("2.5.4 did not rank above 2.5.4-beta2")
+	}
+}
+
+func TestLatestGitHubReleasePrefersStableOverMatchingPrerelease(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[
+			{"tag_name":"v1.1.2-beta1","prerelease":true,"assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/beta.zip"}]},
+			{"tag_name":"v1.1.2","assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/stable.zip"}]}
+		]`)
+	}))
+	defer srv.Close()
+
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	release, _, err := LatestGitHubRelease("https://github.com/owner/repo", "plugin.zip", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release.TagName != "v1.1.2" {
+		t.Fatalf("tag = %q, want v1.1.2", release.TagName)
+	}
+}

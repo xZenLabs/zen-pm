@@ -1,4 +1,5 @@
 local Dispatcher = require("dispatcher")
+local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
@@ -67,13 +68,13 @@ function ZenPM:onDispatcherRegisterActions()
     Dispatcher:registerAction("zenpm", {
         category = "none",
         event = "OpenZenPM",
-        title = _("Open ZenPM"),
+        title = _("ZenPM: Open"),
         general = true,
     })
     Dispatcher:registerAction("zenpm_update_all", {
         category = "none",
         event = "UpdateAllZenPMPlugins",
-        title = _("Update All"),
+        title = _("ZenPM: Update All"),
         general = true,
     })
 end
@@ -92,6 +93,9 @@ function ZenPM:init()
     elseif err then
         daemon:log_cli("CLI setup failed: " .. tostring(err))
     end
+    UIManager:nextTick(function()
+        Launcher.open_after_restart(self)
+    end)
 end
 
 function ZenPM:onOpenZenPM()

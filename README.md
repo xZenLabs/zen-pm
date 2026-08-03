@@ -276,7 +276,9 @@ before testing them.
 
 ## Safety
 
-- The daemon listens only on 127.0.0.1, not on the network.
+- KOReader connects to the daemon through a local Unix-domain socket, except
+  on Android, where the separately installed companion uses a loopback-only
+  HTTP listener. Neither is exposed on the network.
 - Package scripts execute on the device; review the source and package details
   before installing software from an unfamiliar repository.
 - Do not run package installs without dry-run on a non-Kindle/Kobo host.

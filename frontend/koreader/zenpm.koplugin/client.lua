@@ -10,7 +10,6 @@ local ok_https, https = pcall(require, "ssl.https")
 local ok_socketutil, socketutil = pcall(require, "socketutil")
 local ok_logger, logger = pcall(require, "logger")
 local ok_android = pcall(require, "android")
-local ok_device, Device = pcall(require, "device")
 
 local Client = {}
 local UI_BLOCK_TIMEOUT_SECONDS = ok_android and 10 or 1
@@ -65,11 +64,8 @@ end
 function Client:new(opts)
     opts = opts or {}
     local unix_socket = opts.unix_socket_path
-    if unix_socket == nil and ok_device and Device and type(Device.isPocketBook) == "function" then
-        local ok, is_pocketbook = pcall(Device.isPocketBook, Device)
-        if ok and is_pocketbook then
-            unix_socket = Constants.POCKETBOOK_SOCKET
-        end
+    if unix_socket == nil and not ok_android then
+        unix_socket = Constants.UNIX_SOCKET
     end
     local o = {
         base_url = opts.base_url or Constants.API_BASE,
@@ -319,6 +315,16 @@ function Client:package_action(id, action, asset, release)
         path = path .. "?" .. table.concat(query, "&")
     end
     return self:request("POST", path, nil)
+end
+
+function Client:set_package_updates_ignored(id, ignored, ignored_version)
+    local body = {
+        update_ignored = ignored == true,
+    }
+    if ignored_version ~= nil then
+        body.update_ignored_version = tostring(ignored_version)
+    end
+    return self:request("POST", "/packages/" .. url_encode(id) .. "/update-ignored", body)
 end
 
 function Client:update_all_packages()

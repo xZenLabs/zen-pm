@@ -5,11 +5,11 @@ installed with the APK rather than a binary copied to noexec shared storage.
 It includes both 32-bit ARM (`armeabi-v7a`) and 64-bit ARM (`arm64-v8a`) native
 libraries.
 
-On macOS, install JDK 17, Gradle, and the Android command-line tools (or install
-them with Android Studio). Then install the SDK components and build:
+On macOS, install JDK 17, Gradle 8.6, and the Android command-line tools (or
+install them with Android Studio). Then install the SDK components and build:
 
 ```sh
-brew install gradle openjdk@17
+brew install openjdk@17
 brew install --cask android-commandlinetools
 export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
 export ANDROID_HOME="$(brew --prefix)/share/android-commandlinetools"
@@ -17,8 +17,12 @@ export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
 sdkmanager --licenses
 sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/25.2.9519653"
-gradle -p android assembleRelease
+./android/build.sh
 ```
+
+The build script requires Gradle 8.6 because the project uses Android Gradle
+Plugin 8.4.2. Set `GRADLE_BIN` to a Gradle 8.6 executable when it is not on
+your `PATH`.
 
 NDK 25 supplies a macOS compiler compatible with Apple Silicon.
 
@@ -26,7 +30,9 @@ Install `android/app/build/outputs/apk/release/app-release.apk`. On Android 11
 and newer, the first ZenPM launch opens Android settings for **All files
 access**; grant it for KOReader package management. Android 4.4 uses the normal
 storage permission declared by the APK. The KOReader plugin starts the
-companion automatically.
+companion automatically. The companion stops when KOReader closes ZenPM or
+after five minutes without requests, so it does not keep a foreground service
+running while idle.
 
 Published APKs are signed in CI with the persistent release keystore held in
 GitHub Actions secrets. The companion’s **Update** action checks the matching

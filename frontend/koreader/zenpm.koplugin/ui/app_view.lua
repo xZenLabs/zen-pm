@@ -25,14 +25,21 @@ local Theme = require("ui/theme")
 local _ = require("gettext")
 
 local Screen = Device.screen
+local FOCUS_NAVBAR_HOLD_DELAY = 0.4
 
 local AppView = InputContainer:extend{
     modal = false,
     stop_events_propagation = true,
 }
 
+local function supports_focus_navigation()
+    return Device:hasKeys() or Device:hasKeyboard()
+end
+
 function AppView:init()
     self.hitboxes = {}
+    self.focus_targets = {}
+    self.focus_enabled = supports_focus_navigation()
     self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
     self.ges_events = {
         TapZenPM = {
@@ -60,12 +67,302 @@ function AppView:init()
             },
         },
     }
-    if Device:hasKeys() then
+    if self.focus_enabled then
         self.key_events = {
+            ZenPMBack = { { Input.group.Back } },
+            ZenPMShowActions = { { "Menu" } },
             ZenPMPageForward = { { Input.group.PgFwd }, event = "ZenPMScroll", args = 1 },
             ZenPMPageBack = { { Input.group.PgBack }, event = "ZenPMScroll", args = -1 },
         }
+        if self.focus_enabled then
+            self.key_events.ZenPMFocusUp = { { "Up" }, event = "ZenPMFocusMove", args = { 0, -1 } }
+            self.key_events.ZenPMFocusRight = { { "Right" }, event = "ZenPMFocusMove", args = { 1, 0 } }
+            self.key_events.ZenPMFocusDown = { { "Down" }, event = "ZenPMFocusMove", args = { 0, 1 } }
+            self.key_events.ZenPMFocusLeft = { { "Left" }, event = "ZenPMFocusMove", args = { -1, 0 } }
+            self.key_events.ZenPMFocusConfirm = { { "Press" }, { "Return" }, event = "ZenPMFocusConfirm" }
+        end
     end
+end
+
+function AppView:_focus_target(id)
+    for _, target in ipairs(self.focus_targets or {}) do
+        if target.id == id then
+            return target
+        end
+    end
+end
+
+function AppView:_set_focus(id)
+    local target = self:_focus_target(id)
+    if not target then
+        return false
+    end
+    self.focus_key = id
+    if target.focus_content then
+        self.last_content_focus_key = id
+    end
+    self:refresh()
+    return true
+end
+
+function AppView:_find_focus_target(predicate)
+    for _, target in ipairs(self.focus_targets or {}) do
+        if predicate(target) then
+            return target
+        end
+    end
+end
+
+function AppView:_active_tab_target()
+    return self:_find_focus_target(function(target)
+        return target.focus_type == "tab" and target.id == "tab:" .. tostring(self.app.state.active_tab)
+    end)
+end
+
+local function is_down_key(key)
+    return key == "Down" or (type(key) == "table" and type(key.match) == "function" and key:match({ "Down" }))
+end
+
+function AppView:_cancel_navbar_focus_hold()
+    if self._navbar_focus_hold then
+        UIManager:unschedule(self._navbar_focus_hold)
+        self._navbar_focus_hold = nil
+    end
+end
+
+function AppView:_focus_navbar()
+    local current = self:_focus_target(self.focus_key)
+    if current and current.focus_type == "tab" then
+        return true
+    end
+    local tab = self:_active_tab_target()
+    return tab and self:_set_focus(tab.id) or false
+end
+
+function AppView:onKeyPress(key)
+    if self.focus_enabled and is_down_key(key) then
+        self:_cancel_navbar_focus_hold()
+        self._navbar_focus_hold = function()
+            self._navbar_focus_hold = nil
+            self:_focus_navbar()
+        end
+        UIManager:scheduleIn(FOCUS_NAVBAR_HOLD_DELAY, self._navbar_focus_hold)
+    end
+    return InputContainer.onKeyPress(self, key)
+end
+
+function AppView:onKeyRepeat(key)
+    if self.focus_enabled and is_down_key(key) then
+        return true
+    end
+    return InputContainer.onKeyRepeat(self, key)
+end
+
+function AppView:onKeyRelease(key)
+    if self.focus_enabled and is_down_key(key) then
+        self:_cancel_navbar_focus_hold()
+        return true
+    end
+end
+
+function AppView:_move_package_focus(target, direction)
+    local next_index = (target.list_index or 0) + direction
+    if next_index < 1 or next_index > (target.list_count or 0) then
+        return false
+    end
+    local next_target = self:_find_focus_target(function(candidate)
+        return candidate.list_group == target.list_group
+            and candidate.list_index == next_index
+            and candidate.focus_column == target.focus_column
+    end)
+    if next_target then
+        return self:_set_focus(next_target.id)
+    end
+
+    local step = self.scroll_step or 0
+    local old_scroll = self.app.state.scroll[self.app:scroll_key()] or 0
+    local new_scroll = math.max(0, math.min(old_scroll + direction * step, self.max_scroll or 0))
+    if step <= 0 or new_scroll == old_scroll then
+        return false
+    end
+    self.focus_pending = {
+        list_group = target.list_group,
+        list_index = next_index,
+        focus_column = target.focus_column,
+    }
+    self.app.state.scroll[self.app:scroll_key()] = new_scroll
+    self:refresh()
+    return true
+end
+
+function AppView:_focus_first_content()
+    local target = self:_find_focus_target(function(candidate)
+        return candidate.focus_primary
+    end)
+    if not target then
+        target = self:_find_focus_target(function(candidate)
+        return candidate.focus_content
+        end)
+    end
+    if not target then
+        target = self:_find_focus_target(function(candidate)
+            return candidate.focus_type ~= "tab"
+        end)
+    end
+    return target and self:_set_focus(target.id) or false
+end
+
+function AppView:_focus_package_details_tab()
+    local selected_tab = "details-tab:" .. tostring(self.app.state.details_tab or "readme")
+    return self:_set_focus(selected_tab)
+end
+
+function AppView:_focus_package_details_body()
+    if self:_focus_package_details_tab() then return true end
+    local content = self:_find_focus_target(function(candidate)
+        return candidate.id == "details-content"
+    end)
+    return content and self:_set_focus(content.id) or false
+end
+
+function AppView:_move_spatial_focus(target, dx, dy)
+    if dx == 0 and dy == 0 then
+        return false
+    end
+    local center_x = target.x + target.w / 2
+    local center_y = target.y + target.h / 2
+    local best, best_score
+    for _, candidate in ipairs(self.focus_targets or {}) do
+        if candidate.id ~= target.id then
+            local candidate_x = candidate.x + candidate.w / 2
+            local candidate_y = candidate.y + candidate.h / 2
+            local major, cross
+            if dx ~= 0 then
+                major = (candidate_x - center_x) * dx
+                cross = math.abs(candidate_y - center_y)
+            else
+                major = (candidate_y - center_y) * dy
+                cross = math.abs(candidate_x - center_x)
+            end
+            if major > 0 then
+                local score = cross * 1000 + major
+                if not best_score or score < best_score then
+                    best, best_score = candidate, score
+                end
+            end
+        end
+    end
+    return best and self:_set_focus(best.id) or false
+end
+
+function AppView:onZenPMFocusMove(args)
+    local dx = args and args[1] or 0
+    local dy = args and args[2] or 0
+    local target = self:_focus_target(self.focus_key)
+    if not target then
+        if dx ~= 0 or dy < 0 then
+            local tab = self:_active_tab_target()
+            return tab and self:_set_focus(tab.id) or false
+        end
+        return self:_focus_first_content()
+    end
+
+    if target.focus_type == "tab" then
+        if dx ~= 0 then
+            local tabs = {}
+            for _, candidate in ipairs(self.focus_targets or {}) do
+                if candidate.focus_type == "tab" then
+                    table.insert(tabs, candidate)
+                end
+            end
+            if #tabs == 0 then return false end
+            local index = 1
+            for i, candidate in ipairs(tabs) do
+                if candidate.id == target.id then index = i break end
+            end
+            index = ((index - 1 + dx) % #tabs) + 1
+            return self:_set_focus(tabs[index].id)
+        end
+        if dy < 0 then
+            local banner = self:_find_focus_target(function(candidate)
+                return candidate.focus_type == "queue_banner"
+            end)
+            if banner then
+                return self:_set_focus(banner.id)
+            end
+            if self:_set_focus(self.last_content_focus_key) then
+                return true
+            end
+            local last
+            for _, candidate in ipairs(self.focus_targets or {}) do
+                if candidate.focus_content then
+                    last = candidate
+                end
+            end
+            return last and self:_set_focus(last.id) or false
+        end
+        return true
+    end
+
+    if target.focus_type == "scroll_content" and dy ~= 0 then
+        if self:_scroll_list(dy) then
+            return true
+        end
+        if target.id == "details-content" and dy < 0 and self:_focus_package_details_tab() then
+            return true
+        end
+        return self:_move_spatial_focus(target, dx, dy)
+    end
+
+    if dx ~= 0 and target.list_group and target.list_index and target.focus_column then
+        local desired_column = dx > 0 and "action" or "main"
+        local sibling = self:_find_focus_target(function(candidate)
+            return candidate.list_group == target.list_group
+                and candidate.list_index == target.list_index
+                and candidate.focus_column == desired_column
+        end)
+        return sibling and self:_set_focus(sibling.id) or true
+    end
+
+    if dy ~= 0 and target.list_group and target.list_index then
+        if self:_move_package_focus(target, dy) then
+            return true
+        end
+        if dy > 0 then
+            if target.list_group == "package_details" and self:_focus_package_details_body() then
+                return true
+            end
+            local queue_banner = self:_find_focus_target(function(candidate)
+                return candidate.focus_type == "queue_banner"
+            end)
+            if queue_banner then
+                return self:_set_focus(queue_banner.id)
+            end
+            local tab = self:_active_tab_target()
+            return tab and self:_set_focus(tab.id) or false
+        end
+        return self:_move_spatial_focus(target, dx, dy)
+    end
+    return self:_move_spatial_focus(target, dx, dy)
+end
+
+function AppView:onZenPMFocusConfirm()
+    local target = self:_focus_target(self.focus_key)
+    if not target or type(target.callback) ~= "function" then
+        return false
+    end
+    target.callback()
+    return true
+end
+
+function AppView:onZenPMBack()
+    self.app:go_back()
+    return true
+end
+
+function AppView:onZenPMShowActions()
+    self.app:show_actions()
+    return true
 end
 
 function AppView:getSize()
@@ -99,7 +396,9 @@ end
 
 function AppView:tap_in_koreader_menu_zone(ges)
     local pos = ges and ges.pos
-    return pos and self.koreader_menu_zone and P.contains(self.koreader_menu_zone, pos.x, pos.y)
+    return pos and self.koreader_menu_zone
+        and P.contains(self.koreader_menu_zone, pos.x, pos.y)
+        and not (self.koreader_menu_tap_guard and P.contains(self.koreader_menu_tap_guard, pos.x, pos.y))
 end
 
 function AppView:tap_should_pass_to_koreader_menu(ges)
@@ -161,8 +460,12 @@ function AppView:_scroll_list(steps, page_sized)
         return true
     end
     local old = self.app.state.scroll[key] or 0
-    local delta = self.scroll_step or math.floor(Screen:getHeight() * 0.45)
-    if page_sized and self.list_bounds then
+    local delta = self.scroll_page_step or self.scroll_step or math.floor(Screen:getHeight() * 0.45)
+    local details_paged = self.app.state.page == "package_details"
+        and self.app.state.details_tab ~= "patches"
+    if details_paged and self.list_bounds then
+        delta = math.floor(self.list_bounds.h * 0.9)
+    elseif page_sized and not self.scroll_page_step and self.list_bounds then
         delta = math.floor(self.list_bounds.h * 0.9)
     end
     local new = math.max(0, math.min(old + steps * delta, self.max_scroll or 0))
@@ -310,6 +613,7 @@ function AppView:refresh(full)
 end
 
 function AppView:onCloseWidget()
+    self:_cancel_navbar_focus_hold()
     UIManager:setDirty("all", "flashui", self.dimen)
 end
 
@@ -320,10 +624,13 @@ end
 
 function AppView:paintTo(bb, x, y)
     self.hitboxes = {}
+    self.focus_targets = {}
     self.list_bounds = nil
     self.scroll_step = nil
+    self.scroll_page_step = nil
     self.scrollbar = nil
     self.koreader_menu_zone = nil
+    self.koreader_menu_tap_guard = nil
     self.package_details_featured_visible = false
     local m = Theme.metrics()
     self.dimen = Geom:new{ x = x, y = y, w = m.screen_w, h = m.screen_h }

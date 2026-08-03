@@ -111,6 +111,36 @@ func TestScanKOReaderPluginsDoesNotMatchSharedModuleWithoutIdentity(t *testing.T
 	}
 }
 
+func TestScanKOReaderPluginsKeepsTrackedSharedModuleWithoutMetadata(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
+		{ID: "zlibrary", Name: "OctoNezd Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+		{ID: "zlibrary-2", Name: "ZlibraryKO Zlibrary", Version: "1.0.41", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},
+	})
+	pluginPath := writeKOReaderPlugin(t, plugins, "zlibrary", `return { fullname = "Z-library" }`)
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zlibrary-2", Name: "ZlibraryKO Zlibrary", Version: "1.0.41", Repo: "ZenLabs", Asset: "zlibrary_plugin_v1.0.41.zip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "local-plugin:zlibrary", Name: "zlibrary", InstallPath: filepath.Dir(pluginPath),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.ScanKOReaderPlugins(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != 1 {
+		t.Fatalf("scan result = %+v, want one catalog match", result)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zlibrary-2" || installed[0].Version != "1.0.41" || installed[0].InstallPath != filepath.Dir(pluginPath) {
+		t.Fatalf("installed plugins = %#v, %v", installed, err)
+	}
+}
+
 func TestScanKOReaderPluginsReadsVersionFallbackFiles(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
 		{ID: "version-file", Name: "Version File", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "version-file"},
@@ -158,6 +188,35 @@ func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *tes
 	installed, err := st.ReadInstalled()
 	if err != nil || len(installed) != 1 || installed[0].InstallPath != filepath.Join(plugins, "reader.koplugin") {
 		t.Fatalf("installed plugin = %#v, %v", installed, err)
+	}
+}
+
+func TestScanKOReaderPluginsRemovesPreviouslyScannedPluginMissingFromDisk(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}})
+	writeKOReaderPlugin(t, plugins, "reader", `return { version = "1.2.3" }`)
+	if _, err := manager.ScanKOReaderPlugins(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "host-package", Name: "Host Package", Version: "1.0.0", Repo: "ZenLabs", InstallPath: "/opt/host-package",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(plugins, "reader.koplugin")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ScanKOReaderPlugins(true); err != nil {
+		t.Fatal(err)
+	}
+
+	if installed, _ := st.IsInstalled("reader"); installed {
+		t.Fatal("manually removed plugin remains installed")
+	}
+	if installed, _ := st.IsInstalled("host-package"); !installed {
+		t.Fatal("non-plugin package was removed during plugin scan")
 	}
 }
 

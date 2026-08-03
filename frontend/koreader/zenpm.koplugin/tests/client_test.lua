@@ -23,15 +23,9 @@ package.preload["constants"] = function()
     return {
         API_BASE = "http://127.0.0.1:18765",
         PLUGIN_DIR = root,
-        POCKETBOOK_SOCKET = "/tmp/zenpm.sock",
+        UNIX_SOCKET = "/tmp/zenpm.sock",
     }
 end
-package.preload["device"] = function()
-    return {
-        isPocketBook = function() return true end,
-    }
-end
-
 local Client = require("client")
 local unix_request
 local client = Client:new({
@@ -87,6 +81,23 @@ client.request = function(_, method, path, body)
     return true, {}
 end
 assert(client:list_packages("koreader", false, true))
+
+client.request = function(_, method, path, body)
+    assert(method == "POST")
+    assert(path == "/packages/example%20package/update-ignored")
+    assert(body.update_ignored == true)
+    return true, {}
+end
+assert(client:set_package_updates_ignored("example package", true))
+
+client.request = function(_, method, path, body)
+    assert(method == "POST")
+    assert(path == "/packages/example%20package/update-ignored")
+    assert(body.update_ignored == false)
+    assert(body.update_ignored_version == "1.2.0")
+    return true, {}
+end
+assert(client:set_package_updates_ignored("example package", false, "1.2.0"))
 
 local requested_timeout
 
