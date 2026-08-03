@@ -66,6 +66,25 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	}
 }
 
+func TestKindleScriptEnvUsesRSACABundle(t *testing.T) {
+	st := &state.State{CABundle: "/tmp/cacert.pem", RSACABundle: "/tmp/cacert-rsa.pem"}
+	env := (&Manager{st: st, plat: platform.Kindle}).baseScriptEnv("package")
+	if got := env["CURL_CA_BUNDLE"]; got != st.RSACABundle {
+		t.Fatalf("CURL_CA_BUNDLE = %q, want %q", got, st.RSACABundle)
+	}
+	if got := env["SSL_CERT_FILE"]; got != st.RSACABundle {
+		t.Fatalf("SSL_CERT_FILE = %q, want %q", got, st.RSACABundle)
+	}
+}
+
+func TestNonKindleScriptEnvUsesFullCABundle(t *testing.T) {
+	st := &state.State{CABundle: "/tmp/cacert.pem", RSACABundle: "/tmp/cacert-rsa.pem"}
+	env := (&Manager{st: st, plat: platform.Kobo}).baseScriptEnv("package")
+	if got := env["CURL_CA_BUNDLE"]; got != st.CABundle {
+		t.Fatalf("CURL_CA_BUNDLE = %q, want %q", got, st.CABundle)
+	}
+}
+
 func TestInstallGenericPluginNatively(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
