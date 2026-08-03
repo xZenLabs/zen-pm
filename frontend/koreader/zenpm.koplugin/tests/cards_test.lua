@@ -101,4 +101,27 @@ for _, text in ipairs(painted_text) do
     assert(text ~= "ZenPM")
 end
 assert(painted_text[1] == "By Zen Labs")
+
+painted_text = {}
+Cards.package({
+    app = {
+        state = { active_tab = "changes", queue = {} },
+        package_disabled = function() return false end,
+        package_icon_file = function() return "reader.svg" end,
+        perform_package_action = function() end,
+        show_package_details = function() end,
+    },
+}, {}, {
+    id = "reader",
+    name = "Reader",
+    version = "1.0.0",
+    repo = "ZenLabs",
+}, 0, 0, 300, { meta_suffix = "Yesterday" })
+
+local found_changes_meta = false
+for _, text in ipairs(painted_text) do
+    if text == "v1.0.0 • Yesterday" then found_changes_meta = true end
+    assert(text ~= "v1.0.0 • ZenLabs")
+end
+assert(found_changes_meta)
 print("cards tests passed")

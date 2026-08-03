@@ -152,6 +152,7 @@ function App:new(plugin)
             filters = { search = "", categories = "", category = "", installed = "", source = "" },
             sorts = {
                 search = saved_sorts.search or "stars",
+                changes = saved_sorts.changes or "published_at_desc",
                 installed = saved_sorts.installed or "name_asc",
                 sources = saved_sorts.sources or "name_asc",
                 category = saved_sorts.category or "stars",
@@ -160,6 +161,7 @@ function App:new(plugin)
             scroll = {},
             packages = {},
             visible_packages = {},
+            changes_packages = {},
             featured_packages = {},
             installed_packages = {},
             categories = {},
@@ -1800,6 +1802,8 @@ function App:navigate(tab_id, full_refresh)
     self._full_refresh = full_refresh ~= false
     if tab_id == "home" then
         self:show_featured()
+    elseif tab_id == "changes" then
+        self:show_changes()
     elseif tab_id == "categories" then
         self:show_categories()
     elseif tab_id == "sources" then
@@ -2017,6 +2021,24 @@ function App:show_search()
     end
     self.state.packages = packages
     self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(packages, self.state.filters.search))
+    self:clear_status()
+    self:refresh()
+end
+
+function App:show_changes()
+    self.state.page = "changes"
+    self.state.active_tab = "changes"
+    if not self:ensure_backend() then return end
+    self:set_loading(_("Loading packages..."))
+    local ok, packages, err = self:load_packages()
+    if not ok then
+        self:set_error(_("Failed to load packages: ") .. tostring(err))
+        return
+    end
+    self.state.packages = packages
+    local changes = Models.changes_packages(packages, 14, 40, self.state.sorts.changes)
+    self.state.changes_packages = changes
+    self.state.visible_packages = changes
     self:clear_status()
     self:refresh()
 end
@@ -2347,11 +2369,13 @@ function App:set_filter(kind, value)
 end
 
 function App:set_sort(kind, value)
-    self.state.sorts[kind] = value or "stars"
+    self.state.sorts[kind] = value or (kind == "changes" and "published_at_desc" or "stars")
     App.save_setting("sorts", self.state.sorts)
     self:reset_scroll(self:scroll_key())
     if kind == "installed" then
         self:show_installed()
+    elseif kind == "changes" then
+        self:show_changes()
     elseif kind == "sources" then
         self:show_sources()
     elseif kind == "category" and self.state.current_category then
@@ -2393,10 +2417,27 @@ function App:prompt_installed_category_filter()
 end
 
 function App:prompt_sort(kind)
-    local current = self.state.sorts[kind] or "stars"
+    local current = self.state.sorts[kind] or (kind == "changes" and "published_at_desc" or "stars")
     local title = kind == "sources" and _("Sort sources") or _("Sort packages")
     local function selected(key)
         return function() return current == key end
+    end
+    if kind == "changes" then
+        Modals.actions(title, {
+            {
+                icon = "sort_asc",
+                text = _("Ascending"),
+                checked_func = selected("published_at_asc"),
+                callback = function() self:set_sort(kind, "published_at_asc") end,
+            },
+            {
+                icon = "sort_desc",
+                text = _("Descending"),
+                checked_func = selected("published_at_desc"),
+                callback = function() self:set_sort(kind, "published_at_desc") end,
+            },
+        }, { show_cancel = false, align = "left" })
+        return
     end
     if kind == "installed" or kind == "sources" then
         local rows = {
@@ -3298,6 +3339,11 @@ function App:show_actions(anchor)
             text = _("Refresh"),
             icon = "refresh",
             callback = function() self:refresh_repos() end,
+        },
+        {
+            text = _("Sources"),
+            icon = "sources",
+            callback = function() self:show_sources() end,
         },
         {
             text = _("Report a Bug"),

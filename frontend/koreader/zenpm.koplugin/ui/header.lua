@@ -39,6 +39,8 @@ function Header.page_title(view)
     local page = state.page
     if page == "home" then
         return _("Featured") .. " (" .. tostring(#(state.featured_packages or {})) .. ")"
+    elseif page == "changes" then
+        return _("Changes") .. " (" .. tostring(#(state.changes_packages or {})) .. ")"
     elseif page == "search" then
         return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
     elseif page == "categories" then
@@ -284,6 +286,7 @@ function Header.draw(view, bb, x, y, w)
     })[page]
     local sort_kind = ({
         search = "search",
+        changes = "changes",
         category_details = "category",
         installed = "installed",
         sources = "sources",
@@ -302,7 +305,7 @@ function Header.draw(view, bb, x, y, w)
         draw_title_button(view, bb, right_x, button_y, label, function()
             view.app:prompt_add_source()
         end, "add-source", true)
-    elseif page == "installed" then
+    elseif page == "installed" or page == "changes" then
         local updates = view.app:installed_update_count()
         local label = _("Update All") .. " (" .. tostring(updates) .. ")"
         local enabled = updates > 0 and not view.app.state.queue_running

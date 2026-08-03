@@ -18,6 +18,9 @@ local ignore_updates_prompt
 local confirm_message
 local confirm_ok_text
 local confirm_callback
+local model_changes_days
+local model_changes_limit
+local model_changes_sort
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 package.preload["socket"] = function() return {} end
@@ -133,6 +136,12 @@ package.preload["models"] = function()
             }
         end,
         category_label = function(category) return category.label end,
+        changes_packages = function(packages, days, limit, sort_key)
+            model_changes_days = days
+            model_changes_limit = limit
+            model_changes_sort = sort_key
+            return { packages[1] }
+        end,
     }
 end
 package.preload["ui/theme"] = function() return {} end
@@ -425,6 +434,53 @@ App.navigate(navigation_app, "home", false)
 assert(navigation_refreshes[1] == true)
 assert(navigation_refreshes[2] == false)
 
+local changes_refreshes = 0
+local changes_app = {
+    state = {
+        sorts = { changes = "published_at_desc" },
+    },
+    ensure_backend = function() return true end,
+    set_loading = function() end,
+    load_packages = function()
+        return true, {
+            { id = "reader", installed = true },
+            { id = "browser" },
+        }
+    end,
+    clear_status = function() end,
+    refresh = function() changes_refreshes = changes_refreshes + 1 end,
+}
+App.show_changes(changes_app)
+assert(changes_app.state.page == "changes" and changes_app.state.active_tab == "changes")
+assert(model_changes_days == 14)
+assert(model_changes_limit == 40)
+assert(model_changes_sort == "published_at_desc")
+assert(#changes_app.state.changes_packages == 1)
+assert(#changes_app.state.visible_packages == 1)
+assert(changes_refreshes == 1)
+
+local changes_sort_shown = 0
+local changes_sort_app = {
+    state = { sorts = { changes = "published_at_desc" } },
+    scroll_key = function() return "changes" end,
+    reset_scroll = function() end,
+    show_changes = function() changes_sort_shown = changes_sort_shown + 1 end,
+}
+App.set_sort(changes_sort_app, "changes", "published_at_asc")
+assert(changes_sort_app.state.sorts.changes == "published_at_asc")
+assert(changes_sort_shown == 1)
+
+local selected_changes_sort
+App.prompt_sort({
+    state = { sorts = { changes = "published_at_desc" } },
+    set_sort = function(_, _, value) selected_changes_sort = value end,
+}, "changes")
+assert(#modal_rows == 2)
+assert(modal_rows[1].text == "Ascending" and modal_rows[2].text == "Descending")
+assert(modal_rows[2].checked_func())
+modal_rows[1].callback()
+assert(selected_changes_sort == "published_at_asc")
+
 local shown_catalog_refreshes = 0
 App.show({
     view = {},
@@ -448,6 +504,16 @@ App.backend_started({
     refresh_catalog_on_open = function() started_catalog_refreshes = started_catalog_refreshes + 1 end,
 }, {})
 assert(started_catalog_refreshes == 1)
+
+local sources_menu_calls = 0
+App.show_actions({
+    show_sources = function() sources_menu_calls = sources_menu_calls + 1 end,
+})
+assert(modal_title == "ZenPM")
+assert(modal_rows[4].text == "Sources")
+assert(modal_rows[5].text == "Report a Bug")
+modal_rows[4].callback()
+assert(sources_menu_calls == 1)
 
 local update_result
 local trapper_required = false

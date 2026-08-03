@@ -28,7 +28,7 @@ return {
 
     TABS = {
         { id = "home", label = "Featured" },
-        { id = "sources", label = "Sources" },
+        { id = "changes", label = "Changes" },
         { id = "categories", label = "Categories" },
         { id = "installed", label = "Installed" },
         -- { id = "debug", label = "Debug" },
