@@ -434,6 +434,9 @@ function Models.package_action_label(pkg)
         return _("Get")
     end
     if pkg and pkg.installed then
+        if pkg.update_available then
+            return _("Update")
+        end
         return _("Modify")
     end
     return _("Get")

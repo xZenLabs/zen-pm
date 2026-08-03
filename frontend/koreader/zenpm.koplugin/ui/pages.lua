@@ -295,6 +295,15 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_filter_installable() end,
         },
         {
+            text = _("Advanced"),
+            toggle = true,
+            value = function() return view.app.state.advanced end,
+            callback = function()
+                view.app:toggle_advanced()
+                view:refresh()
+            end,
+        },
+        {
             text = _("Font size"),
             value = function() return tostring(view.app.state.base_font_size) end,
             callback = function() view.app:prompt_base_font_size() end,

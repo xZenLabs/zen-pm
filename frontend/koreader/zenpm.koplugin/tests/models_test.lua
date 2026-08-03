@@ -31,6 +31,9 @@ end
 package.preload["gettext"] = function() return function(value) return value end end
 
 local Models = require("models")
+assert(Models.package_action_label({ installed = true, update_available = true }) == "Update")
+assert(Models.package_action_label({ installed = true }) == "Modify")
+assert(Models.package_action_label({}) == "Get")
 local repos = {
     { name = "ZenLabs", url = "https://zenlabs.example" },
     { name = "Alpha", url = "https://alpha.example" },

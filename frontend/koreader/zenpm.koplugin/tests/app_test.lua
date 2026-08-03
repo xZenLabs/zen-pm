@@ -208,6 +208,11 @@ App.toggle_beta_updates(app)
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
 
+app.state.advanced = false
+App.toggle_advanced(app)
+assert(app.state.advanced)
+assert(settings.advanced_queue == true)
+
 local cli_installs = 0
 local cli_app = {
     daemon = {
@@ -602,6 +607,36 @@ App.queue_package_action({
 }, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 2)
 
+local simple_queue_opened = 0
+modal_message = nil
+local simple_queue_app = {
+    state = { queue_running = false, queue = {}, packages = {} },
+    conflicting_packages = function() return {} end,
+    zen_ui_installed = function() return false end,
+    queue_entry_for = App.queue_entry_for,
+    show_queue = function() simple_queue_opened = simple_queue_opened + 1 end,
+    refresh = function() error("simple updates should open the queue") end,
+}
+assert(App.queue_package_action(simple_queue_app, {
+    id = "reader",
+    installed = true,
+}, "update", nil, {}))
+assert(#simple_queue_app.state.queue == 1)
+assert(simple_queue_opened == 1)
+assert(modal_message == nil)
+
+local advanced_queue_refreshed = 0
+simple_queue_app.state.advanced = true
+simple_queue_app.state.queue = {}
+simple_queue_app.show_queue = function() error("advanced updates should keep the existing flow") end
+simple_queue_app.refresh = function() advanced_queue_refreshed = advanced_queue_refreshed + 1 end
+assert(App.queue_package_action(simple_queue_app, {
+    id = "reader",
+    installed = true,
+}, "update", nil, {}))
+assert(advanced_queue_refreshed == 1)
+assert(modal_message == "Added to Queue")
+
 local companion_update_requests = 0
 local reinstalled_scan_calls = 0
 local reinstalled_backend_restarts = 0
@@ -710,7 +745,7 @@ assert(scriptlet_install_action == "install")
 local regular_zenpm_action
 local ignored_updates_toggled = 0
 App.perform_package_action({
-    state = { page = "installed", active_tab = "installed" },
+    state = { page = "installed", active_tab = "installed", advanced = true },
     package_icon_file = function() return nil end,
     prompt_package_updates = function() ignored_updates_toggled = ignored_updates_toggled + 1 end,
     confirm_package_action = function(_, _, action) regular_zenpm_action = action end,
@@ -734,6 +769,17 @@ package_modify_callbacks.update()
 assert(regular_zenpm_action == "update")
 package_modify_callbacks.toggle_updates()
 assert(ignored_updates_toggled == 1)
+
+local simple_update_action
+App.perform_package_action({
+    state = { page = "installed", active_tab = "installed", advanced = false },
+    confirm_package_action = function(_, _, action) simple_update_action = action end,
+}, {
+    id = "reader",
+    installed = true,
+    update_available = true,
+})
+assert(simple_update_action == "update")
 
 local queued_updates_toggled = 0
 local removed_queued_updates = {}
@@ -822,6 +868,7 @@ assert(prompted_updates[2].ignored == true and prompted_updates[2].ignored_versi
 assert(prompt_callbacks == 2)
 
 local bulk_queued = {}
+local bulk_queue_opened = 0
 local bulk_app = {
     state = {
         queue_running = false,
@@ -838,12 +885,24 @@ local bulk_app = {
         table.insert(bulk_queued, pkg.id .. ":" .. action)
         return true
     end,
+    show_queue = function() bulk_queue_opened = bulk_queue_opened + 1 end,
     refresh = function() end,
 }
 assert(App.installed_update_count(bulk_app) == 1)
+modal_message = nil
 App.queue_all_updates(bulk_app)
 assert(#bulk_queued == 1)
 assert(bulk_queued[1] == "active:update")
+assert(bulk_queue_opened == 1)
+assert(modal_message == nil)
+
+bulk_app.state.advanced = true
+bulk_queue_opened = 0
+bulk_queued = {}
+App.queue_all_updates(bulk_app)
+assert(#bulk_queued == 1)
+assert(bulk_queue_opened == 0)
+assert(modal_message == "Added to Queue")
 
 local reader_settings = {}
 _G.G_reader_settings = {

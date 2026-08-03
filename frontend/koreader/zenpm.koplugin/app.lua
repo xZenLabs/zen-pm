@@ -144,6 +144,7 @@ function App:new(plugin)
             page = "home",
             active_tab = "home",
             filter_installable = App.load_setting("filter_installable", true),
+            advanced = App.load_setting("advanced_queue", false),
             manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
             show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
@@ -708,6 +709,14 @@ function App:queue_count()
     return #(self.state.queue or {})
 end
 
+local function refresh_after_queue_change(app, open_queue)
+    if open_queue then
+        app:show_queue()
+    else
+        app:refresh()
+    end
+end
+
 function App:set_package_updates_ignored(pkg, ignored, ignored_version)
     local id = Util.trim(tostring(pkg and (pkg.id or pkg.name) or ""))
     if id == "" then return false end
@@ -782,14 +791,14 @@ function App:queue_all_updates()
     end
     local packages = self.state.packages or {}
     local function finish()
-        if added > 0 then
+        if added > 0 and self.state.advanced then
             local notice = _("Added to Queue")
             if kindle_only_added then
                 notice = notice .. "\n" .. _([[This will install as a "book" on the Kindle homescreen.]])
             end
             Modals.info_for(notice, Constants.PACKAGE_NOTICE_SECONDS)
         end
-        self:refresh()
+        refresh_after_queue_change(self, not self.state.advanced)
     end
     local add_next
     add_next = function(index)
@@ -888,6 +897,7 @@ function App:queue_package_action(pkg, action, asset, opts)
         return false
     end
     opts = opts or {}
+    local open_queue = action == "update" and not self.state.advanced and not opts.silent
     if action == "update" and is_zenpm_package(pkg) then
         return self:queue_self_update(pkg, opts)
     end
@@ -930,18 +940,18 @@ function App:queue_package_action(pkg, action, asset, opts)
     for index, queued in ipairs(self.state.queue) do
         if queued.key == entry.key then
             self.state.queue[index] = entry
-            if not opts.silent then
+            if not opts.silent and not open_queue then
                 Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
             end
-            self:refresh()
+            refresh_after_queue_change(self, open_queue)
             return true
         end
     end
     table.insert(self.state.queue, entry)
-    if not opts.silent then
+    if not opts.silent and not open_queue then
         Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
     end
-    self:refresh()
+    refresh_after_queue_change(self, open_queue)
     return true
 end
 
@@ -954,6 +964,7 @@ function App:queue_self_update(pkg, opts)
     local id = pkg and (pkg.id or pkg.name)
     if not id then return false end
     local reinstall = opts.reinstall == true
+    local open_queue = not reinstall and not self.state.advanced and not opts.silent
     local entry = {
         key = queue_key(id, nil),
         id = id,
@@ -967,15 +978,15 @@ function App:queue_self_update(pkg, opts)
     for index, queued in ipairs(self.state.queue) do
         if queued.key == entry.key then
             self.state.queue[index] = entry
-            self:refresh()
+            refresh_after_queue_change(self, open_queue)
             return true
         end
     end
     table.insert(self.state.queue, entry)
-    if not opts.silent then
+    if not opts.silent and not open_queue then
         Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
     end
-    self:refresh()
+    refresh_after_queue_change(self, open_queue)
     return true
 end
 
@@ -2604,6 +2615,10 @@ function App:perform_package_action(pkg, on_done)
         self:show_package_details(pkg.id or pkg.name, self.state.active_tab, false, "patches")
         return
     end
+    if pkg.installed and pkg.update_available and not self.state.advanced then
+        self:confirm_package_action(pkg, "update", on_done)
+        return
+    end
     if pkg.installed then
         local is_koplugin = package_is_koreader_plugin(pkg)
         Modals.package_modify(pkg, {
@@ -2887,7 +2902,7 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action == "update" and is_zenpm_package(pkg) then
-        self:queue_self_update(pkg)
+        self:queue_self_update(pkg, opts)
         return
     end
     if action_installs_package(action) and opts and opts.release then
@@ -3279,6 +3294,11 @@ function App:toggle_filter_installable()
         return
     end
     self:reload_current_page()
+end
+
+function App:toggle_advanced()
+    self.state.advanced = not self.state.advanced
+    App.save_setting("advanced_queue", self.state.advanced)
 end
 
 function App:toggle_manual_version_picker()
