@@ -55,6 +55,38 @@ func TestExecuteScriptWithEnvLogsScriptOutput(t *testing.T) {
 	}
 }
 
+func TestExecuteScriptWithEnvRoutesCurlThroughZenPM(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args")
+	fakeExecutable := filepath.Join(dir, "zenpm")
+	if err := os.WriteFile(fakeExecutable, []byte("#!/bin/sh\nprintf '%s\\n' \"$*\" > \"$ZENPM_TEST_ARGS\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	originalExecutablePath := executablePath
+	executablePath = func() (string, error) { return fakeExecutable, nil }
+	defer func() { executablePath = originalExecutablePath }()
+
+	scriptPath := filepath.Join(dir, "script.sh")
+	script := "#!/bin/sh\ncurl -fSL --progress-bar -o /tmp/output https://example.test/asset\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ExecuteScriptWithEnv(scriptPath, map[string]string{
+		"ZENPM_USE_GO_CURL": "1",
+		"ZENPM_TEST_ARGS":   argsPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "script-curl -fSL --progress-bar -o /tmp/output https://example.test/asset"
+	if got := strings.TrimSpace(string(data)); got != want {
+		t.Fatalf("shim args = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultHomeMatchesKOReaderPluginParents(t *testing.T) {
 	tests := map[string]string{
 		"kobo":             "/mnt/onboard/.adds",

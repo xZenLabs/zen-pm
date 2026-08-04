@@ -33,6 +33,7 @@ type State struct {
 	TmpDir           string
 	LockDir          string
 	CABundle         string
+	RSACABundle      string
 	LogFile          string
 	SeededRepoURL    string // non-empty only when the database was just created
 	kindleWAFAllowed bool
@@ -90,6 +91,7 @@ func Init(platformName string) (*State, error) {
 		TmpDir:           filepath.Join(home, "tmp"),
 		LockDir:          filepath.Join(home, "locks"),
 		CABundle:         filepath.Join(home, "cacert.pem"),
+		RSACABundle:      filepath.Join(home, "cacert-rsa.pem"),
 		LogFile:          filepath.Join(home, "ZenPM.log"),
 		kindleWAFAllowed: deviceplatform.KindleWAFAllowed(platformName),
 	}
@@ -104,6 +106,9 @@ func Init(platformName string) (*State, error) {
 	}
 	if err := cabundle.WriteFile(s.CABundle); err != nil {
 		return nil, fmt.Errorf("write CA bundle: %w", err)
+	}
+	if err := cabundle.WriteRSAFile(s.RSACABundle); err != nil {
+		return nil, fmt.Errorf("write RSA CA bundle: %w", err)
 	}
 	StartupTrace("State initialization: directories ready.")
 

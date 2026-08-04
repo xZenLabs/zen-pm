@@ -11,6 +11,12 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/log"
 )
 
+var executablePath = os.Executable
+
+const curlShim = `#!/bin/sh
+exec "$ZENPM_EXECUTABLE" script-curl "$@"
+`
+
 // ExecuteScript runs a shell script at the given path.
 // Respects ZENPM_DRY_RUN=1 — prints intent without executing.
 func ExecuteScript(scriptPath string) error {
@@ -43,14 +49,47 @@ func ExecuteScriptWithEnvArgsAtDir(scriptPath string, env map[string]string, arg
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	if home, ok := lookupEnv(cmd.Env, "HOME"); !ok || home == "" {
-		cmd.Env = append(cmd.Env, "HOME="+defaultHome())
+		cmd.Env = setEnv(cmd.Env, "HOME", defaultHome())
 	}
 	for key, value := range env {
-		cmd.Env = append(cmd.Env, key+"="+value)
+		cmd.Env = setEnv(cmd.Env, key, value)
+	}
+	if enabled, _ := lookupEnv(cmd.Env, "ZENPM_USE_GO_CURL"); enabled == "1" {
+		shimEnv, cleanup, err := addCurlShim(scriptPath, cmd.Env)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		cmd.Env = shimEnv
 	}
 	output, err := cmd.CombinedOutput()
 	logScriptOutput(scriptPath, output)
 	return err
+}
+
+func addCurlShim(scriptPath string, env []string) ([]string, func(), error) {
+	executable, err := executablePath()
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve ZenPM executable for curl shim: %w", err)
+	}
+	shimDir, err := os.MkdirTemp(filepath.Dir(scriptPath), ".zenpm-curl-")
+	if err != nil {
+		return nil, nil, fmt.Errorf("create curl shim directory: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(shimDir) }
+	if err := os.WriteFile(filepath.Join(shimDir, "curl"), []byte(curlShim), 0755); err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("write curl shim: %w", err)
+	}
+	path, _ := lookupEnv(env, "PATH")
+	if path == "" {
+		path = shimDir
+	} else {
+		path = shimDir + string(os.PathListSeparator) + path
+	}
+	env = setEnv(env, "PATH", path)
+	env = setEnv(env, "ZENPM_EXECUTABLE", executable)
+	return env, cleanup, nil
 }
 
 func logScriptOutput(scriptPath string, output []byte) {
@@ -72,6 +111,17 @@ func lookupEnv(env []string, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func setEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	for i, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
 }
 
 func defaultHome() string {

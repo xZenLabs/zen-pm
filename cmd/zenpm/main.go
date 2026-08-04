@@ -26,6 +26,13 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
+	if os.Args[1] == "script-curl" {
+		if err := runScriptCurl(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "curl: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	plat := platform.Detect()
 	initStart := time.Now()
