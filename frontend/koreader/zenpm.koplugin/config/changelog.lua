@@ -40,4 +40,8 @@ return {
         "Fix duplicate unknown and known entries for prev installed items",
         "Android performance improvements",
     },
+    ["1.3.0"] = {
+        "Add Changes tab",
+        "Add simple mode",
+    },
 }

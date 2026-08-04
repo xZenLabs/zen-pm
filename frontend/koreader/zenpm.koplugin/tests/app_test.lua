@@ -15,9 +15,6 @@ local modal_rows
 local plugin_settings_prompt
 local package_modify_callbacks
 local ignore_updates_prompt
-local confirm_message
-local confirm_ok_text
-local confirm_callback
 local model_changes_days
 local model_changes_limit
 local model_changes_sort
@@ -75,11 +72,7 @@ package.preload["ui/modals"] = function()
         end,
         status = function(message) status_message = message end,
         close_status = function() end,
-        confirm = function(message, ok_text, callback)
-            confirm_message = message
-            confirm_ok_text = ok_text
-            confirm_callback = callback
-        end,
+        confirm = function() end,
         actions = function(title, rows)
             modal_title = title
             modal_rows = rows
@@ -419,10 +412,6 @@ App.go_back({
     state = { page = "home" },
     quit = function() quit_calls = quit_calls + 1 end,
 })
-assert(confirm_message == "Are you sure you want to exit ZenPM?")
-assert(confirm_ok_text == "Quit")
-assert(quit_calls == 0)
-confirm_callback()
 assert(quit_calls == 1)
 
 local navigation_refreshes = {}
@@ -615,7 +604,7 @@ local simple_queue_app = {
     zen_ui_installed = function() return false end,
     queue_entry_for = App.queue_entry_for,
     show_queue = function() simple_queue_opened = simple_queue_opened + 1 end,
-    refresh = function() error("simple updates should open the queue") end,
+    refresh = function() error("simple actions should open the queue") end,
 }
 assert(App.queue_package_action(simple_queue_app, {
     id = "reader",
@@ -623,6 +612,29 @@ assert(App.queue_package_action(simple_queue_app, {
 }, "update", nil, {}))
 assert(#simple_queue_app.state.queue == 1)
 assert(simple_queue_opened == 1)
+assert(modal_message == nil)
+
+local expected_queue_opens = simple_queue_opened
+for _, action in ipairs({ "install", "reinstall", "downgrade", "uninstall" }) do
+    simple_queue_app.state.queue = {}
+    assert(App.queue_package_action(simple_queue_app, {
+        id = "book-browser",
+    }, action, nil, {}))
+    expected_queue_opens = expected_queue_opens + 1
+    assert(#simple_queue_app.state.queue == 1)
+    assert(simple_queue_app.state.queue[1].action == action)
+    assert(simple_queue_opened == expected_queue_opens)
+    assert(modal_message == nil)
+end
+
+simple_queue_app.state.queue = {}
+simple_queue_app.queue_self_update = App.queue_self_update
+assert(App.queue_self_reinstall(simple_queue_app, {
+    id = "zenpm-koreader",
+}, "1.2.3", {}))
+assert(#simple_queue_app.state.queue == 1)
+assert(simple_queue_app.state.queue[1].action == "reinstall")
+assert(simple_queue_opened == expected_queue_opens + 1)
 assert(modal_message == nil)
 
 local advanced_queue_refreshed = 0

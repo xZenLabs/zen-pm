@@ -143,7 +143,7 @@ end
 function Header.draw_close(view, bb, x, y)
     local s = Theme.scale(46)
     P.box(bb, x, y, s, s, { border = false })
-    if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(11), y + Theme.scale(11), s - Theme.scale(22), s - Theme.scale(22), { is_icon = true }) then
+    if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(6), y + Theme.scale(6), s - Theme.scale(12), s - Theme.scale(12), { is_icon = true }) then
         P.center_text(bb, "×", x, y + Theme.scale(10), s, "title", { bold = true })
     end
     local callback = function() view.app:close_settings() end

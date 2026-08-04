@@ -897,7 +897,7 @@ function App:queue_package_action(pkg, action, asset, opts)
         return false
     end
     opts = opts or {}
-    local open_queue = action == "update" and not self.state.advanced and not opts.silent
+    local open_queue = not self.state.advanced and not opts.silent
     if action == "update" and is_zenpm_package(pkg) then
         return self:queue_self_update(pkg, opts)
     end
@@ -964,7 +964,7 @@ function App:queue_self_update(pkg, opts)
     local id = pkg and (pkg.id or pkg.name)
     if not id then return false end
     local reinstall = opts.reinstall == true
-    local open_queue = not reinstall and not self.state.advanced and not opts.silent
+    local open_queue = not self.state.advanced and not opts.silent
     local entry = {
         key = queue_key(id, nil),
         id = id,
