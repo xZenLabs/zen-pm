@@ -183,6 +183,18 @@ local function package_published_at(pkg)
     return tostring(pkg and pkg.published_at or "")
 end
 
+local function normalized_published_at(pkg)
+    local timestamp, _, month, day = package_published_at(pkg):match(
+        "^((%d%d%d%d)%-(%d%d)%-(%d%d)T%d%d:%d%d:%d%d)"
+    )
+    month, day = tonumber(month), tonumber(day)
+    local month_days = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
+    if not month or month < 1 or month > 12 or not day or day < 1 or day > month_days[month] then
+        return nil
+    end
+    return timestamp
+end
+
 local function compare_text(a, b)
     local an, bn = package_name(a), package_name(b)
     if an ~= bn then
@@ -228,9 +240,14 @@ function Models.sort_packages(packages, sort_key)
                 return aa < ba
             end
             return compare_text(a, b)
-        elseif sort_key == "published_at_desc" then
+        elseif sort_key == "published_at_desc" or sort_key == "published_at_asc" then
             local aa, ba = package_published_at(a), package_published_at(b)
             if aa ~= ba then
+                if aa == "" then return false end
+                if ba == "" then return true end
+                if sort_key == "published_at_asc" then
+                    return aa < ba
+                end
                 return aa > ba
             end
             return compare_text(a, b)
@@ -248,6 +265,73 @@ function Models.sort_packages(packages, sort_key)
         return compare_text(a, b)
     end)
     return out
+end
+
+function Models.changes_packages(packages, days, limit, sort_key, now)
+    now = tonumber(now) or os.time()
+    local cutoff = os.date("!%Y-%m-%dT%H:%M:%S", now - (tonumber(days) or 14) * 24 * 60 * 60)
+    local current = os.date("!%Y-%m-%dT%H:%M:%S", now)
+    local updates, published, recent = {}, {}, {}
+    for _, pkg in ipairs(packages or {}) do
+        local published_at = normalized_published_at(pkg)
+        if pkg.installed == true then
+            local actionable_update = pkg.update_available == true and not pkg.update_ignored
+            if actionable_update and (not published_at or published_at <= current) then
+                table.insert(updates, pkg)
+            end
+        elseif published_at and published_at <= current then
+            table.insert(published, pkg)
+            if published_at >= cutoff then
+                table.insert(recent, pkg)
+            end
+        end
+    end
+    updates = Models.sort_packages(updates, "published_at_desc")
+    local uninstalled = Models.sort_packages(#recent > 0 and recent or published, "published_at_desc")
+    local selected_updates, selected_uninstalled = {}, {}
+    local max_packages = tonumber(limit) or 40
+    for _, pkg in ipairs(updates) do
+        if #selected_updates >= max_packages then break end
+        table.insert(selected_updates, pkg)
+    end
+    for _, pkg in ipairs(uninstalled) do
+        if #selected_updates + #selected_uninstalled >= max_packages then break end
+        table.insert(selected_uninstalled, pkg)
+    end
+    local display_sort = sort_key == "published_at_asc" and "published_at_asc" or "published_at_desc"
+    selected_updates = Models.sort_packages(selected_updates, display_sort)
+    selected_uninstalled = Models.sort_packages(selected_uninstalled, display_sort)
+    local changes = {}
+    for _, pkg in ipairs(selected_updates) do
+        table.insert(changes, pkg)
+    end
+    for _, pkg in ipairs(selected_uninstalled) do
+        table.insert(changes, pkg)
+    end
+    return changes
+end
+
+local days_before_month = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 }
+
+local function date_ordinal(year, month, day)
+    local previous_year = year - 1
+    local leap_days = math.floor(previous_year / 4) - math.floor(previous_year / 100) + math.floor(previous_year / 400)
+    local leap_day = month > 2 and (year % 4 == 0 and (year % 100 ~= 0 or year % 400 == 0)) and 1 or 0
+    return previous_year * 365 + leap_days + days_before_month[month] + day + leap_day
+end
+
+function Models.friendly_published_at(pkg, now)
+    local published_at = normalized_published_at(pkg)
+    if not published_at then
+        return pkg and pkg.installed and pkg.update_available and not pkg.update_ignored and _("Update available") or ""
+    end
+    local year, month, day = published_at:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T")
+    local current = os.date("!*t", tonumber(now) or os.time())
+    local elapsed = date_ordinal(current.year, current.month, current.day)
+        - date_ordinal(tonumber(year), tonumber(month), tonumber(day))
+    if elapsed <= 0 then return _("Today") end
+    if elapsed == 1 then return _("Yesterday") end
+    return string.format(_("%d days ago"), elapsed)
 end
 
 function Models.sort_repos(repos, sort_key)
@@ -350,6 +434,9 @@ function Models.package_action_label(pkg)
         return _("Get")
     end
     if pkg and pkg.installed then
+        if pkg.update_available then
+            return _("Update")
+        end
         return _("Modify")
     end
     return _("Get")

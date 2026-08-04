@@ -42,11 +42,11 @@ separate from a native ZenPM install.
 
 ## Parity Targets
 
-- Featured, Search, Installed, Sources, Source Details, Package Details, Debug
+- Featured, Changes, Categories, Installed, Discover, Sources, Source Details, Package Details, Debug
 - Repository refresh, add, remove
 - Install, reinstall, uninstall with polling
 - About and update actions
 - Device-aware package filter: Kindle, Kobo, or host
 
 The Kindle WAF frontend remains the visual reference. Shared labels, retry
-counts, repository constants, and tab order are mirrored in `constants.lua`.
+counts, and repository constants are mirrored in `constants.lua`.

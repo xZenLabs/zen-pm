@@ -15,8 +15,8 @@ local function tab_label(tab_id)
         return _("Featured")
     elseif tab_id == "categories" then
         return _("Categories")
-    elseif tab_id == "sources" then
-        return _("Sources")
+    elseif tab_id == "changes" then
+        return _("Changes")
     elseif tab_id == "installed" then
         return _("Installed")
     elseif tab_id == "debug" then
@@ -30,7 +30,7 @@ end
 local ICONS = {
     home = "star.svg",
     categories = "categories.svg",
-    sources = "sources.svg",
+    changes = "changes.svg",
     installed = "packages.svg",
     debug = "debug.svg",
     search = "discover.svg",

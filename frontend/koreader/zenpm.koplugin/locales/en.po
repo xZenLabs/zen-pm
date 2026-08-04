@@ -48,6 +48,9 @@ msgstr "Add Source"
 msgid "Added to Queue"
 msgstr "Added to Queue"
 
+msgid "Advanced"
+msgstr "Advanced"
+
 msgid "All categories"
 msgstr "All categories"
 

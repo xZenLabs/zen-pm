@@ -20,6 +20,7 @@ local nerd_icons = {
     ignore_updates = "\u{F04E8}",
     allow_updates = "\u{F04E6}",
     refresh = "\u{F0450}",
+    sources = "\u{F062C}",
     settings_bug = "\u{F00E4}",
     settings = "\u{F0493}",
     disable = "\u{F04DB}",

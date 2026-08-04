@@ -31,6 +31,9 @@ end
 package.preload["gettext"] = function() return function(value) return value end end
 
 local Models = require("models")
+assert(Models.package_action_label({ installed = true, update_available = true }) == "Update")
+assert(Models.package_action_label({ installed = true }) == "Modify")
+assert(Models.package_action_label({}) == "Get")
 local repos = {
     { name = "ZenLabs", url = "https://zenlabs.example" },
     { name = "Alpha", url = "https://alpha.example" },
@@ -71,6 +74,57 @@ local published = {
 }
 local recent = Models.sort_packages(published, "published_at_desc")
 assert(recent[1].id == "third" and recent[2].id == "second" and recent[3].id == "first")
+
+local change_candidates = {
+    { id = "old-installed", name = "Old installed", installed = true, update_available = true, published_at = "2026-07-19T11:59:59Z" },
+    { id = "older-installed", name = "Older installed", installed = true, published_at = "2026-07-20T12:00:00Z" },
+    { id = "new", name = "New", published_at = "2026-08-02T11:00:00Z" },
+    { id = "new-installed", name = "New installed", installed = true, update_available = true, published_at = "2026-08-01T10:00:00Z" },
+    { id = "undated-update", name = "Undated update", installed = true, update_available = true },
+    { id = "ignored", name = "Ignored", installed = true, update_available = true, update_ignored = true, published_at = "2026-08-02T11:30:00Z" },
+    { id = "future", name = "Future", published_at = "2026-08-03T10:00:00Z" },
+    { id = "invalid", name = "Invalid", published_at = "2026-07-99T10:00:00Z" },
+    { id = "undated", name = "Undated" },
+}
+local changes = Models.changes_packages(change_candidates, 14, 40, "published_at_desc", 1785672000)
+assert(#changes == 4)
+assert(changes[1].id == "new-installed")
+assert(changes[2].id == "old-installed")
+assert(changes[3].id == "undated-update")
+assert(changes[4].id == "new")
+
+local ascending_changes = Models.changes_packages(change_candidates, 14, 40, "published_at_asc", 1785672000)
+assert(ascending_changes[1].id == "old-installed")
+assert(ascending_changes[2].id == "new-installed")
+assert(ascending_changes[3].id == "undated-update")
+assert(ascending_changes[4].id == "new")
+
+local edge = Models.changes_packages({
+    { id = "outside", published_at = "2026-07-19T11:59:59Z" },
+    { id = "edge", published_at = "2026-07-19T12:00:00Z" },
+}, 14, 20, "published_at_desc", 1785672000)
+assert(#edge == 1 and edge[1].id == "edge")
+
+local fallback = Models.changes_packages({
+    { id = "latest", published_at = "2026-07-10T12:00:00Z" },
+    { id = "second", published_at = "2026-07-09T12:00:00Z" },
+    { id = "oldest", published_at = "2026-07-08T12:00:00Z" },
+}, 14, 2, "published_at_desc", 1785672000)
+assert(#fallback == 2)
+assert(fallback[1].id == "latest" and fallback[2].id == "second")
+
+local ascending_fallback = Models.changes_packages({
+    { id = "latest", published_at = "2026-07-10T12:00:00Z" },
+    { id = "second", published_at = "2026-07-09T12:00:00Z" },
+    { id = "oldest", published_at = "2026-07-08T12:00:00Z" },
+}, 14, 2, "published_at_asc", 1785672000)
+assert(ascending_fallback[1].id == "second" and ascending_fallback[2].id == "latest")
+
+assert(Models.friendly_published_at({ published_at = "2026-08-02T01:00:00Z" }, 1785672000) == "Today")
+assert(Models.friendly_published_at({ published_at = "2026-08-01T23:00:00Z" }, 1785672000) == "Yesterday")
+assert(Models.friendly_published_at({ published_at = "2026-07-30T12:00:00Z" }, 1785672000) == "3 days ago")
+assert(Models.friendly_published_at({ published_at = "2026-07-99T12:00:00Z" }, 1785672000) == "")
+assert(Models.friendly_published_at({ installed = true, update_available = true }, 1785672000) == "Update available")
 
 local searchable = {
     { id = "title", name = "Title match", author = "Other", description = "No match" },

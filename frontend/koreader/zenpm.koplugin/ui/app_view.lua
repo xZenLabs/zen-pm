@@ -677,6 +677,8 @@ function AppView:draw_content(bb, x, y, w, h)
 
     if page == "home" then
         max_scroll = Pages.featured(self, bb, x, y, w, h, scroll)
+    elseif page == "changes" then
+        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Changes"), "changes", state.visible_packages, state.changes_packages, "")
     elseif page == "search" then
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Discover"), "search", state.visible_packages, state.packages, state.filters.search)
     elseif page == "categories" then
