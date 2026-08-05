@@ -264,10 +264,14 @@ function Reporter:submit(app, title, description, username)
         local body = issue_body(description, app, username, uploaded_zenpm_log_url, uploaded_crash_log_url, inline_zenpm_log, inline_crash_log)
         body = truncate_utf8_bytes(body, MAX_BODY, "\n...[truncated]")
         local report_title = truncate_utf8_bytes("[BUG] " .. title, MAX_TITLE + 6)
+        local labels = { "bug" }
+        if app.state.beta_updates then
+            table.insert(labels, "beta")
+        end
         local submitted, response, code = app.client:request("POST", PROXY_URL, {
             title = report_title,
             body = body,
-            labels = { "bug" },
+            labels = labels,
         }, REPORT_TIMEOUT)
         Modals.close_status()
         if submitted then
