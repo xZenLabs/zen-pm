@@ -3,6 +3,7 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. root .. "/ui/?.lua;" .. package.path
 
 local painted_text = {}
+local hit_callbacks = {}
 
 package.preload["constants"] = function() return { PLUGIN_DIR = root } end
 package.preload["i18n"] = function()
@@ -27,7 +28,7 @@ package.preload["ui/primitives"] = function()
         image_zoomed = function() return true end,
         center_text_box = function() end,
         dim = function() end,
-        hit = function() end,
+        hit = function(_, _, _, _, _, callback, id) hit_callbacks[id] = callback end,
         focus_control = function() end,
         focus_target = function() return false end,
         focus_outline = function() end,
@@ -103,13 +104,16 @@ end
 assert(painted_text[1] == "By Zen Labs")
 
 painted_text = {}
+local opened_changes_details
 Cards.package({
     app = {
-        state = { active_tab = "changes", queue = {} },
+        state = { page = "changes", active_tab = "changes", queue = {} },
         package_disabled = function() return false end,
         package_icon_file = function() return "reader.svg" end,
         perform_package_action = function() end,
-        show_package_details = function() end,
+        show_package_details = function(_, ...)
+            opened_changes_details = { ... }
+        end,
     },
 }, {}, {
     id = "reader",
@@ -117,6 +121,12 @@ Cards.package({
     version = "1.0.0",
     repo = "ZenLabs",
 }, 0, 0, 300, { meta_suffix = "Yesterday" })
+
+hit_callbacks["package:reader:"]()
+assert(opened_changes_details[1] == "reader")
+assert(opened_changes_details[2] == "changes")
+assert(opened_changes_details[3] == false)
+assert(opened_changes_details[4] == "release_notes")
 
 local found_changes_meta = false
 for _, text in ipairs(painted_text) do

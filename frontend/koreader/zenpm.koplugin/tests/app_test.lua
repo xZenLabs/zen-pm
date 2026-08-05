@@ -138,20 +138,20 @@ package.preload["models"] = function()
     }
 end
 package.preload["ui/theme"] = function() return {} end
-package.preload["updater"] = function()
-    return {
-        update = function()
-            return true, "1.2.4-beta3"
-        end,
-        reinstall = function(_, _, tag, allow_prerelease, force_refresh)
-            updater_reinstall_requests = updater_reinstall_requests + 1
-            assert(tag == "v1.2.3")
-            assert(not allow_prerelease)
-            assert(force_refresh)
-            return true, "1.2.3"
-        end,
-    }
-end
+local updater_stub = {
+    update = function()
+        return true, "1.2.4-beta3"
+    end,
+    reinstall = function(_, _, tag, allow_prerelease, force_refresh)
+        updater_reinstall_requests = updater_reinstall_requests + 1
+        assert(tag == "v1.2.3")
+        assert(not allow_prerelease)
+        assert(force_refresh)
+        return true, "1.2.3"
+    end,
+}
+-- Another plugin may have already claimed this generic module name.
+package.loaded["updater"] = {}
 package.preload["zenpm_util"] = function()
     return {
         trim = function(value)
@@ -185,12 +185,18 @@ package.preload["luasettings"] = function()
 end
 
 local original_dofile = dofile
+local updater_dofile_loads = 0
 dofile = function(path)
     if path == root .. "/client.lua" then return {} end
+    if path == root .. "/updater.lua" then
+        updater_dofile_loads = updater_dofile_loads + 1
+        return updater_stub
+    end
     return original_dofile(path)
 end
 local App = require("app")
 dofile = original_dofile
+assert(updater_dofile_loads == 1)
 
 local app = {
     state = { beta_updates = false },

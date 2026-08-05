@@ -61,8 +61,8 @@ updates** in ZenPM only if you want in-app beta updates.
 ### Kindle standalone
 
 This option requires a Kindle jailbreak that provides root access. It also
-needs the device's sqlite3 binary and a script launcher such as KUAL. Do not
-install the standalone package on any setup without root access.
+needs a script launcher such as KUAL. Do not install the standalone package on
+any setup without root access.
 
 > [!WARNING]
 > As with KindleForge, using ZenPM Kindle Standalone on WinterBreak, SpringBreak, Sanctuary, or

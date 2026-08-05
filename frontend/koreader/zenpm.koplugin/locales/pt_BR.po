@@ -520,7 +520,7 @@ msgid "README"
 msgstr "LEIA-ME"
 
 msgid "Refresh"
-msgstr "Atualizar"
+msgstr "Recarregar"
 
 msgid "Refresh failed: "
 msgstr "Refresh failed: "

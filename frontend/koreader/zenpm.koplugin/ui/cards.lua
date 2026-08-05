@@ -174,7 +174,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local focus_key = "package:" .. id .. ":" .. asset
     local action_focus_key = "package-action:" .. id .. ":" .. asset
     local function show_details()
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
+        local details_tab = view.app.state.page == "changes" and "release_notes" or nil
+        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, details_tab, pkg.patch_asset)
     end
 
     if icon_w > 0 then

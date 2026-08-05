@@ -2,6 +2,7 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
+local log_messages = {}
 package.preload["json"] = function()
     return {
         encode = function() return '{"scan":true}' end,
@@ -19,6 +20,11 @@ package.preload["socket"] = function()
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
+package.preload["logger"] = function()
+    return {
+        info = function(message) table.insert(log_messages, message) end,
+    }
+end
 package.preload["constants"] = function()
     return {
         API_BASE = "http://127.0.0.1:18765",
@@ -52,6 +58,15 @@ assert(unix_request.path == "/koreader/plugins/scan")
 assert(unix_request.body == '{"scan":true}')
 assert(unix_request.timeout == 4)
 assert(unix_request.accept == "application/json, text/plain, */*")
+assert(log_messages[1] == "ZenPM UDS POST /koreader/plugins/scan via /tmp/zenpm.sock started")
+assert(log_messages[2] == "ZenPM UDS POST /koreader/plugins/scan via /tmp/zenpm.sock HTTP 200 after 0ms")
+
+ok, response = client:download("/packages/example/icon")
+assert(ok and response == '{"ok":true}')
+assert(unix_request.method == "GET")
+assert(unix_request.path == "/packages/example/icon")
+assert(log_messages[3] == "ZenPM UDS GET /packages/example/icon via /tmp/zenpm.sock started")
+assert(log_messages[4] == "ZenPM UDS GET /packages/example/icon via /tmp/zenpm.sock HTTP 200 after 0ms")
 
 ok, response = client:scan_installed_plugins()
 assert(ok and response.ok)

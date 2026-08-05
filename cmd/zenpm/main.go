@@ -85,12 +85,12 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  doctor")
 	fmt.Fprintln(os.Stderr, "  logs    [--tail N]")
 	fmt.Fprintln(os.Stderr, "  serve   [--socket PATH | --port PORT]")
-	fmt.Fprintln(os.Stderr, "  maintenance update|uninstall [--parent-pid PID] [--remove-settings]")
+	fmt.Fprintln(os.Stderr, "  maintenance register|update|uninstall [--parent-pid PID] [--remove-settings]")
 }
 
 func runMaintenance(args []string) {
 	if len(args) == 0 {
-		die("Usage: zenpm maintenance <update|uninstall> [--parent-pid PID] [--remove-settings]")
+		die("Usage: zenpm maintenance <register|update|uninstall> [--parent-pid PID] [--remove-settings]")
 	}
 	parentPID := 0
 	removeSettings := false

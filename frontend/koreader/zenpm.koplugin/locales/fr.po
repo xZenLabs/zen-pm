@@ -691,7 +691,7 @@ msgid "Unknown package"
 msgstr "Paquet inconnu"
 
 msgid "Update"
-msgstr "Mettre a jour"
+msgstr "Mettre à jour"
 
 msgid "update"
 msgstr "mise à jour"

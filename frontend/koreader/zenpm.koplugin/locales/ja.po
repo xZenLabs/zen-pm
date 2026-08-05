@@ -520,7 +520,7 @@ msgid "README"
 msgstr "お読みください"
 
 msgid "Refresh"
-msgstr "更新"
+msgstr "リロード"
 
 msgid "Refresh failed: "
 msgstr "更新に失敗しました: "

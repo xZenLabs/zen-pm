@@ -9,8 +9,8 @@ Download the required files from the [ZenPM releases page](https://github.com/xZ
 > on newer jailbreaks, KPM-managed devices where `/mnt/us/kmc/kpm` exists, or
 > any setup without root access.
 
-This install also requires the latest hotfix, the device's `sqlite3` binary,
-and a script launcher such as KUAL.
+This install also requires the latest hotfix and a script launcher such as
+KUAL.
 
 ### Hotfix update/reinstall
 Reinstallation steps:

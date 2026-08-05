@@ -7,8 +7,9 @@ local ok_logger, logger = pcall(require, "logger")
 local AppView = require("ui/app_view")
 local BugReporter = require("bugreporter")
 local Constants = require("constants")
--- KOReader may already have a module named "client" loaded. Load our HTTP
--- client explicitly so that cache entry cannot replace it.
+-- KOReader or another plugin may already have modules with these generic
+-- names loaded. Load our implementations explicitly so cache entries cannot
+-- replace them.
 local Client = dofile(Constants.PLUGIN_DIR .. "/client.lua")
 local Daemon = require("daemon")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
@@ -16,7 +17,7 @@ local Images = require("ui/images")
 local Modals = require("ui/modals")
 local Models = require("models")
 local Theme = require("ui/theme")
-local Updater = require("updater")
+local Updater = dofile(Constants.PLUGIN_DIR .. "/updater.lua")
 local Util = require("zenpm_util")
 
 local App = {}
