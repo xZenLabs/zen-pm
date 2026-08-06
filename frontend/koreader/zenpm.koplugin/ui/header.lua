@@ -211,8 +211,8 @@ local function draw_queue_clear_button(view, bb, x, y)
     local w = Theme.scale(14) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
     local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
     P.box(bb, x, y, w, h, {
-        border = false,
         background = enabled and Theme.button_bg or Theme.bg,
+        border_color = enabled and Theme.button_bg or Theme.soft,
         radius = math.floor(h / 2),
     })
     P.center_text_box(bb, InlineIcons.icon("clear"), x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
