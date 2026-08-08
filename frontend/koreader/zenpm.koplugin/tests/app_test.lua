@@ -20,9 +20,20 @@ local model_changes_limit
 local model_changes_sort
 local updater_reinstall_requests = 0
 local logged_warnings = {}
+local network_connected = true
+local network_retry_callback
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function()
     return { new = function(_, name) return name end }
+end
+package.preload["ui/network/manager"] = function()
+    return {
+        willRerunWhenConnected = function(_, callback)
+            if network_connected then return false end
+            network_retry_callback = callback
+            return true
+        end,
+    }
 end
 package.preload["ui/uimanager"] = function()
     return {
@@ -385,11 +396,28 @@ local opened_app = {
     load_packages = function() end,
     load_repos = function() end,
     reload_current_page = function() open_catalog_reloads = open_catalog_reloads + 1 end,
+    refresh_catalog_on_open = App.refresh_catalog_on_open,
 }
 App.refresh_catalog_on_open(opened_app)
 assert(open_refreshes == 1)
 assert(next(opened_app.state.readme_cache) == nil)
 assert(open_catalog_reloads == 1)
+
+network_connected = false
+opened_app.state.readme_cache.reader = { readme = "Cached README" }
+App.refresh_catalog_on_open(opened_app)
+assert(open_refreshes == 1)
+assert(not opened_app.catalog_refreshing)
+assert(type(network_retry_callback) == "function")
+assert(opened_app.state.readme_cache.reader.readme == "Cached README")
+
+network_connected = true
+local retry_catalog_refresh = network_retry_callback
+network_retry_callback = nil
+retry_catalog_refresh()
+assert(open_refreshes == 2)
+assert(next(opened_app.state.readme_cache) == nil)
+assert(open_catalog_reloads == 2)
 
 local interrupted_catalog_callback
 local interrupted_catalog_loads = 0

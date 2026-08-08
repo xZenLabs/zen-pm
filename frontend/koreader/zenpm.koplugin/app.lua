@@ -1,5 +1,6 @@
 local socket = require("socket")
 local Event = require("ui/event")
+local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local ok_logger, logger = pcall(require, "logger")
@@ -1429,6 +1430,11 @@ end
 
 function App:refresh_catalog_on_open()
     if self.catalog_refreshing or not self.backend_ready or not self.view then return end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:refresh_catalog_on_open()
+    end) then
+        return
+    end
     self.catalog_refreshing = true
     self:run_update_task(function()
         return pcall(self.client.refresh_repos, self.client)
