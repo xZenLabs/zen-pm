@@ -4,6 +4,8 @@ package.path = root .. "/?.lua;" .. package.path
 
 local uploaded_logs = {}
 local submitted_reports = {}
+local submitting_repainted = false
+local submitting_ticks = 0
 package.preload["device"] = function() return { model = "Test device" } end
 package.preload["datastorage"] = function()
     return {
@@ -14,12 +16,20 @@ package.preload["ui/modals"] = function()
     return {
         close_status = function() end,
         notice = function() end,
-        status = function() end,
+        status = function(message)
+            assert(message == "Submitting report…")
+            submitting_repainted = false
+            submitting_ticks = 0
+        end,
     }
 end
 package.preload["ui/uimanager"] = function()
     return {
-        nextTick = function(_, callback) callback() end,
+        forceRePaint = function() submitting_repainted = true end,
+        nextTick = function(_, callback)
+            submitting_ticks = submitting_ticks + 1
+            callback()
+        end,
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
@@ -45,6 +55,8 @@ local app = {
         end,
         request = function(_, method, url, body)
             assert(method == "POST")
+            assert(submitting_repainted)
+            assert(submitting_ticks == 2)
             if url:find("/upload", 1, true) then
                 table.insert(uploaded_logs, body.log)
             else

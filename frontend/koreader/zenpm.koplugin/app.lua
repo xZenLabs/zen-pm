@@ -212,7 +212,7 @@ local function is_sdl_wayland_desktop()
     return device_bool("isSDL") or device_bool("isDesktop")
 end
 
-function App:run_update_task(task, trap_widget, on_done)
+function App:run_update_task(task, trap_widget, on_done, force_in_process)
     local function finish(...)
         -- Trapper attaches this callback to let a tap cancel the subprocess.
         -- Once it returns, closing the progress modal must not resume the
@@ -236,7 +236,8 @@ function App:run_update_task(task, trap_widget, on_done)
     -- Android's JNI-backed runtime can likewise exit without returning the
     -- updater result to Trapper. Kobo self-updates can fail before entering
     -- the updater when forked, so keep them in the parent process too.
-    if self.daemon:is_android()
+    if force_in_process
+        or self.daemon:is_android()
         or self.daemon:detect_platform() == "kobo"
         or is_sdl_wayland_desktop() then
         run_in_process()
@@ -1433,7 +1434,8 @@ function App:refresh_catalog_on_open()
         return pcall(self.client.refresh_repos, self.client)
     end, nil, function(completed, called, ok)
         self.catalog_refreshing = false
-        if not completed or not called or not ok or not self.view then return end
+        -- Self-update can stop the backend while this refresh is in flight.
+        if not completed or not called or not ok or not self.view or not self.backend_ready then return end
         self.state.readme_cache = {}
         self.image_files = {}
         Images.invalidate_cache()
@@ -3264,6 +3266,9 @@ function App:apply_kindle_homepage_install()
     self.busy = true
     local status = Modals.status(_("Copying ZenPM to Kindle homepage..."))
     UIManager:forceRePaint()
+    -- The installer starts and waits for Kindle setup commands of its own.
+    -- Running it in another subprocess can leave KOReader waiting for the
+    -- child-result handoff even after the installation has completed.
     self:run_update_task(function()
         return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates, true)
     end, status, function(completed, called, ok, result)
@@ -3282,7 +3287,7 @@ function App:apply_kindle_homepage_install()
             return
         end
         Modals.info(_("ZenPM v") .. tostring(result) .. _(" was copied to the Kindle homepage."))
-    end)
+    end, true)
 end
 
 function App:toggle_filter_installable()

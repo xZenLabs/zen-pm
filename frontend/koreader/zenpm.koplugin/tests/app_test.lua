@@ -142,6 +142,11 @@ local updater_stub = {
     update = function()
         return true, "1.2.4-beta3"
     end,
+    install_kindle_standalone = function(_, _, allow_prerelease, force_refresh)
+        assert(not allow_prerelease)
+        assert(force_refresh)
+        return true, "1.3.0"
+    end,
     reinstall = function(_, _, tag, allow_prerelease, force_refresh)
         updater_reinstall_requests = updater_reinstall_requests + 1
         assert(tag == "v1.2.3")
@@ -386,6 +391,37 @@ assert(open_refreshes == 1)
 assert(next(opened_app.state.readme_cache) == nil)
 assert(open_catalog_reloads == 1)
 
+local interrupted_catalog_callback
+local interrupted_catalog_loads = 0
+local interrupted_catalog_reloads = 0
+local interrupted_catalog_app = {
+    backend_ready = true,
+    view = {},
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
+    client = {
+        refresh_repos = function() return true end,
+    },
+    run_update_task = function(_, task, _, callback)
+        local called, ok = task()
+        interrupted_catalog_callback = function()
+            callback(true, called, ok)
+        end
+    end,
+    load_packages = function() interrupted_catalog_loads = interrupted_catalog_loads + 1 end,
+    load_repos = function() end,
+    reload_current_page = function() interrupted_catalog_reloads = interrupted_catalog_reloads + 1 end,
+}
+App.refresh_catalog_on_open(interrupted_catalog_app)
+assert(interrupted_catalog_app.catalog_refreshing)
+interrupted_catalog_app.backend_ready = false
+interrupted_catalog_callback()
+assert(not interrupted_catalog_app.catalog_refreshing)
+assert(interrupted_catalog_loads == 0)
+assert(interrupted_catalog_reloads == 0)
+assert(interrupted_catalog_app.state.readme_cache.reader.readme == "Cached README")
+
 local reload_tab
 local reload_full_refresh
 App.reload_current_page({
@@ -562,6 +598,50 @@ assert(update_result[2] == true)
 assert(update_result[3] == true)
 assert(update_result[4] == "1.2.4")
 assert(trapper_required)
+
+local forced_subprocess_runs = 0
+package.preload["ui/trapper"] = function()
+    return {
+        wrap = function(_, callback) callback() end,
+        dismissableRunInSubprocess = function(_, task)
+            forced_subprocess_runs = forced_subprocess_runs + 1
+            return true, task()
+        end,
+    }
+end
+package.loaded["ui/trapper"] = nil
+update_result = nil
+App.run_update_task({
+    daemon = {
+        is_android = function() return false end,
+        detect_platform = function() return "kindle" end,
+    },
+}, function()
+    return true, true, "1.3.0"
+end, trap_widget, function(...)
+    update_result = { ... }
+end, true)
+assert(update_result[1] == true)
+assert(update_result[2] == true)
+assert(update_result[3] == true)
+assert(update_result[4] == "1.3.0")
+assert(trap_widget.dismiss_callback == nil)
+assert(forced_subprocess_runs == 0)
+
+local homepage_forced_in_process = false
+modal_message = nil
+App.apply_kindle_homepage_install({
+    busy = false,
+    state = { beta_updates = false },
+    daemon = {},
+    run_update_task = function(_, task, _, callback, force_in_process)
+        homepage_forced_in_process = force_in_process
+        local called, ok, result = task()
+        callback(true, called, ok, result)
+    end,
+})
+assert(homepage_forced_in_process)
+assert(modal_message == "ZenPM v1.3.0 was copied to the Kindle homepage.")
 
 local self_update_queued = 0
 local self_action_app = {

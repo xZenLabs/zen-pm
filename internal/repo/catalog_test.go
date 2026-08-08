@@ -320,6 +320,29 @@ func TestFetchCatalogIncludesHTTPFailureDetail(t *testing.T) {
 	}
 }
 
+func TestFetchHTTPBytesRetriesHeaderTimeout(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			time.Sleep(100 * time.Millisecond)
+			return
+		}
+		w.Write([]byte("package data"))
+	}))
+	defer srv.Close()
+
+	data, err := fetchHTTPBytes(srv.URL, &http.Client{Timeout: 25 * time.Millisecond}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "package data" {
+		t.Fatalf("FetchHTTPBytes() = %q", data)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("requests = %d, want 2", got)
+	}
+}
+
 func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	featuredOrder := 10
 	entry := &CatalogEntry{
