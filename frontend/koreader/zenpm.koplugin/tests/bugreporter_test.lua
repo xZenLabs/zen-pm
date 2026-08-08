@@ -3,6 +3,7 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
 local uploaded_logs = {}
+local submitted_reports = {}
 package.preload["device"] = function() return { model = "Test device" } end
 package.preload["datastorage"] = function()
     return {
@@ -46,6 +47,8 @@ local app = {
             assert(method == "POST")
             if url:find("/upload", 1, true) then
                 table.insert(uploaded_logs, body.log)
+            else
+                table.insert(submitted_reports, body)
             end
             return true, { url = "https://example.test/report" }
         end,
@@ -56,12 +59,21 @@ local app = {
         plugin_version = function() return "test" end,
     },
     platform = function() return "test" end,
+    state = { beta_updates = false },
     version = "test",
 }
 
 Reporter:submit(app, "report", "", "")
-io.open = original_open
-
 assert(uploaded_logs[1] == "ZenPM log")
 assert(uploaded_logs[2] == "crash first\ncrash last\n")
+assert(#submitted_reports[1].labels == 1)
+assert(submitted_reports[1].labels[1] == "bug")
+
+app.state.beta_updates = true
+Reporter:submit(app, "beta report", "", "")
+io.open = original_open
+
+assert(#submitted_reports[2].labels == 2)
+assert(submitted_reports[2].labels[1] == "bug")
+assert(submitted_reports[2].labels[2] == "beta")
 print("bug reporter tests passed")

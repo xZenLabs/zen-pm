@@ -3,6 +3,7 @@ package pkg
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -20,6 +21,8 @@ const (
 	genericPatchInstaller  = "patch"
 	genericFontInstaller   = "font"
 )
+
+var chmodInstallStage = os.Chmod
 
 func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
 	if !packageHasPlatform(entry, "koreader") {
@@ -658,7 +661,8 @@ func replaceTree(source, destination string) error {
 		return err
 	}
 	defer os.RemoveAll(stage)
-	if err := os.Chmod(stage, 0755); err != nil {
+	// PocketBook's storage mount does not support changing Unix mode bits.
+	if err := chmodInstallStage(stage, 0755); err != nil && !errors.Is(err, fs.ErrPermission) {
 		return err
 	}
 	backup := stage + ".backup"

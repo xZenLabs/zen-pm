@@ -3,6 +3,7 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
 local requests = {}
+local log_messages = {}
 package.preload["json"] = function()
     return {
         decode = function(value)
@@ -39,6 +40,11 @@ package.preload["socket"] = function()
     }
 end
 package.preload["gettext"] = function() return function(value) return value end end
+package.preload["logger"] = function()
+    return {
+        info = function(message) table.insert(log_messages, message) end,
+    }
+end
 package.preload["constants"] = function()
     return {
         API_BASE = "http://127.0.0.1:18765",
@@ -56,5 +62,7 @@ local ok, response = client:request("GET", "/health")
 assert(ok and response.ok)
 assert(#requests == 1)
 assert(requests[1].url == "http://127.0.0.1:18765/health")
+assert(log_messages[1] == "ZenPM HTTP GET http://127.0.0.1:18765/health started")
+assert(log_messages[2] == "ZenPM HTTP GET http://127.0.0.1:18765/health HTTP 200 after 0ms")
 
 print("Android client tests passed")

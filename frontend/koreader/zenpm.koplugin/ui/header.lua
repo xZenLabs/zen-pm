@@ -39,6 +39,8 @@ function Header.page_title(view)
     local page = state.page
     if page == "home" then
         return _("Featured") .. " (" .. tostring(#(state.featured_packages or {})) .. ")"
+    elseif page == "changes" then
+        return _("Changes") .. " (" .. tostring(#(state.changes_packages or {})) .. ")"
     elseif page == "search" then
         return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
     elseif page == "categories" then
@@ -141,7 +143,7 @@ end
 function Header.draw_close(view, bb, x, y)
     local s = Theme.scale(46)
     P.box(bb, x, y, s, s, { border = false })
-    if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(11), y + Theme.scale(11), s - Theme.scale(22), s - Theme.scale(22), { is_icon = true }) then
+    if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(6), y + Theme.scale(6), s - Theme.scale(12), s - Theme.scale(12), { is_icon = true }) then
         P.center_text(bb, "×", x, y + Theme.scale(10), s, "title", { bold = true })
     end
     local callback = function() view.app:close_settings() end
@@ -209,8 +211,8 @@ local function draw_queue_clear_button(view, bb, x, y)
     local w = Theme.scale(14) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
     local enabled = view.app:queue_count() > 0 and not view.app.state.queue_running
     P.box(bb, x, y, w, h, {
-        border = false,
         background = enabled and Theme.button_bg or Theme.bg,
+        border_color = enabled and Theme.button_bg or Theme.soft,
         radius = math.floor(h / 2),
     })
     P.center_text_box(bb, InlineIcons.icon("clear"), x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
@@ -284,6 +286,7 @@ function Header.draw(view, bb, x, y, w)
     })[page]
     local sort_kind = ({
         search = "search",
+        changes = "changes",
         category_details = "category",
         installed = "installed",
         sources = "sources",
@@ -302,7 +305,7 @@ function Header.draw(view, bb, x, y, w)
         draw_title_button(view, bb, right_x, button_y, label, function()
             view.app:prompt_add_source()
         end, "add-source", true)
-    elseif page == "installed" then
+    elseif page == "installed" or page == "changes" then
         local updates = view.app:installed_update_count()
         local label = _("Update All") .. " (" .. tostring(updates) .. ")"
         local enabled = updates > 0 and not view.app.state.queue_running

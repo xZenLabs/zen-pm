@@ -4,6 +4,7 @@ package maintenance
 import (
 	"archive/zip"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -22,10 +23,12 @@ import (
 )
 
 const (
-	kindlePayloadDir = "/mnt/us/ZenPM"
-	kindlePersistDir = "/mnt/us/.ZenPM"
-	kindleAppID      = "com.zenlabs.zenpm"
-	zenPMRepository  = "https://github.com/xZenLabs/zen-pm"
+	kindlePayloadDir     = "/mnt/us/ZenPM"
+	kindlePersistDir     = "/mnt/us/.ZenPM"
+	kindleAppregDB       = "/var/local/appreg.db"
+	kindleMesquiteTarget = "/var/local/mesquite/ZenPM"
+	kindleAppID          = "com.zenlabs.zenpm"
+	zenPMRepository      = "https://github.com/xZenLabs/zen-pm"
 )
 
 // Start launches a detached maintenance helper. The helper must be a separate
@@ -51,6 +54,8 @@ func Run(action string, parentPID int, removeSettings bool) error {
 		return errors.New("Kindle maintenance is only available on Kindle")
 	}
 	switch action {
+	case "register":
+		return registerApp()
 	case "update":
 		if !platform.KindleWAFAllowed(platform.Kindle) {
 			return errors.New("Kindle standalone is not supported on this device")
@@ -129,7 +134,7 @@ func uninstall(parentPID int, removeSettings bool) error {
 	if err := unregisterApp(); err != nil {
 		return err
 	}
-	if err := os.RemoveAll("/var/local/mesquite/ZenPM"); err != nil {
+	if err := os.RemoveAll(kindleMesquiteTarget); err != nil {
 		return fmt.Errorf("remove WAF: %w", err)
 	}
 	if err := os.RemoveAll(kindlePayloadDir); err != nil {
@@ -324,27 +329,75 @@ func writeCLIWrappers(payloadDir string) error {
 }
 
 func deployWAF() error {
-	target := "/var/local/mesquite/ZenPM"
-	if err := os.RemoveAll(target); err != nil {
+	if err := os.RemoveAll(kindleMesquiteTarget); err != nil {
 		return err
 	}
-	return copyTree(filepath.Join(kindlePayloadDir, "frontend", "kindle"), target)
+	return copyTree(filepath.Join(kindlePayloadDir, "frontend", "kindle"), kindleMesquiteTarget)
 }
 
 func registerApp() error {
-	query := "INSERT OR IGNORE INTO interfaces(interface) VALUES('application');" +
-		"INSERT OR IGNORE INTO handlerIds(handlerId) VALUES('" + kindleAppID + "');" +
-		"INSERT OR REPLACE INTO properties(handlerId,name,value) VALUES('" + kindleAppID + "','command','/usr/bin/mesquite -l " + kindleAppID + " -c file:///var/local/mesquite/ZenPM/');"
-	return runCommand("sqlite3", "/var/local/appreg.db", query)
+	return registerAppAt(kindleAppregDB)
+}
+
+func registerAppAt(path string) error {
+	db, err := sql.Open(maintenanceSQLiteDriver, path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("INSERT OR IGNORE INTO interfaces(interface) VALUES(?)", "application"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT OR IGNORE INTO handlerIds(handlerId) VALUES(?)", kindleAppID); err != nil {
+		return err
+	}
+	properties := [][2]string{
+		{"lipcId", kindleAppID},
+		{"command", "/usr/bin/mesquite -l " + kindleAppID + " -c file://" + kindleMesquiteTarget + "/"},
+		{"name", "Zen Package Manager"},
+		{"description", "Zen Package Manager WAF"},
+		{"supportedOrientation", "U"},
+	}
+	for _, property := range properties {
+		if _, err := tx.Exec("INSERT OR REPLACE INTO properties(handlerId,name,value) VALUES(?,?,?)", kindleAppID, property[0], property[1]); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func unregisterApp() error {
-	if _, err := os.Stat("/var/local/appreg.db"); err != nil {
+	if _, err := os.Stat(kindleAppregDB); err != nil {
 		return nil
 	}
-	query := "DELETE FROM properties WHERE handlerId = '" + kindleAppID + "';" +
-		"DELETE FROM handlerIds WHERE handlerId = '" + kindleAppID + "';"
-	return runCommand("sqlite3", "/var/local/appreg.db", query)
+	return unregisterAppAt(kindleAppregDB)
+}
+
+func unregisterAppAt(path string) error {
+	db, err := sql.Open(maintenanceSQLiteDriver, path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, query := range []string{
+		"DELETE FROM properties WHERE handlerId = ?",
+		"DELETE FROM handlerIds WHERE handlerId = ?",
+	} {
+		if _, err := tx.Exec(query, kindleAppID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func startDaemon() error {

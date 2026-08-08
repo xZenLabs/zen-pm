@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/xZenLabs/zen-pm/internal/platform"
@@ -232,6 +233,32 @@ func TestReplaceTreeStagesBeforeRemovingExistingPlugin(t *testing.T) {
 	}
 	if _, err := os.Stat(font); !os.IsNotExist(err) {
 		t.Fatalf("old non-empty font tree remains after update: %v", err)
+	}
+}
+
+func TestReplaceTreeContinuesWhenStageChmodIsNotPermitted(t *testing.T) {
+	root := t.TempDir()
+	update := filepath.Join(root, "update")
+	destination := filepath.Join(root, "plugins", "reader.koplugin")
+	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(update, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(update, "main.lua"), []byte("return {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	originalChmodInstallStage := chmodInstallStage
+	chmodInstallStage = func(string, os.FileMode) error { return syscall.EPERM }
+	defer func() { chmodInstallStage = originalChmodInstallStage }()
+
+	if err := replaceTree(update, destination); err != nil {
+		t.Fatalf("replaceTree failed when chmod was not permitted: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "main.lua")); err != nil {
+		t.Fatalf("installed plugin missing: %v", err)
 	}
 }
 

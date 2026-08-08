@@ -520,7 +520,7 @@ msgid "README"
 msgstr "README"
 
 msgid "Refresh"
-msgstr "Оновити"
+msgstr "Перезавантажити"
 
 msgid "Refresh failed: "
 msgstr "Не вдалося оновити:"
@@ -691,7 +691,7 @@ msgid "Unknown package"
 msgstr "Невідомий пакет"
 
 msgid "Update"
-msgstr "оновлення"
+msgstr "Оновити"
 
 msgid "update"
 msgstr "оновлення"

@@ -61,8 +61,8 @@ updates** in ZenPM only if you want in-app beta updates.
 ### Kindle standalone
 
 This option requires a Kindle jailbreak that provides root access. It also
-needs the device's sqlite3 binary and a script launcher such as KUAL. Do not
-install the standalone package on any setup without root access.
+needs a script launcher such as KUAL. Do not install the standalone package on
+any setup without root access.
 
 > [!WARNING]
 > As with KindleForge, using ZenPM Kindle Standalone on WinterBreak, SpringBreak, Sanctuary, or
@@ -133,6 +133,10 @@ Start by letting ZenPM refresh its sources. The user interface then gives you:
 
 - **Featured** for highlighted packages.
 - **Categories** and **Search** to find packages.
+- **Changes** in KOReader for up to 40 packages. Actionable installed updates
+  appear first, followed by uninstalled packages published in the last 14
+  days. If that window is empty, it falls back to the most recently published
+  uninstalled packages.
 - **Sources** to inspect repositories and add compatible ones.
 - **Installed** to see what is present and update it.
 - **Package details** to review package metadata, assets, and the available

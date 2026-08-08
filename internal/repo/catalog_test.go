@@ -1,15 +1,20 @@
 package repo
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/xZenLabs/zen-pm/internal/log"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
@@ -221,6 +226,79 @@ func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
 		t.Fatalf("manifest requests = %d, want 0", got)
 	}
 	assertEntryIDs(t, entries, []string{"notebook"})
+}
+
+func TestFetchCatalogFallbackLogNamesActualRepository(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "zenpm.log")
+	log.Init(logPath)
+	defer log.Init("")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/registry.json" {
+			w.Write([]byte(`[{"name":"Notebook","uri":"notebook"}]`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	if _, err := FetchCatalog("ZenLabs", srv.URL, 1, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs := string(data)
+	if !strings.Contains(logs, "Fetching registry for repo ZenLabs:") {
+		t.Fatalf("log = %q, want actual repository name", logs)
+	}
+	if strings.Contains(logs, "Fetching KindleForge registry") {
+		t.Fatalf("log = %q, contains misleading KindleForge label", logs)
+	}
+}
+
+func TestRegistryFallbackSkipsTransportErrors(t *testing.T) {
+	transportErr := fmt.Errorf("clock hint: %w", &url.Error{
+		Op:  "Get",
+		URL: "https://repo.example/manifest.json",
+		Err: fmt.Errorf("TLS certificate validation failed"),
+	})
+	if shouldTryRegistryFallback(transportErr) {
+		t.Fatal("transport error triggered registry fallback")
+	}
+	if !shouldTryRegistryFallback(fmt.Errorf("HTTP 404 Not Found")) {
+		t.Fatal("HTTP response error did not trigger registry fallback")
+	}
+}
+
+func TestAddTLSClockHintExplainsNotYetValidCertificate(t *testing.T) {
+	now := time.Date(2012, time.January, 15, 15, 38, 23, 0, time.UTC)
+	notBefore := time.Date(2026, time.July, 17, 4, 51, 13, 0, time.UTC)
+	certErr := x509.CertificateInvalidError{
+		Cert:   &x509.Certificate{NotBefore: notBefore, NotAfter: notBefore.Add(90 * 24 * time.Hour)},
+		Reason: x509.Expired,
+	}
+	err := addTLSClockHint(fmt.Errorf("request failed: %w", certErr), now)
+
+	for _, want := range []string{"device clock appears incorrect", now.Format(time.RFC3339), notBefore.Format(time.RFC3339), "sync the device date and time"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
+	}
+}
+
+func TestAddTLSClockHintLeavesExpiredCertificateErrorUnchanged(t *testing.T) {
+	now := time.Date(2026, time.August, 4, 0, 0, 0, 0, time.UTC)
+	certErr := x509.CertificateInvalidError{
+		Cert:   &x509.Certificate{NotBefore: now.Add(-48 * time.Hour), NotAfter: now.Add(-24 * time.Hour)},
+		Reason: x509.Expired,
+	}
+	err := fmt.Errorf("request failed: %w", certErr)
+
+	if got := addTLSClockHint(err, now); got != err {
+		t.Fatalf("expired certificate error changed to %q", got)
+	}
 }
 
 func TestFetchCatalogIncludesHTTPFailureDetail(t *testing.T) {

@@ -86,7 +86,7 @@ local function queued_action_icon(action)
     return "upgrade.svg"
 end
 
-local function package_version_repo_text(pkg)
+local function package_version_repo_text(pkg, meta_suffix)
     local parts = {}
     local version = pkg and pkg.version
     if pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
@@ -96,7 +96,7 @@ local function package_version_repo_text(pkg)
         local v = tostring(version):gsub("^[vV]", "")
         table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
-    table.insert(parts, Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
+    table.insert(parts, meta_suffix or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " • ")
 end
 
@@ -174,7 +174,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local focus_key = "package:" .. id .. ":" .. asset
     local action_focus_key = "package-action:" .. id .. ":" .. asset
     local function show_details()
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, nil, pkg.patch_asset)
+        local details_tab = view.app.state.page == "changes" and "release_notes" or nil
+        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, details_tab, pkg.patch_asset)
     end
 
     if icon_w > 0 then
@@ -196,7 +197,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local description = ellipsize(opts.second_line or I18n.dynamic_or(pkg.description, _("No description")), 56)
     -- When a caller overrides second_line (e.g. details "By <author>"), skip the separate author row.
     local author = opts.second_line and "" or ellipsize(package_author_text(pkg), 56)
-    local meta_text = ellipsize(package_version_repo_text(pkg), 56)
+    local meta_text = ellipsize(package_version_repo_text(pkg, opts.meta_suffix), 56)
     local body_role = opts.body_role or "tiny"
     local title_role = opts.title_role or "card_title"
     -- Vertical text padding kept tighter than the horizontal pad so 4 rows fit.

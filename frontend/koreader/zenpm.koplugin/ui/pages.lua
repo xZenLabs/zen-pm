@@ -140,6 +140,7 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
+            meta_suffix = kind == "changes" and Models.friendly_published_at(pkg) or nil,
             focus_group = kind,
             focus_index = index,
             focus_count = count,
@@ -292,6 +293,15 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             toggle = true,
             value = function() return view.app.state.filter_installable end,
             callback = function() view.app:toggle_filter_installable() end,
+        },
+        {
+            text = _("Advanced"),
+            toggle = true,
+            value = function() return view.app.state.advanced end,
+            callback = function()
+                view.app:toggle_advanced()
+                view:refresh()
+            end,
         },
         {
             text = _("Font size"),

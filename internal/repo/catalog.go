@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -412,7 +413,10 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 	log.Infof("Fetching %s", manifestURL)
 	data, err := fetchBytes(manifestURL)
 	if err != nil {
-		// Fall back to KindleForge registry.json.
+		if !shouldTryRegistryFallback(err) {
+			return nil, fmt.Errorf("fetch %s: %w", manifestURL, err)
+		}
+		// Fall back to a KindleForge-compatible registry.json.
 		log.Infof("manifest.json failed (%v), trying registry.json", err)
 		return fetchKindleForgeCatalog(repoName, repoURL, priority, cacheDir)
 	}
@@ -433,6 +437,11 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 	}
 
 	return nil, fmt.Errorf("unrecognized catalog format from %s", repoName)
+}
+
+func shouldTryRegistryFallback(err error) bool {
+	var requestErr *url.Error
+	return !errors.As(err, &requestErr)
 }
 
 // IsKindleForgeRepo reports whether a repo is the known KindleForge registry.
@@ -646,7 +655,7 @@ func resolveURLList(base string, values []string) []string {
 // fetchKindleForgeCatalog fetches registry.json from the repo URL.
 func fetchKindleForgeCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
 	regURL := joinURL(repoURL, "registry.json")
-	log.Infof("Fetching KindleForge registry: %s", regURL)
+	log.Infof("Fetching registry for repo %s: %s", repoName, regURL)
 	data, err := fetchBytes(regURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", regURL, err)
@@ -658,7 +667,7 @@ func fetchKindleForgeCatalog(repoName, repoURL string, priority int, cacheDir st
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, fmt.Errorf("parse registry.json from %s: %w", repoName, err)
 	}
-	log.Infof("KindleForge registry %s: %d packages", repoName, len(entries))
+	log.Infof("Registry %s: %d packages", repoName, len(entries))
 	return parseKindleForgeCatalog(repoName, repoURL, priority, entries), nil
 }
 func MergeCatalogs(all []*CatalogEntry) []*CatalogEntry {
@@ -766,7 +775,7 @@ func fetchBytes(url string) ([]byte, error) {
 	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, addTLSClockHint(err, time.Now())
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
@@ -775,6 +784,19 @@ func fetchBytes(url string) ([]byte, error) {
 		return nil, err
 	}
 	return io.ReadAll(resp.Body)
+}
+
+func addTLSClockHint(err error, now time.Time) error {
+	var certErr x509.CertificateInvalidError
+	if !errors.As(err, &certErr) || certErr.Reason != x509.Expired || certErr.Cert == nil || !now.Before(certErr.Cert.NotBefore) {
+		return err
+	}
+	return fmt.Errorf(
+		"device clock appears incorrect (device time %s is before certificate validity %s); sync the device date and time: %w",
+		now.UTC().Format(time.RFC3339),
+		certErr.Cert.NotBefore.UTC().Format(time.RFC3339),
+		err,
+	)
 }
 
 func joinURL(base, path string) string {

@@ -55,10 +55,17 @@ local function http_error(url, code, detail)
     return message
 end
 
-local function log_request(method, url, started_at, outcome)
+local function request_log_prefix(method, path, url, unix_socket, backend_path)
+    if unix_socket and backend_path then
+        return "ZenPM UDS " .. method .. " " .. path .. " via " .. unix_socket
+    end
+    return "ZenPM HTTP " .. method .. " " .. url
+end
+
+local function log_request(prefix, started_at, outcome)
     if not (ok_logger and logger and logger.info) then return end
     local elapsed_ms = math.floor((socket.gettime() - started_at) * 1000)
-    logger.info("ZenPM HTTP " .. method .. " " .. url .. " " .. outcome .. " after " .. elapsed_ms .. "ms")
+    logger.info(prefix .. " " .. outcome .. " after " .. elapsed_ms .. "ms")
 end
 
 function Client:new(opts)
@@ -96,8 +103,9 @@ function Client:request(method, path, body, timeout)
     local backend_path = not tostring(path or ""):match("^https?://")
     local url = self:build_url(path)
     local started_at = socket.gettime()
+    local log_prefix = request_log_prefix(method, path, url, self.unix_socket, backend_path)
     if ok_logger and logger and logger.info then
-        logger.info("ZenPM HTTP " .. method .. " " .. url .. " started")
+        logger.info(log_prefix .. " started")
     end
     local sink = {}
     local headers = {
@@ -116,7 +124,7 @@ function Client:request(method, path, body, timeout)
     if self.unix_socket and backend_path then
         if not self.unix_http then
             local err = connection_error(url, self.unix_http_error or _("Unix socket support is unavailable."))
-            log_request(method, url, started_at, err)
+            log_request(log_prefix, started_at, err)
             return false, err
         end
         local response_body
@@ -141,7 +149,7 @@ function Client:request(method, path, body, timeout)
         if url:match("^https://") then
             if not ok_https then
                 local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
-                log_request(method, url, started_at, err)
+                log_request(log_prefix, started_at, err)
                 return false, err
             end
             requester = https
@@ -164,26 +172,26 @@ function Client:request(method, path, body, timeout)
     local numeric_code = tonumber(code)
     if not numeric_code then
         local err = connection_error(url, code or status or _("network error"))
-        log_request(method, url, started_at, err)
+        log_request(log_prefix, started_at, err)
         return false, err
     end
     if numeric_code < 200 or numeric_code >= 300 then
         local detail = text ~= "" and text or nil
         local err = http_error(url, numeric_code, detail)
-        log_request(method, url, started_at, err)
+        log_request(log_prefix, started_at, err)
         return false, err, numeric_code, resp_headers
     end
     if text == "" then
-        log_request(method, url, started_at, "HTTP " .. numeric_code)
+        log_request(log_prefix, started_at, "HTTP " .. numeric_code)
         return true, nil, numeric_code, resp_headers
     end
 
     local ok, decoded = pcall(JSON.decode, text)
     if ok then
-        log_request(method, url, started_at, "HTTP " .. numeric_code)
+        log_request(log_prefix, started_at, "HTTP " .. numeric_code)
         return true, decoded, numeric_code, resp_headers
     end
-    log_request(method, url, started_at, "HTTP " .. numeric_code)
+    log_request(log_prefix, started_at, "HTTP " .. numeric_code)
     return true, text, numeric_code, resp_headers
 end
 
@@ -191,8 +199,9 @@ function Client:download(path)
     local backend_path = not tostring(path or ""):match("^https?://")
     local url = self:build_url(path)
     local started_at = socket.gettime()
+    local log_prefix = request_log_prefix("GET", path, url, self.unix_socket, backend_path)
     if ok_logger and logger and logger.info then
-        logger.info("ZenPM HTTP GET " .. url .. " started")
+        logger.info(log_prefix .. " started")
     end
     local sink = {}
     local accept = "image/svg+xml,image/png,image/jpeg,image/gif,*/*"
@@ -201,7 +210,7 @@ function Client:download(path)
     if self.unix_socket and backend_path then
         if not self.unix_http then
             local err = connection_error(url, self.unix_http_error or _("Unix socket support is unavailable."))
-            log_request("GET", url, started_at, err)
+            log_request(log_prefix, started_at, err)
             return false, err
         end
         code, resp_headers, response_body, status = self.unix_http.request(
@@ -225,7 +234,7 @@ function Client:download(path)
         if url:match("^https://") then
             if not ok_https then
                 local err = connection_error(url, _("HTTPS support is unavailable in this KOReader build."))
-                log_request("GET", url, started_at, err)
+                log_request(log_prefix, started_at, err)
                 return false, err
             end
             requester = https
@@ -246,15 +255,15 @@ function Client:download(path)
     local numeric_code = tonumber(code)
     if not numeric_code then
         local err = connection_error(url, code or status or _("download failed"))
-        log_request("GET", url, started_at, err)
+        log_request(log_prefix, started_at, err)
         return false, err
     end
     if numeric_code < 200 or numeric_code >= 300 then
         local err = http_error(url, numeric_code, nil)
-        log_request("GET", url, started_at, err)
+        log_request(log_prefix, started_at, err)
         return false, err, numeric_code, resp_headers
     end
-    log_request("GET", url, started_at, "HTTP " .. numeric_code)
+    log_request(log_prefix, started_at, "HTTP " .. numeric_code)
     return true, response_body or "", numeric_code, resp_headers
 end
 

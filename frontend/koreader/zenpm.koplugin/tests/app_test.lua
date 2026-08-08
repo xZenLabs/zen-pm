@@ -15,9 +15,9 @@ local modal_rows
 local plugin_settings_prompt
 local package_modify_callbacks
 local ignore_updates_prompt
-local confirm_message
-local confirm_ok_text
-local confirm_callback
+local model_changes_days
+local model_changes_limit
+local model_changes_sort
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 package.preload["socket"] = function() return {} end
@@ -72,11 +72,7 @@ package.preload["ui/modals"] = function()
         end,
         status = function(message) status_message = message end,
         close_status = function() end,
-        confirm = function(message, ok_text, callback)
-            confirm_message = message
-            confirm_ok_text = ok_text
-            confirm_callback = callback
-        end,
+        confirm = function() end,
         actions = function(title, rows)
             modal_title = title
             modal_rows = rows
@@ -133,23 +129,29 @@ package.preload["models"] = function()
             }
         end,
         category_label = function(category) return category.label end,
+        changes_packages = function(packages, days, limit, sort_key)
+            model_changes_days = days
+            model_changes_limit = limit
+            model_changes_sort = sort_key
+            return { packages[1] }
+        end,
     }
 end
 package.preload["ui/theme"] = function() return {} end
-package.preload["updater"] = function()
-    return {
-        update = function()
-            return true, "1.2.4-beta3"
-        end,
-        reinstall = function(_, _, tag, allow_prerelease, force_refresh)
-            updater_reinstall_requests = updater_reinstall_requests + 1
-            assert(tag == "v1.2.3")
-            assert(not allow_prerelease)
-            assert(force_refresh)
-            return true, "1.2.3"
-        end,
-    }
-end
+local updater_stub = {
+    update = function()
+        return true, "1.2.4-beta3"
+    end,
+    reinstall = function(_, _, tag, allow_prerelease, force_refresh)
+        updater_reinstall_requests = updater_reinstall_requests + 1
+        assert(tag == "v1.2.3")
+        assert(not allow_prerelease)
+        assert(force_refresh)
+        return true, "1.2.3"
+    end,
+}
+-- Another plugin may have already claimed this generic module name.
+package.loaded["updater"] = {}
 package.preload["zenpm_util"] = function()
     return {
         trim = function(value)
@@ -183,12 +185,18 @@ package.preload["luasettings"] = function()
 end
 
 local original_dofile = dofile
+local updater_dofile_loads = 0
 dofile = function(path)
     if path == root .. "/client.lua" then return {} end
+    if path == root .. "/updater.lua" then
+        updater_dofile_loads = updater_dofile_loads + 1
+        return updater_stub
+    end
     return original_dofile(path)
 end
 local App = require("app")
 dofile = original_dofile
+assert(updater_dofile_loads == 1)
 
 local app = {
     state = { beta_updates = false },
@@ -198,6 +206,11 @@ App.toggle_beta_updates(app)
 
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
+
+app.state.advanced = false
+App.toggle_advanced(app)
+assert(app.state.advanced)
+assert(settings.advanced_queue == true)
 
 local cli_installs = 0
 local cli_app = {
@@ -405,10 +418,6 @@ App.go_back({
     state = { page = "home" },
     quit = function() quit_calls = quit_calls + 1 end,
 })
-assert(confirm_message == "Are you sure you want to exit ZenPM?")
-assert(confirm_ok_text == "Quit")
-assert(quit_calls == 0)
-confirm_callback()
 assert(quit_calls == 1)
 
 local navigation_refreshes = {}
@@ -424,6 +433,53 @@ App.navigate(navigation_app, "home")
 App.navigate(navigation_app, "home", false)
 assert(navigation_refreshes[1] == true)
 assert(navigation_refreshes[2] == false)
+
+local changes_refreshes = 0
+local changes_app = {
+    state = {
+        sorts = { changes = "published_at_desc" },
+    },
+    ensure_backend = function() return true end,
+    set_loading = function() end,
+    load_packages = function()
+        return true, {
+            { id = "reader", installed = true },
+            { id = "browser" },
+        }
+    end,
+    clear_status = function() end,
+    refresh = function() changes_refreshes = changes_refreshes + 1 end,
+}
+App.show_changes(changes_app)
+assert(changes_app.state.page == "changes" and changes_app.state.active_tab == "changes")
+assert(model_changes_days == 14)
+assert(model_changes_limit == 40)
+assert(model_changes_sort == "published_at_desc")
+assert(#changes_app.state.changes_packages == 1)
+assert(#changes_app.state.visible_packages == 1)
+assert(changes_refreshes == 1)
+
+local changes_sort_shown = 0
+local changes_sort_app = {
+    state = { sorts = { changes = "published_at_desc" } },
+    scroll_key = function() return "changes" end,
+    reset_scroll = function() end,
+    show_changes = function() changes_sort_shown = changes_sort_shown + 1 end,
+}
+App.set_sort(changes_sort_app, "changes", "published_at_asc")
+assert(changes_sort_app.state.sorts.changes == "published_at_asc")
+assert(changes_sort_shown == 1)
+
+local selected_changes_sort
+App.prompt_sort({
+    state = { sorts = { changes = "published_at_desc" } },
+    set_sort = function(_, _, value) selected_changes_sort = value end,
+}, "changes")
+assert(#modal_rows == 2)
+assert(modal_rows[1].text == "Ascending" and modal_rows[2].text == "Descending")
+assert(modal_rows[2].checked_func())
+modal_rows[1].callback()
+assert(selected_changes_sort == "published_at_asc")
 
 local shown_catalog_refreshes = 0
 App.show({
@@ -448,6 +504,16 @@ App.backend_started({
     refresh_catalog_on_open = function() started_catalog_refreshes = started_catalog_refreshes + 1 end,
 }, {})
 assert(started_catalog_refreshes == 1)
+
+local sources_menu_calls = 0
+App.show_actions({
+    show_sources = function() sources_menu_calls = sources_menu_calls + 1 end,
+})
+assert(modal_title == "ZenPM")
+assert(modal_rows[4].text == "Sources")
+assert(modal_rows[5].text == "Report a Bug")
+modal_rows[4].callback()
+assert(sources_menu_calls == 1)
 
 local update_result
 local trapper_required = false
@@ -535,6 +601,59 @@ App.queue_package_action({
     queue_self_update = function() self_update_queued = self_update_queued + 1 return true end,
 }, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 2)
+
+local simple_queue_opened = 0
+modal_message = nil
+local simple_queue_app = {
+    state = { queue_running = false, queue = {}, packages = {} },
+    conflicting_packages = function() return {} end,
+    zen_ui_installed = function() return false end,
+    queue_entry_for = App.queue_entry_for,
+    show_queue = function() simple_queue_opened = simple_queue_opened + 1 end,
+    refresh = function() error("simple actions should open the queue") end,
+}
+assert(App.queue_package_action(simple_queue_app, {
+    id = "reader",
+    installed = true,
+}, "update", nil, {}))
+assert(#simple_queue_app.state.queue == 1)
+assert(simple_queue_opened == 1)
+assert(modal_message == nil)
+
+local expected_queue_opens = simple_queue_opened
+for _, action in ipairs({ "install", "reinstall", "downgrade", "uninstall" }) do
+    simple_queue_app.state.queue = {}
+    assert(App.queue_package_action(simple_queue_app, {
+        id = "book-browser",
+    }, action, nil, {}))
+    expected_queue_opens = expected_queue_opens + 1
+    assert(#simple_queue_app.state.queue == 1)
+    assert(simple_queue_app.state.queue[1].action == action)
+    assert(simple_queue_opened == expected_queue_opens)
+    assert(modal_message == nil)
+end
+
+simple_queue_app.state.queue = {}
+simple_queue_app.queue_self_update = App.queue_self_update
+assert(App.queue_self_reinstall(simple_queue_app, {
+    id = "zenpm-koreader",
+}, "1.2.3", {}))
+assert(#simple_queue_app.state.queue == 1)
+assert(simple_queue_app.state.queue[1].action == "reinstall")
+assert(simple_queue_opened == expected_queue_opens + 1)
+assert(modal_message == nil)
+
+local advanced_queue_refreshed = 0
+simple_queue_app.state.advanced = true
+simple_queue_app.state.queue = {}
+simple_queue_app.show_queue = function() error("advanced updates should keep the existing flow") end
+simple_queue_app.refresh = function() advanced_queue_refreshed = advanced_queue_refreshed + 1 end
+assert(App.queue_package_action(simple_queue_app, {
+    id = "reader",
+    installed = true,
+}, "update", nil, {}))
+assert(advanced_queue_refreshed == 1)
+assert(modal_message == "Added to Queue")
 
 local companion_update_requests = 0
 local reinstalled_scan_calls = 0
@@ -644,7 +763,7 @@ assert(scriptlet_install_action == "install")
 local regular_zenpm_action
 local ignored_updates_toggled = 0
 App.perform_package_action({
-    state = { page = "installed", active_tab = "installed" },
+    state = { page = "installed", active_tab = "installed", advanced = true },
     package_icon_file = function() return nil end,
     prompt_package_updates = function() ignored_updates_toggled = ignored_updates_toggled + 1 end,
     confirm_package_action = function(_, _, action) regular_zenpm_action = action end,
@@ -668,6 +787,17 @@ package_modify_callbacks.update()
 assert(regular_zenpm_action == "update")
 package_modify_callbacks.toggle_updates()
 assert(ignored_updates_toggled == 1)
+
+local simple_update_action
+App.perform_package_action({
+    state = { page = "installed", active_tab = "installed", advanced = false },
+    confirm_package_action = function(_, _, action) simple_update_action = action end,
+}, {
+    id = "reader",
+    installed = true,
+    update_available = true,
+})
+assert(simple_update_action == "update")
 
 local queued_updates_toggled = 0
 local removed_queued_updates = {}
@@ -756,6 +886,7 @@ assert(prompted_updates[2].ignored == true and prompted_updates[2].ignored_versi
 assert(prompt_callbacks == 2)
 
 local bulk_queued = {}
+local bulk_queue_opened = 0
 local bulk_app = {
     state = {
         queue_running = false,
@@ -772,12 +903,24 @@ local bulk_app = {
         table.insert(bulk_queued, pkg.id .. ":" .. action)
         return true
     end,
+    show_queue = function() bulk_queue_opened = bulk_queue_opened + 1 end,
     refresh = function() end,
 }
 assert(App.installed_update_count(bulk_app) == 1)
+modal_message = nil
 App.queue_all_updates(bulk_app)
 assert(#bulk_queued == 1)
 assert(bulk_queued[1] == "active:update")
+assert(bulk_queue_opened == 1)
+assert(modal_message == nil)
+
+bulk_app.state.advanced = true
+bulk_queue_opened = 0
+bulk_queued = {}
+App.queue_all_updates(bulk_app)
+assert(#bulk_queued == 1)
+assert(bulk_queue_opened == 0)
+assert(modal_message == "Added to Queue")
 
 local reader_settings = {}
 _G.G_reader_settings = {
