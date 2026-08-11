@@ -23,6 +23,7 @@ return {
     CONNECT_RETRIES = 40,
     CONNECT_RETRY_DELAY_SECONDS = 0.5,
     CONNECT_INITIAL_DELAY_SECONDS = 0.2,
+    ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
 
     DAEMON_UNAVAILABLE_MESSAGE = "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running.",
 

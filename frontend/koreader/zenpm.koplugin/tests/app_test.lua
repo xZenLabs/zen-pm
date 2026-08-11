@@ -59,7 +59,11 @@ end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
 package.preload["constants"] = function()
-    return { PLUGIN_DIR = root, PACKAGE_ERROR_NOTICE_SECONDS = 1 }
+    return {
+        PLUGIN_DIR = root,
+        PACKAGE_ERROR_NOTICE_SECONDS = 1,
+        ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
+    }
 end
 package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
 package.preload["i18n"] = function() return {} end
@@ -568,6 +572,66 @@ App.backend_started({
     refresh_catalog_on_open = function() started_catalog_refreshes = started_catalog_refreshes + 1 end,
 }, {})
 assert(started_catalog_refreshes == 1)
+
+local UIManager = require("ui/uimanager")
+local original_schedule_in = UIManager.scheduleIn
+local backend_health_callback
+UIManager.scheduleIn = function(_, delay, callback)
+    assert(delay == 60)
+    backend_health_callback = callback
+end
+local backend_health_checks = 0
+local backend_health_restarts = 0
+local backend_health_loading
+local backend_health_app = {
+    view = {},
+    state = {},
+    daemon = {
+        is_android = function() return true end,
+        health_matches = function(_, data) return data and data.version == "1.2.3" end,
+    },
+    client = {
+        health = function()
+            backend_health_checks = backend_health_checks + 1
+            if backend_health_checks == 1 then return true, { version = "1.2.3" } end
+            return false
+        end,
+    },
+    finish_deferred_font_uninstalls = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+    schedule_plugin_scan_after_open = function() end,
+    refresh_catalog_on_open = function() end,
+    set_loading = function(_, message) backend_health_loading = message end,
+    start_backend_then_reload = function() backend_health_restarts = backend_health_restarts + 1 end,
+}
+App.backend_started(backend_health_app, { version = "1.2.3" })
+assert(type(backend_health_callback) == "function")
+local first_backend_health_callback = backend_health_callback
+backend_health_callback = nil
+first_backend_health_callback()
+assert(backend_health_checks == 1)
+assert(backend_health_app.backend_ready)
+assert(type(backend_health_callback) == "function")
+local second_backend_health_callback = backend_health_callback
+backend_health_callback = nil
+second_backend_health_callback()
+assert(backend_health_checks == 2)
+assert(not backend_health_app.backend_ready)
+assert(backend_health_restarts == 1)
+assert(backend_health_loading == "Loading packages, please wait")
+backend_health_app.backend_ready = true
+backend_health_app.view = {}
+backend_health_app.restore_koreader_exit = function() end
+backend_health_app.daemon.stop_standalone_backend = function() end
+App.schedule_android_backend_health_check(backend_health_app)
+local stale_backend_health_callback = backend_health_callback
+backend_health_app.view = nil
+App.close(backend_health_app)
+stale_backend_health_callback()
+assert(backend_health_checks == 2)
+assert(backend_health_restarts == 1)
+UIManager.scheduleIn = original_schedule_in
 
 local sources_menu_calls = 0
 App.show_actions({

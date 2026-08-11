@@ -1417,6 +1417,7 @@ function App:show()
     UIManager:show(self.view)
     self.scan_plugins_on_open = true
     if self.backend_ready then
+        App.schedule_android_backend_health_check(self)
         self:finish_deferred_font_uninstalls()
         self:navigate(self.state.active_tab or "home")
         self:schedule_plugin_scan_after_open()
@@ -1477,6 +1478,10 @@ end
 
 function App:close()
     self:restore_koreader_exit()
+    -- Scheduled callbacks cannot be removed portably across KOReader builds.
+    -- Invalidate them so reopening ZenPM can start a fresh health-check loop.
+    self.backend_health_check_generation = (self.backend_health_check_generation or 0) + 1
+    self.backend_health_check_scheduled = false
     if self.daemon and type(self.daemon.is_android) == "function" and self.daemon:is_android() then
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
@@ -1583,10 +1588,47 @@ function App:scan_plugins_after_open(attempt)
     Modals.info_for(_("Plugin scan failed: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
 end
 
+function App:schedule_android_backend_health_check()
+    -- The Android companion exits after its request idle timeout. Keep it
+    -- supervised while ZenPM is open so cached backend_ready state cannot
+    -- outlive the service.
+    if self.backend_health_check_scheduled
+        or not self.view
+        or not self.daemon
+        or type(self.daemon.is_android) ~= "function"
+        or not self.daemon:is_android() then
+        return
+    end
+
+    local generation = self.backend_health_check_generation or 0
+    self.backend_health_check_scheduled = true
+    UIManager:scheduleIn(Constants.ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS, function()
+        if generation ~= (self.backend_health_check_generation or 0) then return end
+        self.backend_health_check_scheduled = false
+        if not self.view then return end
+        if self.backend_starting then
+            App.schedule_android_backend_health_check(self)
+            return
+        end
+        if not self.backend_ready then return end
+
+        local ok, data = self.client:health()
+        if ok and self.daemon:health_matches(data) then
+            App.schedule_android_backend_health_check(self)
+            return
+        end
+
+        self.backend_ready = false
+        self:set_loading(_("Loading packages, please wait"))
+        self:start_backend_then_reload()
+    end)
+end
+
 function App:backend_started(data, on_ready)
     self.backend_starting = false
     self.backend_ready = true
     self.version = data and data.version or self.version or "?"
+    App.schedule_android_backend_health_check(self)
     if self.t_open then
         self:log_timing("backend ready (open -> health ok)", self.t_open)
     end
