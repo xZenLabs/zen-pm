@@ -34,6 +34,10 @@ companion automatically. The companion stops when KOReader closes ZenPM or
 after five minutes without requests, so it does not keep a foreground service
 running while idle.
 
+On BOOX devices, the companion appears in Apps as **ZenPM Backend**. Ensure
+**App Freeze** is turned off for it under **Apps > App Management**, because a
+frozen companion cannot receive KOReader's start request.
+
 Published APKs are signed in CI with the persistent release keystore held in
 GitHub Actions secrets. The companion’s **Update** action checks the matching
 GitHub release, verifies the APK SHA-256 digest, and opens Android’s package

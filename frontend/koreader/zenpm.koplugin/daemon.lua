@@ -846,11 +846,19 @@ function Daemon:start(prepared)
         local service_args = " -n org.zenlabs.zenpm/.ZenPMService"
             .. " --es zenpm_log_home " .. Util.sh_quote(self:state_home())
             .. " --es koreader_root " .. Util.sh_quote(root)
+        append_text(companion_log, log_timestamp() .. "  KOReader starting ZenPM companion explicitly.\n")
+        -- ActivityManager writes command output from system_server. Some BOOX
+        -- SELinux policies reject the external-storage log FD, causing the
+        -- otherwise valid Binder request itself to fail. Log the exit status
+        -- from KOReader instead and keep ActivityManager's output on /dev/null.
         local cmd = "( /system/bin/am start" .. activity_args
             .. " || /system/bin/am start-foreground-service" .. service_args
             .. " || /system/bin/am startservice" .. service_args
-            .. " ) </dev/null >>" .. Util.sh_quote(companion_log) .. " 2>&1"
-        if os.execute(cmd) ~= 0 then
+            .. " ) </dev/null >/dev/null 2>&1"
+        local result = os.execute(cmd)
+        append_text(companion_log, log_timestamp() .. "  ZenPM explicit start result: "
+            .. tostring(result) .. "\n")
+        if result ~= 0 then
             return false, _("ZenPM Android companion is not installed or could not start. See ") .. companion_log
         end
         return true
