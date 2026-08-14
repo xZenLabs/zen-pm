@@ -220,6 +220,8 @@ assert(#android_commands == 1)
 local android_command = android_commands[1]
 assert(android_command:find("/system/bin/am start -W -n org.zenlabs.zenpm/.ZenPMActivity -a android.intent.action.VIEW -d 'zenpm://start?home=%2Fstorage%2Femulated%2F0%2FZenPM&root=%2Fstorage%2Femulated%2F0%2Fkoreader'", 1, true))
 assert(android_command:find("--es zenpm_log_home '/storage/emulated/0/ZenPM'", 1, true))
+assert(android_command:find("</dev/null >/dev/null 2>&1", 1, true))
+assert(not android_command:find(">>'/storage/emulated/0/ZenPM/android-companion.log'", 1, true))
 
 local android_stop_commands = {}
 os.execute = function(command)

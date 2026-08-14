@@ -233,53 +233,56 @@ end
 
 function Reporter:submit(app, title, description, username)
     Modals.status(_("Submitting report…"))
+    UIManager:forceRePaint()
     UIManager:nextTick(function()
-        local crash_log = koreader_crash_log(app)
-        local ok_log, zenpm_log = app.client:get_log(5000)
-        if not ok_log or type(zenpm_log) ~= "string" or zenpm_log == "" then
-            zenpm_log = "ZenPM log unavailable: " .. tostring(zenpm_log or "unknown error")
-        end
-        local companion_log = android_companion_log(app)
-        if companion_log ~= "" then
-            zenpm_log = zenpm_log .. "\n\nAndroid companion log:\n" .. companion_log
-        end
-        zenpm_log = without_dhcpd_lines(zenpm_log)
-        crash_log = without_dhcpd_lines(crash_log)
-
-        local uploaded_zenpm_log_url
-        local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log }, REPORT_TIMEOUT)
-        if uploaded then
-            uploaded_zenpm_log_url = log_url(upload_response)
-        end
-        local uploaded_crash_log_url
-        if crash_log ~= "" then
-            uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = crash_log }, REPORT_TIMEOUT)
-            if uploaded then
-                uploaded_crash_log_url = log_url(upload_response)
+        UIManager:nextTick(function()
+            local crash_log = koreader_crash_log(app)
+            local ok_log, zenpm_log = app.client:get_log(5000)
+            if not ok_log or type(zenpm_log) ~= "string" or zenpm_log == "" then
+                zenpm_log = "ZenPM log unavailable: " .. tostring(zenpm_log or "unknown error")
             end
-        end
-        local inline_log_limit = crash_log ~= "" and math.floor(MAX_INLINE_LOG / 2) or MAX_INLINE_LOG
-        local inline_zenpm_log = truncate_utf8_bytes(zenpm_log, inline_log_limit, "\n...[truncated]")
-        local inline_crash_log = truncate_utf8_bytes(crash_log, inline_log_limit, "\n...[truncated]")
-        local body = issue_body(description, app, username, uploaded_zenpm_log_url, uploaded_crash_log_url, inline_zenpm_log, inline_crash_log)
-        body = truncate_utf8_bytes(body, MAX_BODY, "\n...[truncated]")
-        local report_title = truncate_utf8_bytes("[BUG] " .. title, MAX_TITLE + 6)
-        local labels = { "bug" }
-        if app.state.beta_updates then
-            table.insert(labels, "beta")
-        end
-        local submitted, response, code = app.client:request("POST", PROXY_URL, {
-            title = report_title,
-            body = body,
-            labels = labels,
-        }, REPORT_TIMEOUT)
-        Modals.close_status()
-        if submitted then
-            local url = log_url(response) or "https://github.com/AnthonyGress/ZenPackageManager/issues"
-            Modals.notice(_("Bug report submitted!") .. "\n\n" .. url)
-        else
-            Modals.info(_("Failed to submit report: ") .. tostring(response or code or "unknown error"))
-        end
+            local companion_log = android_companion_log(app)
+            if companion_log ~= "" then
+                zenpm_log = zenpm_log .. "\n\nAndroid companion log:\n" .. companion_log
+            end
+            zenpm_log = without_dhcpd_lines(zenpm_log)
+            crash_log = without_dhcpd_lines(crash_log)
+
+            local uploaded_zenpm_log_url
+            local uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = zenpm_log }, REPORT_TIMEOUT)
+            if uploaded then
+                uploaded_zenpm_log_url = log_url(upload_response)
+            end
+            local uploaded_crash_log_url
+            if crash_log ~= "" then
+                uploaded, upload_response = app.client:request("POST", UPLOAD_URL, { log = crash_log }, REPORT_TIMEOUT)
+                if uploaded then
+                    uploaded_crash_log_url = log_url(upload_response)
+                end
+            end
+            local inline_log_limit = crash_log ~= "" and math.floor(MAX_INLINE_LOG / 2) or MAX_INLINE_LOG
+            local inline_zenpm_log = truncate_utf8_bytes(zenpm_log, inline_log_limit, "\n...[truncated]")
+            local inline_crash_log = truncate_utf8_bytes(crash_log, inline_log_limit, "\n...[truncated]")
+            local body = issue_body(description, app, username, uploaded_zenpm_log_url, uploaded_crash_log_url, inline_zenpm_log, inline_crash_log)
+            body = truncate_utf8_bytes(body, MAX_BODY, "\n...[truncated]")
+            local report_title = truncate_utf8_bytes("[BUG] " .. title, MAX_TITLE + 6)
+            local labels = { "bug" }
+            if app.state.beta_updates then
+                table.insert(labels, "beta")
+            end
+            local submitted, response, code = app.client:request("POST", PROXY_URL, {
+                title = report_title,
+                body = body,
+                labels = labels,
+            }, REPORT_TIMEOUT)
+            Modals.close_status()
+            if submitted then
+                local url = log_url(response) or "https://github.com/AnthonyGress/ZenPackageManager/issues"
+                Modals.notice(_("Bug report submitted!") .. "\n\n" .. url)
+            else
+                Modals.info(_("Failed to submit report: ") .. tostring(response or code or "unknown error"))
+            end
+        end)
     end)
 end
 

@@ -44,4 +44,8 @@ return {
         "Add Changes tab",
         "Add simple mode",
     },
+    ["1.3.1"] = {
+        "Boox bug fixes",
+        "Minor bug fixes"
+    },
 }

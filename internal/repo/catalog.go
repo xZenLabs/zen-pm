@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -24,6 +25,11 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/httpdiag"
 	"github.com/xZenLabs/zen-pm/internal/log"
 	"github.com/xZenLabs/zen-pm/internal/state"
+)
+
+const (
+	packageFetchTimeout  = time.Minute
+	packageFetchAttempts = 2
 )
 
 // CatalogEntry is the internal merged-catalog representation.
@@ -766,24 +772,54 @@ func fetchBytes(url string) ([]byte, error) {
 	if strings.HasPrefix(url, "file://") {
 		return os.ReadFile(strings.TrimPrefix(url, "file://"))
 	}
-	client := cabundle.Client(30 * time.Second)
+	return fetchHTTPBytes(url, cabundle.Client(packageFetchTimeout), packageFetchAttempts)
+}
+
+func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, error) {
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		data, retry, err := fetchHTTPBytesOnce(url, client)
+		if err == nil {
+			return data, nil
+		}
+		lastErr = addTLSClockHint(err, time.Now())
+		if !retry || attempt == attempts {
+			return nil, lastErr
+		}
+		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, attempts, lastErr)
+	}
+	return nil, lastErr
+}
+
+func fetchHTTPBytesOnce(url string, client *http.Client) ([]byte, bool, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, addTLSClockHint(err, time.Now())
+		return nil, retryableFetchError(err), err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		err := httpdiag.ResponseError(resp)
+		resp.Body.Close()
 		log.Warn(err.Error())
-		return nil, err
+		return nil, false, err
 	}
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, retryableFetchError(err), err
+	}
+	return data, false, nil
+}
+
+func retryableFetchError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 func addTLSClockHint(err error, now time.Time) error {

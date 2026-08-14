@@ -1,5 +1,6 @@
 local socket = require("socket")
 local Event = require("ui/event")
+local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local ok_logger, logger = pcall(require, "logger")
@@ -212,7 +213,7 @@ local function is_sdl_wayland_desktop()
     return device_bool("isSDL") or device_bool("isDesktop")
 end
 
-function App:run_update_task(task, trap_widget, on_done)
+function App:run_update_task(task, trap_widget, on_done, force_in_process)
     local function finish(...)
         -- Trapper attaches this callback to let a tap cancel the subprocess.
         -- Once it returns, closing the progress modal must not resume the
@@ -236,7 +237,8 @@ function App:run_update_task(task, trap_widget, on_done)
     -- Android's JNI-backed runtime can likewise exit without returning the
     -- updater result to Trapper. Kobo self-updates can fail before entering
     -- the updater when forked, so keep them in the parent process too.
-    if self.daemon:is_android()
+    if force_in_process
+        or self.daemon:is_android()
         or self.daemon:detect_platform() == "kobo"
         or is_sdl_wayland_desktop() then
         run_in_process()
@@ -1415,6 +1417,7 @@ function App:show()
     UIManager:show(self.view)
     self.scan_plugins_on_open = true
     if self.backend_ready then
+        App.schedule_android_backend_health_check(self)
         self:finish_deferred_font_uninstalls()
         self:navigate(self.state.active_tab or "home")
         self:schedule_plugin_scan_after_open()
@@ -1428,12 +1431,18 @@ end
 
 function App:refresh_catalog_on_open()
     if self.catalog_refreshing or not self.backend_ready or not self.view then return end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:refresh_catalog_on_open()
+    end) then
+        return
+    end
     self.catalog_refreshing = true
     self:run_update_task(function()
         return pcall(self.client.refresh_repos, self.client)
     end, nil, function(completed, called, ok)
         self.catalog_refreshing = false
-        if not completed or not called or not ok or not self.view then return end
+        -- Self-update can stop the backend while this refresh is in flight.
+        if not completed or not called or not ok or not self.view or not self.backend_ready then return end
         self.state.readme_cache = {}
         self.image_files = {}
         Images.invalidate_cache()
@@ -1469,6 +1478,10 @@ end
 
 function App:close()
     self:restore_koreader_exit()
+    -- Scheduled callbacks cannot be removed portably across KOReader builds.
+    -- Invalidate them so reopening ZenPM can start a fresh health-check loop.
+    self.backend_health_check_generation = (self.backend_health_check_generation or 0) + 1
+    self.backend_health_check_scheduled = false
     if self.daemon and type(self.daemon.is_android) == "function" and self.daemon:is_android() then
         self.daemon:stop_standalone_backend()
         self.backend_ready = false
@@ -1575,10 +1588,47 @@ function App:scan_plugins_after_open(attempt)
     Modals.info_for(_("Plugin scan failed: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
 end
 
+function App:schedule_android_backend_health_check()
+    -- The Android companion exits after its request idle timeout. Keep it
+    -- supervised while ZenPM is open so cached backend_ready state cannot
+    -- outlive the service.
+    if self.backend_health_check_scheduled
+        or not self.view
+        or not self.daemon
+        or type(self.daemon.is_android) ~= "function"
+        or not self.daemon:is_android() then
+        return
+    end
+
+    local generation = self.backend_health_check_generation or 0
+    self.backend_health_check_scheduled = true
+    UIManager:scheduleIn(Constants.ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS, function()
+        if generation ~= (self.backend_health_check_generation or 0) then return end
+        self.backend_health_check_scheduled = false
+        if not self.view then return end
+        if self.backend_starting then
+            App.schedule_android_backend_health_check(self)
+            return
+        end
+        if not self.backend_ready then return end
+
+        local ok, data = self.client:health()
+        if ok and self.daemon:health_matches(data) then
+            App.schedule_android_backend_health_check(self)
+            return
+        end
+
+        self.backend_ready = false
+        self:set_loading(_("Loading packages, please wait"))
+        self:start_backend_then_reload()
+    end)
+end
+
 function App:backend_started(data, on_ready)
     self.backend_starting = false
     self.backend_ready = true
     self.version = data and data.version or self.version or "?"
+    App.schedule_android_backend_health_check(self)
     if self.t_open then
         self:log_timing("backend ready (open -> health ok)", self.t_open)
     end
@@ -3264,6 +3314,9 @@ function App:apply_kindle_homepage_install()
     self.busy = true
     local status = Modals.status(_("Copying ZenPM to Kindle homepage..."))
     UIManager:forceRePaint()
+    -- The installer starts and waits for Kindle setup commands of its own.
+    -- Running it in another subprocess can leave KOReader waiting for the
+    -- child-result handoff even after the installation has completed.
     self:run_update_task(function()
         return pcall(Updater.install_kindle_standalone, Updater, self.daemon, self.state.beta_updates, true)
     end, status, function(completed, called, ok, result)
@@ -3282,7 +3335,7 @@ function App:apply_kindle_homepage_install()
             return
         end
         Modals.info(_("ZenPM v") .. tostring(result) .. _(" was copied to the Kindle homepage."))
-    end)
+    end, true)
 end
 
 function App:toggle_filter_installable()

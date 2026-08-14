@@ -62,6 +62,13 @@ public final class ZenPMActivity extends Activity {
                     Uri.parse("package:" + getPackageName()));
                 startActivity(settings);
             }
+        } else if (data == null) {
+            // Keep a normal launcher entry so BOOX exposes the companion in
+            // App Info, Auto Start, and App Freeze. Tapping it opens the
+            // system management page; KOReader still starts the backend.
+            Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + getPackageName()));
+            startActivity(settings);
         }
         finish();
     }

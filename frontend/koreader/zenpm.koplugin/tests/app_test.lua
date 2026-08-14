@@ -20,9 +20,20 @@ local model_changes_limit
 local model_changes_sort
 local updater_reinstall_requests = 0
 local logged_warnings = {}
+local network_connected = true
+local network_retry_callback
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function()
     return { new = function(_, name) return name end }
+end
+package.preload["ui/network/manager"] = function()
+    return {
+        willRerunWhenConnected = function(_, callback)
+            if network_connected then return false end
+            network_retry_callback = callback
+            return true
+        end,
+    }
 end
 package.preload["ui/uimanager"] = function()
     return {
@@ -48,7 +59,11 @@ end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
 package.preload["constants"] = function()
-    return { PLUGIN_DIR = root, PACKAGE_ERROR_NOTICE_SECONDS = 1 }
+    return {
+        PLUGIN_DIR = root,
+        PACKAGE_ERROR_NOTICE_SECONDS = 1,
+        ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
+    }
 end
 package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
 package.preload["i18n"] = function() return {} end
@@ -141,6 +156,11 @@ package.preload["ui/theme"] = function() return {} end
 local updater_stub = {
     update = function()
         return true, "1.2.4-beta3"
+    end,
+    install_kindle_standalone = function(_, _, allow_prerelease, force_refresh)
+        assert(not allow_prerelease)
+        assert(force_refresh)
+        return true, "1.3.0"
     end,
     reinstall = function(_, _, tag, allow_prerelease, force_refresh)
         updater_reinstall_requests = updater_reinstall_requests + 1
@@ -380,11 +400,59 @@ local opened_app = {
     load_packages = function() end,
     load_repos = function() end,
     reload_current_page = function() open_catalog_reloads = open_catalog_reloads + 1 end,
+    refresh_catalog_on_open = App.refresh_catalog_on_open,
 }
 App.refresh_catalog_on_open(opened_app)
 assert(open_refreshes == 1)
 assert(next(opened_app.state.readme_cache) == nil)
 assert(open_catalog_reloads == 1)
+
+network_connected = false
+opened_app.state.readme_cache.reader = { readme = "Cached README" }
+App.refresh_catalog_on_open(opened_app)
+assert(open_refreshes == 1)
+assert(not opened_app.catalog_refreshing)
+assert(type(network_retry_callback) == "function")
+assert(opened_app.state.readme_cache.reader.readme == "Cached README")
+
+network_connected = true
+local retry_catalog_refresh = network_retry_callback
+network_retry_callback = nil
+retry_catalog_refresh()
+assert(open_refreshes == 2)
+assert(next(opened_app.state.readme_cache) == nil)
+assert(open_catalog_reloads == 2)
+
+local interrupted_catalog_callback
+local interrupted_catalog_loads = 0
+local interrupted_catalog_reloads = 0
+local interrupted_catalog_app = {
+    backend_ready = true,
+    view = {},
+    state = {
+        readme_cache = { reader = { readme = "Cached README" } },
+    },
+    client = {
+        refresh_repos = function() return true end,
+    },
+    run_update_task = function(_, task, _, callback)
+        local called, ok = task()
+        interrupted_catalog_callback = function()
+            callback(true, called, ok)
+        end
+    end,
+    load_packages = function() interrupted_catalog_loads = interrupted_catalog_loads + 1 end,
+    load_repos = function() end,
+    reload_current_page = function() interrupted_catalog_reloads = interrupted_catalog_reloads + 1 end,
+}
+App.refresh_catalog_on_open(interrupted_catalog_app)
+assert(interrupted_catalog_app.catalog_refreshing)
+interrupted_catalog_app.backend_ready = false
+interrupted_catalog_callback()
+assert(not interrupted_catalog_app.catalog_refreshing)
+assert(interrupted_catalog_loads == 0)
+assert(interrupted_catalog_reloads == 0)
+assert(interrupted_catalog_app.state.readme_cache.reader.readme == "Cached README")
 
 local reload_tab
 local reload_full_refresh
@@ -505,6 +573,66 @@ App.backend_started({
 }, {})
 assert(started_catalog_refreshes == 1)
 
+local UIManager = require("ui/uimanager")
+local original_schedule_in = UIManager.scheduleIn
+local backend_health_callback
+UIManager.scheduleIn = function(_, delay, callback)
+    assert(delay == 60)
+    backend_health_callback = callback
+end
+local backend_health_checks = 0
+local backend_health_restarts = 0
+local backend_health_loading
+local backend_health_app = {
+    view = {},
+    state = {},
+    daemon = {
+        is_android = function() return true end,
+        health_matches = function(_, data) return data and data.version == "1.2.3" end,
+    },
+    client = {
+        health = function()
+            backend_health_checks = backend_health_checks + 1
+            if backend_health_checks == 1 then return true, { version = "1.2.3" } end
+            return false
+        end,
+    },
+    finish_deferred_font_uninstalls = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+    schedule_plugin_scan_after_open = function() end,
+    refresh_catalog_on_open = function() end,
+    set_loading = function(_, message) backend_health_loading = message end,
+    start_backend_then_reload = function() backend_health_restarts = backend_health_restarts + 1 end,
+}
+App.backend_started(backend_health_app, { version = "1.2.3" })
+assert(type(backend_health_callback) == "function")
+local first_backend_health_callback = backend_health_callback
+backend_health_callback = nil
+first_backend_health_callback()
+assert(backend_health_checks == 1)
+assert(backend_health_app.backend_ready)
+assert(type(backend_health_callback) == "function")
+local second_backend_health_callback = backend_health_callback
+backend_health_callback = nil
+second_backend_health_callback()
+assert(backend_health_checks == 2)
+assert(not backend_health_app.backend_ready)
+assert(backend_health_restarts == 1)
+assert(backend_health_loading == "Loading packages, please wait")
+backend_health_app.backend_ready = true
+backend_health_app.view = {}
+backend_health_app.restore_koreader_exit = function() end
+backend_health_app.daemon.stop_standalone_backend = function() end
+App.schedule_android_backend_health_check(backend_health_app)
+local stale_backend_health_callback = backend_health_callback
+backend_health_app.view = nil
+App.close(backend_health_app)
+stale_backend_health_callback()
+assert(backend_health_checks == 2)
+assert(backend_health_restarts == 1)
+UIManager.scheduleIn = original_schedule_in
+
 local sources_menu_calls = 0
 App.show_actions({
     show_sources = function() sources_menu_calls = sources_menu_calls + 1 end,
@@ -562,6 +690,50 @@ assert(update_result[2] == true)
 assert(update_result[3] == true)
 assert(update_result[4] == "1.2.4")
 assert(trapper_required)
+
+local forced_subprocess_runs = 0
+package.preload["ui/trapper"] = function()
+    return {
+        wrap = function(_, callback) callback() end,
+        dismissableRunInSubprocess = function(_, task)
+            forced_subprocess_runs = forced_subprocess_runs + 1
+            return true, task()
+        end,
+    }
+end
+package.loaded["ui/trapper"] = nil
+update_result = nil
+App.run_update_task({
+    daemon = {
+        is_android = function() return false end,
+        detect_platform = function() return "kindle" end,
+    },
+}, function()
+    return true, true, "1.3.0"
+end, trap_widget, function(...)
+    update_result = { ... }
+end, true)
+assert(update_result[1] == true)
+assert(update_result[2] == true)
+assert(update_result[3] == true)
+assert(update_result[4] == "1.3.0")
+assert(trap_widget.dismiss_callback == nil)
+assert(forced_subprocess_runs == 0)
+
+local homepage_forced_in_process = false
+modal_message = nil
+App.apply_kindle_homepage_install({
+    busy = false,
+    state = { beta_updates = false },
+    daemon = {},
+    run_update_task = function(_, task, _, callback, force_in_process)
+        homepage_forced_in_process = force_in_process
+        local called, ok, result = task()
+        callback(true, called, ok, result)
+    end,
+})
+assert(homepage_forced_in_process)
+assert(modal_message == "ZenPM v1.3.0 was copied to the Kindle homepage.")
 
 local self_update_queued = 0
 local self_action_app = {
