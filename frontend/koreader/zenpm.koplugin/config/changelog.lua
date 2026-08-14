@@ -48,4 +48,7 @@ return {
         "Boox bug fixes",
         "Minor bug fixes"
     },
+    ["1.3.2"] = {
+        "Update icon",
+    },
 }
