@@ -732,8 +732,8 @@ msgstr "Добре дошли"
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "Интерфейс на Zen Package Manager за KOReader."
 
-msgid "Zen UI is installed. Most patches should not be used with Zen UI."
-msgstr "Zen UI е инсталиран. Повечето пачове не трябва да се използват с Zen UI."
+msgid "ZenOS is installed. Most patches should not be used with ZenOS."
+msgstr "ZenOS е инсталиран. Повечето пачове не трябва да се използват с ZenOS."
 
 msgid "ZenPM"
 msgstr "ZenPM"

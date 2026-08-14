@@ -367,6 +367,9 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		ReleaseNotesURL:       "https://example.invalid/release-notes.md",
 		PrereleaseNotesURL:    "https://example.invalid/prerelease-notes.md",
 		PrereleaseVersion:     "1.3.0-rc.1",
+		PluginModule:          "zenos",
+		PluginModuleAliases:   []string{"zen_ui"},
+		SourceAssetAliases:    []string{"zen_ui.koplugin.zip"},
 	}
 
 	got, err := parseCatalogLine(entry.serialize())
@@ -381,6 +384,9 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	}
 	if got.FeaturedOrder == nil || *got.FeaturedOrder != featuredOrder {
 		t.Fatalf("FeaturedOrder = %v, want %d", got.FeaturedOrder, featuredOrder)
+	}
+	if got.PluginModule != "zenos" || len(got.PluginModuleAliases) != 1 || got.PluginModuleAliases[0] != "zen_ui" || len(got.SourceAssetAliases) != 1 || got.SourceAssetAliases[0] != "zen_ui.koplugin.zip" {
+		t.Fatalf("plugin identity aliases = %#v", got)
 	}
 	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.VersionsURL != entry.VersionsURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
@@ -405,6 +411,29 @@ func TestParseZenPMCatalogDerivesPluginModuleFromSource(t *testing.T) {
 	entries := parseZenPMCatalog("ZenLabs", "https://example.invalid/repo", 10, manifest)
 	if len(entries) != 1 || entries[0].PluginModule != "zlibrary" {
 		t.Fatalf("entries = %#v, want zlibrary plugin module", entries)
+	}
+}
+
+func TestParseZenPMCatalogPreservesPluginIdentityAliases(t *testing.T) {
+	manifest := manifestJSON{}
+	if err := json.Unmarshal([]byte(`{
+		"packages": [{
+			"id": "zen-ui",
+			"name": "ZenOS",
+			"version": "3.0.0",
+			"platforms": ["koreader"],
+			"source_asset": "zenos.koplugin.zip",
+			"source_asset_aliases": ["zen_ui.koplugin.zip"],
+			"plugin_module": "zenos",
+			"plugin_module_aliases": ["zen_ui"]
+		}]
+	}`), &manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	entries := parseZenPMCatalog("ZenLabs", "https://example.invalid/repo", 10, manifest)
+	if len(entries) != 1 || entries[0].PluginModule != "zenos" || len(entries[0].PluginModuleAliases) != 1 || entries[0].PluginModuleAliases[0] != "zen_ui" || len(entries[0].SourceAssetAliases) != 1 || entries[0].SourceAssetAliases[0] != "zen_ui.koplugin.zip" {
+		t.Fatalf("entries = %#v", entries)
 	}
 }
 

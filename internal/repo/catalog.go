@@ -34,7 +34,7 @@ const (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url|plugin_module_aliases|source_asset_aliases
 type CatalogEntry struct {
 	Repo                  string
 	Priority              int
@@ -66,6 +66,8 @@ type CatalogEntry struct {
 	Assets                string
 	Constraints           string
 	PluginModule          string
+	PluginModuleAliases   []string
+	SourceAssetAliases    []string
 	ReadmeURL             string
 	VersionsURL           string
 	PublishedAt           string
@@ -129,6 +131,8 @@ func (e *CatalogEntry) serialize() string {
 		e.PrereleaseNotesURL,
 		e.PrereleaseVersion,
 		e.VersionsURL,
+		strings.Join(e.PluginModuleAliases, ","),
+		strings.Join(e.SourceAssetAliases, ","),
 	}, "|")
 }
 
@@ -250,6 +254,12 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 36 {
 		e.VersionsURL = parts[35]
+	}
+	if len(parts) >= 37 && parts[36] != "" {
+		e.PluginModuleAliases = strings.Split(parts[36], ",")
+	}
+	if len(parts) >= 38 && parts[37] != "" {
+		e.SourceAssetAliases = strings.Split(parts[37], ",")
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -376,6 +386,7 @@ type manifestJSON struct {
 		ImageURL              string          `json:"image_url,omitempty"`
 		Source                string          `json:"source,omitempty"`
 		SourceAsset           string          `json:"source_asset,omitempty"`
+		SourceAssetAliases    []string        `json:"source_asset_aliases,omitempty"`
 		SourceType            string          `json:"source_type,omitempty"`
 		SourceURL             string          `json:"source_url,omitempty"`
 		ReadmeURL             string          `json:"readme_url,omitempty"`
@@ -387,6 +398,8 @@ type manifestJSON struct {
 		Stars                 string          `json:"stars,omitempty"`
 		Assets                json.RawMessage `json:"assets,omitempty"`
 		Constraints           json.RawMessage `json:"constraints,omitempty"`
+		PluginModule          string          `json:"plugin_module,omitempty"`
+		PluginModuleAliases   []string        `json:"plugin_module_aliases,omitempty"`
 		Featured              bool            `json:"featured,omitempty"`
 		FeaturedImage         string          `json:"featured_image,omitempty"`
 		FeaturedOrder         *int            `json:"featured_order,omitempty"`
@@ -500,6 +513,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Category:              p.Category,
 			Source:                source,
 			SourceAsset:           p.SourceAsset,
+			SourceAssetAliases:    p.SourceAssetAliases,
 			SourceType:            p.SourceType,
 			SourceURL:             resolveURL(repoURL, p.SourceURL),
 			ReadmeURL:             resolveURL(repoURL, p.ReadmeURL),
@@ -511,6 +525,8 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			Stars:                 strings.TrimSpace(p.Stars),
 			Assets:                resolveAssetURLs(repoURL, p.Assets),
 			Constraints:           compactJSONField(p.Constraints),
+			PluginModule:          strings.TrimSpace(p.PluginModule),
+			PluginModuleAliases:   p.PluginModuleAliases,
 		}
 		entry.ensurePluginModule()
 		entries = append(entries, entry)

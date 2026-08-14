@@ -656,6 +656,754 @@ func zipContents(t *testing.T, files map[string]string) []byte {
 	return out.Bytes()
 }
 
+func transitionalZenOSCatalogEntry(version, versionsURL string) state.CatalogEntry {
+	return state.CatalogEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: version, Repo: "ZenLabs", Platforms: []string{"koreader"},
+		SourceType: "release", SourceAsset: "zen_ui.koplugin.zip", VersionsURL: versionsURL,
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"}, SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}
+}
+
+func TestTransitionalManifestUpdatesExistingLegacyRootInPlace(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.MkdirAll(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "_meta.lua"), []byte(`return { version = "2.5.4" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	compatZIP := zipContents(t, map[string]string{
+		"zen_ui.koplugin/_meta.lua": `return { version = "3.0.0" }`,
+	})
+	var releasesServer *httptest.Server
+	releasesServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/versions.json":
+			_, _ = io.WriteString(w, `{"releases":[{"tag_name":"v3.0.0","assets":[`+
+				`{"name":"zen_ui.koplugin.zip","url":"`+releasesServer.URL+`/zen_ui.koplugin.zip"}]}]}`)
+		case "/zen_ui.koplugin.zip":
+			_, _ = w.Write(compatZIP)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer releasesServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		transitionalZenOSCatalogEntry("3.0.0", releasesServer.URL+"/versions.json"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: "2.5.4", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: legacyPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Update("zen-ui"); err != nil {
+		t.Fatal(err)
+	}
+	if version, err := koreaderPluginVersion(legacyPath); err != nil || version != "3.0.0" {
+		t.Fatalf("legacy root version = %q, %v", version, err)
+	}
+	if _, err := os.Lstat(filepath.Join(plugins, "zenos.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("transitional update created canonical root: %v", err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != legacyPath {
+		t.Fatalf("transitional installed record = %#v, %v", installed, err)
+	}
+}
+
+func TestTransitionalManifestCanonicalUpdateRefusesWithoutCanonicalAsset(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	if err := os.MkdirAll(canonicalPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := filepath.Join(canonicalPath, "_meta.lua")
+	if err := os.WriteFile(metaPath, []byte(`return { version = "2.5.4" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(canonicalPath, "keep.txt")
+	if err := os.WriteFile(marker, []byte("unchanged"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	compatZIP := zipContents(t, map[string]string{
+		"zen_ui.koplugin/_meta.lua": `return { version = "3.0.0" }`,
+	})
+	var releasesServer *httptest.Server
+	releasesServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/versions.json":
+			_, _ = io.WriteString(w, `{"releases":[{"tag_name":"v3.0.0","assets":[`+
+				`{"name":"zen_ui.koplugin.zip","url":"`+releasesServer.URL+`/zen_ui.koplugin.zip"}]}]}`)
+		case "/zen_ui.koplugin.zip":
+			_, _ = w.Write(compatZIP)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer releasesServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		transitionalZenOSCatalogEntry("3.0.0", releasesServer.URL+"/versions.json"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: "2.5.4", Repo: "ZenLabs",
+		Asset: "zenos.koplugin.zip", InstallPath: canonicalPath,
+	}
+	if err := st.AppendInstalled(want); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Update("zen-ui"); err == nil {
+		t.Fatal("canonical update unexpectedly succeeded without a canonical asset")
+	}
+	if version, err := koreaderPluginVersion(canonicalPath); err != nil || version != "2.5.4" {
+		t.Fatalf("canonical root version changed = %q, %v", version, err)
+	}
+	if data, err := os.ReadFile(marker); err != nil || string(data) != "unchanged" {
+		t.Fatalf("canonical root changed after rejected update: %q, %v", data, err)
+	}
+	if _, err := os.Lstat(filepath.Join(plugins, "zen_ui.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("rejected canonical update created legacy root: %v", err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Name != want.Name || installed[0].Version != want.Version ||
+		installed[0].Asset != want.Asset || installed[0].InstallPath != want.InstallPath {
+		t.Fatalf("installed record changed after rejected canonical update: %#v, %v", installed, err)
+	}
+}
+
+func TestTransitionalManifestUninstallsCanonicalRootOnly(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	otherPath := filepath.Join(plugins, "other.koplugin")
+	for _, path := range []string{canonicalPath, otherPath} {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	otherMarker := filepath.Join(otherPath, "keep.txt")
+	if err := os.WriteFile(otherMarker, []byte("keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		transitionalZenOSCatalogEntry("3.0.0", ""),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs",
+		Asset: "zenos.koplugin.zip", InstallPath: canonicalPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Uninstall("zen-ui", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(canonicalPath); !os.IsNotExist(err) {
+		t.Fatalf("canonical root remains after uninstall: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(plugins, "zen_ui.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("canonical uninstall changed legacy root state: %v", err)
+	}
+	if data, err := os.ReadFile(otherMarker); err != nil || string(data) != "keep" {
+		t.Fatalf("canonical uninstall changed unrelated plugin: %q, %v", data, err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 0 {
+		t.Fatalf("installed record remains after canonical uninstall: %#v, %v", installed, err)
+	}
+}
+
+func TestUpdateGenericPluginStaysOnExistingAliasRoot(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.MkdirAll(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "_meta.lua"), []byte(`return { version = "2.5.4" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	canonicalZIP := zipContents(t, map[string]string{
+		"zenos.koplugin/_meta.lua": `return { version = "3.0.0" }`,
+	})
+	compatZIP := zipContents(t, map[string]string{
+		"zen_ui.koplugin/_meta.lua": `return { version = "3.0.0" }`,
+	})
+	var releasesServer *httptest.Server
+	releasesServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/versions.json":
+			_, _ = io.WriteString(w, `{"releases":[{"tag_name":"v3.0.0","assets":[`+
+				`{"name":"zenos.koplugin.zip","url":"`+releasesServer.URL+`/zenos.koplugin.zip"},`+
+				`{"name":"zen_ui.koplugin.zip","url":"`+releasesServer.URL+`/zen_ui.koplugin.zip"}]}]}`)
+		case "/zenos.koplugin.zip":
+			_, _ = w.Write(canonicalZIP)
+		case "/zen_ui.koplugin.zip":
+			_, _ = w.Write(compatZIP)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer releasesServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		SourceType: "release", SourceAsset: "zenos.koplugin.zip", VersionsURL: releasesServer.URL + "/versions.json",
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"}, SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "2.5.4", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: legacyPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Update("zen-ui"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(plugins, "zenos.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("update created a side-by-side canonical root: %v", err)
+	}
+	if version, err := koreaderPluginVersion(legacyPath); err != nil || version != "3.0.0" {
+		t.Fatalf("legacy compatibility root version = %q, %v", version, err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Name != "ZenOS" ||
+		installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != legacyPath {
+		t.Fatalf("updated installed record = %#v, %v", installed, err)
+	}
+}
+
+func TestReinstallGenericPluginAllowsHistoricLegacyAssetAfterCanonicalRemoval(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	if err := os.MkdirAll(canonicalPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	legacyZIP := zipContents(t, map[string]string{
+		"zen_ui.koplugin/_meta.lua": `return { version = "2.5.4" }`,
+	})
+	var releasesServer *httptest.Server
+	releasesServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/versions.json":
+			_, _ = io.WriteString(w, `{"releases":[{"tag_name":"v2.5.4","assets":[`+
+				`{"name":"zen_ui.koplugin.zip","url":"`+releasesServer.URL+`/zen_ui.koplugin.zip"}]}]}`)
+		case "/zen_ui.koplugin.zip":
+			_, _ = w.Write(legacyZIP)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer releasesServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		Source: "https://github.com/owner/zen_ui.koplugin", SourceType: "release",
+		SourceAsset: "zenos.koplugin.zip", VersionsURL: releasesServer.URL + "/versions.json",
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"}, SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs",
+		Asset: "zenos.koplugin.zip", InstallPath: canonicalPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Reinstall("zen-ui", "zen_ui.koplugin.zip", "v2.5.4"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(canonicalPath); !os.IsNotExist(err) {
+		t.Fatalf("canonical root remains after historic downgrade: %v", err)
+	}
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if version, err := koreaderPluginVersion(legacyPath); err != nil || version != "2.5.4" {
+		t.Fatalf("historic legacy root version = %q, %v", version, err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != legacyPath {
+		t.Fatalf("historic installed record = %#v, %v", installed, err)
+	}
+}
+
+func TestInstallGenericPluginRejectsCanonicalAndAliasRoots(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	for _, module := range []string{"zenos", "zen_ui"} {
+		path := filepath.Join(plugins, module+".koplugin")
+		if err := os.MkdirAll(path, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "keep.txt"), []byte(module), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		SourceAsset: "zenos.koplugin.zip", PluginModule: "zenos",
+		PluginModuleAliases: []string{"zen_ui"}, SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	err = New(st, repo.New(st), "host").Install("zen-ui")
+	if err == nil || !strings.Contains(err.Error(), "multiple plugin roots") {
+		t.Fatalf("Install() error = %v", err)
+	}
+	for _, module := range []string{"zenos", "zen_ui"} {
+		data, readErr := os.ReadFile(filepath.Join(plugins, module+".koplugin", "keep.txt"))
+		if readErr != nil || string(data) != module {
+			t.Fatalf("%s root changed after rejected install: %q, %v", module, data, readErr)
+		}
+	}
+	installed, readErr := st.ReadInstalled()
+	if readErr != nil || len(installed) != 1 || installed[0].Name != "ZenOS" || installed[0].InstallPath != "" {
+		t.Fatalf("installed record changed after rejected install: %#v, %v", installed, readErr)
+	}
+}
+
+func TestNewReconcilesInstalledPluginAliasRecord(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	if err := os.MkdirAll(canonicalPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "3.0.0", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: filepath.Join(plugins, "zen_ui.koplugin"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	New(st, repo.New(st), "host")
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	if installed[0].Name != "ZenOS" || installed[0].Asset != "zenos.koplugin.zip" || installed[0].InstallPath != canonicalPath {
+		t.Fatalf("reconciled installed record = %#v", installed[0])
+	}
+}
+
+func TestNewRefusesAliasRecordOutsidePluginDirs(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	if err := os.MkdirAll(canonicalPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(canonicalPath, "keep.txt")
+	if err := os.WriteFile(marker, []byte("unchanged"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	outsidePath := filepath.Join(t.TempDir(), "zen_ui.koplugin")
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "3.0.0", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: outsidePath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	if installed[0].Name != "Zen UI" || installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != outsidePath {
+		t.Fatalf("outside tracked record was reconciled: %#v", installed[0])
+	}
+	err = manager.Install("zen-ui")
+	if err == nil || !strings.Contains(err.Error(), "outside configured plugin identity roots") {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if data, readErr := os.ReadFile(marker); readErr != nil || string(data) != "unchanged" {
+		t.Fatalf("canonical root changed after rejected install: %q, %v", data, readErr)
+	}
+}
+
+func TestUninstallGenericPluginRemovesTrackedAliasRoot(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.MkdirAll(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "2.5.4", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: legacyPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := &Manager{st: st, repos: repo.New(st), plat: "host"}
+	if err := manager.Uninstall("zen-ui", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Fatalf("tracked legacy plugin root remains after uninstall: %v", err)
+	}
+}
+
+func TestUninstallGenericPluginResolvesRelativeAliasPluginDir(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	root := filepath.Join(t.TempDir(), "koreader")
+	pluginsOverride := filepath.Join("external", "plugins")
+	plugins := filepath.Join(root, pluginsOverride)
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_DIR", root)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", pluginsOverride)
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.MkdirAll(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "2.5.4", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: legacyPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "test").Uninstall("zen-ui", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(legacyPath); !os.IsNotExist(err) {
+		t.Fatalf("relative alias plugin root remains after uninstall: %v", err)
+	}
+}
+
+func TestInstallKOReaderPluginRejectsAliasArchiveRootMismatch(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	if err := os.MkdirAll(canonicalPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(canonicalPath, "keep.txt")
+	if err := os.WriteFile(marker, []byte("unchanged"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := zipContents(t, map[string]string{
+		"zen_ui.koplugin/_meta.lua": `return { version = "3.0.0" }`,
+	})
+	_, _, err = (&Manager{st: st, plat: "host"}).installKOReaderPlugin(&repo.CatalogEntry{
+		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}, filepath.Dir(plugins), "zenos.koplugin.zip", data)
+	if err == nil || !strings.Contains(err.Error(), "does not match selected asset root") {
+		t.Fatalf("installKOReaderPlugin() error = %v", err)
+	}
+	if data, readErr := os.ReadFile(marker); readErr != nil || string(data) != "unchanged" {
+		t.Fatalf("existing canonical root changed after archive mismatch: %q, %v", data, readErr)
+	}
+}
+
+func TestInstallKOReaderPluginKeepsAliasInAlternateConfiguredDir(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	primaryRoot := filepath.Join(t.TempDir(), "primary")
+	secondaryRoot := filepath.Join(t.TempDir(), "secondary")
+	t.Setenv("ZENPM_KOREADER_DIR", primaryRoot)
+	t.Setenv("KOREADER_DIR", secondaryRoot)
+	if err := os.MkdirAll(primaryRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(primaryRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(secondaryRoot, "plugins", "zen_ui.koplugin")
+	if err := os.MkdirAll(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secondaryRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := zipContents(t, map[string]string{
+		"zen_ui.koplugin/_meta.lua": `return { version = "3.0.0" }`,
+	})
+	_, installedPath, err := (&Manager{st: st, plat: "host"}).installKOReaderPlugin(&repo.CatalogEntry{
+		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}, primaryRoot, "zen_ui.koplugin.zip", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installedPath != legacyPath {
+		t.Fatalf("installed path = %q, want %q", installedPath, legacyPath)
+	}
+	if _, err := os.Stat(filepath.Join(primaryRoot, "plugins")); !os.IsNotExist(err) {
+		t.Fatalf("install created primary plugins directory: %v", err)
+	}
+}
+
+func TestUninstallGenericPluginUnlinksAliasSymlinkOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "outside-target")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(target, "keep.txt")
+	if err := os.WriteFile(marker, []byte("keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.Symlink(target, legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Asset: "zen_ui.koplugin.zip", InstallPath: legacyPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{st: st, repos: repo.New(st), plat: "host"}
+	if err := manager.Uninstall("zen-ui", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(legacyPath); !os.IsNotExist(err) {
+		t.Fatalf("legacy symlink remains after uninstall: %v", err)
+	}
+	if data, err := os.ReadFile(marker); err != nil || string(data) != "keep" {
+		t.Fatalf("symlink target changed during uninstall: %q, %v", data, err)
+	}
+}
+
+func TestUninstallGenericPluginRejectsTrackedPathOutsidePluginDirs(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	outsidePath := filepath.Join(t.TempDir(), "zen_ui.koplugin")
+	for _, path := range []string{legacyPath, outsidePath} {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Asset: "zen_ui.koplugin.zip", InstallPath: outsidePath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{st: st, repos: repo.New(st), plat: "host"}
+	err = manager.Uninstall("zen-ui", "")
+	if err == nil || !strings.Contains(err.Error(), "outside configured plugin identity roots") {
+		t.Fatalf("Uninstall() error = %v", err)
+	}
+	for _, path := range []string{legacyPath, outsidePath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("plugin path %s changed after rejected uninstall: %v", path, err)
+		}
+	}
+}
+
+func TestUninstallGenericPluginRejectsConflictingIdentityPath(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.MkdirAll(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	canonicalPath := filepath.Join(plugins, "zenos.koplugin")
+	if err := os.WriteFile(canonicalPath, []byte("conflict"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Asset: "zenos.koplugin.zip", InstallPath: canonicalPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{st: st, repos: repo.New(st), plat: "host"}
+	err = manager.Uninstall("zen-ui", "")
+	if err == nil || !strings.Contains(err.Error(), "path conflict") {
+		t.Fatalf("Uninstall() error = %v", err)
+	}
+	if _, err := os.Stat(legacyPath); err != nil {
+		t.Fatalf("legacy root changed after path conflict: %v", err)
+	}
+	if data, err := os.ReadFile(canonicalPath); err != nil || string(data) != "conflict" {
+		t.Fatalf("conflicting path changed after rejected uninstall: %q, %v", data, err)
+	}
+}
+
+func TestKOReaderPluginAssetForModuleSupportsLegacySourceAsset(t *testing.T) {
+	entry := &repo.CatalogEntry{
+		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zen_ui.koplugin.zip",
+	}
+	if got := koreaderPluginAssetForModule(entry, "zen_ui"); got != "zen_ui.koplugin.zip" {
+		t.Fatalf("legacy module asset = %q", got)
+	}
+	if module, ok := koreaderPluginModuleForAsset(entry, "zen_ui.koplugin.zip"); !ok || module != "zen_ui" {
+		t.Fatalf("legacy source asset module = %q, %t", module, ok)
+	}
+}
+
 func TestPatchInstallUninstallTracksPerFileState(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -1314,6 +2062,89 @@ func TestSelectAssetReusesInstalledAssetWhenAmbiguous(t *testing.T) {
 	}
 }
 
+func TestSelectAssetKeepsLegacyCandidateForPreAliasInstalledRecord(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		SourceAsset: "zenos.koplugin.zip", PluginModule: "zenos",
+		Assets: `[{"arch":"any","asset":"zenos.koplugin.zip"},{"arch":"any","asset":"zen_ui.koplugin.zip"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "2.5.4", Repo: "ZenLabs", Asset: "zen_ui.koplugin.zip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := New(st, repo.New(st), "host").SelectAsset("zen-ui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.NeedsChoice || result.Auto != "zen_ui.koplugin.zip" {
+		t.Fatalf("SelectAsset = %+v, want recorded legacy candidate", result)
+	}
+}
+
+func TestSelectAssetUsesPluginIdentityRoot(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_HOME", home)
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		SourceAsset: "zenos.koplugin.zip", PluginModule: "zenos",
+		PluginModuleAliases: []string{"zen_ui"}, SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+		Assets: `[{"arch":"any","asset":"zenos.koplugin.zip"},{"arch":"any","asset":"zen_ui.koplugin.zip"}]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	manager := New(st, repo.New(st), "host")
+	if result, err := manager.SelectAsset("zen-ui"); err != nil || result.Auto != "zenos.koplugin.zip" || result.NeedsChoice {
+		t.Fatalf("fresh SelectAsset = %+v, %v", result, err)
+	}
+
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.Mkdir(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := manager.SelectAsset("zen-ui"); err != nil || result.Auto != "zen_ui.koplugin.zip" || result.NeedsChoice {
+		t.Fatalf("legacy-root SelectAsset = %+v, %v", result, err)
+	}
+	if err := os.RemoveAll(legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(plugins, "zenos.koplugin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "3.0.0", Repo: "ZenLabs", Asset: "zen_ui.koplugin.zip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := manager.SelectAsset("zen-ui"); err != nil || result.Auto != "zenos.koplugin.zip" || result.NeedsChoice {
+		t.Fatalf("canonical-root SelectAsset = %+v, %v", result, err)
+	}
+	if err := os.Mkdir(legacyPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.SelectAsset("zen-ui"); err == nil || !strings.Contains(err.Error(), "matches multiple KOReader plugin directories") {
+		t.Fatalf("dual-root SelectAsset error = %v", err)
+	}
+}
+
 func TestAssetNamesMatchIgnoringVersion(t *testing.T) {
 	if !assetNamesMatchIgnoringVersion("localsend-koplugin-v1.4.1-armv7.zip", "localsend-koplugin-v1.4.0-armv7.zip") {
 		t.Fatal("versioned armv7 assets did not match")
@@ -1380,6 +2211,16 @@ func TestKOReaderRootUsesPluginDirectoryEnvironment(t *testing.T) {
 	}
 	if got != root {
 		t.Fatalf("koreaderRoot() = %q, want %q", got, root)
+	}
+}
+
+func TestKOReaderRootCandidatesIgnoreRelativePluginDirectory(t *testing.T) {
+	t.Setenv("ZENPM_KOREADER_DIR", "")
+	t.Setenv("ZENPM_KOREADER_ROOT", "")
+	t.Setenv("KOREADER_DIR", "")
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", "plugins")
+	if got := koreaderRootCandidates("test"); len(got) != 0 {
+		t.Fatalf("relative plugin directory inferred KOReader root candidates: %#v", got)
 	}
 }
 

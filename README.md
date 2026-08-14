@@ -50,7 +50,7 @@ directory.
 
 ## Install
 
-If you have Zen UI, install ZenPM from **Extras > Install ZenPM**.
+If you have ZenOS, install ZenPM from **Extras > Install ZenPM**.
 
 Otherwise:
 

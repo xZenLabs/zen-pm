@@ -122,7 +122,7 @@ package.preload["models"] = function()
         is_patch_package = function(pkg) return pkg and pkg.is_patch == true end,
         is_installed_patch_item = function() return false end,
         is_unmanaged_patch = function() return false end,
-        is_font_package = function() return false end,
+        is_font_package = function(pkg) return pkg and pkg.category == "fonts" end,
         has_version_history = function(pkg) return pkg and pkg.versions_url ~= nil end,
         find_package = function(packages, id)
             for _, pkg in ipairs(packages or {}) do
@@ -1095,6 +1095,10 @@ assert(bulk_queue_opened == 0)
 assert(modal_message == "Added to Queue")
 
 local reader_settings = {}
+local pluginloader = require("pluginloader")
+pluginloader._discover = function()
+    return { { name = "zen_ui", path = "/tmp/zen_ui.koplugin" } }
+end
 _G.G_reader_settings = {
     readSetting = function(_, key) return reader_settings[key] end,
     saveSetting = function(_, key, value) reader_settings[key] = value end,
@@ -1109,13 +1113,15 @@ App.toggle_enable({
     package_disabled = function() return false end,
     restart_koreader = App.restart_koreader,
 }, {
-    id = "example",
-    name = "Example plugin",
-    plugin_module = "example",
+    id = "zen-ui",
+    name = "ZenOS",
+    plugin_module = "zenos",
+    plugin_module_aliases = { " zen_ui.koplugin ", "zen_ui" },
 }, "plugin", function()
     toggle_done = true
 end)
-assert(reader_settings.plugins_disabled.example == true)
+assert(reader_settings.plugins_disabled.zen_ui == true)
+assert(reader_settings.plugins_disabled.zenos == nil)
 assert(restart_message == "Restart KOReader to apply the changes.")
 assert(modal_message == nil)
 assert(modal_seconds == nil)
@@ -1254,6 +1260,50 @@ App.poll_package_action({
 }, 1)
 assert(plugin_settings_prompt:find("Remove plugin settings?", 1, true))
 assert(local_plugin_cleanup_calls == 1)
+
+local legacy_cleanup_calls = 0
+local legacy_loaded = {
+    path = "/tmp/zen_ui.koplugin",
+    deletePluginSettings = function() legacy_cleanup_calls = legacy_cleanup_calls + 1 end,
+}
+table.insert(pluginloader.loaded_plugins, legacy_loaded)
+local legacy_entry = App.queue_entry_for({ state = {} }, {
+    id = "zen-ui",
+    name = "ZenOS",
+    installed = true,
+    platforms = { "koreader" },
+    plugin_module = "zenos",
+    plugin_module_aliases = { "zen_ui" },
+}, "uninstall")
+assert(type(legacy_entry.settings_deleter) == "function")
+legacy_entry.settings_deleter()
+assert(legacy_cleanup_calls == 1)
+
+local zenos_save_calls = 0
+local zenos = {
+    path = "/tmp/zenos.koplugin",
+    config = { library_font = { font_face = "/tmp/fonts/example/Custom.ttf" } },
+    saveConfig = function() zenos_save_calls = zenos_save_calls + 1 end,
+}
+local legacy_zen = {
+    path = "/tmp/zen_ui.koplugin",
+    config = { library_font = { font_face = "/tmp/fonts/example/Legacy.ttf" } },
+}
+table.insert(pluginloader.loaded_plugins, zenos)
+table.insert(pluginloader.loaded_plugins, legacy_zen)
+local deferred_font
+App.run_package_action({
+    package_action_failure_stats = function() return {} end,
+    defer_font_uninstall = function(_, pkg) deferred_font = pkg end,
+}, {
+    id = "font-example",
+    name = "Example Font",
+    category = "fonts",
+}, "uninstall")
+assert(deferred_font and deferred_font.id == "font-example")
+assert(zenos.config.library_font.font_face == "default")
+assert(zenos_save_calls == 1)
+assert(legacy_zen.config.library_font.font_face == "/tmp/fonts/example/Legacy.ttf")
 
 local release_requests = 0
 local release_app = {

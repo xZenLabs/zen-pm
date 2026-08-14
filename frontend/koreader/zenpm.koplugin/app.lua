@@ -386,12 +386,22 @@ end
 
 local function koplugin_candidates(pkg)
     local candidates = {}
-    for _, key in ipairs({ "plugin_module", "id", "name" }) do
-        local value = pkg and pkg[key]
-        if type(value) == "string" and value ~= "" then
+    local seen = {}
+    local function add(value)
+        if type(value) == "string" then
+            value = Util.trim(value):gsub("%.koplugin$", "")
+        end
+        if type(value) == "string" and value ~= "" and not seen[value] then
+            seen[value] = true
             table.insert(candidates, value)
         end
     end
+    add(pkg and pkg.plugin_module)
+    if pkg and type(pkg.plugin_module_aliases) == "table" then
+        for _i, value in ipairs(pkg.plugin_module_aliases) do add(value) end
+    end
+    add(pkg and pkg.id)
+    add(pkg and pkg.name)
     return candidates
 end
 
@@ -399,8 +409,7 @@ end
 -- loaded plugins and matching on each instance's actual install directory
 -- basename. This avoids guessing PluginLoader's internal key: we compare against
 -- the directory KOReader really loaded the plugin from (instance.path). The
--- daemon-derived plugin_module is preferred, then the package id/name, since the
--- generic uninstall path leaves plugin_module empty but the id usually matches.
+-- canonical module is preferred, then legacy aliases and the package id/name.
 local function koreader_plugin_instance(pkg)
     if type(pkg) ~= "table" then return nil end
     local ok, PluginLoader = pcall(require, "pluginloader")
@@ -490,7 +499,7 @@ local function reset_settings_font_references(settings, directory)
     return changed
 end
 
--- A deleted font may still be selected by the active reader or by Zen UI's
+-- A deleted font may still be selected by the active reader or by ZenOS's
 -- library-wide font setting. Reset the persisted references first; removal is
 -- deferred until the next ZenPM session, after KOReader restarts with defaults.
 local function reset_active_font_before_uninstall(pkg)
@@ -502,15 +511,19 @@ local function reset_active_font_before_uninstall(pkg)
         changed = true
     end
 
-    local zen_ui = koreader_plugin_instance({ id = "zen_ui", plugin_module = "zen_ui" })
-    if zen_ui and type(zen_ui.config) == "table" then
-        local _, config_changed = reset_font_references(zen_ui.config, directory)
+    local zen = koreader_plugin_instance({
+        id = "zen-ui",
+        plugin_module = "zenos",
+        plugin_module_aliases = { "zen_ui" },
+    })
+    if zen and type(zen.config) == "table" then
+        local _, config_changed = reset_font_references(zen.config, directory)
         if config_changed then
-            if type(zen_ui.config.library_font) == "table" then
-                zen_ui.config.library_font.font_face = "default"
+            if type(zen.config.library_font) == "table" then
+                zen.config.library_font.font_face = "default"
             end
-            _G.__ZEN_UI_LIBRARY_FONT_CFG = zen_ui.config.library_font
-            if type(zen_ui.saveConfig) == "function" then zen_ui:saveConfig() end
+            _G.__ZEN_UI_LIBRARY_FONT_CFG = zen.config.library_font
+            if type(zen.saveConfig) == "function" then zen:saveConfig() end
             changed = true
         end
     end
@@ -912,7 +925,7 @@ function App:queue_package_action(pkg, action, asset, opts)
             for _, conflict in ipairs(conflicts) do
                 table.insert(names, package_title(conflict, conflict.id or _("Package")))
             end
-            local message = zen_ui_warning and _("Zen UI is installed. Most patches should not be used with Zen UI.") or ""
+            local message = zen_ui_warning and _("ZenOS is installed. Most patches should not be used with ZenOS.") or ""
             if #names > 0 then
                 local conflict_message = string.format(
                     _("%s conflicts with %s. They should not be used together. Install anyway?"),

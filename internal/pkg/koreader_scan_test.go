@@ -3,6 +3,8 @@ package pkg
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/xZenLabs/zen-pm/internal/repo"
@@ -188,6 +190,156 @@ func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *tes
 	installed, err := st.ReadInstalled()
 	if err != nil || len(installed) != 1 || installed[0].InstallPath != filepath.Join(plugins, "reader.koplugin") {
 		t.Fatalf("installed plugin = %#v, %v", installed, err)
+	}
+}
+
+func TestScanKOReaderPluginsReconcilesCanonicalModuleAlias(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}})
+	writeKOReaderPlugin(t, plugins, "zenos", `return { version = "3.0.0" }`)
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "Zen UI", Version: "3.0.0", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: filepath.Join(plugins, "zen_ui.koplugin"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.ScanKOReaderPlugins(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Matched != 1 || result.Updated != 1 {
+		t.Fatalf("scan result = %+v", result)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 {
+		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	if installed[0].ID != "zen-ui" || installed[0].Name != "ZenOS" || installed[0].Asset != "zenos.koplugin.zip" || installed[0].InstallPath != filepath.Join(plugins, "zenos.koplugin") {
+		t.Fatalf("reconciled install = %#v", installed[0])
+	}
+}
+
+func TestScanKOReaderPluginsTracksLegacyModuleAlias(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}})
+	writeKOReaderPlugin(t, plugins, "zen_ui", `return { version = "2.5.4" }`)
+
+	if _, err := manager.ScanKOReaderPlugins(true); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zen-ui" || installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != filepath.Join(plugins, "zen_ui.koplugin") {
+		t.Fatalf("tracked legacy install = %#v, %v", installed, err)
+	}
+}
+
+func TestScanKOReaderPluginsPreservesTrackedAliasSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}})
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "zen-ui-target")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "_meta.lua"), []byte(`return { version = "2.5.4" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.Symlink(target, legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: "2.5.4", Repo: "ZenLabs",
+		Asset: "zen_ui.koplugin.zip", InstallPath: legacyPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.ScanKOReaderPlugins(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Scanned != 1 || result.Matched != 1 {
+		t.Fatalf("scan result = %+v", result)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != "zen-ui" || installed[0].InstallPath != legacyPath {
+		t.Fatalf("tracked symlink install = %#v, %v", installed, err)
+	}
+}
+
+func TestScanKOReaderPluginsRejectsCanonicalAndAliasRootsBeforeTracking(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+	}})
+	writeKOReaderPlugin(t, plugins, "zenos", `return { version = "3.0.0" }`)
+	writeKOReaderPlugin(t, plugins, "zen_ui", `return { version = "3.0.0" }`)
+
+	if _, err := manager.ScanKOReaderPlugins(true); err == nil || !strings.Contains(err.Error(), "multiple KOReader plugin directories") {
+		t.Fatalf("ScanKOReaderPlugins() error = %v", err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 0 {
+		t.Fatalf("installed changed before duplicate detection: %#v, %v", installed, err)
+	}
+}
+
+func TestScanKOReaderPluginsRejectsAliasSymlinkDuplicateBeforeTracking(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
+	}})
+	canonicalPath := filepath.Dir(writeKOReaderPlugin(t, plugins, "zenos", `return { version = "3.0.0" }`))
+	target := filepath.Join(t.TempDir(), "zen-ui-target")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "_meta.lua"), []byte(`return { version = "3.0.0" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(plugins, "zen_ui.koplugin")
+	if err := os.Symlink(target, legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	want := state.InstalledEntry{
+		ID: "zen-ui", Name: "ZenOS", Version: "3.0.0", Repo: "ZenLabs",
+		Asset: "zenos.koplugin.zip", InstallPath: canonicalPath,
+	}
+	if err := st.AppendInstalled(want); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := manager.ScanKOReaderPlugins(true); err == nil || !strings.Contains(err.Error(), "multiple KOReader plugin directories") {
+		t.Fatalf("ScanKOReaderPlugins() error = %v", err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].ID != want.ID || installed[0].Asset != want.Asset || installed[0].InstallPath != want.InstallPath {
+		t.Fatalf("installed changed before symlink duplicate detection: %#v, %v", installed, err)
+	}
+	if _, err := os.Stat(canonicalPath); err != nil {
+		t.Fatalf("canonical root changed after rejected scan: %v", err)
+	}
+	if _, err := os.Lstat(legacyPath); err != nil {
+		t.Fatalf("alias symlink changed after rejected scan: %v", err)
 	}
 }
 

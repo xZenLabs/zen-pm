@@ -31,6 +31,8 @@ type CatalogEntry struct {
 	Assets                string
 	Constraints           string
 	PluginModule          string
+	PluginModuleAliases   []string
+	SourceAssetAliases    []string
 	ReadmeURL             string
 	VersionsURL           string
 	PublishedAt           string
