@@ -62,6 +62,7 @@ package.preload["constants"] = function()
     return {
         PLUGIN_DIR = root,
         PACKAGE_ERROR_NOTICE_SECONDS = 1,
+        PACKAGE_ACTION_MAX_POLL_RETRIES = 20,
         ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
     }
 end
@@ -1260,6 +1261,113 @@ App.poll_package_action({
 }, 1)
 assert(plugin_settings_prompt:find("Remove plugin settings?", 1, true))
 assert(local_plugin_cleanup_calls == 1)
+
+local plugin_poll_op
+App.run_package_action({
+    package_action_failure_stats = function() return 0 end,
+    client = {
+        package_action = function(_, id, action)
+            assert(id == "zen-ui" and action == "install")
+            return true
+        end,
+    },
+    poll_package_action = function(_, op, attempt)
+        plugin_poll_op = op
+        assert(attempt == 1)
+    end,
+}, {
+    id = "zen-ui",
+    name = "ZenOS",
+    installed = true,
+    latest_version = "3.0.0-beta26",
+    platforms = { "koreader" },
+}, "update")
+assert(plugin_poll_op.is_plugin)
+
+local recovery_scan_calls = 0
+local recovery_load_calls = 0
+local recovery_result
+local recovery_app = {
+    busy = true,
+    client = {
+        scan_installed_plugins = function()
+            recovery_scan_calls = recovery_scan_calls + 1
+            return true
+        end,
+    },
+    package_action_failure_detail = function() return nil end,
+    load_packages = function()
+        recovery_load_calls = recovery_load_calls + 1
+        return true, {{
+            id = "zen-ui",
+            installed = true,
+            installed_version = recovery_load_calls == 1 and "3.0.0-beta20" or "3.0.0-beta26",
+        }}
+    end,
+    package_action_succeeded = App.package_action_succeeded,
+    patch_action_succeeded_from_db = function() return false end,
+    recover_interrupted_plugin_action = App.recover_interrupted_plugin_action,
+}
+App.poll_package_action(recovery_app, {
+    id = "zen-ui",
+    name = "ZenOS",
+    action = "update",
+    is_plugin = true,
+    target_version = "3.0.0-beta26",
+    on_result = function(ok, detail) recovery_result = { ok, detail } end,
+}, 20)
+assert(recovery_scan_calls == 1)
+assert(recovery_load_calls == 2)
+assert(recovery_result[1] == true and recovery_result[2] == nil)
+assert(not recovery_app.busy)
+
+local failed_scan_calls = 0
+local failed_result
+App.poll_package_action({
+    busy = true,
+    client = {
+        scan_installed_plugins = function()
+            failed_scan_calls = failed_scan_calls + 1
+            return true
+        end,
+    },
+    package_action_failure_detail = function() return "backend failure" end,
+}, {
+    id = "zen-ui",
+    name = "ZenOS",
+    action = "update",
+    is_plugin = true,
+    target_version = "3.0.0-beta26",
+    on_result = function(ok, detail) failed_result = { ok, detail } end,
+}, 20)
+assert(failed_scan_calls == 0)
+assert(failed_result[1] == false and failed_result[2] == "backend failure")
+
+local non_plugin_scan_calls = 0
+local non_plugin_result
+App.poll_package_action({
+    busy = true,
+    client = {
+        scan_installed_plugins = function()
+            non_plugin_scan_calls = non_plugin_scan_calls + 1
+            return true
+        end,
+    },
+    package_action_failure_detail = function() return nil end,
+    load_packages = function() return true, {} end,
+    package_action_succeeded = function() return false end,
+    patch_action_succeeded_from_db = function() return false end,
+    recover_interrupted_plugin_action = App.recover_interrupted_plugin_action,
+}, {
+    id = "example",
+    name = "Example",
+    action = "update",
+    is_plugin = false,
+    target_version = "2.0.0",
+    on_result = function(ok, detail) non_plugin_result = { ok, detail } end,
+}, 20)
+assert(non_plugin_scan_calls == 0)
+assert(non_plugin_result[1] == false)
 
 local legacy_cleanup_calls = 0
 local legacy_loaded = {
