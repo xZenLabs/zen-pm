@@ -251,7 +251,7 @@ local function draw_title_bar(view, bb, x, y, w)
         title_right = action_x - Theme.scale(8)
     end
     if page == "home" then
-        local logo = Theme.scale(42)
+        local logo = Theme.scale(52)
         if not P.image(bb, Images.asset("zenpm.svg"), title_x, toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
             P.center_text_box(bb, "Z", title_x, toolbar_y(y, h, logo), logo, logo, "title", { bold = true })
         end

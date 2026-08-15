@@ -180,6 +180,22 @@ func koreaderPatchDir(root string) string {
 
 func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, string, error) {
 	pluginsDir := koreaderPluginDir(root)
+	var identityPluginDirs []string
+	var existingRoot *koreaderPluginRootMatch
+	if len(koreaderPluginModules(entry)) > 1 {
+		var err error
+		identityPluginDirs, err = m.koreaderPluginDirs()
+		if err != nil {
+			return "", "", err
+		}
+		existingRoot, err = findKOReaderPluginIdentityRoot(entry, identityPluginDirs)
+		if err != nil {
+			return "", "", err
+		}
+		if existingRoot != nil {
+			pluginsDir = filepath.Dir(existingRoot.path)
+		}
+	}
 	if info, err := os.Stat(pluginsDir); err != nil || !info.IsDir() {
 		return "", "", fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
 	}
@@ -191,10 +207,37 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 	sourceDir = pluginArchiveSource(sourceDir)
 
 	name := pluginTrackingName(entry, assetName)
-	if base := filepath.Base(sourceDir); strings.HasSuffix(base, ".koplugin") {
-		name = base
+	archiveRoot := filepath.Base(sourceDir)
+	if len(koreaderPluginModules(entry)) > 1 {
+		module, ok := koreaderPluginModuleForAsset(entry, assetName)
+		if !ok {
+			return "", "", fmt.Errorf("selected asset %q does not map to a configured plugin identity", assetName)
+		}
+		expectedRoot := module + ".koplugin"
+		if archiveRoot != expectedRoot {
+			return "", "", fmt.Errorf("archive root %q does not match selected asset root %q", archiveRoot, expectedRoot)
+		}
+		if existingRoot != nil && existingRoot.module != module {
+			return "", "", fmt.Errorf("selected asset root %q conflicts with existing plugin root %s", expectedRoot, existingRoot.path)
+		}
+		name = expectedRoot
+	} else if strings.HasSuffix(archiveRoot, ".koplugin") {
+		name = archiveRoot
+	}
+	if filepath.Base(name) != name || !strings.HasSuffix(name, ".koplugin") {
+		return "", "", fmt.Errorf("invalid KOReader plugin directory %q", name)
 	}
 	destination := filepath.Join(pluginsDir, name)
+	if existingRoot != nil {
+		destination = existingRoot.path
+	}
+	if len(identityPluginDirs) > 0 {
+		if err := validateKOReaderPluginIdentityPath(entry, identityPluginDirs, destination); err != nil {
+			return "", "", err
+		}
+	} else if filepath.Clean(filepath.Dir(destination)) != filepath.Clean(pluginsDir) {
+		return "", "", fmt.Errorf("invalid KOReader plugin path %q", destination)
+	}
 	if err := replaceTree(sourceDir, destination); err != nil {
 		return "", "", err
 	}
@@ -296,6 +339,9 @@ func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind
 	}
 	switch kind {
 	case genericPluginInstaller:
+		if len(koreaderPluginModules(entry)) > 1 {
+			return m.removeResolvedKOReaderPlugin(entry)
+		}
 		return removeKOReaderPlugin(root, pluginTrackingName(entry, asset))
 	case genericPatchInstaller:
 		path, err := m.installedPatchPath(entry.ID, asset)
@@ -364,14 +410,15 @@ func removeKOReaderFont(root, id, fontDir string) error {
 }
 
 func removeKOReaderPlugin(root, name string) error {
-	destination := filepath.Join(koreaderPluginDir(root), name)
-	if !pathWithinRoot(root, destination) {
+	pluginsDir := koreaderPluginDir(root)
+	if filepath.Base(name) != name || !strings.HasSuffix(name, ".koplugin") {
+		return fmt.Errorf("invalid KOReader plugin name %q", name)
+	}
+	destination := filepath.Join(pluginsDir, name)
+	if filepath.Clean(filepath.Dir(destination)) != filepath.Clean(pluginsDir) {
 		return fmt.Errorf("invalid KOReader plugin path %q", destination)
 	}
-	if err := os.RemoveAll(destination); err != nil {
-		return fmt.Errorf("remove KOReader plugin %s: %w", destination, err)
-	}
-	return nil
+	return removeKOReaderPluginPath(destination)
 }
 
 func (m *Manager) removeTrackedKOReaderPlugin(pluginPath string) error {
@@ -387,12 +434,56 @@ func (m *Manager) removeTrackedKOReaderPlugin(pluginPath string) error {
 		if filepath.Clean(filepath.Dir(pluginPath)) != filepath.Clean(pluginDir) {
 			continue
 		}
-		if err := os.RemoveAll(pluginPath); err != nil {
-			return fmt.Errorf("remove KOReader plugin %s: %w", pluginPath, err)
+		return removeKOReaderPluginPath(pluginPath)
+	}
+	return fmt.Errorf("tracked KOReader plugin path is outside the plugins directories: %q", pluginPath)
+}
+
+func (m *Manager) removeResolvedKOReaderPlugin(entry *repo.CatalogEntry) error {
+	pluginDirs, err := m.koreaderPluginDirs()
+	if err != nil {
+		return err
+	}
+	trackedPath, err := m.installedPackagePath(entry.ID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(trackedPath) != "" {
+		if err := validateKOReaderPluginIdentityPath(entry, pluginDirs, trackedPath); err != nil {
+			return err
+		}
+	}
+	found, err := findKOReaderPluginIdentityRoot(entry, pluginDirs)
+	if err != nil {
+		return err
+	}
+	if found == nil {
+		return nil
+	}
+	return removeKOReaderPluginPath(found.path)
+}
+
+func removeKOReaderPluginPath(path string) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect KOReader plugin path %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("unlink KOReader plugin %s: %w", path, err)
 		}
 		return nil
 	}
-	return fmt.Errorf("tracked KOReader plugin path is outside the plugins directories: %q", pluginPath)
+	if !info.IsDir() {
+		return fmt.Errorf("KOReader plugin path conflict at %s", path)
+	}
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("remove KOReader plugin %s: %w", path, err)
+	}
+	return nil
 }
 
 func removeKOReaderPatch(root, id, asset, patchPath string) error {

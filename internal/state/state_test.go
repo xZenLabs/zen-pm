@@ -126,6 +126,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 		Platforms: []string{"host", "koreader"}, IncompatiblePlatforms: []string{"android"}, Deps: []string{"dep"}, Conflicts: []string{"zen-ui"}, Tags: []string{"tag"},
 		InstallURL: "https://example.invalid/install.sh", UninstallURL: "https://example.invalid/uninstall.sh",
 		Featured: true, FeaturedImage: "featured", FeaturedOrder: &featuredOrder, Category: "utility", Source: "source", SourceAsset: "pkg.zip",
+		PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"}, SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
 		SourceType: "release", SourceURL: "https://example.invalid/source.zip", Stars: "42",
 		ReadmeURL:          "https://example.invalid/README.md",
 		VersionsURL:        "https://example.invalid/versions.json",
@@ -142,7 +143,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].VersionsURL != "https://example.invalid/versions.json" || gotCatalog[0].ReleaseNotesURL != "https://example.invalid/RELEASE_NOTES.md" || gotCatalog[0].PrereleaseNotesURL != "https://example.invalid/PRERELEASE_NOTES.md" || gotCatalog[0].PrereleaseVersion != "1.2.0-rc.1" || gotCatalog[0].PublishedAt != "2026-07-24T12:00:00Z" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
+	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].PluginModule != "zenos" || len(gotCatalog[0].PluginModuleAliases) != 1 || gotCatalog[0].PluginModuleAliases[0] != "zen_ui" || len(gotCatalog[0].SourceAssetAliases) != 1 || gotCatalog[0].SourceAssetAliases[0] != "zen_ui.koplugin.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].VersionsURL != "https://example.invalid/versions.json" || gotCatalog[0].ReleaseNotesURL != "https://example.invalid/RELEASE_NOTES.md" || gotCatalog[0].PrereleaseNotesURL != "https://example.invalid/PRERELEASE_NOTES.md" || gotCatalog[0].PrereleaseVersion != "1.2.0-rc.1" || gotCatalog[0].PublishedAt != "2026-07-24T12:00:00Z" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
 		t.Fatalf("catalog = %#v", gotCatalog)
 	}
 }

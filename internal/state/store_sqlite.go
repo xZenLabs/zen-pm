@@ -110,6 +110,8 @@ func (s *sqliteStore) migrate() error {
 			assets TEXT NOT NULL DEFAULT '',
 			constraints TEXT NOT NULL DEFAULT '',
 			plugin_module TEXT NOT NULL DEFAULT '',
+			plugin_module_aliases TEXT NOT NULL DEFAULT '',
+			source_asset_aliases TEXT NOT NULL DEFAULT '',
 			readme_url TEXT NOT NULL DEFAULT '',
 			versions_url TEXT NOT NULL DEFAULT '',
 			published_at TEXT NOT NULL DEFAULT '',
@@ -168,6 +170,12 @@ func (s *sqliteStore) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "plugin_module", "plugin_module TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "plugin_module_aliases", "plugin_module_aliases TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("catalog_packages", "source_asset_aliases", "source_asset_aliases TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("catalog_packages", "readme_url", "readme_url TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -497,7 +505,7 @@ func (s *sqliteStore) WriteValue(key, value string) error {
 }
 
 func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
-	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, incompatible_platforms, deps, conflicts, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url, versions_url, published_at, release_notes_url, prerelease_notes_url, prerelease_version FROM catalog_packages ORDER BY position`)
+	rows, err := s.db.Query(`SELECT id, repo, priority, name, version, platforms, incompatible_platforms, deps, conflicts, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, plugin_module_aliases, source_asset_aliases, readme_url, versions_url, published_at, release_notes_url, prerelease_notes_url, prerelease_version FROM catalog_packages ORDER BY position`)
 	if err != nil {
 		return nil, err
 	}
@@ -507,8 +515,8 @@ func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
 		var e CatalogEntry
 		var featured int
 		var featuredOrder sql.NullInt64
-		var platforms, incompatiblePlatforms, deps, conflicts, tags string
-		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &incompatiblePlatforms, &deps, &conflicts, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &featuredOrder, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints, &e.PluginModule, &e.ReadmeURL, &e.VersionsURL, &e.PublishedAt, &e.ReleaseNotesURL, &e.PrereleaseNotesURL, &e.PrereleaseVersion); err != nil {
+		var platforms, incompatiblePlatforms, deps, conflicts, tags, pluginModuleAliases, sourceAssetAliases string
+		if err := rows.Scan(&e.ID, &e.Repo, &e.Priority, &e.Name, &e.Version, &platforms, &incompatiblePlatforms, &deps, &conflicts, &e.InstallURL, &e.UninstallURL, &e.Size, &e.Description, &e.Author, &tags, &e.IconURL, &e.RepoIconURL, &featured, &e.FeaturedImage, &featuredOrder, &e.Category, &e.Source, &e.SourceAsset, &e.SourceType, &e.SourceURL, &e.Stars, &e.Assets, &e.Constraints, &e.PluginModule, &pluginModuleAliases, &sourceAssetAliases, &e.ReadmeURL, &e.VersionsURL, &e.PublishedAt, &e.ReleaseNotesURL, &e.PrereleaseNotesURL, &e.PrereleaseVersion); err != nil {
 			return nil, err
 		}
 		e.Platforms = splitCatalogList(platforms)
@@ -516,6 +524,8 @@ func (s *sqliteStore) ReadCatalog() ([]CatalogEntry, error) {
 		e.Deps = splitCatalogList(deps)
 		e.Conflicts = splitCatalogList(conflicts)
 		e.Tags = splitCatalogList(tags)
+		e.PluginModuleAliases = splitCatalogList(pluginModuleAliases)
+		e.SourceAssetAliases = splitCatalogList(sourceAssetAliases)
 		e.Featured = featured != 0
 		if featuredOrder.Valid {
 			value := int(featuredOrder.Int64)
@@ -537,9 +547,9 @@ func (s *sqliteStore) WriteCatalog(entries []CatalogEntry) error {
 	}
 	for i, e := range entries {
 		if _, err := tx.Exec(
-			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, incompatible_platforms, deps, conflicts, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, readme_url, versions_url, published_at, release_notes_url, prerelease_notes_url, prerelease_version)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.IncompatiblePlatforms, ","), strings.Join(e.Deps, ","), strings.Join(e.Conflicts, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.FeaturedOrder, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints, e.PluginModule, e.ReadmeURL, e.VersionsURL, e.PublishedAt, e.ReleaseNotesURL, e.PrereleaseNotesURL, e.PrereleaseVersion,
+			`INSERT INTO catalog_packages(id, position, repo, priority, name, version, platforms, incompatible_platforms, deps, conflicts, install_url, uninstall_url, size, description, author, tags, icon_url, repo_icon_url, featured, featured_image, featured_order, category, source, source_asset, source_type, source_url, stars, assets, constraints, plugin_module, plugin_module_aliases, source_asset_aliases, readme_url, versions_url, published_at, release_notes_url, prerelease_notes_url, prerelease_version)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			e.ID, i, e.Repo, e.Priority, e.Name, e.Version, strings.Join(e.Platforms, ","), strings.Join(e.IncompatiblePlatforms, ","), strings.Join(e.Deps, ","), strings.Join(e.Conflicts, ","), e.InstallURL, e.UninstallURL, e.Size, e.Description, e.Author, strings.Join(e.Tags, ","), e.IconURL, e.RepoIconURL, boolInt(e.Featured), e.FeaturedImage, e.FeaturedOrder, e.Category, e.Source, e.SourceAsset, e.SourceType, e.SourceURL, e.Stars, e.Assets, e.Constraints, e.PluginModule, strings.Join(e.PluginModuleAliases, ","), strings.Join(e.SourceAssetAliases, ","), e.ReadmeURL, e.VersionsURL, e.PublishedAt, e.ReleaseNotesURL, e.PrereleaseNotesURL, e.PrereleaseVersion,
 		); err != nil {
 			tx.Rollback()
 			return err

@@ -28,6 +28,9 @@ func New(st *state.State, repos *repo.Manager, plat string) *Manager {
 	if err := m.migrateLegacyKOReaderTracking(); err != nil {
 		log.Warnf("Could not migrate legacy KOReader tracking: %v", err)
 	}
+	if err := m.reconcileKOReaderPluginAliasRecords(); err != nil {
+		log.Warnf("Could not reconcile KOReader plugin aliases: %v", err)
+	}
 	return m
 }
 
@@ -123,6 +126,12 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (ret
 			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(installEntry.Version), entry.Repo)
 		}
 		genericInstaller := m.nativeKOReaderInstaller(entry, override)
+		if genericInstaller == genericPluginInstaller {
+			override, err = m.prepareKOReaderPluginInstall(entry, override)
+			if err != nil {
+				return fmt.Errorf("install %s: %w", pkgID, err)
+			}
+		}
 		installedPluginVersion := ""
 		installedPath := ""
 		if genericInstaller != "" {
@@ -432,7 +441,7 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 					return assets.Result{Auto: parsed[0].Asset}, nil
 				}
 			}
-			return m.selectAsset(e), nil
+			return m.selectAssetWithError(e)
 		}
 	}
 	return assets.Result{}, fmt.Errorf("package %q not found", id)
@@ -479,13 +488,23 @@ func (m *Manager) installAssetName(entry *repo.CatalogEntry, override string) st
 }
 
 func (m *Manager) selectAsset(entry *repo.CatalogEntry) assets.Result {
+	result, _ := m.selectAssetWithError(entry)
+	return result
+}
+
+func (m *Manager) selectAssetWithError(entry *repo.CatalogEntry) (assets.Result, error) {
 	result := assets.Select(entry.Assets, m.device())
 	if result.Auto != "" || !result.NeedsChoice {
-		return result
+		return result, nil
+	}
+	if asset, ok, err := m.selectKOReaderPluginIdentityAsset(entry, result.Candidates); err != nil {
+		return result, err
+	} else if ok {
+		return assets.Result{Auto: asset}, nil
 	}
 	installed, err := m.st.ReadInstalled()
 	if err != nil {
-		return result
+		return result, nil
 	}
 	for _, item := range installed {
 		if item.ID != entry.ID || item.Asset == "" {
@@ -493,7 +512,7 @@ func (m *Manager) selectAsset(entry *repo.CatalogEntry) assets.Result {
 		}
 		for _, candidate := range result.Candidates {
 			if assetNamesMatchIgnoringVersion(candidate.Asset, item.Asset) {
-				return assets.Result{Auto: candidate.Asset}
+				return assets.Result{Auto: candidate.Asset}, nil
 			}
 		}
 		if isSpecificAssetArch(item.AssetArch) {
@@ -508,11 +527,11 @@ func (m *Manager) selectAsset(entry *repo.CatalogEntry) assets.Result {
 				}
 			}
 			if match != "" {
-				return assets.Result{Auto: match}
+				return assets.Result{Auto: match}, nil
 			}
 		}
 	}
-	return result
+	return result, nil
 }
 
 func (m *Manager) installedAsset(entry *repo.CatalogEntry, override string) (string, string) {
@@ -670,7 +689,7 @@ func koreaderRootCandidates(plat string) []string {
 	add(os.Getenv("KOREADER_DIR"))
 	if pluginsDir := strings.TrimSpace(os.Getenv("ZENPM_KOREADER_PLUGIN_DIR")); pluginsDir != "" {
 		pluginsDir = filepath.Clean(pluginsDir)
-		if filepath.Base(pluginsDir) == "plugins" {
+		if filepath.IsAbs(pluginsDir) && filepath.Base(pluginsDir) == "plugins" {
 			add(filepath.Dir(pluginsDir))
 		}
 	}

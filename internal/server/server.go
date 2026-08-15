@@ -103,6 +103,8 @@ type pkgJSON struct {
 	PublishedAt           string            `json:"published_at,omitempty"`
 	Stars                 string            `json:"stars,omitempty"`
 	PluginModule          string            `json:"plugin_module,omitempty"`
+	PluginModuleAliases   []string          `json:"plugin_module_aliases,omitempty"`
+	SourceAssetAliases    []string          `json:"source_asset_aliases,omitempty"`
 	Assets                json.RawMessage   `json:"assets,omitempty"`
 	Constraints           json.RawMessage   `json:"constraints,omitempty"`
 }
@@ -830,6 +832,8 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			PublishedAt:           e.PublishedAt,
 			Stars:                 e.Stars,
 			PluginModule:          e.PluginModule,
+			PluginModuleAliases:   e.PluginModuleAliases,
+			SourceAssetAliases:    e.SourceAssetAliases,
 			Assets:                rawJSON(e.Assets),
 			Constraints:           rawJSON(e.Constraints),
 		}
@@ -1101,17 +1105,17 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageReleaseMetadata(id string) (string, string, error) {
+func (s *Server) packageReleaseMetadata(id string) (string, string, string, []string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", "", err
+		return "", "", "", nil, err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			return strings.TrimSpace(entry.VersionsURL), strings.ToLower(strings.TrimSpace(entry.SourceType)), nil
+			return strings.TrimSpace(entry.VersionsURL), strings.ToLower(strings.TrimSpace(entry.SourceType)), strings.TrimSpace(entry.SourceAsset), entry.SourceAssetAliases, nil
 		}
 	}
-	return "", "", fmt.Errorf("package %q not found", id)
+	return "", "", "", nil, fmt.Errorf("package %q not found", id)
 }
 
 func (s *Server) packageReadmeMetadata(id string) (string, string, error) {
@@ -1228,7 +1232,7 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	versionsURL, sourceType, err := s.packageReleaseMetadata(id)
+	versionsURL, sourceType, sourceAsset, sourceAssetAliases, err := s.packageReleaseMetadata(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -1240,6 +1244,34 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	if sourceAsset != "" && len(sourceAssetAliases) > 0 {
+		aliases := make(map[string]bool, len(sourceAssetAliases))
+		for _, alias := range sourceAssetAliases {
+			alias = strings.TrimSpace(alias)
+			if alias != "" && alias != sourceAsset {
+				aliases[alias] = true
+			}
+		}
+		for index := range items {
+			hasCanonical := false
+			for _, asset := range items[index].Assets {
+				if strings.TrimSpace(asset.Name) == sourceAsset {
+					hasCanonical = true
+					break
+				}
+			}
+			if !hasCanonical {
+				continue
+			}
+			visible := items[index].Assets[:0]
+			for _, asset := range items[index].Assets {
+				if !aliases[strings.TrimSpace(asset.Name)] {
+					visible = append(visible, asset)
+				}
+			}
+			items[index].Assets = visible
+		}
 	}
 	if sourceType == "source" {
 		installable := make([]releases.Release, 0, len(items))

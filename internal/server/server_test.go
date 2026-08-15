@@ -898,6 +898,78 @@ func TestHandlePackageReleasesUsesSourceAssetsFromVersionsURL(t *testing.T) {
 	}
 }
 
+func TestHandlePackageReleasesHidesCompatibilityAssetBesideCanonicalAsset(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	versionsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"releases":[
+			{"tag_name":"v3.0.0","assets":[
+				{"name":"zenos.koplugin.zip","url":"https://example.com/zenos.zip"},
+				{"name":"zen_ui.koplugin.zip","url":"https://example.com/zen-ui.zip"}
+			]},
+			{"tag_name":"v2.5.4","assets":[
+				{"name":"zen_ui.koplugin.zip","url":"https://example.com/zen-ui-old.zip"}
+			]}
+		]}`))
+	}))
+	defer versionsServer.Close()
+
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", VersionsURL: versionsServer.URL,
+		SourceType: "release", SourceAsset: "zenos.koplugin.zip",
+		SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageReleases(rec, httptest.NewRequest(http.MethodGet, "/packages/zen-ui/releases", nil), "zen-ui")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Releases []struct {
+			Assets []struct {
+				Name string `json:"name"`
+			} `json:"assets"`
+		} `json:"releases"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Releases) != 2 || len(response.Releases[0].Assets) != 1 || response.Releases[0].Assets[0].Name != "zenos.koplugin.zip" {
+		t.Fatalf("canonical release assets = %#v", response.Releases)
+	}
+	if len(response.Releases[1].Assets) != 1 || response.Releases[1].Assets[0].Name != "zen_ui.koplugin.zip" {
+		t.Fatalf("legacy-only release assets = %#v", response.Releases)
+	}
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", VersionsURL: versionsServer.URL,
+		SourceType: "release", SourceAsset: "zen_ui.koplugin.zip",
+		SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	srv.handlePackageReleases(rec, httptest.NewRequest(http.MethodGet, "/packages/zen-ui/releases", nil), "zen-ui")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("legacy source status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	response.Releases = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Releases) != 2 || len(response.Releases[1].Assets) != 1 || response.Releases[1].Assets[0].Name != "zen_ui.koplugin.zip" {
+		t.Fatalf("current legacy source asset was hidden = %#v", response.Releases)
+	}
+}
+
 func TestPackageReadmeURLRequiresHostedMetadata(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)

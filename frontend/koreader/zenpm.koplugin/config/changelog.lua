@@ -48,4 +48,8 @@ return {
         "Boox bug fixes",
         "Minor bug fixes"
     },
+    ["1.4.0"] = {
+        "ZenOS migration",
+        "Update icon"
+    },
 }

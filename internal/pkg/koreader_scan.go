@@ -96,6 +96,9 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 	if err != nil {
 		return result, err
 	}
+	if err := rejectDuplicateKOReaderPluginCatalogPaths(pluginDirs, byModule); err != nil {
+		return result, err
+	}
 	scannedDirs := make(map[string]bool, len(pluginDirs))
 	foundPaths := make(map[string]bool)
 	foundIDs := make(map[string]bool)
@@ -108,7 +111,7 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			return result, fmt.Errorf("read KOReader plugins directory %s: %w", pluginDir, err)
 		}
 		for _, dir := range entries {
-			if !dir.IsDir() || !strings.HasSuffix(dir.Name(), ".koplugin") {
+			if !isScannableKOReaderPluginDir(pluginDir, dir) {
 				continue
 			}
 			module := strings.TrimSuffix(dir.Name(), ".koplugin")
@@ -134,7 +137,6 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			if pkg == nil && len(candidates) == 0 {
 				pkg = byID[module]
 			}
-
 			id, name, repoName := module, module, ""
 			if pkg != nil {
 				result.Matched++
@@ -187,16 +189,24 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 			current := state.InstalledEntry{
 				ID: id, Name: name, Version: version, Repo: repoName, InstallPath: pluginPath,
 			}
+			mappedAsset := ""
+			if pkg != nil {
+				mappedAsset = koreaderPluginAssetForModule(pkg, module)
+				current.Asset = mappedAsset
+			}
 			if exists {
 				if pkg == nil {
 					current.Name = previous.Name
 					current.Repo = previous.Repo
 				}
 				current.Asset = previous.Asset
+				if mappedAsset != "" {
+					current.Asset = mappedAsset
+				}
 				current.AssetArch = previous.AssetArch
 				current.InstalledAt = previous.InstalledAt
 				if previous.Name == current.Name && previous.Version == current.Version &&
-					previous.Repo == current.Repo && previous.InstallPath == current.InstallPath {
+					previous.Repo == current.Repo && previous.Asset == current.Asset && previous.InstallPath == current.InstallPath {
 					continue
 				}
 				if err := m.st.AppendInstalled(current); err != nil {
@@ -229,6 +239,46 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 	return result, nil
 }
 
+func rejectDuplicateKOReaderPluginCatalogPaths(pluginDirs []string, byModule map[string][]*repo.CatalogEntry) error {
+	matchedPaths := make(map[string]string)
+	for _, pluginDir := range pluginDirs {
+		entries, err := os.ReadDir(pluginDir)
+		if err != nil {
+			return fmt.Errorf("read KOReader plugins directory %s: %w", pluginDir, err)
+		}
+		for _, dir := range entries {
+			if !isScannableKOReaderPluginDir(pluginDir, dir) {
+				continue
+			}
+			module := strings.TrimSuffix(dir.Name(), ".koplugin")
+			candidates := byModule[module]
+			if len(candidates) != 1 {
+				continue
+			}
+			path := filepath.Join(pluginDir, dir.Name())
+			if previous, exists := matchedPaths[candidates[0].ID]; exists && filepath.Clean(previous) != filepath.Clean(path) {
+				return fmt.Errorf("catalog package %q matches multiple KOReader plugin directories (%s, %s)", candidates[0].ID, previous, path)
+			}
+			matchedPaths[candidates[0].ID] = path
+		}
+	}
+	return nil
+}
+
+func isScannableKOReaderPluginDir(pluginDir string, entry os.DirEntry) bool {
+	if !strings.HasSuffix(entry.Name(), ".koplugin") {
+		return false
+	}
+	if entry.IsDir() {
+		return true
+	}
+	if entry.Type()&os.ModeSymlink == 0 {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(pluginDir, entry.Name()))
+	return err == nil && info.IsDir()
+}
+
 func (m *Manager) koreaderPluginDirs() ([]string, error) {
 	seen := map[string]bool{}
 	var dirs []string
@@ -244,9 +294,8 @@ func (m *Manager) koreaderPluginDirs() ([]string, error) {
 		}
 	}
 
-	add(os.Getenv("ZENPM_KOREADER_PLUGIN_DIR"))
 	for _, root := range koreaderRootCandidates(m.plat) {
-		add(filepath.Join(root, "plugins"))
+		add(koreaderPluginDir(root))
 	}
 
 	var existing []string
@@ -310,7 +359,7 @@ func koreaderPluginCatalog(catalog []*repo.CatalogEntry) (map[string][]*repo.Cat
 		if !packageHasPlatform(entry, "koreader") || isPatchPackage(entry) {
 			continue
 		}
-		if module := strings.TrimSpace(entry.PluginModule); module != "" {
+		for _, module := range koreaderPluginModules(entry) {
 			byModule[module] = append(byModule[module], entry)
 		}
 		if entry.ID != "" && byID[entry.ID] == nil {
