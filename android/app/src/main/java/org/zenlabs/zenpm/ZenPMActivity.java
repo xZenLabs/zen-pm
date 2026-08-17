@@ -1,6 +1,7 @@
 package org.zenlabs.zenpm;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -50,9 +51,7 @@ public final class ZenPMActivity extends Activity {
             }
             if (requestAllFilesAccess) {
                 CompanionLog.write(this, logHome, "All files access is not granted; opening Android settings.");
-                Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:" + getPackageName()));
-                startActivity(settings);
+                openAllFilesAccessSettings();
             } else if (requestPackageInstalls) {
                 CompanionLog.write(this, logHome, "Unknown apps installs are not allowed; opening Android settings.");
                 Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -60,13 +59,42 @@ public final class ZenPMActivity extends Activity {
                 startActivity(settings);
             }
         } else if (data == null && incoming != null && Intent.ACTION_MAIN.equals(incoming.getAction())) {
-            // Keep a normal launcher entry so BOOX exposes the companion in
-            // App Info, Auto Start, and App Freeze. Tapping it opens the
-            // system management page; KOReader still starts the backend.
-            Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:" + getPackageName()));
-            startActivity(settings);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !Environment.isExternalStorageManager()) {
+                openAllFilesAccessSettings();
+            } else {
+                // Keep a normal launcher entry so BOOX exposes the companion in
+                // App Info, Auto Start, and App Freeze. KOReader still starts
+                // the backend.
+                openApplicationDetailsSettings();
+            }
         }
         finish();
+    }
+
+    private void openAllFilesAccessSettings() {
+        Intent appSettings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            Uri.parse("package:" + getPackageName()));
+        if (tryStartActivity(appSettings)) return;
+
+        Intent allFilesSettings = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+        if (tryStartActivity(allFilesSettings)) return;
+
+        openApplicationDetailsSettings();
+    }
+
+    private boolean tryStartActivity(Intent intent) {
+        try {
+            startActivity(intent);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException exception) {
+            return false;
+        }
+    }
+
+    private void openApplicationDetailsSettings() {
+        Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:" + getPackageName()));
+        startActivity(settings);
     }
 }

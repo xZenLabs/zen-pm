@@ -43,6 +43,16 @@ public final class ManifestPolicyTest {
         assertTrue(activitySource.contains("Settings.ACTION_APPLICATION_DETAILS_SETTINGS"));
     }
 
+    @Test public void allFilesAccessIsRequestedFromStartAndLauncherWithFallbacks() throws Exception {
+        String activitySource = new String(Files.readAllBytes(source(
+            "src/main/java/org/zenlabs/zenpm/ZenPMActivity.java")), StandardCharsets.UTF_8);
+
+        assertEquals(3, occurrences(activitySource, "openAllFilesAccessSettings()"));
+        assertTrue(activitySource.contains("Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION"));
+        assertTrue(activitySource.contains("Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION"));
+        assertTrue(activitySource.contains("ActivityNotFoundException | SecurityException"));
+    }
+
     private static Path source(String relative) {
         Path fromRoot = Paths.get("app").resolve(relative);
         return Files.exists(fromRoot) ? fromRoot : Paths.get(relative);
@@ -63,5 +73,15 @@ public final class ManifestPolicyTest {
             if (name.equals(((Element) nodes.item(index)).getAttribute("android:name"))) return true;
         }
         return false;
+    }
+
+    private static int occurrences(String value, String search) {
+        int count = 0;
+        int offset = 0;
+        while ((offset = value.indexOf(search, offset)) >= 0) {
+            count++;
+            offset += search.length();
+        }
+        return count;
     }
 }

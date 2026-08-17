@@ -285,7 +285,11 @@ function P.image(bb, file, x, y, w, h, opts)
             file = file,
             width = w,
             height = h,
-            alpha = opts.alpha ~= false,
+            -- ImageWidget's native inversion is reliable across display buffer
+            -- types, but icons must be flattened first so only their artwork
+            -- becomes white on a dark background.
+            alpha = not opts.invert and opts.alpha ~= false,
+            invert = opts.invert,
             is_icon = opts.is_icon,
             file_do_cache = true,
         }
@@ -297,18 +301,9 @@ function P.image(bb, file, x, y, w, h, opts)
     if not ok or not widget then
         return false
     end
-    if opts.invert then
-        widget:getSize()
-    end
-    if opts.invert and widget._bb then
-        widget._bb:invert()
-    end
     local painted = pcall(function()
         widget:paintTo(bb, x, y)
     end)
-    if opts.invert and widget._bb then
-        widget._bb:invert()
-    end
     if widget.free then
         widget:free()
     end
