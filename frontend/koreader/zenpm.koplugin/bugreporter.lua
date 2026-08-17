@@ -280,7 +280,7 @@ function Reporter:submit(app, title, description, username)
                 local url = log_url(response) or "https://github.com/AnthonyGress/ZenPackageManager/issues"
                 Modals.notice(_("Bug report submitted!") .. "\n\n" .. url)
             else
-                Modals.info(_("Failed to submit report: ") .. tostring(response or code or "unknown error"))
+                Modals.info(_("Failed to submit report: ") .. tostring(response or code or _("unknown error")))
             end
         end)
     end)

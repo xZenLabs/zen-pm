@@ -2,6 +2,7 @@ local ImageViewer = require("ui/widget/imageviewer")
 local Markdown = require("ui/markdown")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")
+local _ = require("gettext")
 local UIManager = require("ui/uimanager")
 local Util = require("zenpm_util")
 local ok_logger, logger = pcall(require, "logger")
@@ -232,8 +233,8 @@ end
 
 local function image_entry(view, block, image_base_url, width, image_refs)
     if not view.app.state.show_readme_images then
-        local alt = block.alt ~= "" and block.alt or "Image"
-        return fallback_text_entry("[Image: " .. alt .. "]", width)
+        local text = block.alt ~= "" and string.format(_("[Image: %s]"), block.alt) or _("[Image]")
+        return fallback_text_entry(text, width)
     end
     local url = Markdown.resolve_url(image_base_url, block.url)
     if not url:match("^https://") then

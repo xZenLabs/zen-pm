@@ -7,7 +7,7 @@ local Models = {}
 
 function Models.repo_display_name(name)
     if name == Constants.REPO_ZENLABS_NAME then
-        return Constants.REPO_ZENLABS_DISPLAY
+        return I18n.dynamic_or(Constants.REPO_ZENLABS_DISPLAY, Constants.REPO_ZENLABS_DISPLAY)
     end
     return name
 end

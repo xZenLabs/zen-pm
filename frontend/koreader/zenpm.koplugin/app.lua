@@ -1674,7 +1674,7 @@ function App:poll_backend_ready(attempt, on_ready)
             return
         end
         if attempt >= Constants.CONNECT_RETRIES then
-            self:backend_failed(Constants.DAEMON_UNAVAILABLE_MESSAGE)
+            self:backend_failed(_(Constants.DAEMON_UNAVAILABLE_MESSAGE))
             return
         end
         self:poll_backend_ready(attempt + 1, on_ready)

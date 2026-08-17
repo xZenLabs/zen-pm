@@ -977,7 +977,7 @@ function Daemon:ensure(client, force_start)
         end
     end
 
-    return false, Constants.DAEMON_UNAVAILABLE_MESSAGE
+    return false, _(Constants.DAEMON_UNAVAILABLE_MESSAGE)
 end
 
 return Daemon

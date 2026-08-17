@@ -6,17 +6,35 @@ msgstr ""
 "Language: ja\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+msgid "\nABI: "
+msgstr "\nアビ: "
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " 完了しませんでした。\n\n詳細については、デバッグ ログを確認してください。"
+
 msgid " is available. Update now?"
-msgstr "利用可能です。今すぐアップデートしますか?"
+msgstr " 利用可能です。今すぐアップデートしますか?"
 
 msgid " returned HTTP "
-msgstr "返されたHTTP"
+msgstr " 返されたHTTP "
 
 msgid " successfully."
 msgstr " に成功しました。"
 
+msgid " successfully.\n\nRemove plugin settings?"
+msgstr " 成功しました。\n\nプラグイン設定を削除しますか?"
+
+msgid " successfully.\n\nRestart KOReader to apply the change."
+msgstr " 成功しました。\n\nKOReader を再起動して変更を適用します。"
+
+msgid " successfully.\n\nRestart KOReader to load the plugin."
+msgstr " 成功しました。\n\nKOReader を再起動してプラグインをロードします。"
+
 msgid " was copied to the Kindle homepage."
-msgstr "Kindle のホームページにコピーされました。"
+msgstr " Kindle のホームページにコピーされました。"
+
+msgid "%d days ago"
+msgstr "%d 日前"
 
 msgid "%d packages queued"
 msgstr "%d パッケージがキューに登録されました"
@@ -27,11 +45,20 @@ msgstr "%s は %s と競合します。これらを一緒に使用しないで�
 msgid "(installed)"
 msgstr "(設置済み)"
 
+msgid ".\n\nRestart KOReader to use the new version."
+msgstr "。\n\n新しいバージョンを使用するには、KOReader を再起動します。"
+
 msgid "... Please wait."
 msgstr "... お待ちください。"
 
 msgid "1 package queued"
 msgstr "1 個のパッケージがキューにあります"
+
+msgid "[Image: %s]"
+msgstr "[画像: %s]"
+
+msgid "[Image]"
+msgstr "[画像]"
 
 msgid "A short summary of what went wrong"
 msgstr "何がうまくいかなかったのかを簡単にまとめたもの"
@@ -48,14 +75,23 @@ msgstr "ソースを追加"
 msgid "Added to Queue"
 msgstr "キューに追加されました"
 
+msgid "Advanced"
+msgstr "高度な"
+
+msgid "All categories"
+msgstr "すべてのカテゴリー"
+
+msgid "Allow updates"
+msgstr "更新を許可する"
+
+msgid "Always ignore"
+msgstr "常に無視する"
+
 msgid "Always manually pick version"
 msgstr "常に手動でバージョンを選択する"
 
 msgid "Another operation is in progress. Please wait."
 msgstr "別の操作が進行中です。お待ちください。"
-
-msgid "Are you sure you want to "
-msgstr "本当によろしいですか"
 
 msgid "Are you sure you want to clear the queue?"
 msgstr "キューをクリアしてもよろしいですか?"
@@ -64,7 +100,10 @@ msgid "Are you sure you want to perform all queued actions?"
 msgstr "キューに入れられたすべてのアクションを実行してもよろしいですか?"
 
 msgid "Are you sure you want to remove "
-msgstr "削除してもよろしいですか"
+msgstr "削除してもよろしいですか "
+
+msgid "Ascending"
+msgstr "上昇"
 
 msgid "Author: Anthony Gress (ZenLabs)"
 msgstr "作者: Anthony Gress (ZenLabs)"
@@ -102,8 +141,8 @@ msgstr "カテゴリが見つかりません。"
 msgid "Change version"
 msgstr "バージョンを変更する"
 
-msgid "Check for updates automatically"
-msgstr "アップデートを自動的にチェックする"
+msgid "Changes"
+msgstr "変更点"
 
 msgid "Check the debug log for details."
 msgstr "詳細については、デバッグ ログを確認してください。"
@@ -112,19 +151,22 @@ msgid "Checking for update..."
 msgstr "アップデートをチェックしています..."
 
 msgid "Choose a build for "
-msgstr "ビルドを選択してください"
+msgstr "ビルドを選択してください "
 
 msgid "Choose a patch for "
-msgstr "パッチを選択してください"
+msgstr "パッチを選択してください "
 
 msgid "Clear"
 msgstr "クリア"
 
 msgid "Companion update failed to start: "
-msgstr "コンパニオンのアップデートを開始できませんでした:"
+msgstr "コンパニオンのアップデートを開始できませんでした: "
 
 msgid "Confirm"
 msgstr "確認する"
+
+msgid "connect: "
+msgstr "接続する： "
 
 msgid "Continue"
 msgstr "続く"
@@ -136,52 +178,88 @@ msgid "Copying ZenPM to Kindle homepage..."
 msgstr "ZenPM を Kindle ホームページにコピーしています..."
 
 msgid "Could not "
-msgstr "できませんでした"
+msgstr "できませんでした "
 
 msgid "Could not add source: "
 msgstr "ソースを追加できませんでした: "
 
+msgid "Could not back up the existing Kindle homepage script: "
+msgstr "既存の Kindle ホームページ スクリプトをバックアップできませんでした: "
+
+msgid "Could not back up the existing standalone ZenPM installation: "
+msgstr "既存のスタンドアロン ZenPM インストールをバックアップできませんでした: "
+
 msgid "Could not connect to "
-msgstr "に接続できませんでした"
+msgstr "に接続できませんでした "
 
 msgid "Could not connect to GitHub: "
-msgstr "GitHub に接続できませんでした:"
+msgstr "GitHub に接続できませんでした: "
 
 msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
 msgstr "GitHub に接続できませんでした: この KOReader ビルドでは HTTPS サポートを利用できません。"
 
 msgid "Could not create ZenPM directory: "
-msgstr "ZenPM ディレクトリを作成できませんでした:"
+msgstr "ZenPM ディレクトリを作成できませんでした: "
 
 msgid "Could not create ZenPM settings directory: "
-msgstr "ZenPM 設定ディレクトリを作成できませんでした:"
+msgstr "ZenPM 設定ディレクトリを作成できませんでした: "
 
 msgid "Could not detect repo format."
 msgstr "リポジトリ形式を検出できませんでした。"
 
 msgid "Could not determine which build to install: "
-msgstr "どのビルドをインストールするかを決定できませんでした:"
+msgstr "どのビルドをインストールするかを決定できませんでした: "
+
+msgid "Could not find KOReader's plugins directory."
+msgstr "KOReader のプラグイン ディレクトリが見つかりませんでした。"
 
 msgid "Could not install bundled ZenPM backend to: "
-msgstr "バンドルされた ZenPM バックエンドを次の場所にインストールできませんでした:"
+msgstr "バンドルされた ZenPM バックエンドを次の場所にインストールできませんでした: "
+
+msgid "Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"
+msgstr "Kindle ホームページ スクリプトをインストールできませんでした: 名前の変更に失敗しました: %s;コピーに失敗しました: %s"
+
+msgid "Could not install the standalone ZenPM payload: "
+msgstr "スタンドアロン ZenPM ペイロードをインストールできませんでした: "
+
+msgid "Could not install the updated ZenPM plugin."
+msgstr "更新された ZenPM プラグインをインストールできませんでした。"
 
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "ZenPM コマンドライン ラッパーをインストールできませんでした。"
 
-msgid "Could not load GitHub releases: "
-msgstr "GitHub リリースをロードできませんでした:"
+msgid "Could not load available versions: "
+msgstr "利用可能なバージョンをロードできませんでした: "
+
+msgid "Could not move the old ZenPM plugin."
+msgstr "古い ZenPM プラグインを移動できませんでした。"
+
+msgid "Could not open standalone archive."
+msgstr "スタンドアロン アーカイブを開けませんでした。"
+
+msgid "Could not open update archive."
+msgstr "更新アーカイブを開けませんでした。"
+
+msgid "Could not prepare the Kindle USB storage."
+msgstr "Kindle USB ストレージを準備できませんでした。"
+
+msgid "Could not prepare the standalone installation directory."
+msgstr "スタンドアロンのインストール ディレクトリを準備できませんでした。"
+
+msgid "Could not prepare the update directory."
+msgstr "更新ディレクトリを準備できませんでした。"
+
+msgid "Could not read GitHub release information."
+msgstr "GitHub リリース情報を読み取れませんでした。"
 
 msgid "Could not read log: "
 msgstr "ログを読み取れませんでした: "
 
 msgid "Could not remove patch: "
-msgstr "パッチを削除できませんでした:"
+msgstr "パッチを削除できませんでした: "
 
 msgid "Could not remove source: "
 msgstr "ソースを削除できませんでした: "
-
-msgid "Could not remove the ZenPM plugin."
-msgstr "ZenPM プラグインを削除できませんでした。"
 
 msgid "Could not resolve patch file."
 msgstr "パッチファイルを解決できませんでした。"
@@ -189,8 +267,23 @@ msgstr "パッチファイルを解決できませんでした。"
 msgid "Could not resolve plugin name."
 msgstr "プラグイン名を解決できませんでした。"
 
+msgid "Could not unpack standalone archive."
+msgstr "スタンドアロン アーカイブを解凍できませんでした。"
+
+msgid "Could not unpack update archive."
+msgstr "更新アーカイブを解凍できませんでした。"
+
+msgid "Could not update the package preference: "
+msgstr "パッケージ設定を更新できませんでした: "
+
+msgid "Could not verify the update download."
+msgstr "アップデートのダウンロードを確認できませんでした。"
+
 msgid "Debug"
 msgstr "デバッグ"
+
+msgid "Descending"
+msgstr "降順"
 
 msgid "Description"
 msgstr "説明"
@@ -199,19 +292,19 @@ msgid "Details"
 msgstr "詳細"
 
 msgid "Detected ABI: "
-msgstr "検出された ABI:"
+msgstr "検出された ABI: "
 
 msgid "Detecting repo..."
 msgstr "リポジトリを検出中..."
 
-msgid "disable"
-msgstr "無効にする"
-
 msgid "Disable"
 msgstr "無効にする"
 
-msgid "disabled"
-msgstr "無効"
+msgid "disable"
+msgstr "無効にする"
+
+msgid "Discover"
+msgstr "発見する"
 
 msgid "downgrade"
 msgstr "ダウングレード"
@@ -231,20 +324,29 @@ msgstr "最新のスタンドアロン ZenPM リリースをダウンロード�
 msgid "download failed"
 msgstr "ダウンロードに失敗しました"
 
-msgid "Download this asset: "
-msgstr "このアセットをダウンロードします。"
+msgid "Download failed with HTTP "
+msgstr "HTTPでダウンロードに失敗しました "
 
-msgid "Enable"
-msgstr "有効にする"
+msgid "Download support is unavailable in this KOReader build."
+msgstr "この KOReader ビルドではダウンロード サポートは利用できません。"
+
+msgid "Download this asset: "
+msgstr "このアセットをダウンロードします。 "
+
+msgid "Downloaded update checksum did not match."
+msgstr "ダウンロードされたアップデートのチェックサムが一致しませんでした。"
 
 msgid "enable"
 msgstr "有効にする"
 
-msgid "enabled"
-msgstr "有効"
+msgid "Enable"
+msgstr "有効にする"
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "問題にタグ付けする GitHub ユーザー名を入力してください"
+
+msgid "Error code: "
+msgstr "エラーコード: "
 
 msgid "Failed to load package: "
 msgstr "パッケージの読み込みに失敗しました: "
@@ -262,10 +364,16 @@ msgid "Failed to start package action: "
 msgstr "パッケージ操作を開始できませんでした: "
 
 msgid "Failed to submit report: "
-msgstr "レポートの送信に失敗しました:"
+msgstr "レポートの送信に失敗しました: "
 
 msgid "Featured"
 msgstr "注目"
+
+msgid "Filter"
+msgstr "フィルター"
+
+msgid "Filter by category"
+msgstr "カテゴリでフィルタリングする"
 
 msgid "Font preview"
 msgstr "フォントプレビュー"
@@ -273,8 +381,14 @@ msgstr "フォントプレビュー"
 msgid "Font size"
 msgstr "フォントサイズ"
 
+msgid "Fonts"
+msgstr "フォント"
+
 msgid "Found %d installed plugins"
 msgstr "%d がインストールされたプラグインが見つかりました"
+
+msgid "Games"
+msgstr "ゲーム"
 
 msgid "Get"
 msgstr "取得"
@@ -286,7 +400,10 @@ msgid "GitHub download redirected too many times."
 msgstr "GitHub ダウンロードがリダイレクトされる回数が多すぎます。"
 
 msgid "GitHub download returned HTTP "
-msgstr "GitHub ダウンロードで HTTP が返されました"
+msgstr "GitHub ダウンロードで HTTP が返されました "
+
+msgid "GitHub returned HTTP "
+msgstr "GitHub が HTTP を返しました "
 
 msgid "GitHub supplied an invalid download redirect."
 msgstr "GitHub が無効なダウンロード リダイレクトを提供しました。"
@@ -300,6 +417,15 @@ msgstr "GitHub ユーザー名 (オプション)"
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "このKOReaderビルドではHTTPSサポートを利用できません。"
 
+msgid "Ignore updates"
+msgstr "更新を無視する"
+
+msgid "Ignore updates for %s?"
+msgstr "%s のアップデートを無視しますか?"
+
+msgid "incomplete HTTP response"
+msgstr "不完全なHTTPレスポンス"
+
 msgid "install"
 msgstr "インストール"
 
@@ -312,35 +438,56 @@ msgstr "とにかくインストールする"
 msgid "Install anyway?"
 msgstr "とにかくインストールしますか?"
 
+msgid "Install command-line interface"
+msgstr "コマンドラインインターフェースをインストールする"
+
 msgid "Install to Kindle homepage"
 msgstr "Kindle ホームページにインストールする"
-
-msgid "Installed"
-msgstr "インストール済み"
 
 msgid "installed"
 msgstr "インストール済み"
 
+msgid "Installed"
+msgstr "インストール済み"
+
+msgid "Installed date (newest first)"
+msgstr "インストール日 (新しい順)"
+
+msgid "Installed date (oldest first)"
+msgstr "インストール日（古い順）"
+
 msgid "Installing"
 msgstr "インストール中"
+
+msgid "invalid HTTP request path"
+msgstr "無効なHTTPリクエストパス"
+
+msgid "invalid HTTP response"
+msgstr "無効なHTTP応答"
 
 msgid "Keep settings"
 msgstr "設定を維持する"
 
 msgid "Kindle homepage installation failed: "
-msgstr "Kindle ホームページのインストールに失敗しました:"
+msgstr "Kindle ホームページのインストールに失敗しました: "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Kindle ホームページのインストールがキャンセルされました。"
 
-msgid "Kobo network is not ready. Please wait a moment and try again."
-msgstr "kobo ネットワークの準備ができていません。しばらく待ってから、もう一度試してください。"
+msgid "Kindle standalone is not supported on this device."
+msgstr "このデバイスでは Kindle スタンドアロンはサポートされていません。"
 
 msgid "KOReader settings are unavailable."
 msgstr "KOReader 設定は使用できません。"
 
+msgid "KOReader's plugins directory is not writable."
+msgstr "KOReader のプラグイン ディレクトリは書き込み可能ではありません。"
+
 msgid "Latest"
 msgstr "最新"
+
+msgid "Loading available versions..."
+msgstr "利用可能なバージョンをロード中..."
 
 msgid "Loading categories..."
 msgstr "カテゴリを読み込んでいます..."
@@ -350,9 +497,6 @@ msgstr "カテゴリを読み込み中..."
 
 msgid "Loading featured packages..."
 msgstr "注目パッケージを読み込み中..."
-
-msgid "Loading GitHub releases..."
-msgstr "GitHub リリースを読み込んでいます..."
 
 msgid "Loading installed packages..."
 msgstr "インストール済みパッケージを読み込み中..."
@@ -366,6 +510,9 @@ msgstr "パッケージを読み込んでいます。お待ちください"
 msgid "Loading packages..."
 msgstr "パッケージを読み込み中..."
 
+msgid "Loading release notes..."
+msgstr "リリースノートを読み込んでいます..."
+
 msgid "Loading source..."
 msgstr "ソースを読み込み中..."
 
@@ -374,6 +521,9 @@ msgstr "ソースを読み込み中..."
 
 msgid "Log is empty."
 msgstr "ログは空です。"
+
+msgid "Media"
+msgstr "メディア"
 
 msgid "Modify"
 msgstr "変更"
@@ -393,14 +543,20 @@ msgstr "カテゴリが見つかりませんでした。"
 msgid "No categories match the filter."
 msgstr "フィルターに一致するカテゴリはありません。"
 
+msgid "No compatible ZenPM release is available for this platform (expected %s)."
+msgstr "このプラットフォームで利用できる互換性のある ZenPM リリースはありません (%s が予想されます)。"
+
+msgid "No compatible ZenPM release is available for this platform."
+msgstr "このプラットフォームでは、互換性のある ZenPM リリースは利用できません。"
+
 msgid "No description"
 msgstr "説明なし"
 
 msgid "No description available."
 msgstr "説明はありません。"
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "ZIP アセットを含む GitHub リリースは見つかりませんでした。"
+msgid "No installable versions were found."
+msgstr "インストール可能なバージョンが見つかりませんでした。"
 
 msgid "No installed packages match the filter."
 msgstr "絞り込み条件に一致するインストール済みパッケージはありません。"
@@ -429,8 +585,14 @@ msgstr "キューに入れられた操作はありません。"
 msgid "No README available."
 msgstr "利用可能な README はありません。"
 
+msgid "No release notes available."
+msgstr "リリースノートはありません。"
+
 msgid "No repositories configured."
 msgstr "リポジトリが設定されていません。"
+
+msgid "No standalone Kindle ZenPM release is available."
+msgstr "スタンドアロンの Kindle ZenPM リリースはありません。"
 
 msgid "None"
 msgstr "なし"
@@ -444,8 +606,11 @@ msgstr "OK"
 msgid "Only show installable packages"
 msgstr "インストール可能なパッケージのみを表示する"
 
-msgid "Open ZenPM"
-msgstr "ZenPMを開く"
+msgid "Only this version"
+msgstr "このバージョンのみ"
+
+msgid "Open ZenPM after restart"
+msgstr "再起動後に ZenPM を開く"
 
 msgid "Package"
 msgstr "パッケージ"
@@ -455,9 +620,6 @@ msgstr "パッケージの詳細"
 
 msgid "Package has no id."
 msgstr "パッケージにIDがありません。"
-
-msgid "Package manager for KOReader."
-msgstr "KOReader のパッケージ マネージャー。"
 
 msgid "Package not found."
 msgstr "パッケージが見つかりません。"
@@ -484,22 +646,28 @@ msgid "Patches"
 msgstr "パッチ"
 
 msgid "Platform: "
-msgstr "プラットフォーム:"
+msgstr "プラットフォーム: "
 
 msgid "Please enter a URL."
 msgstr "URLを入力してください。"
 
 msgid "Plugin scan failed: "
-msgstr "プラグインのスキャンに失敗しました:"
+msgstr "プラグインのスキャンに失敗しました: "
+
+msgid "poll: "
+msgstr "投票: "
 
 msgid "prerelease"
 msgstr "プレリリース"
+
+msgid "Productivity"
+msgstr "生産性"
 
 msgid "Queue"
 msgstr "列"
 
 msgid "Queue %d/%d: "
-msgstr "キュー %d/%d:"
+msgstr "キュー %d/%d: "
 
 msgid "Queue completed: %d succeeded, %d failed."
 msgstr "キューが完了しました: %d は成功しました、%d は失敗しました。"
@@ -519,11 +687,17 @@ msgstr "終了"
 msgid "README"
 msgstr "お読みください"
 
+msgid "Recently updated"
+msgstr "最近更新された"
+
+msgid "recv: "
+msgstr "受信: "
+
 msgid "Refresh"
 msgstr "リロード"
 
-msgid "Refresh failed: "
-msgstr "更新に失敗しました: "
+msgid "Refresh failed"
+msgstr "更新に失敗しました"
 
 msgid "Refreshing repositories..."
 msgstr "リポジトリを更新中..."
@@ -539,6 +713,12 @@ msgstr "再インストール済み"
 
 msgid "Reinstalling"
 msgstr "再インストール中"
+
+msgid "Reinstalling ZenPM..."
+msgstr "ZenPM を再インストールしています..."
+
+msgid "Release Notes"
+msgstr "リリースノート"
 
 msgid "remote server"
 msgstr "リモートサーバー"
@@ -603,20 +783,20 @@ msgstr "検索カテゴリー"
 msgid "Search category..."
 msgstr "カテゴリを検索..."
 
-msgid "Search installed packages"
-msgstr "インストールされているパッケージを検索する"
-
-msgid "Search installed..."
-msgstr "インストールされている検索..."
-
 msgid "Search packages"
 msgstr "パッケージを検索"
+
+msgid "Search source"
+msgstr "ソースを検索"
+
+msgid "Search source..."
+msgstr "ソースを検索..."
 
 msgid "Search..."
 msgstr "検索..."
 
-msgid "Select version for "
-msgstr "バージョンを選択してください"
+msgid "send: "
+msgstr "送信： "
 
 msgid "Settings"
 msgstr "設定"
@@ -633,11 +813,20 @@ msgstr "README イメージを表示する"
 msgid "Skip"
 msgstr "スキップ"
 
+msgid "socket closed while sending"
+msgstr "送信中にソケットが閉じられた"
+
+msgid "socket error"
+msgstr "ソケットエラー"
+
 msgid "Sort"
 msgstr "選別"
 
 msgid "Sort packages"
 msgstr "パッケージの並べ替え"
+
+msgid "Sort sources"
+msgstr "ソースの並べ替え"
 
 msgid "Source"
 msgstr "ソース"
@@ -647,6 +836,15 @@ msgstr "ソースが見つかりません。"
 
 msgid "Sources"
 msgstr "ソース"
+
+msgid "Standalone archive does not contain a complete Kindle installation."
+msgstr "スタンドアロン アーカイブには、完全な Kindle インストールが含まれていません。"
+
+msgid "Standalone archive has an invalid layout."
+msgstr "スタンドアロン アーカイブのレイアウトが無効です。"
+
+msgid "Standalone archive is empty."
+msgstr "スタンドアロン アーカイブは空です。"
 
 msgid "Stars"
 msgstr "星"
@@ -660,44 +858,83 @@ msgstr "提出する"
 msgid "Submitting report…"
 msgstr "レポートを送信中…"
 
+msgid "The selected ZenPM version is not available for this platform."
+msgstr "選択した ZenPM バージョンは、このプラットフォームでは使用できません。"
+
+msgid "The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."
+msgstr "スタンドアロン ペイロードはインストールされましたが、Kindle セットアップ スクリプトが失敗しました。 %s を参照するか、KUAL から %s を実行して再試行してください。"
+
+msgid "Theme"
+msgstr "テーマ"
+
 msgid "This release has no ZIP assets."
 msgstr "このリリースには ZIP アセットがありません。"
 
 msgid "This will install as a \"book\" on the Kindle homescreen."
 msgstr "これは Kindle ホーム画面に「書籍」としてインストールされます。"
 
+msgid "timeout"
+msgstr "タイムアウト"
+
+msgid "Title (A-Z)"
+msgstr "タイトル (A-Z)"
+
+msgid "Title (Z-A)"
+msgstr "タイトル(Z-A)"
+
 msgid "to"
 msgstr "に"
 
-msgid "Uninstall"
-msgstr "アンインストール"
+msgid "Today"
+msgstr "今日"
 
 msgid "uninstall"
 msgstr "アンインストール"
 
-msgid "Uninstall ZenPM?"
-msgstr "ZenPM をアンインストールしますか?"
+msgid "Uninstall"
+msgstr "アンインストール"
 
 msgid "uninstalled"
 msgstr "アンインストール済み"
 
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "正常にアンインストールされました。\n\nプラグイン設定を削除しますか?"
+
 msgid "Uninstalling"
 msgstr "アンインストール中"
 
-msgid "Uninstalling ZenPM..."
-msgstr "ZenPM をアンインストールしています..."
+msgid "Unix socket path is too long"
+msgstr "Unix ソケットのパスが長すぎます"
+
+msgid "Unix socket support is unavailable."
+msgstr "Unix ソケットのサポートは利用できません。"
+
+msgid "unknown error"
+msgstr "不明なエラー"
 
 msgid "Unknown package"
 msgstr "不明なパッケージ"
 
-msgid "Update"
-msgstr "更新"
-
 msgid "update"
 msgstr "アップデート"
 
+msgid "Update"
+msgstr "更新"
+
 msgid "Update All"
 msgstr "すべて更新"
+
+msgid "Update archive does not contain a ZenPM plugin."
+msgstr "アップデート アーカイブには ZenPM プラグインが含まれていません。"
+
+msgid "Update archive has an invalid layout."
+msgstr "更新アーカイブに無効なレイアウトがあります。"
+
+msgid "Update archive is empty."
+msgstr "アップデートのアーカイブは空です。"
+
+msgid "Update available"
+msgstr "利用可能なアップデート"
 
 msgid "Update check was cancelled."
 msgstr "更新チェックがキャンセルされました。"
@@ -723,14 +960,26 @@ msgstr "ZenPM を更新しています..."
 msgid "username"
 msgstr "ユーザー名"
 
+msgid "Utility"
+msgstr "ユーティリティ"
+
 msgid "Version: "
 msgstr "バージョン: "
+
+msgid "Versions"
+msgstr "バージョン"
 
 msgid "Welcome"
 msgstr "ようこそ"
 
+msgid "Yesterday"
+msgstr "昨日"
+
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "KOReader用Zen Package Managerフロントエンド。"
+
+msgid "ZenLabs Repo"
+msgstr "ZenLabs リポジトリ"
 
 msgid "ZenOS is installed. Most patches should not be used with ZenOS."
 msgstr "ZenOS がインストールされています。ほとんどのパッチは ZenOS では使用しないでください。"
@@ -745,7 +994,7 @@ msgid "ZenPM Android companion is not available."
 msgstr "ZenPM Android コンパニオンは利用できません。"
 
 msgid "ZenPM Android companion is not installed or could not start. See "
-msgstr "ZenPM Android コンパニオンがインストールされていないか、起動できませんでした。見る"
+msgstr "ZenPM Android コンパニオンがインストールされていないか、起動できませんでした。見る "
 
 msgid "ZenPM backend"
 msgstr "ZenPM バックエンド"
@@ -756,11 +1005,17 @@ msgstr "ZenPM バックエンドが起動しませんでした。このデバイ
 msgid "ZenPM bug reporter"
 msgstr "ZenPM バグレポーター"
 
+msgid "ZenPM command-line interface installed."
+msgstr "ZenPM コマンドライン インターフェイスがインストールされています。"
+
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion はアップデートをチェックしています。"
 
 msgid "ZenPM companion update failed."
 msgstr "ZenPM コンパニオンの更新に失敗しました。"
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM デーモンに到達できません。 ZenPM インストーラーが実行されていない場合は、再実行します。"
 
 msgid "ZenPM font size"
 msgstr "ZenPMのフォントサイズ"
@@ -779,3 +1034,9 @@ msgstr "ZenPM v"
 
 msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
 msgstr "ZenPM.log と KOReader の crash.log (存在する場合) は、公開されている GitHub の問題に添付されます。これらには、パッケージ名、リポジトリ URL、およびファイル パスが含まれる場合があります。"
+
+msgid "ZenPM: Open"
+msgstr "ZenPM: オープン"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM: すべて更新"

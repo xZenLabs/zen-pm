@@ -1,5 +1,6 @@
 local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
+package.preload["gettext"] = function() return function(value) return value end end
 
 local UnixHTTP = dofile(root .. "/unix_http.lua")
 assert(UnixHTTP.AF_UNIX == 1)

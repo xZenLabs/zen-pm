@@ -6,17 +6,35 @@ msgstr ""
 "Language: vi\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+msgid "\nABI: "
+msgstr "\nABI: "
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " đã không hoàn thành.\n\nKiểm tra nhật ký gỡ lỗi để biết chi tiết."
+
 msgid " is available. Update now?"
-msgstr "có sẵn. Cập nhật ngay bây giờ?"
+msgstr " có sẵn. Cập nhật ngay bây giờ?"
 
 msgid " returned HTTP "
-msgstr "trả về HTTP"
+msgstr " trả về HTTP "
 
 msgid " successfully."
 msgstr " thành công."
 
+msgid " successfully.\n\nRemove plugin settings?"
+msgstr " thành công.\n\nXóa cài đặt plugin?"
+
+msgid " successfully.\n\nRestart KOReader to apply the change."
+msgstr " thành công.\n\nKhởi động lại KOReader để áp dụng thay đổi."
+
+msgid " successfully.\n\nRestart KOReader to load the plugin."
+msgstr " thành công.\n\nKhởi động lại KOReader để tải plugin."
+
 msgid " was copied to the Kindle homepage."
-msgstr "đã được sao chép vào trang chủ Kindle."
+msgstr " đã được sao chép vào trang chủ Kindle."
+
+msgid "%d days ago"
+msgstr "%d ngày trước"
 
 msgid "%d packages queued"
 msgstr "Các gói %d đã được xếp hàng đợi"
@@ -27,11 +45,20 @@ msgstr "%s xung đột với %s. Chúng không nên được sử dụng cùng n
 msgid "(installed)"
 msgstr "(đã cài đặt)"
 
+msgid ".\n\nRestart KOReader to use the new version."
+msgstr ".\n\nKhởi động lại KOReader để sử dụng phiên bản mới."
+
 msgid "... Please wait."
 msgstr "... Vui lòng chờ."
 
 msgid "1 package queued"
 msgstr "1 gói hàng đang xếp hàng"
+
+msgid "[Image: %s]"
+msgstr "[Hình ảnh: %s]"
+
+msgid "[Image]"
+msgstr "[Hình ảnh]"
 
 msgid "A short summary of what went wrong"
 msgstr "Một bản tóm tắt ngắn gọn về những gì đã xảy ra"
@@ -48,14 +75,23 @@ msgstr "Thêm nguồn"
 msgid "Added to Queue"
 msgstr "Đã thêm vào hàng đợi"
 
+msgid "Advanced"
+msgstr "Trình độ cao"
+
+msgid "All categories"
+msgstr "Tất cả danh mục"
+
+msgid "Allow updates"
+msgstr "Cho phép cập nhật"
+
+msgid "Always ignore"
+msgstr "Luôn bỏ qua"
+
 msgid "Always manually pick version"
 msgstr "Luôn chọn phiên bản theo cách thủ công"
 
 msgid "Another operation is in progress. Please wait."
 msgstr "Một thao tác khác đang chạy. Vui lòng chờ."
-
-msgid "Are you sure you want to "
-msgstr "Bạn có chắc chắn muốn"
 
 msgid "Are you sure you want to clear the queue?"
 msgstr "Bạn có chắc chắn muốn xóa hàng đợi không?"
@@ -64,7 +100,10 @@ msgid "Are you sure you want to perform all queued actions?"
 msgstr "Bạn có chắc chắn muốn thực hiện tất cả các hành động được xếp hàng đợi không?"
 
 msgid "Are you sure you want to remove "
-msgstr "Bạn có chắc chắn muốn xóa"
+msgstr "Bạn có chắc chắn muốn xóa "
+
+msgid "Ascending"
+msgstr "Tăng dần"
 
 msgid "Author: Anthony Gress (ZenLabs)"
 msgstr "Tác giả: Anthony Gress (ZenLabs)"
@@ -102,8 +141,8 @@ msgstr "Không tìm thấy danh mục."
 msgid "Change version"
 msgstr "Thay đổi phiên bản"
 
-msgid "Check for updates automatically"
-msgstr "Kiểm tra cập nhật tự động"
+msgid "Changes"
+msgstr "Thay đổi"
 
 msgid "Check the debug log for details."
 msgstr "Kiểm tra nhật ký gỡ lỗi để biết chi tiết."
@@ -112,19 +151,22 @@ msgid "Checking for update..."
 msgstr "Đang kiểm tra cập nhật..."
 
 msgid "Choose a build for "
-msgstr "Chọn bản dựng cho"
+msgstr "Chọn bản dựng cho "
 
 msgid "Choose a patch for "
-msgstr "Chọn một bản vá cho"
+msgstr "Chọn một bản vá cho "
 
 msgid "Clear"
 msgstr "Xóa"
 
 msgid "Companion update failed to start: "
-msgstr "Cập nhật đồng hành không bắt đầu được:"
+msgstr "Cập nhật đồng hành không bắt đầu được: "
 
 msgid "Confirm"
 msgstr "Xác nhận"
+
+msgid "connect: "
+msgstr "kết nối: "
 
 msgid "Continue"
 msgstr "Tiếp tục"
@@ -136,52 +178,88 @@ msgid "Copying ZenPM to Kindle homepage..."
 msgstr "Đang sao chép ZenPM sang trang chủ Kindle..."
 
 msgid "Could not "
-msgstr "không thể"
+msgstr "không thể "
 
 msgid "Could not add source: "
 msgstr "Không thể thêm nguồn: "
 
+msgid "Could not back up the existing Kindle homepage script: "
+msgstr "Không thể sao lưu tập lệnh trang chủ Kindle hiện có: "
+
+msgid "Could not back up the existing standalone ZenPM installation: "
+msgstr "Không thể sao lưu cài đặt ZenPM độc lập hiện có: "
+
 msgid "Could not connect to "
-msgstr "Không thể kết nối với"
+msgstr "Không thể kết nối với "
 
 msgid "Could not connect to GitHub: "
-msgstr "Không thể kết nối với GitHub:"
+msgstr "Không thể kết nối với GitHub: "
 
 msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
 msgstr "Không thể kết nối với GitHub: Hỗ trợ HTTPS không khả dụng trong bản dựng KOReader này."
 
 msgid "Could not create ZenPM directory: "
-msgstr "Không thể tạo thư mục ZenPM:"
+msgstr "Không thể tạo thư mục ZenPM: "
 
 msgid "Could not create ZenPM settings directory: "
-msgstr "Không thể tạo thư mục cài đặt ZenPM:"
+msgstr "Không thể tạo thư mục cài đặt ZenPM: "
 
 msgid "Could not detect repo format."
 msgstr "Không thể phát hiện định dạng kho."
 
 msgid "Could not determine which build to install: "
-msgstr "Không thể xác định bản dựng nào sẽ cài đặt:"
+msgstr "Không thể xác định bản dựng nào sẽ cài đặt: "
+
+msgid "Could not find KOReader's plugins directory."
+msgstr "Không thể tìm thấy thư mục plugin của KOReader."
 
 msgid "Could not install bundled ZenPM backend to: "
-msgstr "Không thể cài đặt phần phụ trợ ZenPM đi kèm vào:"
+msgstr "Không thể cài đặt phần phụ trợ ZenPM đi kèm vào: "
+
+msgid "Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"
+msgstr "Không thể cài đặt tập lệnh trang chủ Kindle: đổi tên không thành công: %s; sao chép không thành công: %s"
+
+msgid "Could not install the standalone ZenPM payload: "
+msgstr "Không thể cài đặt tải trọng ZenPM độc lập: "
+
+msgid "Could not install the updated ZenPM plugin."
+msgstr "Không thể cài đặt plugin ZenPM đã cập nhật."
 
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "Không thể cài đặt trình bao bọc dòng lệnh ZenPM."
 
-msgid "Could not load GitHub releases: "
-msgstr "Không thể tải bản phát hành GitHub:"
+msgid "Could not load available versions: "
+msgstr "Không thể tải các phiên bản có sẵn: "
+
+msgid "Could not move the old ZenPM plugin."
+msgstr "Không thể di chuyển plugin ZenPM cũ."
+
+msgid "Could not open standalone archive."
+msgstr "Không thể mở kho lưu trữ độc lập."
+
+msgid "Could not open update archive."
+msgstr "Không thể mở kho lưu trữ cập nhật."
+
+msgid "Could not prepare the Kindle USB storage."
+msgstr "Không thể chuẩn bị bộ lưu trữ USB Kindle."
+
+msgid "Could not prepare the standalone installation directory."
+msgstr "Không thể chuẩn bị thư mục cài đặt độc lập."
+
+msgid "Could not prepare the update directory."
+msgstr "Không thể chuẩn bị thư mục cập nhật."
+
+msgid "Could not read GitHub release information."
+msgstr "Không thể đọc thông tin phát hành GitHub."
 
 msgid "Could not read log: "
 msgstr "Không thể đọc nhật ký: "
 
 msgid "Could not remove patch: "
-msgstr "Không thể xóa bản vá:"
+msgstr "Không thể xóa bản vá: "
 
 msgid "Could not remove source: "
 msgstr "Không thể xóa nguồn: "
-
-msgid "Could not remove the ZenPM plugin."
-msgstr "Không thể xóa plugin ZenPM."
 
 msgid "Could not resolve patch file."
 msgstr "Không thể giải quyết tập tin vá."
@@ -189,8 +267,23 @@ msgstr "Không thể giải quyết tập tin vá."
 msgid "Could not resolve plugin name."
 msgstr "Không thể giải quyết tên plugin."
 
+msgid "Could not unpack standalone archive."
+msgstr "Không thể giải nén kho lưu trữ độc lập."
+
+msgid "Could not unpack update archive."
+msgstr "Không thể giải nén kho lưu trữ cập nhật."
+
+msgid "Could not update the package preference: "
+msgstr "Không thể cập nhật tùy chọn gói: "
+
+msgid "Could not verify the update download."
+msgstr "Không thể xác minh tải xuống bản cập nhật."
+
 msgid "Debug"
 msgstr "Gỡ lỗi"
+
+msgid "Descending"
+msgstr "Giảm dần"
 
 msgid "Description"
 msgstr "Mô tả"
@@ -199,19 +292,19 @@ msgid "Details"
 msgstr "Chi tiết"
 
 msgid "Detected ABI: "
-msgstr "Đã phát hiện ABI:"
+msgstr "Đã phát hiện ABI: "
 
 msgid "Detecting repo..."
 msgstr "Đang phát hiện kho..."
 
-msgid "disable"
-msgstr "vô hiệu hóa"
-
 msgid "Disable"
 msgstr "Vô hiệu hóa"
 
-msgid "disabled"
-msgstr "tàn tật"
+msgid "disable"
+msgstr "vô hiệu hóa"
+
+msgid "Discover"
+msgstr "Phát hiện"
 
 msgid "downgrade"
 msgstr "hạ cấp"
@@ -231,20 +324,29 @@ msgstr "Tải xuống và sao chép bản phát hành ZenPM độc lập mới n
 msgid "download failed"
 msgstr "tải xuống thất bại"
 
-msgid "Download this asset: "
-msgstr "Tải xuống tài sản này:"
+msgid "Download failed with HTTP "
+msgstr "Tải xuống không thành công với HTTP "
 
-msgid "Enable"
-msgstr "Cho phép"
+msgid "Download support is unavailable in this KOReader build."
+msgstr "Hỗ trợ tải xuống không có sẵn trong bản dựng KOReader này."
+
+msgid "Download this asset: "
+msgstr "Tải xuống tài sản này: "
+
+msgid "Downloaded update checksum did not match."
+msgstr "Tổng kiểm tra bản cập nhật đã tải xuống không khớp."
 
 msgid "enable"
 msgstr "cho phép"
 
-msgid "enabled"
-msgstr "đã bật"
+msgid "Enable"
+msgstr "Cho phép"
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Nhập tên người dùng GitHub của bạn để được gắn thẻ trong vấn đề này"
+
+msgid "Error code: "
+msgstr "Mã lỗi: "
 
 msgid "Failed to load package: "
 msgstr "Không tải được gói: "
@@ -262,10 +364,16 @@ msgid "Failed to start package action: "
 msgstr "Không thể bắt đầu thao tác gói: "
 
 msgid "Failed to submit report: "
-msgstr "Không gửi được báo cáo:"
+msgstr "Không gửi được báo cáo: "
 
 msgid "Featured"
 msgstr "Nổi bật"
+
+msgid "Filter"
+msgstr "Lọc"
+
+msgid "Filter by category"
+msgstr "Lọc theo danh mục"
 
 msgid "Font preview"
 msgstr "Xem trước phông chữ"
@@ -273,8 +381,14 @@ msgstr "Xem trước phông chữ"
 msgid "Font size"
 msgstr "Cỡ chữ"
 
+msgid "Fonts"
+msgstr "Phông chữ"
+
 msgid "Found %d installed plugins"
 msgstr "Đã tìm thấy %d plugin đã cài đặt"
+
+msgid "Games"
+msgstr "Trò chơi"
 
 msgid "Get"
 msgstr "Tải"
@@ -286,7 +400,10 @@ msgid "GitHub download redirected too many times."
 msgstr "Tải xuống GitHub được chuyển hướng quá nhiều lần."
 
 msgid "GitHub download returned HTTP "
-msgstr "Tải xuống GitHub trả về HTTP"
+msgstr "Tải xuống GitHub trả về HTTP "
+
+msgid "GitHub returned HTTP "
+msgstr "GitHub trả về HTTP "
 
 msgid "GitHub supplied an invalid download redirect."
 msgstr "GitHub đã cung cấp chuyển hướng tải xuống không hợp lệ."
@@ -300,6 +417,15 @@ msgstr "Tên người dùng GitHub (tùy chọn)"
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "Bản KOReader này không hỗ trợ HTTPS."
 
+msgid "Ignore updates"
+msgstr "Bỏ qua cập nhật"
+
+msgid "Ignore updates for %s?"
+msgstr "Bỏ qua các bản cập nhật cho %s?"
+
+msgid "incomplete HTTP response"
+msgstr "phản hồi HTTP không đầy đủ"
+
 msgid "install"
 msgstr "cài đặt"
 
@@ -312,35 +438,56 @@ msgstr "Vẫn cài đặt"
 msgid "Install anyway?"
 msgstr "Vẫn cài đặt?"
 
+msgid "Install command-line interface"
+msgstr "Cài đặt giao diện dòng lệnh"
+
 msgid "Install to Kindle homepage"
 msgstr "Cài đặt vào trang chủ Kindle"
-
-msgid "Installed"
-msgstr "Đã cài"
 
 msgid "installed"
 msgstr "đã cài"
 
+msgid "Installed"
+msgstr "Đã cài"
+
+msgid "Installed date (newest first)"
+msgstr "Ngày cài đặt (mới nhất trước)"
+
+msgid "Installed date (oldest first)"
+msgstr "Ngày cài đặt (cũ nhất xếp trước)"
+
 msgid "Installing"
 msgstr "Đang cài đặt"
+
+msgid "invalid HTTP request path"
+msgstr "đường dẫn yêu cầu HTTP không hợp lệ"
+
+msgid "invalid HTTP response"
+msgstr "phản hồi HTTP không hợp lệ"
 
 msgid "Keep settings"
 msgstr "Giữ cài đặt"
 
 msgid "Kindle homepage installation failed: "
-msgstr "Cài đặt trang chủ Kindle không thành công:"
+msgstr "Cài đặt trang chủ Kindle không thành công: "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Quá trình cài đặt trang chủ Kindle đã bị hủy."
 
-msgid "Kobo network is not ready. Please wait a moment and try again."
-msgstr "Mạng Kobo chưa sẵn sàng. Vui lòng đợi một lát và thử lại."
+msgid "Kindle standalone is not supported on this device."
+msgstr "Kindle độc ​​lập không được hỗ trợ trên thiết bị này."
 
 msgid "KOReader settings are unavailable."
 msgstr "Cài đặt KOReader không khả dụng."
 
+msgid "KOReader's plugins directory is not writable."
+msgstr "Thư mục plugin của KOReader không thể ghi được."
+
 msgid "Latest"
 msgstr "Mới nhất"
+
+msgid "Loading available versions..."
+msgstr "Đang tải các phiên bản có sẵn..."
 
 msgid "Loading categories..."
 msgstr "Đang tải danh mục..."
@@ -350,9 +497,6 @@ msgstr "Đang tải danh mục..."
 
 msgid "Loading featured packages..."
 msgstr "Đang tải gói nổi bật..."
-
-msgid "Loading GitHub releases..."
-msgstr "Đang tải bản phát hành GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Đang tải gói đã cài..."
@@ -366,6 +510,9 @@ msgstr "Đang tải các gói, vui lòng đợi"
 msgid "Loading packages..."
 msgstr "Đang tải các gói..."
 
+msgid "Loading release notes..."
+msgstr "Đang tải ghi chú phát hành..."
+
 msgid "Loading source..."
 msgstr "Đang tải nguồn..."
 
@@ -374,6 +521,9 @@ msgstr "Đang tải các nguồn..."
 
 msgid "Log is empty."
 msgstr "Nhật ký trống."
+
+msgid "Media"
+msgstr "Phương tiện truyền thông"
 
 msgid "Modify"
 msgstr "Sửa"
@@ -393,14 +543,20 @@ msgstr "Không tìm thấy danh mục nào."
 msgid "No categories match the filter."
 msgstr "Không có danh mục nào phù hợp với bộ lọc."
 
+msgid "No compatible ZenPM release is available for this platform (expected %s)."
+msgstr "Không có bản phát hành ZenPM tương thích nào cho nền tảng này (dự kiến ​​%s)."
+
+msgid "No compatible ZenPM release is available for this platform."
+msgstr "Không có bản phát hành ZenPM tương thích nào cho nền tảng này."
+
 msgid "No description"
 msgstr "Không có mô tả"
 
 msgid "No description available."
 msgstr "Không có mô tả."
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "Không tìm thấy bản phát hành GitHub nào có nội dung ZIP."
+msgid "No installable versions were found."
+msgstr "Không tìm thấy phiên bản có thể cài đặt nào."
 
 msgid "No installed packages match the filter."
 msgstr "Không có gói đã cài nào khớp với bộ lọc."
@@ -429,8 +585,14 @@ msgstr "Không có hoạt động xếp hàng đợi."
 msgid "No README available."
 msgstr "Không có README."
 
+msgid "No release notes available."
+msgstr "Không có ghi chú phát hành có sẵn."
+
 msgid "No repositories configured."
 msgstr "Chưa cấu hình kho nào."
+
+msgid "No standalone Kindle ZenPM release is available."
+msgstr "Không có bản phát hành Kindle ZenPM độc lập nào có sẵn."
 
 msgid "None"
 msgstr "Không có"
@@ -444,8 +606,11 @@ msgstr "OK"
 msgid "Only show installable packages"
 msgstr "Chỉ hiển thị các gói có thể cài đặt"
 
-msgid "Open ZenPM"
-msgstr "Mở ZenPM"
+msgid "Only this version"
+msgstr "Chỉ có phiên bản này"
+
+msgid "Open ZenPM after restart"
+msgstr "Mở ZenPM sau khi khởi động lại"
 
 msgid "Package"
 msgstr "Gói"
@@ -455,9 +620,6 @@ msgstr "Chi tiết gói"
 
 msgid "Package has no id."
 msgstr "Gói không có id."
-
-msgid "Package manager for KOReader."
-msgstr "Trình quản lý gói cho KOReader."
 
 msgid "Package not found."
 msgstr "Không tìm thấy gói."
@@ -484,22 +646,28 @@ msgid "Patches"
 msgstr "Bản vá"
 
 msgid "Platform: "
-msgstr "Nền tảng:"
+msgstr "Nền tảng: "
 
 msgid "Please enter a URL."
 msgstr "Vui lòng nhập URL."
 
 msgid "Plugin scan failed: "
-msgstr "Quét plugin không thành công:"
+msgstr "Quét plugin không thành công: "
+
+msgid "poll: "
+msgstr "thăm dò ý kiến: "
 
 msgid "prerelease"
 msgstr "phát hành trước"
+
+msgid "Productivity"
+msgstr "Năng suất"
 
 msgid "Queue"
 msgstr "Hàng đợi"
 
 msgid "Queue %d/%d: "
-msgstr "Xếp hàng %d/%d:"
+msgstr "Xếp hàng %d/%d: "
 
 msgid "Queue completed: %d succeeded, %d failed."
 msgstr "Hàng đợi đã hoàn thành: %d đã thành công, %d không thành công."
@@ -519,11 +687,17 @@ msgstr "Thoát"
 msgid "README"
 msgstr "ĐỌC TÔI"
 
+msgid "Recently updated"
+msgstr "Đã cập nhật gần đây"
+
+msgid "recv: "
+msgstr "recv: "
+
 msgid "Refresh"
 msgstr "Làm mới"
 
-msgid "Refresh failed: "
-msgstr "Làm mới thất bại: "
+msgid "Refresh failed"
+msgstr "Làm mới không thành công"
 
 msgid "Refreshing repositories..."
 msgstr "Đang làm mới kho..."
@@ -539,6 +713,12 @@ msgstr "đã cài lại"
 
 msgid "Reinstalling"
 msgstr "Đang cài lại"
+
+msgid "Reinstalling ZenPM..."
+msgstr "Đang cài đặt lại ZenPM..."
+
+msgid "Release Notes"
+msgstr "Ghi chú phát hành"
 
 msgid "remote server"
 msgstr "máy chủ từ xa"
@@ -603,20 +783,20 @@ msgstr "Tìm kiếm danh mục"
 msgid "Search category..."
 msgstr "Tìm kiếm danh mục..."
 
-msgid "Search installed packages"
-msgstr "Tìm kiếm các gói đã cài đặt"
-
-msgid "Search installed..."
-msgstr "Tìm kiếm đã cài đặt..."
-
 msgid "Search packages"
 msgstr "Tìm gói"
+
+msgid "Search source"
+msgstr "Nguồn tìm kiếm"
+
+msgid "Search source..."
+msgstr "Tìm kiếm nguồn..."
 
 msgid "Search..."
 msgstr "Tìm kiếm..."
 
-msgid "Select version for "
-msgstr "Chọn phiên bản cho"
+msgid "send: "
+msgstr "gửi: "
 
 msgid "Settings"
 msgstr "Cài đặt"
@@ -633,11 +813,20 @@ msgstr "Hiển thị hình ảnh README"
 msgid "Skip"
 msgstr "Nhảy"
 
+msgid "socket closed while sending"
+msgstr "ổ cắm đóng trong khi gửi"
+
+msgid "socket error"
+msgstr "lỗi ổ cắm"
+
 msgid "Sort"
 msgstr "Loại"
 
 msgid "Sort packages"
 msgstr "Sắp xếp gói"
+
+msgid "Sort sources"
+msgstr "Sắp xếp nguồn"
 
 msgid "Source"
 msgstr "Nguồn"
@@ -647,6 +836,15 @@ msgstr "Không tìm thấy nguồn."
 
 msgid "Sources"
 msgstr "Nguồn"
+
+msgid "Standalone archive does not contain a complete Kindle installation."
+msgstr "Kho lưu trữ độc lập không chứa bản cài đặt Kindle hoàn chỉnh."
+
+msgid "Standalone archive has an invalid layout."
+msgstr "Kho lưu trữ độc lập có bố cục không hợp lệ."
+
+msgid "Standalone archive is empty."
+msgstr "Kho lưu trữ độc lập trống rỗng."
 
 msgid "Stars"
 msgstr "Ngôi sao"
@@ -660,44 +858,83 @@ msgstr "Nộp"
 msgid "Submitting report…"
 msgstr "Đang gửi báo cáo…"
 
+msgid "The selected ZenPM version is not available for this platform."
+msgstr "Phiên bản ZenPM đã chọn không có sẵn cho nền tảng này."
+
+msgid "The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."
+msgstr "Tải trọng độc lập đã được cài đặt nhưng tập lệnh thiết lập Kindle của nó không thành công. Xem %s hoặc chạy %s từ KUAL để thử lại."
+
+msgid "Theme"
+msgstr "chủ đề"
+
 msgid "This release has no ZIP assets."
 msgstr "Bản phát hành này không có nội dung ZIP."
 
 msgid "This will install as a \"book\" on the Kindle homescreen."
 msgstr "Điều này sẽ cài đặt như một \"cuốn sách\" trên màn hình chính của Kindle."
 
+msgid "timeout"
+msgstr "hết thời gian chờ"
+
+msgid "Title (A-Z)"
+msgstr "Tiêu đề (A-Z)"
+
+msgid "Title (Z-A)"
+msgstr "Tiêu đề (Z-A)"
+
 msgid "to"
 msgstr "ĐẾN"
 
-msgid "Uninstall"
-msgstr "Gỡ cài đặt"
+msgid "Today"
+msgstr "Hôm nay"
 
 msgid "uninstall"
 msgstr "gỡ cài đặt"
 
-msgid "Uninstall ZenPM?"
-msgstr "Gỡ cài đặt ZenPM?"
+msgid "Uninstall"
+msgstr "Gỡ cài đặt"
 
 msgid "uninstalled"
 msgstr "đã gỡ cài đặt"
 
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "đã gỡ cài đặt thành công.\n\nXóa cài đặt plugin?"
+
 msgid "Uninstalling"
 msgstr "Đang gỡ cài đặt"
 
-msgid "Uninstalling ZenPM..."
-msgstr "Đang gỡ cài đặt ZenPM..."
+msgid "Unix socket path is too long"
+msgstr "Đường dẫn ổ cắm Unix quá dài"
+
+msgid "Unix socket support is unavailable."
+msgstr "Hỗ trợ ổ cắm Unix không có sẵn."
+
+msgid "unknown error"
+msgstr "lỗi không xác định"
 
 msgid "Unknown package"
 msgstr "Gói không xác định"
 
-msgid "Update"
-msgstr "Cập nhật"
-
 msgid "update"
 msgstr "cập nhật"
 
+msgid "Update"
+msgstr "Cập nhật"
+
 msgid "Update All"
 msgstr "Cập nhật tất cả"
+
+msgid "Update archive does not contain a ZenPM plugin."
+msgstr "Kho lưu trữ cập nhật không chứa plugin ZenPM."
+
+msgid "Update archive has an invalid layout."
+msgstr "Bản lưu trữ cập nhật có bố cục không hợp lệ."
+
+msgid "Update archive is empty."
+msgstr "Kho lưu trữ cập nhật trống."
+
+msgid "Update available"
+msgstr "Đã có bản cập nhật"
 
 msgid "Update check was cancelled."
 msgstr "Kiểm tra cập nhật đã bị hủy."
@@ -723,14 +960,26 @@ msgstr "Đang cập nhật ZenPM..."
 msgid "username"
 msgstr "tên người dùng"
 
+msgid "Utility"
+msgstr "Tính thiết thực"
+
 msgid "Version: "
 msgstr "Phiên bản: "
+
+msgid "Versions"
+msgstr "Phiên bản"
 
 msgid "Welcome"
 msgstr "Chào mừng"
 
+msgid "Yesterday"
+msgstr "Hôm qua"
+
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "Giao diện Zen Package Manager cho KOReader."
+
+msgid "ZenLabs Repo"
+msgstr "Kho lưu trữ ZenLabs"
 
 msgid "ZenOS is installed. Most patches should not be used with ZenOS."
 msgstr "ZenOS đã được cài đặt. Hầu hết các bản vá không nên sử dụng với ZenOS."
@@ -745,7 +994,7 @@ msgid "ZenPM Android companion is not available."
 msgstr "Đồng hành ZenPM Android không có sẵn."
 
 msgid "ZenPM Android companion is not installed or could not start. See "
-msgstr "Đồng hành ZenPM Android chưa được cài đặt hoặc không thể khởi động. Nhìn thấy"
+msgstr "Đồng hành ZenPM Android chưa được cài đặt hoặc không thể khởi động. Nhìn thấy "
 
 msgid "ZenPM backend"
 msgstr "Phần phụ trợ ZenPM"
@@ -756,11 +1005,17 @@ msgstr "Chương trình phụ trợ ZenPM không khởi động. Đảm bảo b�
 msgid "ZenPM bug reporter"
 msgstr "Trình báo lỗi ZenPM"
 
+msgid "ZenPM command-line interface installed."
+msgstr "Đã cài đặt giao diện dòng lệnh ZenPM."
+
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion đang kiểm tra bản cập nhật."
 
 msgid "ZenPM companion update failed."
 msgstr "Cập nhật đồng hành ZenPM không thành công."
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "Daemon ZenPM không thể truy cập được. Chạy lại trình cài đặt ZenPM nếu nó không chạy."
 
 msgid "ZenPM font size"
 msgstr "Cỡ chữ ZenPM"
@@ -779,3 +1034,9 @@ msgstr "ZenPM v"
 
 msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
 msgstr "Crash.log của ZenPM.log và KOReader (nếu có) sẽ được đính kèm vào một vấn đề công khai trên GitHub. Chúng có thể chứa tên gói, URL kho lưu trữ và đường dẫn tệp."
+
+msgid "ZenPM: Open"
+msgstr "ZenPM: Mở"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM: Cập nhật tất cả"

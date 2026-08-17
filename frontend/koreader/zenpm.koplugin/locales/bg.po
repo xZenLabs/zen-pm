@@ -6,17 +6,35 @@ msgstr ""
 "Language: bg\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "\nABI: "
+msgstr "\nABI: "
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " не е завършен.\n\nПроверете регистъра за отстраняване на грешки за подробности."
+
 msgid " is available. Update now?"
-msgstr "е наличен. Актуализиране сега?"
+msgstr " е наличен. Актуализиране сега?"
 
 msgid " returned HTTP "
-msgstr "върна HTTP"
+msgstr " върна HTTP "
 
 msgid " successfully."
 msgstr " успешно."
 
+msgid " successfully.\n\nRemove plugin settings?"
+msgstr " успешно.\n\nПремахване на настройките на приставката?"
+
+msgid " successfully.\n\nRestart KOReader to apply the change."
+msgstr " успешно.\n\nРестартирайте KOReader, за да приложите промяната."
+
+msgid " successfully.\n\nRestart KOReader to load the plugin."
+msgstr " успешно.\n\nРестартирайте KOReader, за да заредите приставката."
+
 msgid " was copied to the Kindle homepage."
-msgstr "беше копиран на началната страница на Kindle."
+msgstr " беше копиран на началната страница на Kindle."
+
+msgid "%d days ago"
+msgstr "%d преди дни"
 
 msgid "%d packages queued"
 msgstr "%d пакети на опашка"
@@ -27,11 +45,20 @@ msgstr "%s е в конфликт с %s. Те не трябва да се изп
 msgid "(installed)"
 msgstr "(инсталиран)"
 
+msgid ".\n\nRestart KOReader to use the new version."
+msgstr ".\n\nРестартирайте KOReader, за да използвате новата версия."
+
 msgid "... Please wait."
 msgstr "... Моля, изчакайте."
 
 msgid "1 package queued"
 msgstr "1 пакет на опашка"
+
+msgid "[Image: %s]"
+msgstr "[Изображение: %s]"
+
+msgid "[Image]"
+msgstr "[Изображение]"
 
 msgid "A short summary of what went wrong"
 msgstr "Кратко резюме на обърканото"
@@ -48,14 +75,23 @@ msgstr "Добави източник"
 msgid "Added to Queue"
 msgstr "Добавено към опашката"
 
+msgid "Advanced"
+msgstr "Разширено"
+
+msgid "All categories"
+msgstr "Всички категории"
+
+msgid "Allow updates"
+msgstr "Разрешаване на актуализации"
+
+msgid "Always ignore"
+msgstr "Винаги игнорирайте"
+
 msgid "Always manually pick version"
 msgstr "Винаги ръчно избирайте версия"
 
 msgid "Another operation is in progress. Please wait."
 msgstr "Друга операция е в ход. Моля, изчакайте."
-
-msgid "Are you sure you want to "
-msgstr "Сигурни ли сте, че искате"
 
 msgid "Are you sure you want to clear the queue?"
 msgstr "Сигурни ли сте, че искате да изчистите опашката?"
@@ -64,7 +100,10 @@ msgid "Are you sure you want to perform all queued actions?"
 msgstr "Сигурни ли сте, че искате да изпълните всички действия в опашката?"
 
 msgid "Are you sure you want to remove "
-msgstr "Сигурни ли сте, че искате да премахнете"
+msgstr "Сигурни ли сте, че искате да премахнете "
+
+msgid "Ascending"
+msgstr "Възходящо"
 
 msgid "Author: Anthony Gress (ZenLabs)"
 msgstr "Автор: Anthony Gress (ZenLabs)"
@@ -102,8 +141,8 @@ msgstr "Категорията не е намерена."
 msgid "Change version"
 msgstr "Промяна на версията"
 
-msgid "Check for updates automatically"
-msgstr "Автоматично проверявайте за актуализации"
+msgid "Changes"
+msgstr "Промени"
 
 msgid "Check the debug log for details."
 msgstr "Проверете регистъра за отстраняване на грешки за подробности."
@@ -112,19 +151,22 @@ msgid "Checking for update..."
 msgstr "Проверка за актуализация..."
 
 msgid "Choose a build for "
-msgstr "Изберете компилация за"
+msgstr "Изберете компилация за "
 
 msgid "Choose a patch for "
-msgstr "Изберете пластир за"
+msgstr "Изберете пластир за "
 
 msgid "Clear"
 msgstr "Изчисти"
 
 msgid "Companion update failed to start: "
-msgstr "Придружаващата актуализация не успя да започне:"
+msgstr "Придружаващата актуализация не успя да започне: "
 
 msgid "Confirm"
 msgstr "Потвърдете"
+
+msgid "connect: "
+msgstr "свързване: "
 
 msgid "Continue"
 msgstr "Продължи"
@@ -136,52 +178,88 @@ msgid "Copying ZenPM to Kindle homepage..."
 msgstr "Копиране на ZenPM в началната страница на Kindle..."
 
 msgid "Could not "
-msgstr "Не може"
+msgstr "Не може "
 
 msgid "Could not add source: "
-msgstr "Could not add source: "
+msgstr "Не може да се добави източник: "
+
+msgid "Could not back up the existing Kindle homepage script: "
+msgstr "Неуспешно архивиране на съществуващия скрипт за начална страница на Kindle: "
+
+msgid "Could not back up the existing standalone ZenPM installation: "
+msgstr "Не може да се архивира съществуващата самостоятелна инсталация на ZenPM: "
 
 msgid "Could not connect to "
-msgstr "Не можа да се свърже с"
+msgstr "Не можа да се свърже с "
 
 msgid "Could not connect to GitHub: "
-msgstr "Неуспешно свързване с GitHub:"
+msgstr "Неуспешно свързване с GitHub: "
 
 msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
 msgstr "Не може да се свърже с GitHub: поддръжката на HTTPS не е налична в тази компилация на KOReader."
 
 msgid "Could not create ZenPM directory: "
-msgstr "Не можа да се създаде ZenPM директория:"
+msgstr "Не можа да се създаде ZenPM директория: "
 
 msgid "Could not create ZenPM settings directory: "
-msgstr "Не можа да се създаде директория с настройки на ZenPM:"
+msgstr "Не можа да се създаде директория с настройки на ZenPM: "
 
 msgid "Could not detect repo format."
 msgstr "Форматът на хранилището не бе разпознат."
 
 msgid "Could not determine which build to install: "
-msgstr "Не може да се определи коя компилация да се инсталира:"
+msgstr "Не може да се определи коя компилация да се инсталира: "
+
+msgid "Could not find KOReader's plugins directory."
+msgstr "Не можа да се намери директорията с добавки на KOReader."
 
 msgid "Could not install bundled ZenPM backend to: "
-msgstr "Не можах да инсталирам пакетния бекенд на ZenPM към:"
+msgstr "Не можах да инсталирам пакетния бекенд на ZenPM към: "
+
+msgid "Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"
+msgstr "Неуспешно инсталиране на скрипта за начална страница на Kindle: неуспешно преименуване: %s; неуспешно копиране: %s"
+
+msgid "Could not install the standalone ZenPM payload: "
+msgstr "Не може да се инсталира самостоятелният полезен товар ZenPM: "
+
+msgid "Could not install the updated ZenPM plugin."
+msgstr "Не можа да се инсталира актуализираната добавка ZenPM."
 
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "Не може да се инсталира обвивката на командния ред на ZenPM."
 
-msgid "Could not load GitHub releases: "
-msgstr "Неуспешно зареждане на GitHub версии:"
+msgid "Could not load available versions: "
+msgstr "Неуспешно зареждане на наличните версии: "
+
+msgid "Could not move the old ZenPM plugin."
+msgstr "Не можах да преместя стария плъгин ZenPM."
+
+msgid "Could not open standalone archive."
+msgstr "Не може да се отвори самостоятелен архив."
+
+msgid "Could not open update archive."
+msgstr "Архивът на актуализацията не можа да се отвори."
+
+msgid "Could not prepare the Kindle USB storage."
+msgstr "USB паметта на Kindle не можа да се подготви."
+
+msgid "Could not prepare the standalone installation directory."
+msgstr "Не можа да се подготви самостоятелната инсталационна директория."
+
+msgid "Could not prepare the update directory."
+msgstr "Не можа да се подготви директорията за актуализация."
+
+msgid "Could not read GitHub release information."
+msgstr "Не можа да се прочете информация за версията на GitHub."
 
 msgid "Could not read log: "
-msgstr "Could not read log: "
+msgstr "Не можах да прочета дневника: "
 
 msgid "Could not remove patch: "
-msgstr "Не можа да се премахне корекцията:"
+msgstr "Не можа да се премахне корекцията: "
 
 msgid "Could not remove source: "
-msgstr "Could not remove source: "
-
-msgid "Could not remove the ZenPM plugin."
-msgstr "Приставката ZenPM не можа да бъде премахната."
+msgstr "Не може да се премахне източникът: "
 
 msgid "Could not resolve patch file."
 msgstr "Файлът с корекцията не можа да бъде разрешен."
@@ -189,8 +267,23 @@ msgstr "Файлът с корекцията не можа да бъде раз�
 msgid "Could not resolve plugin name."
 msgstr "Името на приставката не можа да бъде разрешено."
 
+msgid "Could not unpack standalone archive."
+msgstr "Неуспешно разопаковане на самостоятелен архив."
+
+msgid "Could not unpack update archive."
+msgstr "Архивът на актуализацията не можа да бъде разопакован."
+
+msgid "Could not update the package preference: "
+msgstr "Не може да се актуализира предпочитанието за пакет: "
+
+msgid "Could not verify the update download."
+msgstr "Не може да се провери изтеглянето на актуализацията."
+
 msgid "Debug"
 msgstr "Отстраняване"
+
+msgid "Descending"
+msgstr "Спускане"
 
 msgid "Description"
 msgstr "Описание"
@@ -199,19 +292,19 @@ msgid "Details"
 msgstr "Подробности"
 
 msgid "Detected ABI: "
-msgstr "Открит ABI:"
+msgstr "Открит ABI: "
 
 msgid "Detecting repo..."
 msgstr "Откриване на хранилище..."
 
-msgid "disable"
-msgstr "деактивирайте"
-
 msgid "Disable"
 msgstr "Деактивиране"
 
-msgid "disabled"
-msgstr "деактивиран"
+msgid "disable"
+msgstr "деактивирайте"
+
+msgid "Discover"
+msgstr "Открийте"
 
 msgid "downgrade"
 msgstr "понижаване"
@@ -229,43 +322,58 @@ msgid "Download and copy the latest standalone ZenPM release to the Kindle homep
 msgstr "Изтегляне и копиране на най-новата самостоятелна версия на ZenPM на началната страница на Kindle? Това добавя ZenPM скриптлет (книга) към началната страница/библиотеката на Kindle"
 
 msgid "download failed"
-msgstr "download failed"
+msgstr "изтеглянето е неуспешно"
+
+msgid "Download failed with HTTP "
+msgstr "Неуспешно изтегляне с HTTP "
+
+msgid "Download support is unavailable in this KOReader build."
+msgstr "Поддръжката за изтегляне не е налична в тази компилация на KOReader."
 
 msgid "Download this asset: "
-msgstr "Изтеглете този актив:"
+msgstr "Изтеглете този актив: "
 
-msgid "Enable"
-msgstr "Активирайте"
+msgid "Downloaded update checksum did not match."
+msgstr "Контролната сума на изтеглената актуализация не съответства."
 
 msgid "enable"
 msgstr "активирайте"
 
-msgid "enabled"
-msgstr "активиран"
+msgid "Enable"
+msgstr "Активирайте"
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Въведете вашето потребителско име в GitHub, за да бъдете маркирани в проблема"
 
+msgid "Error code: "
+msgstr "код на грешка: "
+
 msgid "Failed to load package: "
-msgstr "Failed to load package: "
+msgstr "Неуспешно зареждане на пакета: "
 
 msgid "Failed to load packages: "
-msgstr "Failed to load packages: "
+msgstr "Неуспешно зареждане на пакети: "
 
 msgid "Failed to load source: "
-msgstr "Failed to load source: "
+msgstr "Неуспешно зареждане на източника: "
 
 msgid "Failed to load sources: "
-msgstr "Failed to load sources: "
+msgstr "Неуспешно зареждане на източниците: "
 
 msgid "Failed to start package action: "
-msgstr "Failed to start package action: "
+msgstr "Неуспешно стартиране на действие на пакета: "
 
 msgid "Failed to submit report: "
-msgstr "Неуспешно изпращане на отчет:"
+msgstr "Неуспешно изпращане на отчет: "
 
 msgid "Featured"
 msgstr "Препоръчани"
+
+msgid "Filter"
+msgstr "Филтър"
+
+msgid "Filter by category"
+msgstr "Филтриране по категория"
 
 msgid "Font preview"
 msgstr "Визуализация на шрифта"
@@ -273,8 +381,14 @@ msgstr "Визуализация на шрифта"
 msgid "Font size"
 msgstr "Размер на шрифта"
 
+msgid "Fonts"
+msgstr "Шрифтове"
+
 msgid "Found %d installed plugins"
 msgstr "Намерени инсталирани плъгини %d"
+
+msgid "Games"
+msgstr "игри"
 
 msgid "Get"
 msgstr "Вземи"
@@ -286,7 +400,10 @@ msgid "GitHub download redirected too many times."
 msgstr "Изтеглянето на GitHub е пренасочено твърде много пъти."
 
 msgid "GitHub download returned HTTP "
-msgstr "Изтеглянето на GitHub върна HTTP"
+msgstr "Изтеглянето на GitHub върна HTTP "
+
+msgid "GitHub returned HTTP "
+msgstr "GitHub върна HTTP "
 
 msgid "GitHub supplied an invalid download redirect."
 msgstr "GitHub предостави невалидно пренасочване за изтегляне."
@@ -298,7 +415,16 @@ msgid "GitHub username (optional)"
 msgstr "GitHub потребителско име (по избор)"
 
 msgid "HTTPS support is unavailable in this KOReader build."
-msgstr "HTTPS support is unavailable in this KOReader build."
+msgstr "Поддръжката на HTTPS не е налична в тази компилация на KOReader."
+
+msgid "Ignore updates"
+msgstr "Игнорирайте актуализациите"
+
+msgid "Ignore updates for %s?"
+msgstr "Игнориране на актуализации за %s?"
+
+msgid "incomplete HTTP response"
+msgstr "непълен HTTP отговор"
 
 msgid "install"
 msgstr "инсталиране"
@@ -312,35 +438,56 @@ msgstr "Инсталирайте все пак"
 msgid "Install anyway?"
 msgstr "Да инсталирам все пак?"
 
+msgid "Install command-line interface"
+msgstr "Инсталирайте интерфейса на командния ред"
+
 msgid "Install to Kindle homepage"
 msgstr "Инсталирайте в началната страница на Kindle"
-
-msgid "Installed"
-msgstr "Инсталирани"
 
 msgid "installed"
 msgstr "инсталиран"
 
+msgid "Installed"
+msgstr "Инсталирани"
+
+msgid "Installed date (newest first)"
+msgstr "Дата на инсталиране (първо най-новите)"
+
+msgid "Installed date (oldest first)"
+msgstr "Дата на инсталиране (първо най-старите)"
+
 msgid "Installing"
 msgstr "Инсталиране"
+
+msgid "invalid HTTP request path"
+msgstr "невалиден път на HTTP заявка"
+
+msgid "invalid HTTP response"
+msgstr "невалиден HTTP отговор"
 
 msgid "Keep settings"
 msgstr "Запазване на настройките"
 
 msgid "Kindle homepage installation failed: "
-msgstr "Неуспешно инсталиране на началната страница на Kindle:"
+msgstr "Неуспешно инсталиране на началната страница на Kindle: "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Инсталирането на началната страница на Kindle беше отменено."
 
-msgid "Kobo network is not ready. Please wait a moment and try again."
-msgstr "Мрежата Kobo не е готова. Моля, изчакайте малко и опитайте отново."
+msgid "Kindle standalone is not supported on this device."
+msgstr "Самостоятелният Kindle не се поддържа на това устройство."
 
 msgid "KOReader settings are unavailable."
 msgstr "Настройките на KOReader не са налични."
 
+msgid "KOReader's plugins directory is not writable."
+msgstr "Директорията с плъгини на KOReader не може да се записва."
+
 msgid "Latest"
 msgstr "Последни"
+
+msgid "Loading available versions..."
+msgstr "Наличните версии се зареждат..."
 
 msgid "Loading categories..."
 msgstr "Категориите се зареждат..."
@@ -350,9 +497,6 @@ msgstr "Категорията се зарежда..."
 
 msgid "Loading featured packages..."
 msgstr "Зареждане на препоръчани пакети..."
-
-msgid "Loading GitHub releases..."
-msgstr "Изданията на GitHub се зареждат..."
 
 msgid "Loading installed packages..."
 msgstr "Зареждане на инсталирани пакети..."
@@ -366,6 +510,9 @@ msgstr "Зареждане на пакетите, моля изчакайте"
 msgid "Loading packages..."
 msgstr "Зареждане на пакети..."
 
+msgid "Loading release notes..."
+msgstr "Бележките по версията се зареждат..."
+
 msgid "Loading source..."
 msgstr "Зареждане на източник..."
 
@@ -374,6 +521,9 @@ msgstr "Зареждане на източници..."
 
 msgid "Log is empty."
 msgstr "Логът е празен."
+
+msgid "Media"
+msgstr "Медия"
 
 msgid "Modify"
 msgstr "Промени"
@@ -393,14 +543,20 @@ msgstr "Няма намерени категории."
 msgid "No categories match the filter."
 msgstr "Няма категории, които отговарят на филтъра."
 
+msgid "No compatible ZenPM release is available for this platform (expected %s)."
+msgstr "Няма налична съвместима версия на ZenPM за тази платформа (очаква се %s)."
+
+msgid "No compatible ZenPM release is available for this platform."
+msgstr "Няма съвместимо издание на ZenPM за тази платформа."
+
 msgid "No description"
 msgstr "Няма описание"
 
 msgid "No description available."
 msgstr "Няма налично описание."
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "Не бяха намерени издания на GitHub с ZIP активи."
+msgid "No installable versions were found."
+msgstr "Не бяха намерени версии за инсталиране."
 
 msgid "No installed packages match the filter."
 msgstr "Няма инсталирани пакети, съвпадащи с филтъра."
@@ -429,8 +585,14 @@ msgstr "Няма операции на опашка."
 msgid "No README available."
 msgstr "Няма наличен README."
 
+msgid "No release notes available."
+msgstr "Няма налични бележки за изданието."
+
 msgid "No repositories configured."
 msgstr "Няма конфигурирани хранилища."
+
+msgid "No standalone Kindle ZenPM release is available."
+msgstr "Не е налично самостоятелно издание на Kindle ZenPM."
 
 msgid "None"
 msgstr "Няма"
@@ -444,8 +606,11 @@ msgstr "OK"
 msgid "Only show installable packages"
 msgstr "Показване само на инсталируеми пакети"
 
-msgid "Open ZenPM"
-msgstr "Отвори ZenPM"
+msgid "Only this version"
+msgstr "Само тази версия"
+
+msgid "Open ZenPM after restart"
+msgstr "Отворете ZenPM след рестартиране"
 
 msgid "Package"
 msgstr "Пакет"
@@ -456,14 +621,11 @@ msgstr "Детайли за пакета"
 msgid "Package has no id."
 msgstr "Пакетът няма id."
 
-msgid "Package manager for KOReader."
-msgstr "Мениджър на пакети за KOReader."
-
 msgid "Package not found."
 msgstr "Пакетът не е намерен."
 
 msgid "Package operation status could not be checked. See Debug log."
-msgstr "Package operation status could not be checked. See Debug log."
+msgstr "Операционният статус на пакета не може да бъде проверен. Вижте регистрационния файл за отстраняване на грешки."
 
 msgid "packages"
 msgstr "пакети"
@@ -484,22 +646,28 @@ msgid "Patches"
 msgstr "Кръпки"
 
 msgid "Platform: "
-msgstr "платформа:"
+msgstr "платформа: "
 
 msgid "Please enter a URL."
 msgstr "Въведете URL."
 
 msgid "Plugin scan failed: "
-msgstr "Неуспешно сканиране на добавки:"
+msgstr "Неуспешно сканиране на добавки: "
+
+msgid "poll: "
+msgstr "анкета: "
 
 msgid "prerelease"
 msgstr "предварително издание"
+
+msgid "Productivity"
+msgstr "Производителност"
 
 msgid "Queue"
 msgstr "Опашка"
 
 msgid "Queue %d/%d: "
-msgstr "Опашка %d/%d:"
+msgstr "Опашка %d/%d: "
 
 msgid "Queue completed: %d succeeded, %d failed."
 msgstr "Опашката е завършена: %d успешно, %d неуспешно."
@@ -519,11 +687,17 @@ msgstr "Изход"
 msgid "README"
 msgstr "README"
 
+msgid "Recently updated"
+msgstr "Наскоро актуализиран"
+
+msgid "recv: "
+msgstr "recv: "
+
 msgid "Refresh"
 msgstr "Обнови"
 
-msgid "Refresh failed: "
-msgstr "Refresh failed: "
+msgid "Refresh failed"
+msgstr "Опресняването не бе успешно"
 
 msgid "Refreshing repositories..."
 msgstr "Обновяване на хранилищата..."
@@ -539,6 +713,12 @@ msgstr "преинсталиран"
 
 msgid "Reinstalling"
 msgstr "Преинсталиране"
+
+msgid "Reinstalling ZenPM..."
+msgstr "Преинсталиране на ZenPM..."
+
+msgid "Release Notes"
+msgstr "Бележки по изданието"
 
 msgid "remote server"
 msgstr "отдалечен сървър"
@@ -565,7 +745,7 @@ msgid "Report a Bug"
 msgstr "Докладване за грешка"
 
 msgid "request failed"
-msgstr "request failed"
+msgstr "заявката е неуспешна"
 
 msgid "Restart KOReader to apply the changes."
 msgstr "Рестартирайте KOReader, за да приложите промените."
@@ -603,20 +783,20 @@ msgstr "Категория за търсене"
 msgid "Search category..."
 msgstr "Категория за търсене..."
 
-msgid "Search installed packages"
-msgstr "Търсете инсталирани пакети"
-
-msgid "Search installed..."
-msgstr "Търсенето е инсталирано..."
-
 msgid "Search packages"
 msgstr "Търсене на пакети"
+
+msgid "Search source"
+msgstr "Източник на търсене"
+
+msgid "Search source..."
+msgstr "Търсене в източника..."
 
 msgid "Search..."
 msgstr "Търсене..."
 
-msgid "Select version for "
-msgstr "Изберете версия за"
+msgid "send: "
+msgstr "изпрати: "
 
 msgid "Settings"
 msgstr "Настройки"
@@ -633,11 +813,20 @@ msgstr "Показване на README изображения"
 msgid "Skip"
 msgstr "Пропускане"
 
+msgid "socket closed while sending"
+msgstr "гнездото е затворено по време на изпращане"
+
+msgid "socket error"
+msgstr "грешка в гнездото"
+
 msgid "Sort"
 msgstr "Сортиране"
 
 msgid "Sort packages"
 msgstr "Сортирайте пакети"
+
+msgid "Sort sources"
+msgstr "Сортирайте източниците"
 
 msgid "Source"
 msgstr "Източник"
@@ -647,6 +836,15 @@ msgstr "Източникът не е намерен."
 
 msgid "Sources"
 msgstr "Източници"
+
+msgid "Standalone archive does not contain a complete Kindle installation."
+msgstr "Самостоятелният архив не съдържа пълна инсталация на Kindle."
+
+msgid "Standalone archive has an invalid layout."
+msgstr "Самостоятелният архив има невалидно оформление."
+
+msgid "Standalone archive is empty."
+msgstr "Самостоятелният архив е празен."
 
 msgid "Stars"
 msgstr "Звезди"
@@ -660,50 +858,89 @@ msgstr "Изпратете"
 msgid "Submitting report…"
 msgstr "Докладът се изпраща..."
 
+msgid "The selected ZenPM version is not available for this platform."
+msgstr "Избраната версия на ZenPM не е налична за тази платформа."
+
+msgid "The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."
+msgstr "Самостоятелният полезен товар беше инсталиран, но неговият скрипт за настройка на Kindle се провали. Вижте %s или стартирайте %s от KUAL, за да опитате отново."
+
+msgid "Theme"
+msgstr "Тема"
+
 msgid "This release has no ZIP assets."
 msgstr "Тази версия няма ZIP активи."
 
 msgid "This will install as a \"book\" on the Kindle homescreen."
-msgstr "Това ще се инсталира като \"книга\" на началния екран на Kindle."
+msgstr "Това ще се инсталира като „книга“ на началния екран на Kindle."
+
+msgid "timeout"
+msgstr "таймаут"
+
+msgid "Title (A-Z)"
+msgstr "Заглавие (A-Z)"
+
+msgid "Title (Z-A)"
+msgstr "Заглавие (Я-А)"
 
 msgid "to"
 msgstr "към"
 
-msgid "Uninstall"
-msgstr "Деинсталирай"
+msgid "Today"
+msgstr "Днес"
 
 msgid "uninstall"
 msgstr "деинсталиране"
 
-msgid "Uninstall ZenPM?"
-msgstr "Деинсталиране на ZenPM?"
+msgid "Uninstall"
+msgstr "Деинсталирай"
 
 msgid "uninstalled"
 msgstr "деинсталиран"
 
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "деинсталиран успешно.\n\nПремахване на настройките на приставката?"
+
 msgid "Uninstalling"
 msgstr "Деинсталиране"
 
-msgid "Uninstalling ZenPM..."
-msgstr "Деинсталиране на ZenPM..."
+msgid "Unix socket path is too long"
+msgstr "Пътят на Unix сокет е твърде дълъг"
+
+msgid "Unix socket support is unavailable."
+msgstr "Поддръжката на Unix сокет не е налична."
+
+msgid "unknown error"
+msgstr "неизвестна грешка"
 
 msgid "Unknown package"
 msgstr "Неизвестен пакет"
 
-msgid "Update"
-msgstr "Актуализирай"
-
 msgid "update"
 msgstr "актуализация"
 
+msgid "Update"
+msgstr "Актуализирай"
+
 msgid "Update All"
 msgstr "Актуализиране на всички"
+
+msgid "Update archive does not contain a ZenPM plugin."
+msgstr "Архивът на актуализацията не съдържа плъгин ZenPM."
+
+msgid "Update archive has an invalid layout."
+msgstr "Актуализационният архив има невалидно оформление."
+
+msgid "Update archive is empty."
+msgstr "Архивът на актуализацията е празен."
+
+msgid "Update available"
+msgstr "Налична актуализация"
 
 msgid "Update check was cancelled."
 msgstr "Проверката на актуализацията беше анулирана."
 
 msgid "Update failed: "
-msgstr "Update failed: "
+msgstr "Неуспешна актуализация: "
 
 msgid "Update was cancelled."
 msgstr "Актуализацията беше отменена."
@@ -723,14 +960,26 @@ msgstr "ZenPM се актуализира..."
 msgid "username"
 msgstr "потребителско име"
 
+msgid "Utility"
+msgstr "полезност"
+
 msgid "Version: "
 msgstr "Версия: "
+
+msgid "Versions"
+msgstr "Версии"
 
 msgid "Welcome"
 msgstr "Добре дошли"
 
+msgid "Yesterday"
+msgstr "Вчера"
+
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "Интерфейс на Zen Package Manager за KOReader."
+
+msgid "ZenLabs Repo"
+msgstr "Хранилище на ZenLabs"
 
 msgid "ZenOS is installed. Most patches should not be used with ZenOS."
 msgstr "ZenOS е инсталиран. Повечето пачове не трябва да се използват с ZenOS."
@@ -745,7 +994,7 @@ msgid "ZenPM Android companion is not available."
 msgstr "ZenPM Android companion не е наличен."
 
 msgid "ZenPM Android companion is not installed or could not start. See "
-msgstr "ZenPM Android companion не е инсталиран или не може да стартира. Вижте"
+msgstr "ZenPM Android companion не е инсталиран или не може да стартира. Вижте "
 
 msgid "ZenPM backend"
 msgstr "Бекенд на ZenPM"
@@ -756,11 +1005,17 @@ msgstr "Бекендът на ZenPM не стартира. Уверете се, 
 msgid "ZenPM bug reporter"
 msgstr "Репортер на грешки в ZenPM"
 
+msgid "ZenPM command-line interface installed."
+msgstr "Инсталиран интерфейс на командния ред на ZenPM."
+
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion проверява за актуализация."
 
 msgid "ZenPM companion update failed."
 msgstr "Придружаващата актуализация на ZenPM не бе успешна."
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM демонът не е достъпен. Стартирайте повторно инсталатора на ZenPM, ако не работи."
 
 msgid "ZenPM font size"
 msgstr "Размер на шрифта ZenPM"
@@ -779,3 +1034,9 @@ msgstr "ZenPM v"
 
 msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
 msgstr "ZenPM.log и crash.log на KOReader (ако има такъв) ще бъдат прикачени към публичен проблем на GitHub. Те могат да съдържат имена на пакети, URL адреси на хранилища и пътища на файлове."
+
+msgid "ZenPM: Open"
+msgstr "ZenPM: Отворете"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM: Актуализирайте всички"
