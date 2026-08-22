@@ -56,15 +56,15 @@ func Run(home, logHome, koreaderRoot string, port int) {
 	serve(home, logHome, port)
 }
 
-// Stop closes the active listener. A stop arriving while Run is initializing
-// is remembered so the listener is closed as soon as it is available.
+// Stop requests shutdown of the active listener after accepted work finishes.
+// A stop arriving while Run is initializing is remembered for the new server.
 func Stop() {
 	serverMu.Lock()
 	stopRequested = true
 	srv := activeServer
 	serverMu.Unlock()
 	if srv != nil {
-		_ = srv.Close()
+		_ = srv.CloseAfterBackgroundJobs()
 	}
 }
 
@@ -99,7 +99,7 @@ func serve(home, logHome string, port int) {
 	shouldStop := stopRequested
 	serverMu.Unlock()
 	if shouldStop {
-		_ = srv.Close()
+		_ = srv.CloseAfterBackgroundJobs()
 	}
 	if err := srv.ListenAndServe(); err != nil {
 		log.Errorf("Server error: %v", err)

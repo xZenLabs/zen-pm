@@ -44,6 +44,10 @@ android {
     }
 }
 
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
+
 tasks.register('buildZenPMNative', Exec) {
     workingDir rootProject.projectDir
     commandLine 'sh', 'build-native.sh'

@@ -6,17 +6,35 @@ msgstr ""
 "Language: zh_CN\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+msgid "\nABI: "
+msgstr "\n阿比： "
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " 没有完成。\n\n检查调试日志以获取详细信息。"
+
 msgid " is available. Update now?"
-msgstr "可用。现在更新吗？"
+msgstr " 可用。现在更新吗？"
 
 msgid " returned HTTP "
-msgstr "返回 HTTP"
+msgstr " 返回 HTTP "
 
 msgid " successfully."
-msgstr "成功。"
+msgstr " 成功。"
+
+msgid " successfully.\n\nRemove plugin settings?"
+msgstr " 成功地。\n\n删除插件设置？"
+
+msgid " successfully.\n\nRestart KOReader to apply the change."
+msgstr " 成功地。\n\n重新启动 KOReader 以应用更改。"
+
+msgid " successfully.\n\nRestart KOReader to load the plugin."
+msgstr " 成功地。\n\n重新启动 KOReader 以加载插件。"
 
 msgid " was copied to the Kindle homepage."
-msgstr "被复制到Kindle主页。"
+msgstr " 被复制到Kindle主页。"
+
+msgid "%d days ago"
+msgstr "%d 天前"
 
 msgid "%d packages queued"
 msgstr "%d 包已排队"
@@ -27,11 +45,20 @@ msgstr "%s与%s冲突。它们不应该一起使用。还是要安装吗？"
 msgid "(installed)"
 msgstr "（已安装）"
 
+msgid ".\n\nRestart KOReader to use the new version."
+msgstr "。\n\n重新启动 KOReader 以使用新版本。"
+
 msgid "... Please wait."
 msgstr "... 请稍等。"
 
 msgid "1 package queued"
 msgstr "1 个包裹已排队"
+
+msgid "[Image: %s]"
+msgstr "[图片：%s]"
+
+msgid "[Image]"
+msgstr "[图像]"
 
 msgid "A short summary of what went wrong"
 msgstr "问题的简短摘要"
@@ -48,14 +75,23 @@ msgstr "添加来源"
 msgid "Added to Queue"
 msgstr "已添加到队列"
 
+msgid "Advanced"
+msgstr "先进的"
+
+msgid "All categories"
+msgstr "所有类别"
+
+msgid "Allow updates"
+msgstr "允许更新"
+
+msgid "Always ignore"
+msgstr "总是忽略"
+
 msgid "Always manually pick version"
 msgstr "始终手动选择版本"
 
 msgid "Another operation is in progress. Please wait."
 msgstr "另一个操作正在进行。请稍候。"
-
-msgid "Are you sure you want to "
-msgstr "您确定要吗"
 
 msgid "Are you sure you want to clear the queue?"
 msgstr "您确定要清除队列吗？"
@@ -64,7 +100,10 @@ msgid "Are you sure you want to perform all queued actions?"
 msgstr "您确定要执行所有排队的操作吗？"
 
 msgid "Are you sure you want to remove "
-msgstr "您确定要删除吗"
+msgstr "您确定要删除吗 "
+
+msgid "Ascending"
+msgstr "升序"
 
 msgid "Author: Anthony Gress (ZenLabs)"
 msgstr "作者：Anthony Gress (ZenLabs)"
@@ -85,7 +124,7 @@ msgid "Bug report title"
 msgstr "错误报告标题"
 
 msgid "By "
-msgstr "作者："
+msgstr "作者： "
 
 msgid "Cancel"
 msgstr "取消"
@@ -102,8 +141,8 @@ msgstr "未找到类别。"
 msgid "Change version"
 msgstr "更改版本"
 
-msgid "Check for updates automatically"
-msgstr "自动检查更新"
+msgid "Changes"
+msgstr "变化"
 
 msgid "Check the debug log for details."
 msgstr "检查调试日志以获取详细信息。"
@@ -112,19 +151,22 @@ msgid "Checking for update..."
 msgstr "正在检查更新..."
 
 msgid "Choose a build for "
-msgstr "选择一个版本"
+msgstr "选择一个版本 "
 
 msgid "Choose a patch for "
-msgstr "选择一个补丁"
+msgstr "选择一个补丁 "
 
 msgid "Clear"
 msgstr "清除"
 
 msgid "Companion update failed to start: "
-msgstr "配套更新无法启动："
+msgstr "配套更新无法启动： "
 
 msgid "Confirm"
 msgstr "确认"
+
+msgid "connect: "
+msgstr "连接： "
 
 msgid "Continue"
 msgstr "继续"
@@ -136,52 +178,88 @@ msgid "Copying ZenPM to Kindle homepage..."
 msgstr "正在将 ZenPM 复制到 Kindle 主页..."
 
 msgid "Could not "
-msgstr "不能"
+msgstr "不能 "
 
 msgid "Could not add source: "
-msgstr "Could not add source: "
+msgstr "无法添加源： "
+
+msgid "Could not back up the existing Kindle homepage script: "
+msgstr "无法备份现有的 Kindle 主页脚本： "
+
+msgid "Could not back up the existing standalone ZenPM installation: "
+msgstr "无法备份现有的独立 ZenPM 安装： "
 
 msgid "Could not connect to "
-msgstr "无法连接到"
+msgstr "无法连接到 "
 
 msgid "Could not connect to GitHub: "
-msgstr "无法连接到 GitHub："
+msgstr "无法连接到 GitHub： "
 
 msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
 msgstr "无法连接到 GitHub：此 KOReader 版本中不提供 HTTPS 支持。"
 
 msgid "Could not create ZenPM directory: "
-msgstr "无法创建 ZenPM 目录："
+msgstr "无法创建 ZenPM 目录： "
 
 msgid "Could not create ZenPM settings directory: "
-msgstr "无法创建 ZenPM 设置目录："
+msgstr "无法创建 ZenPM 设置目录： "
 
 msgid "Could not detect repo format."
 msgstr "无法检测仓库格式。"
 
 msgid "Could not determine which build to install: "
-msgstr "无法确定要安装哪个版本："
+msgstr "无法确定要安装哪个版本： "
+
+msgid "Could not find KOReader's plugins directory."
+msgstr "找不到 KOReader 的插件目录。"
 
 msgid "Could not install bundled ZenPM backend to: "
-msgstr "无法将捆绑的 ZenPM 后端安装到："
+msgstr "无法将捆绑的 ZenPM 后端安装到： "
+
+msgid "Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"
+msgstr "无法安装 Kindle 主页脚本：重命名失败：%s；复制失败：%s"
+
+msgid "Could not install the standalone ZenPM payload: "
+msgstr "无法安装独立的 ZenPM 负载： "
+
+msgid "Could not install the updated ZenPM plugin."
+msgstr "无法安装更新的 ZenPM 插件。"
 
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "无法安装 ZenPM 命令行包装器。"
 
-msgid "Could not load GitHub releases: "
-msgstr "无法加载 GitHub 版本："
+msgid "Could not load available versions: "
+msgstr "无法加载可用版本： "
+
+msgid "Could not move the old ZenPM plugin."
+msgstr "无法移动旧的 ZenPM 插件。"
+
+msgid "Could not open standalone archive."
+msgstr "无法打开独立存档。"
+
+msgid "Could not open update archive."
+msgstr "无法打开更新存档。"
+
+msgid "Could not prepare the Kindle USB storage."
+msgstr "无法准备 Kindle USB 存储设备。"
+
+msgid "Could not prepare the standalone installation directory."
+msgstr "无法准备独立安装目录。"
+
+msgid "Could not prepare the update directory."
+msgstr "无法准备更新目录。"
+
+msgid "Could not read GitHub release information."
+msgstr "无法读取 GitHub 发布信息。"
 
 msgid "Could not read log: "
-msgstr "Could not read log: "
+msgstr "无法读取日志： "
 
 msgid "Could not remove patch: "
-msgstr "无法删除补丁："
+msgstr "无法删除补丁： "
 
 msgid "Could not remove source: "
-msgstr "Could not remove source: "
-
-msgid "Could not remove the ZenPM plugin."
-msgstr "无法删除 ZenPM 插件。"
+msgstr "无法删除源： "
 
 msgid "Could not resolve patch file."
 msgstr "无法解析补丁文件。"
@@ -189,8 +267,23 @@ msgstr "无法解析补丁文件。"
 msgid "Could not resolve plugin name."
 msgstr "无法解析插件名称。"
 
+msgid "Could not unpack standalone archive."
+msgstr "无法解压独立存档。"
+
+msgid "Could not unpack update archive."
+msgstr "无法解压缩更新存档。"
+
+msgid "Could not update the package preference: "
+msgstr "无法更新包首选项： "
+
+msgid "Could not verify the update download."
+msgstr "无法验证更新下载。"
+
 msgid "Debug"
 msgstr "调试"
+
+msgid "Descending"
+msgstr "降序"
 
 msgid "Description"
 msgstr "描述"
@@ -199,19 +292,19 @@ msgid "Details"
 msgstr "细节"
 
 msgid "Detected ABI: "
-msgstr "检测到的 ABI："
+msgstr "检测到的 ABI： "
 
 msgid "Detecting repo..."
 msgstr "正在检测仓库..."
 
-msgid "disable"
-msgstr "禁用"
-
 msgid "Disable"
 msgstr "禁用"
 
-msgid "disabled"
-msgstr "残疾人"
+msgid "disable"
+msgstr "禁用"
+
+msgid "Discover"
+msgstr "发现"
 
 msgid "downgrade"
 msgstr "降级"
@@ -229,43 +322,58 @@ msgid "Download and copy the latest standalone ZenPM release to the Kindle homep
 msgstr "下载最新的独立 ZenPM 版本并将其复制到 Kindle 主页？这会将 ZenPM scriptlet（书籍）添加到 Kindle 主页/图书馆"
 
 msgid "download failed"
-msgstr "download failed"
+msgstr "下载失败"
+
+msgid "Download failed with HTTP "
+msgstr "HTTP 下载失败 "
+
+msgid "Download support is unavailable in this KOReader build."
+msgstr "此 KOReader 版本不提供下载支持。"
 
 msgid "Download this asset: "
-msgstr "下载该资源："
+msgstr "下载该资源： "
 
-msgid "Enable"
-msgstr "使能够"
+msgid "Downloaded update checksum did not match."
+msgstr "下载的更新校验和不匹配。"
 
 msgid "enable"
 msgstr "使能够"
 
-msgid "enabled"
-msgstr "已启用"
+msgid "Enable"
+msgstr "使能够"
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "输入要在问题中标记的 GitHub 用户名"
 
+msgid "Error code: "
+msgstr "错误代码： "
+
 msgid "Failed to load package: "
-msgstr "Failed to load package: "
+msgstr "加载包失败： "
 
 msgid "Failed to load packages: "
-msgstr "Failed to load packages: "
+msgstr "加载包失败： "
 
 msgid "Failed to load source: "
-msgstr "Failed to load source: "
+msgstr "无法加载源： "
 
 msgid "Failed to load sources: "
-msgstr "Failed to load sources: "
+msgstr "无法加载源： "
 
 msgid "Failed to start package action: "
-msgstr "Failed to start package action: "
+msgstr "无法启动包操作： "
 
 msgid "Failed to submit report: "
-msgstr "提交报告失败："
+msgstr "提交报告失败： "
 
 msgid "Featured"
 msgstr "精选"
+
+msgid "Filter"
+msgstr "筛选"
+
+msgid "Filter by category"
+msgstr "按类别过滤"
 
 msgid "Font preview"
 msgstr "字体预览"
@@ -273,8 +381,14 @@ msgstr "字体预览"
 msgid "Font size"
 msgstr "字体大小"
 
+msgid "Fonts"
+msgstr "字体"
+
 msgid "Found %d installed plugins"
 msgstr "找到%d安装的插件"
+
+msgid "Games"
+msgstr "游戏"
 
 msgid "Get"
 msgstr "获取"
@@ -286,7 +400,10 @@ msgid "GitHub download redirected too many times."
 msgstr "GitHub 下载重定向次数过多。"
 
 msgid "GitHub download returned HTTP "
-msgstr "GitHub下载返回HTTP"
+msgstr "GitHub下载返回HTTP "
+
+msgid "GitHub returned HTTP "
+msgstr "GitHub 返回 HTTP "
 
 msgid "GitHub supplied an invalid download redirect."
 msgstr "GitHub 提供了无效的下载重定向。"
@@ -298,7 +415,16 @@ msgid "GitHub username (optional)"
 msgstr "GitHub 用户名（可选）"
 
 msgid "HTTPS support is unavailable in this KOReader build."
-msgstr "HTTPS support is unavailable in this KOReader build."
+msgstr "此 KOReader 版本中不提供 HTTPS 支持。"
+
+msgid "Ignore updates"
+msgstr "忽略更新"
+
+msgid "Ignore updates for %s?"
+msgstr "忽略%s的更新？"
+
+msgid "incomplete HTTP response"
+msgstr "HTTP 响应不完整"
 
 msgid "install"
 msgstr "安装"
@@ -312,35 +438,56 @@ msgstr "无论如何安装"
 msgid "Install anyway?"
 msgstr "还是要安装吗？"
 
+msgid "Install command-line interface"
+msgstr "安装命令行界面"
+
 msgid "Install to Kindle homepage"
 msgstr "安装到Kindle主页"
-
-msgid "Installed"
-msgstr "已安装"
 
 msgid "installed"
 msgstr "已安装"
 
+msgid "Installed"
+msgstr "已安装"
+
+msgid "Installed date (newest first)"
+msgstr "安装日期（最新的在前）"
+
+msgid "Installed date (oldest first)"
+msgstr "安装日期（最早的在前）"
+
 msgid "Installing"
 msgstr "正在安装"
+
+msgid "invalid HTTP request path"
+msgstr "无效的 HTTP 请求路径"
+
+msgid "invalid HTTP response"
+msgstr "无效的 HTTP 响应"
 
 msgid "Keep settings"
 msgstr "保留设置"
 
 msgid "Kindle homepage installation failed: "
-msgstr "Kindle主页安装失败："
+msgstr "Kindle主页安装失败： "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Kindle 主页安装已取消。"
 
-msgid "Kobo network is not ready. Please wait a moment and try again."
-msgstr "Kobo 网络尚未准备好。请稍等片刻，然后重试。"
+msgid "Kindle standalone is not supported on this device."
+msgstr "此设备不支持 Kindle 独立版。"
 
 msgid "KOReader settings are unavailable."
 msgstr "KOReader 设置不可用。"
 
+msgid "KOReader's plugins directory is not writable."
+msgstr "KOReader 的插件目录不可写。"
+
 msgid "Latest"
 msgstr "最新的"
+
+msgid "Loading available versions..."
+msgstr "正在加载可用版本..."
 
 msgid "Loading categories..."
 msgstr "正在加载类别..."
@@ -350,9 +497,6 @@ msgstr "正在加载类别..."
 
 msgid "Loading featured packages..."
 msgstr "正在加载精选软件包..."
-
-msgid "Loading GitHub releases..."
-msgstr "正在加载 GitHub 版本..."
 
 msgid "Loading installed packages..."
 msgstr "正在加载已安装软件包..."
@@ -366,6 +510,9 @@ msgstr "正在加载软件包，请稍候"
 msgid "Loading packages..."
 msgstr "正在加载软件包..."
 
+msgid "Loading release notes..."
+msgstr "正在加载发行说明..."
+
 msgid "Loading source..."
 msgstr "正在加载来源..."
 
@@ -374,6 +521,9 @@ msgstr "正在加载来源..."
 
 msgid "Log is empty."
 msgstr "日志为空。"
+
+msgid "Media"
+msgstr "媒体"
 
 msgid "Modify"
 msgstr "修改"
@@ -393,14 +543,20 @@ msgstr "未找到类别。"
 msgid "No categories match the filter."
 msgstr "没有与过滤器匹配的类别。"
 
+msgid "No compatible ZenPM release is available for this platform (expected %s)."
+msgstr "没有适用于此平台的兼容 ZenPM 版本（预计为%s）。"
+
+msgid "No compatible ZenPM release is available for this platform."
+msgstr "没有适用于此平台的兼容 ZenPM 版本。"
+
 msgid "No description"
 msgstr "无描述"
 
 msgid "No description available."
 msgstr "没有可用描述。"
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "未找到包含 ZIP 资产的 GitHub 版本。"
+msgid "No installable versions were found."
+msgstr "未找到可安装的版本。"
 
 msgid "No installed packages match the filter."
 msgstr "没有已安装的软件包符合筛选条件。"
@@ -429,8 +585,14 @@ msgstr "没有排队操作。"
 msgid "No README available."
 msgstr "没有可用的自述文件。"
 
+msgid "No release notes available."
+msgstr "没有可用的发行说明。"
+
 msgid "No repositories configured."
 msgstr "未配置仓库。"
+
+msgid "No standalone Kindle ZenPM release is available."
+msgstr "没有独立的 Kindle ZenPM 版本可用。"
 
 msgid "None"
 msgstr "无"
@@ -444,8 +606,11 @@ msgstr "确定"
 msgid "Only show installable packages"
 msgstr "只显示可安装的包"
 
-msgid "Open ZenPM"
-msgstr "打开 ZenPM"
+msgid "Only this version"
+msgstr "只有这个版本"
+
+msgid "Open ZenPM after restart"
+msgstr "重启后打开ZenPM"
 
 msgid "Package"
 msgstr "软件包"
@@ -456,14 +621,11 @@ msgstr "软件包详情"
 msgid "Package has no id."
 msgstr "软件包没有 id。"
 
-msgid "Package manager for KOReader."
-msgstr "KOReader 的包管理器。"
-
 msgid "Package not found."
 msgstr "未找到软件包。"
 
 msgid "Package operation status could not be checked. See Debug log."
-msgstr "Package operation status could not be checked. See Debug log."
+msgstr "无法检查包运行状态。请参阅调试日志。"
 
 msgid "packages"
 msgstr "包"
@@ -484,22 +646,28 @@ msgid "Patches"
 msgstr "补丁"
 
 msgid "Platform: "
-msgstr "平台："
+msgstr "平台： "
 
 msgid "Please enter a URL."
 msgstr "请输入 URL。"
 
 msgid "Plugin scan failed: "
-msgstr "插件扫描失败："
+msgstr "插件扫描失败： "
+
+msgid "poll: "
+msgstr "轮询： "
 
 msgid "prerelease"
 msgstr "预发行"
+
+msgid "Productivity"
+msgstr "生产率"
 
 msgid "Queue"
 msgstr "队列"
 
 msgid "Queue %d/%d: "
-msgstr "队列%d/%d："
+msgstr "队列%d/%d： "
 
 msgid "Queue completed: %d succeeded, %d failed."
 msgstr "队列完成：%d成功，%d失败。"
@@ -519,11 +687,17 @@ msgstr "退出"
 msgid "README"
 msgstr "自述文件"
 
+msgid "Recently updated"
+msgstr "最近更新"
+
+msgid "recv: "
+msgstr "接收： "
+
 msgid "Refresh"
 msgstr "刷新"
 
-msgid "Refresh failed: "
-msgstr "Refresh failed: "
+msgid "Refresh failed"
+msgstr "刷新失败"
 
 msgid "Refreshing repositories..."
 msgstr "正在刷新仓库..."
@@ -539,6 +713,12 @@ msgstr "已重新安装"
 
 msgid "Reinstalling"
 msgstr "正在重新安装"
+
+msgid "Reinstalling ZenPM..."
+msgstr "正在重新安装 ZenPM..."
+
+msgid "Release Notes"
+msgstr "发行说明"
 
 msgid "remote server"
 msgstr "远程服务器"
@@ -565,7 +745,7 @@ msgid "Report a Bug"
 msgstr "报告错误"
 
 msgid "request failed"
-msgstr "request failed"
+msgstr "请求失败"
 
 msgid "Restart KOReader to apply the changes."
 msgstr "重新启动 KOReader 以应用更改。"
@@ -603,20 +783,20 @@ msgstr "搜索类别"
 msgid "Search category..."
 msgstr "搜索类别..."
 
-msgid "Search installed packages"
-msgstr "搜索已安装的软件包"
-
-msgid "Search installed..."
-msgstr "搜索已安装..."
-
 msgid "Search packages"
 msgstr "搜索软件包"
+
+msgid "Search source"
+msgstr "搜索来源"
+
+msgid "Search source..."
+msgstr "搜索来源..."
 
 msgid "Search..."
 msgstr "搜索..."
 
-msgid "Select version for "
-msgstr "选择版本"
+msgid "send: "
+msgstr "发送： "
 
 msgid "Settings"
 msgstr "设置"
@@ -633,11 +813,20 @@ msgstr "显示自述文件图像"
 msgid "Skip"
 msgstr "跳过"
 
+msgid "socket closed while sending"
+msgstr "发送时套接字关闭"
+
+msgid "socket error"
+msgstr "套接字错误"
+
 msgid "Sort"
 msgstr "种类"
 
 msgid "Sort packages"
 msgstr "对包裹进行排序"
+
+msgid "Sort sources"
+msgstr "对来源进行排序"
 
 msgid "Source"
 msgstr "来源"
@@ -647,6 +836,15 @@ msgstr "未找到来源。"
 
 msgid "Sources"
 msgstr "来源"
+
+msgid "Standalone archive does not contain a complete Kindle installation."
+msgstr "独立存档不包含完整的 Kindle 安装。"
+
+msgid "Standalone archive has an invalid layout."
+msgstr "独立存档的布局无效。"
+
+msgid "Standalone archive is empty."
+msgstr "独立存档为空。"
 
 msgid "Stars"
 msgstr "星星"
@@ -660,50 +858,89 @@ msgstr "提交"
 msgid "Submitting report…"
 msgstr "正在提交报告..."
 
+msgid "The selected ZenPM version is not available for this platform."
+msgstr "所选的 ZenPM 版本不适用于该平台。"
+
+msgid "The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."
+msgstr "独立有效负载已安装，但其 Kindle 设置脚本失败。请参阅%s或从 KUAL 运行%s重试。"
+
+msgid "Theme"
+msgstr "主题"
+
 msgid "This release has no ZIP assets."
 msgstr "此版本没有 ZIP 资产。"
 
 msgid "This will install as a \"book\" on the Kindle homescreen."
 msgstr "这将作为一本“书”安装在 Kindle 主屏幕上。"
 
+msgid "timeout"
+msgstr "暂停"
+
+msgid "Title (A-Z)"
+msgstr "标题（A-Z）"
+
+msgid "Title (Z-A)"
+msgstr "标题 (Z-A)"
+
 msgid "to"
 msgstr "到"
 
-msgid "Uninstall"
-msgstr "卸载"
+msgid "Today"
+msgstr "今天"
 
 msgid "uninstall"
 msgstr "卸载"
 
-msgid "Uninstall ZenPM?"
-msgstr "卸载ZenPM？"
+msgid "Uninstall"
+msgstr "卸载"
 
 msgid "uninstalled"
 msgstr "已卸载"
 
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "卸载成功。\n\n删除插件设置？"
+
 msgid "Uninstalling"
 msgstr "正在卸载"
 
-msgid "Uninstalling ZenPM..."
-msgstr "正在卸载 ZenPM..."
+msgid "Unix socket path is too long"
+msgstr "Unix 套接字路径太长"
+
+msgid "Unix socket support is unavailable."
+msgstr "Unix 套接字支持不可用。"
+
+msgid "unknown error"
+msgstr "未知错误"
 
 msgid "Unknown package"
 msgstr "未知软件包"
 
-msgid "Update"
+msgid "update"
 msgstr "更新"
 
-msgid "update"
+msgid "Update"
 msgstr "更新"
 
 msgid "Update All"
 msgstr "全部更新"
 
+msgid "Update archive does not contain a ZenPM plugin."
+msgstr "更新存档不包含 ZenPM 插件。"
+
+msgid "Update archive has an invalid layout."
+msgstr "更新存档的布局无效。"
+
+msgid "Update archive is empty."
+msgstr "更新存档为空。"
+
+msgid "Update available"
+msgstr "可用更新"
+
 msgid "Update check was cancelled."
 msgstr "更新检查已取消。"
 
 msgid "Update failed: "
-msgstr "Update failed: "
+msgstr "更新失败： "
 
 msgid "Update was cancelled."
 msgstr "更新被取消。"
@@ -723,14 +960,26 @@ msgstr "正在更新 ZenPM..."
 msgid "username"
 msgstr "用户名"
 
+msgid "Utility"
+msgstr "公用事业"
+
 msgid "Version: "
-msgstr "版本："
+msgstr "版本： "
+
+msgid "Versions"
+msgstr "版本"
 
 msgid "Welcome"
 msgstr "欢迎"
 
+msgid "Yesterday"
+msgstr "昨天"
+
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "适用于 KOReader 的 Zen Package Manager 前端。"
+
+msgid "ZenLabs Repo"
+msgstr "ZenLabs 仓库"
 
 msgid "ZenOS is installed. Most patches should not be used with ZenOS."
 msgstr "ZenOS 已安装。大多数补丁不应与 ZenOS 一起使用。"
@@ -745,7 +994,7 @@ msgid "ZenPM Android companion is not available."
 msgstr "ZenPM Android 配套不可用。"
 
 msgid "ZenPM Android companion is not installed or could not start. See "
-msgstr "ZenPM Android 伴侣未安装或无法启动。看"
+msgstr "ZenPM Android 伴侣未安装或无法启动。看 "
 
 msgid "ZenPM backend"
 msgstr "ZenPM 后端"
@@ -756,11 +1005,17 @@ msgstr "ZenPM 后端未启动。确保您为此设备使用了正确的 ZenPM �
 msgid "ZenPM bug reporter"
 msgstr "ZenPM 错误报告者"
 
+msgid "ZenPM command-line interface installed."
+msgstr "安装 ZenPM 命令行界面。"
+
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion 正在检查更新。"
 
 msgid "ZenPM companion update failed."
 msgstr "ZenPM 配套更新失败。"
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "ZenPM 守护程序无法访问。如果 ZenPM 安装程序未运行，请重新运行它。"
 
 msgid "ZenPM font size"
 msgstr "ZenPM 字体大小"
@@ -779,3 +1034,9 @@ msgstr "ZenPM v"
 
 msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
 msgstr "ZenPM.log 和 KOReader 的 crash.log（如果存在）将附加到公共 GitHub 问题。它们可能包含包名称、存储库 URL 和文件路径。"
+
+msgid "ZenPM: Open"
+msgstr "ZenPM：打开"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM：更新全部"

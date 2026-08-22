@@ -50,6 +50,11 @@ return {
     },
     ["1.4.0"] = {
         "ZenOS migration",
-        "Update icon"
+        "Update icon",
+        "Fix false plugin upgrade failure notices after Android backend interruptions",
+    },
+    ["1.4.1"] = {
+        "Fix an edge case on android where backend can close while a package is updating",
+        "Fix android permissions"
     },
 }

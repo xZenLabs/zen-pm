@@ -6,17 +6,18 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <application android:allowBackup="false" android:label="ZenPM Backend" android:usesCleartextTraffic="true">
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/zenpm_icon"
+        android:label="ZenPM Backend"
+        android:roundIcon="@drawable/zenpm_icon"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".ZenPMActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:noHistory="true"
             android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -26,6 +27,15 @@
                 <data android:scheme="zenpm" android:host="update" />
             </intent-filter>
         </activity>
+        <activity-alias
+            android:name=".ZenPMLauncher"
+            android:exported="true"
+            android:targetActivity=".ZenPMActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <service
             android:name=".ZenPMService"
             android:exported="true"

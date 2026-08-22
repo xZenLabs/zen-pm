@@ -6,17 +6,35 @@ msgstr ""
 "Language: ro\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100>0 && n%100<20)) ? 1 : 2);\n"
 
+msgid "\nABI: "
+msgstr "\nABI: "
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " nu a completat.\n\nVerificați jurnalul de depanare pentru detalii."
+
 msgid " is available. Update now?"
-msgstr "este disponibil. Actualizați acum?"
+msgstr " este disponibil. Actualizați acum?"
 
 msgid " returned HTTP "
-msgstr "a returnat HTTP"
+msgstr " a returnat HTTP "
 
 msgid " successfully."
 msgstr " cu succes."
 
+msgid " successfully.\n\nRemove plugin settings?"
+msgstr " cu succes.\n\nEliminați setările pluginului?"
+
+msgid " successfully.\n\nRestart KOReader to apply the change."
+msgstr " cu succes.\n\nReporniți KOReader pentru a aplica modificarea."
+
+msgid " successfully.\n\nRestart KOReader to load the plugin."
+msgstr " cu succes.\n\nReporniți KOReader pentru a încărca pluginul."
+
 msgid " was copied to the Kindle homepage."
-msgstr "a fost copiat pe pagina de pornire Kindle."
+msgstr " a fost copiat pe pagina de pornire Kindle."
+
+msgid "%d days ago"
+msgstr "%d zile în urmă"
 
 msgid "%d packages queued"
 msgstr "%d pachetele aflate în coadă"
@@ -27,11 +45,20 @@ msgstr "%s intră în conflict cu %s. Ele nu trebuie folosite împreună. Instal
 msgid "(installed)"
 msgstr "(instalat)"
 
+msgid ".\n\nRestart KOReader to use the new version."
+msgstr ".\n\nReporniți KOReader pentru a utiliza noua versiune."
+
 msgid "... Please wait."
 msgstr "... Va rugam asteptati."
 
 msgid "1 package queued"
 msgstr "1 pachet în coadă"
+
+msgid "[Image: %s]"
+msgstr "[Imagine: %s]"
+
+msgid "[Image]"
+msgstr "[Imagine]"
 
 msgid "A short summary of what went wrong"
 msgstr "Un scurt rezumat a ceea ce a mers prost"
@@ -48,14 +75,23 @@ msgstr "Adaugă sursă"
 msgid "Added to Queue"
 msgstr "Adăugat la coadă"
 
+msgid "Advanced"
+msgstr "Avansat"
+
+msgid "All categories"
+msgstr "Toate categoriile"
+
+msgid "Allow updates"
+msgstr "Permite actualizări"
+
+msgid "Always ignore"
+msgstr "Intotdeauna ignora"
+
 msgid "Always manually pick version"
 msgstr "Alegeți întotdeauna manual versiunea"
 
 msgid "Another operation is in progress. Please wait."
 msgstr "O altă operație este în curs. Așteptați."
-
-msgid "Are you sure you want to "
-msgstr "Ești sigur că vrei"
 
 msgid "Are you sure you want to clear the queue?"
 msgstr "Sigur doriți să curățați coada?"
@@ -64,7 +100,10 @@ msgid "Are you sure you want to perform all queued actions?"
 msgstr "Sigur doriți să efectuați toate acțiunile din coadă?"
 
 msgid "Are you sure you want to remove "
-msgstr "Sigur doriți să eliminați"
+msgstr "Sigur doriți să eliminați "
+
+msgid "Ascending"
+msgstr "Ascendent"
 
 msgid "Author: Anthony Gress (ZenLabs)"
 msgstr "Autor: Anthony Gress (ZenLabs)"
@@ -102,8 +141,8 @@ msgstr "Categoria nu a fost găsită."
 msgid "Change version"
 msgstr "Schimbați versiunea"
 
-msgid "Check for updates automatically"
-msgstr "Verificați automat actualizările"
+msgid "Changes"
+msgstr "Schimbări"
 
 msgid "Check the debug log for details."
 msgstr "Verificați jurnalul de depanare pentru detalii."
@@ -112,19 +151,22 @@ msgid "Checking for update..."
 msgstr "Se verifică actualizarea..."
 
 msgid "Choose a build for "
-msgstr "Alegeți o construcție pentru"
+msgstr "Alegeți o construcție pentru "
 
 msgid "Choose a patch for "
-msgstr "Alegeți un plasture pentru"
+msgstr "Alegeți un plasture pentru "
 
 msgid "Clear"
 msgstr "Șterge"
 
 msgid "Companion update failed to start: "
-msgstr "Actualizarea însoțitoare nu a pornit:"
+msgstr "Actualizarea însoțitoare nu a pornit: "
 
 msgid "Confirm"
 msgstr "Confirma"
+
+msgid "connect: "
+msgstr "conectați: "
 
 msgid "Continue"
 msgstr "Continua"
@@ -136,52 +178,88 @@ msgid "Copying ZenPM to Kindle homepage..."
 msgstr "Se copiează ZenPM pe pagina de pornire Kindle..."
 
 msgid "Could not "
-msgstr "Nu a putut"
+msgstr "Nu a putut "
 
 msgid "Could not add source: "
-msgstr "Could not add source: "
+msgstr "Sursa nu a putut fi adăugată: "
+
+msgid "Could not back up the existing Kindle homepage script: "
+msgstr "Nu s-a putut face backup pentru scriptul existent pentru pagina de pornire Kindle: "
+
+msgid "Could not back up the existing standalone ZenPM installation: "
+msgstr "Nu s-a putut face o copie de rezervă a instalării ZenPM autonome existente: "
 
 msgid "Could not connect to "
-msgstr "Nu s-a putut conecta la"
+msgstr "Nu s-a putut conecta la "
 
 msgid "Could not connect to GitHub: "
-msgstr "Nu s-a putut conecta la GitHub:"
+msgstr "Nu s-a putut conecta la GitHub: "
 
 msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
 msgstr "Nu s-a putut conecta la GitHub: suportul HTTPS nu este disponibil în această versiune KOReader."
 
 msgid "Could not create ZenPM directory: "
-msgstr "Nu s-a putut crea directorul ZenPM:"
+msgstr "Nu s-a putut crea directorul ZenPM: "
 
 msgid "Could not create ZenPM settings directory: "
-msgstr "Nu s-a putut crea directorul de setări ZenPM:"
+msgstr "Nu s-a putut crea directorul de setări ZenPM: "
 
 msgid "Could not detect repo format."
 msgstr "Nu s-a putut detecta formatul depozitului."
 
 msgid "Could not determine which build to install: "
-msgstr "Nu s-a putut determina ce versiune să instaleze:"
+msgstr "Nu s-a putut determina ce versiune să instaleze: "
+
+msgid "Could not find KOReader's plugins directory."
+msgstr "Nu s-a putut găsi directorul de pluginuri KOReader."
 
 msgid "Could not install bundled ZenPM backend to: "
-msgstr "Nu s-a putut instala backend-ul ZenPM inclus la:"
+msgstr "Nu s-a putut instala backend-ul ZenPM inclus la: "
+
+msgid "Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"
+msgstr "Nu s-a putut instala scriptul pentru pagina de pornire Kindle: redenumirea a eșuat: %s; copie eșuată: %s"
+
+msgid "Could not install the standalone ZenPM payload: "
+msgstr "Nu s-a putut instala încărcarea utilă ZenPM autonomă: "
+
+msgid "Could not install the updated ZenPM plugin."
+msgstr "Nu s-a putut instala pluginul actualizat ZenPM."
 
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "Nu s-a putut instala învelișul de linie de comandă ZenPM."
 
-msgid "Could not load GitHub releases: "
-msgstr "Nu s-au putut încărca versiunile GitHub:"
+msgid "Could not load available versions: "
+msgstr "Nu s-au putut încărca versiunile disponibile: "
+
+msgid "Could not move the old ZenPM plugin."
+msgstr "Nu s-a putut muta vechiul plugin ZenPM."
+
+msgid "Could not open standalone archive."
+msgstr "Arhiva autonomă nu a putut fi deschisă."
+
+msgid "Could not open update archive."
+msgstr "Arhiva de actualizare nu a putut fi deschisă."
+
+msgid "Could not prepare the Kindle USB storage."
+msgstr "Nu s-a putut pregăti stocarea USB Kindle."
+
+msgid "Could not prepare the standalone installation directory."
+msgstr "Nu s-a putut pregăti directorul de instalare autonom."
+
+msgid "Could not prepare the update directory."
+msgstr "Nu s-a putut pregăti directorul de actualizare."
+
+msgid "Could not read GitHub release information."
+msgstr "Nu s-au putut citi informațiile despre lansarea GitHub."
 
 msgid "Could not read log: "
-msgstr "Could not read log: "
+msgstr "Nu s-a putut citi jurnalul: "
 
 msgid "Could not remove patch: "
-msgstr "Nu s-a putut elimina patch-ul:"
+msgstr "Nu s-a putut elimina patch-ul: "
 
 msgid "Could not remove source: "
-msgstr "Could not remove source: "
-
-msgid "Could not remove the ZenPM plugin."
-msgstr "Nu s-a putut elimina pluginul ZenPM."
+msgstr "Sursa nu a putut fi eliminată: "
 
 msgid "Could not resolve patch file."
 msgstr "Nu s-a putut rezolva fișierul de corecție."
@@ -189,8 +267,23 @@ msgstr "Nu s-a putut rezolva fișierul de corecție."
 msgid "Could not resolve plugin name."
 msgstr "Nu s-a putut rezolva numele pluginului."
 
+msgid "Could not unpack standalone archive."
+msgstr "Arhiva autonomă nu a putut fi dezambalată."
+
+msgid "Could not unpack update archive."
+msgstr "Arhiva de actualizare nu a putut fi dezambalată."
+
+msgid "Could not update the package preference: "
+msgstr "Nu s-a putut actualiza preferința pachetului: "
+
+msgid "Could not verify the update download."
+msgstr "Nu s-a putut verifica descărcarea actualizării."
+
 msgid "Debug"
 msgstr "Depanare"
+
+msgid "Descending"
+msgstr "Descendent"
 
 msgid "Description"
 msgstr "Descriere"
@@ -199,19 +292,19 @@ msgid "Details"
 msgstr "Detalii"
 
 msgid "Detected ABI: "
-msgstr "ABI detectat:"
+msgstr "ABI detectat: "
 
 msgid "Detecting repo..."
 msgstr "Se detectează depozitul..."
 
-msgid "disable"
-msgstr "dezactivați"
-
 msgid "Disable"
 msgstr "Dezactivați"
 
-msgid "disabled"
-msgstr "dezactivat"
+msgid "disable"
+msgstr "dezactivați"
+
+msgid "Discover"
+msgstr "Descoperi"
 
 msgid "downgrade"
 msgstr "downgrade"
@@ -229,43 +322,58 @@ msgid "Download and copy the latest standalone ZenPM release to the Kindle homep
 msgstr "Descărcați și copiați cea mai recentă versiune ZenPM autonomă pe pagina de pornire Kindle? Aceasta adaugă un scriptlet ZenPM (carte) la Kindle Home/Library"
 
 msgid "download failed"
-msgstr "download failed"
+msgstr "descărcarea a eșuat"
+
+msgid "Download failed with HTTP "
+msgstr "Descărcarea a eșuat cu HTTP "
+
+msgid "Download support is unavailable in this KOReader build."
+msgstr "Asistența pentru descărcare nu este disponibilă în această versiune KOReader."
 
 msgid "Download this asset: "
-msgstr "Descărcați acest material:"
+msgstr "Descărcați acest material: "
 
-msgid "Enable"
-msgstr "Permite"
+msgid "Downloaded update checksum did not match."
+msgstr "Suma de verificare a actualizării descărcate nu s-a potrivit."
 
 msgid "enable"
 msgstr "permite"
 
-msgid "enabled"
-msgstr "activat"
+msgid "Enable"
+msgstr "Permite"
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Introduceți numele de utilizator GitHub pentru a fi etichetat în problemă"
 
+msgid "Error code: "
+msgstr "Cod de eroare: "
+
 msgid "Failed to load package: "
-msgstr "Failed to load package: "
+msgstr "Pachetul nu a putut fi încărcat: "
 
 msgid "Failed to load packages: "
-msgstr "Failed to load packages: "
+msgstr "Nu s-au încărcat pachetele: "
 
 msgid "Failed to load source: "
-msgstr "Failed to load source: "
+msgstr "Sursa nu a fost încărcată: "
 
 msgid "Failed to load sources: "
-msgstr "Failed to load sources: "
+msgstr "Nu s-au încărcat sursele: "
 
 msgid "Failed to start package action: "
-msgstr "Failed to start package action: "
+msgstr "Nu s-a putut porni acțiunea pachetului: "
 
 msgid "Failed to submit report: "
-msgstr "Nu s-a trimis raportul:"
+msgstr "Nu s-a trimis raportul: "
 
 msgid "Featured"
 msgstr "Recomandate"
+
+msgid "Filter"
+msgstr "Filtra"
+
+msgid "Filter by category"
+msgstr "Filtrați după categorie"
 
 msgid "Font preview"
 msgstr "Previzualizarea fontului"
@@ -273,8 +381,14 @@ msgstr "Previzualizarea fontului"
 msgid "Font size"
 msgstr "Dimensiunea fontului"
 
+msgid "Fonts"
+msgstr "Fonturi"
+
 msgid "Found %d installed plugins"
 msgstr "S-au găsit pluginuri instalate %d"
+
+msgid "Games"
+msgstr "Jocuri"
 
 msgid "Get"
 msgstr "Obține"
@@ -286,7 +400,10 @@ msgid "GitHub download redirected too many times."
 msgstr "Descărcarea GitHub a fost redirecționată de prea multe ori."
 
 msgid "GitHub download returned HTTP "
-msgstr "Descărcarea GitHub a returnat HTTP"
+msgstr "Descărcarea GitHub a returnat HTTP "
+
+msgid "GitHub returned HTTP "
+msgstr "GitHub a returnat HTTP "
 
 msgid "GitHub supplied an invalid download redirect."
 msgstr "GitHub a furnizat o redirecționare de descărcare nevalidă."
@@ -298,7 +415,16 @@ msgid "GitHub username (optional)"
 msgstr "Nume de utilizator GitHub (opțional)"
 
 msgid "HTTPS support is unavailable in this KOReader build."
-msgstr "HTTPS support is unavailable in this KOReader build."
+msgstr "Suportul HTTPS nu este disponibil în această versiune KOReader."
+
+msgid "Ignore updates"
+msgstr "Ignorați actualizările"
+
+msgid "Ignore updates for %s?"
+msgstr "Ignorați actualizările pentru %s?"
+
+msgid "incomplete HTTP response"
+msgstr "răspuns HTTP incomplet"
 
 msgid "install"
 msgstr "instalare"
@@ -312,35 +438,56 @@ msgstr "Instalați oricum"
 msgid "Install anyway?"
 msgstr "Instalați oricum?"
 
+msgid "Install command-line interface"
+msgstr "Instalați interfața de linie de comandă"
+
 msgid "Install to Kindle homepage"
 msgstr "Instalați pe pagina de pornire Kindle"
-
-msgid "Installed"
-msgstr "Instalate"
 
 msgid "installed"
 msgstr "instalat"
 
+msgid "Installed"
+msgstr "Instalate"
+
+msgid "Installed date (newest first)"
+msgstr "Data instalării (cea mai nouă mai întâi)"
+
+msgid "Installed date (oldest first)"
+msgstr "Data instalării (cea mai veche mai întâi)"
+
 msgid "Installing"
 msgstr "Se instalează"
+
+msgid "invalid HTTP request path"
+msgstr "cale de solicitare HTTP nevalidă"
+
+msgid "invalid HTTP response"
+msgstr "răspuns HTTP nevalid"
 
 msgid "Keep settings"
 msgstr "Păstrați setările"
 
 msgid "Kindle homepage installation failed: "
-msgstr "Instalarea paginii de pornire Kindle a eșuat:"
+msgstr "Instalarea paginii de pornire Kindle a eșuat: "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Instalarea paginii de pornire Kindle a fost anulată."
 
-msgid "Kobo network is not ready. Please wait a moment and try again."
-msgstr "Rețeaua Kobo nu este pregătită. Vă rugăm să așteptați un moment și să încercați din nou."
+msgid "Kindle standalone is not supported on this device."
+msgstr "Kindle standalone nu este acceptat pe acest dispozitiv."
 
 msgid "KOReader settings are unavailable."
 msgstr "Setările KOReader nu sunt disponibile."
 
+msgid "KOReader's plugins directory is not writable."
+msgstr "Directorul de pluginuri KOReader nu poate fi scris."
+
 msgid "Latest"
 msgstr "Mai recent"
+
+msgid "Loading available versions..."
+msgstr "Se încarcă versiunile disponibile..."
 
 msgid "Loading categories..."
 msgstr "Se încarcă categoriile..."
@@ -350,9 +497,6 @@ msgstr "Se încarcă categoria..."
 
 msgid "Loading featured packages..."
 msgstr "Se încarcă pachetele recomandate..."
-
-msgid "Loading GitHub releases..."
-msgstr "Se încarcă versiunile GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Se încarcă pachetele instalate..."
@@ -366,6 +510,9 @@ msgstr "Se încarcă pachetele, vă rugăm așteptați"
 msgid "Loading packages..."
 msgstr "Se încarcă pachetele..."
 
+msgid "Loading release notes..."
+msgstr "Se încarcă notele de lansare..."
+
 msgid "Loading source..."
 msgstr "Se încarcă sursa..."
 
@@ -374,6 +521,9 @@ msgstr "Se încarcă sursele..."
 
 msgid "Log is empty."
 msgstr "Jurnalul este gol."
+
+msgid "Media"
+msgstr "Media"
 
 msgid "Modify"
 msgstr "Modifică"
@@ -393,14 +543,20 @@ msgstr "Nu s-au găsit categorii."
 msgid "No categories match the filter."
 msgstr "Nicio categorie nu se potrivește cu filtrul."
 
+msgid "No compatible ZenPM release is available for this platform (expected %s)."
+msgstr "Nu este disponibilă nicio versiune ZenPM compatibilă pentru această platformă (se așteaptă %s)."
+
+msgid "No compatible ZenPM release is available for this platform."
+msgstr "Nu este disponibilă nicio versiune ZenPM compatibilă pentru această platformă."
+
 msgid "No description"
 msgstr "Fără descriere"
 
 msgid "No description available."
 msgstr "Nu există descriere disponibilă."
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "Nu au fost găsite versiuni GitHub cu elemente ZIP."
+msgid "No installable versions were found."
+msgstr "Nu au fost găsite versiuni instalabile."
 
 msgid "No installed packages match the filter."
 msgstr "Niciun pachet instalat nu corespunde filtrului."
@@ -429,8 +585,14 @@ msgstr "Fără operațiuni în coadă."
 msgid "No README available."
 msgstr "Nu există README disponibil."
 
+msgid "No release notes available."
+msgstr "Nu sunt disponibile note de lansare."
+
 msgid "No repositories configured."
 msgstr "Nu există depozite configurate."
+
+msgid "No standalone Kindle ZenPM release is available."
+msgstr "Nu este disponibilă nicio versiune autonomă Kindle ZenPM."
 
 msgid "None"
 msgstr "Niciunul"
@@ -444,8 +606,11 @@ msgstr "OK"
 msgid "Only show installable packages"
 msgstr "Afișați numai pachetele instalabile"
 
-msgid "Open ZenPM"
-msgstr "Deschide ZenPM"
+msgid "Only this version"
+msgstr "Doar această versiune"
+
+msgid "Open ZenPM after restart"
+msgstr "Deschideți ZenPM după repornire"
 
 msgid "Package"
 msgstr "Pachet"
@@ -456,14 +621,11 @@ msgstr "Detalii pachet"
 msgid "Package has no id."
 msgstr "Pachetul nu are id."
 
-msgid "Package manager for KOReader."
-msgstr "Manager de pachete pentru KOReader."
-
 msgid "Package not found."
 msgstr "Pachetul nu a fost găsit."
 
 msgid "Package operation status could not be checked. See Debug log."
-msgstr "Package operation status could not be checked. See Debug log."
+msgstr "Starea de funcționare a pachetului nu a putut fi verificată. Consultați jurnalul de depanare."
 
 msgid "packages"
 msgstr "pachete"
@@ -484,22 +646,28 @@ msgid "Patches"
 msgstr "Petice"
 
 msgid "Platform: "
-msgstr "Platformă:"
+msgstr "Platformă: "
 
 msgid "Please enter a URL."
 msgstr "Introduceți un URL."
 
 msgid "Plugin scan failed: "
-msgstr "Scanarea pluginului a eșuat:"
+msgstr "Scanarea pluginului a eșuat: "
+
+msgid "poll: "
+msgstr "sondaj: "
 
 msgid "prerelease"
 msgstr "prelansare"
+
+msgid "Productivity"
+msgstr "Productivitate"
 
 msgid "Queue"
 msgstr "Coadă"
 
 msgid "Queue %d/%d: "
-msgstr "Coada %d/%d:"
+msgstr "Coada %d/%d: "
 
 msgid "Queue completed: %d succeeded, %d failed."
 msgstr "Coada finalizată: %d a reușit, %d a eșuat."
@@ -519,11 +687,17 @@ msgstr "Ieși"
 msgid "README"
 msgstr "CITEȘTE-MĂ"
 
+msgid "Recently updated"
+msgstr "Actualizat recent"
+
+msgid "recv: "
+msgstr "recv: "
+
 msgid "Refresh"
 msgstr "Reîmprospătează"
 
-msgid "Refresh failed: "
-msgstr "Refresh failed: "
+msgid "Refresh failed"
+msgstr "Reîmprospătarea a eșuat"
 
 msgid "Refreshing repositories..."
 msgstr "Se reîmprospătează depozitele..."
@@ -539,6 +713,12 @@ msgstr "reinstalat"
 
 msgid "Reinstalling"
 msgstr "Se reinstalează"
+
+msgid "Reinstalling ZenPM..."
+msgstr "Se reinstalează ZenPM..."
+
+msgid "Release Notes"
+msgstr "Note de lansare"
 
 msgid "remote server"
 msgstr "server la distanță"
@@ -565,7 +745,7 @@ msgid "Report a Bug"
 msgstr "Raportați o eroare"
 
 msgid "request failed"
-msgstr "request failed"
+msgstr "cererea eșuată"
 
 msgid "Restart KOReader to apply the changes."
 msgstr "Reporniți KOReader pentru a aplica modificările."
@@ -603,20 +783,20 @@ msgstr "Caută categorie"
 msgid "Search category..."
 msgstr "Caută categorie..."
 
-msgid "Search installed packages"
-msgstr "Căutați pachetele instalate"
-
-msgid "Search installed..."
-msgstr "Căutare instalată..."
-
 msgid "Search packages"
 msgstr "Caută pachete"
+
+msgid "Search source"
+msgstr "Căutați sursa"
+
+msgid "Search source..."
+msgstr "Cauta sursa..."
 
 msgid "Search..."
 msgstr "Căutare..."
 
-msgid "Select version for "
-msgstr "Selectați versiunea pentru"
+msgid "send: "
+msgstr "trimite: "
 
 msgid "Settings"
 msgstr "Setări"
@@ -633,11 +813,20 @@ msgstr "Afișați imagini README"
 msgid "Skip"
 msgstr "Sari peste"
 
+msgid "socket closed while sending"
+msgstr "priza închisă în timpul trimiterii"
+
+msgid "socket error"
+msgstr "eroare de soclu"
+
 msgid "Sort"
 msgstr "Sorta"
 
 msgid "Sort packages"
 msgstr "Sortați pachetele"
+
+msgid "Sort sources"
+msgstr "Sortați sursele"
 
 msgid "Source"
 msgstr "Sursă"
@@ -647,6 +836,15 @@ msgstr "Sursa nu a fost găsită."
 
 msgid "Sources"
 msgstr "Surse"
+
+msgid "Standalone archive does not contain a complete Kindle installation."
+msgstr "Arhiva autonomă nu conține o instalare completă a Kindle."
+
+msgid "Standalone archive has an invalid layout."
+msgstr "Arhiva autonomă are un aspect nevalid."
+
+msgid "Standalone archive is empty."
+msgstr "Arhiva autonomă este goală."
 
 msgid "Stars"
 msgstr "Stele"
@@ -660,50 +858,89 @@ msgstr "Trimiteți"
 msgid "Submitting report…"
 msgstr "Se trimite raportul..."
 
+msgid "The selected ZenPM version is not available for this platform."
+msgstr "Versiunea ZenPM selectată nu este disponibilă pentru această platformă."
+
+msgid "The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."
+msgstr "Sarcina utilă autonomă a fost instalată, dar scriptul său de configurare Kindle a eșuat. Consultați %s sau rulați %s din KUAL pentru a reîncerca."
+
+msgid "Theme"
+msgstr "Temă"
+
 msgid "This release has no ZIP assets."
 msgstr "Această versiune nu are elemente ZIP."
 
 msgid "This will install as a \"book\" on the Kindle homescreen."
 msgstr "Aceasta se va instala ca „carte” pe ecranul de pornire al Kindle."
 
+msgid "timeout"
+msgstr "pauză"
+
+msgid "Title (A-Z)"
+msgstr "Titlu (A-Z)"
+
+msgid "Title (Z-A)"
+msgstr "Titlu (Z-A)"
+
 msgid "to"
 msgstr "la"
 
-msgid "Uninstall"
-msgstr "Dezinstalează"
+msgid "Today"
+msgstr "Astăzi"
 
 msgid "uninstall"
 msgstr "dezinstalare"
 
-msgid "Uninstall ZenPM?"
-msgstr "Dezinstalați ZenPM?"
+msgid "Uninstall"
+msgstr "Dezinstalează"
 
 msgid "uninstalled"
 msgstr "dezinstalat"
 
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "dezinstalat cu succes.\n\nEliminați setările pluginului?"
+
 msgid "Uninstalling"
 msgstr "Se dezinstalează"
 
-msgid "Uninstalling ZenPM..."
-msgstr "Se dezinstalează ZenPM..."
+msgid "Unix socket path is too long"
+msgstr "Calea socketului Unix este prea lungă"
+
+msgid "Unix socket support is unavailable."
+msgstr "Suportul pentru socket Unix nu este disponibil."
+
+msgid "unknown error"
+msgstr "eroare necunoscută"
 
 msgid "Unknown package"
 msgstr "Pachet necunoscut"
 
-msgid "Update"
-msgstr "Actualizează"
-
 msgid "update"
 msgstr "actualizare"
 
+msgid "Update"
+msgstr "Actualizează"
+
 msgid "Update All"
 msgstr "Actualizați toate"
+
+msgid "Update archive does not contain a ZenPM plugin."
+msgstr "Arhiva de actualizare nu conține un plugin ZenPM."
+
+msgid "Update archive has an invalid layout."
+msgstr "Arhiva de actualizare are un aspect nevalid."
+
+msgid "Update archive is empty."
+msgstr "Arhiva de actualizare este goală."
+
+msgid "Update available"
+msgstr "Actualizare disponibilă"
 
 msgid "Update check was cancelled."
 msgstr "Verificarea actualizării a fost anulată."
 
 msgid "Update failed: "
-msgstr "Update failed: "
+msgstr "Actualizarea a eșuat: "
 
 msgid "Update was cancelled."
 msgstr "Actualizarea a fost anulată."
@@ -723,14 +960,26 @@ msgstr "Se actualizează ZenPM..."
 msgid "username"
 msgstr "nume de utilizator"
 
+msgid "Utility"
+msgstr "Utilitate"
+
 msgid "Version: "
 msgstr "Versiune: "
+
+msgid "Versions"
+msgstr "Versiuni"
 
 msgid "Welcome"
 msgstr "Bun venit"
 
+msgid "Yesterday"
+msgstr "Ieri"
+
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "Interfață Zen Package Manager pentru KOReader."
+
+msgid "ZenLabs Repo"
+msgstr "Depozitul ZenLabs"
 
 msgid "ZenOS is installed. Most patches should not be used with ZenOS."
 msgstr "ZenOS este instalat. Majoritatea patch-urilor nu ar trebui să fie utilizate cu ZenOS."
@@ -745,7 +994,7 @@ msgid "ZenPM Android companion is not available."
 msgstr "Companionul Android ZenPM nu este disponibil."
 
 msgid "ZenPM Android companion is not installed or could not start. See "
-msgstr "ZenPM Android Companion nu este instalat sau nu a putut porni. Vedea"
+msgstr "ZenPM Android Companion nu este instalat sau nu a putut porni. Vedea "
 
 msgid "ZenPM backend"
 msgstr "Backend ZenPM"
@@ -756,11 +1005,17 @@ msgstr "Backend-ul ZenPM nu a pornit. Asigurați-vă că ați folosit versiunea 
 msgid "ZenPM bug reporter"
 msgstr "Raportor de erori ZenPM"
 
+msgid "ZenPM command-line interface installed."
+msgstr "Interfața de linie de comandă ZenPM este instalată."
+
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion caută o actualizare."
 
 msgid "ZenPM companion update failed."
 msgstr "Actualizarea ZenPM însoțitoare a eșuat."
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "Demonul ZenPM nu este accesibil. Reluați programul de instalare ZenPM dacă nu rulează."
 
 msgid "ZenPM font size"
 msgstr "Dimensiunea fontului ZenPM"
@@ -779,3 +1034,9 @@ msgstr "ZenPM v"
 
 msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
 msgstr "ZenPM.log și crash.log de la KOReader (dacă există) vor fi atașate unei probleme publice GitHub. Acestea pot conține nume de pachete, adrese URL de depozit și căi de fișiere."
+
+msgid "ZenPM: Open"
+msgstr "ZenPM: Deschide"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM: Actualizați totul"

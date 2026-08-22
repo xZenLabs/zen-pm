@@ -39,13 +39,24 @@ GOOGLE_LOCALES = {
     "zh_TW": "zh-TW",
 }
 TRANSLATION_WORKERS = 6
+IDENTICAL_TRANSLATION_ALLOWLIST = {"ZenPM v", "ZenPM: Open"}
 
-_RE_GETTEXT_DQ = re.compile(r'_\(\s*"((?:[^"\\\\]|\\\\.)*)"\s*\)', re.DOTALL)
-_RE_GETTEXT_SQ = re.compile(r"_\(\s*'((?:[^'\\\\]|\\\\.)*)'\s*\)", re.DOTALL)
-_RE_CGETTEXT_DQ = re.compile(r'C_\(\s*"[^"]*"\s*,\s*"((?:[^"\\\\]|\\\\.)*)"\s*\)', re.DOTALL)
-_RE_CGETTEXT_SQ = re.compile(r"C_\(\s*'[^']*'\s*,\s*'((?:[^'\\\\]|\\\\.)*)'\s*\)", re.DOTALL)
+_RE_GETTEXT_DQ = re.compile(r'(?<![A-Za-z0-9_])_\(\s*"((?:[^"\\]|\\.)*)"\s*\)', re.DOTALL)
+_RE_GETTEXT_SQ = re.compile(r"(?<![A-Za-z0-9_])_\(\s*'((?:[^'\\]|\\.)*)'\s*\)", re.DOTALL)
+_RE_NGETTEXT_DQ = re.compile(r'N_\(\s*"((?:[^"\\]|\\.)*)"\s*\)', re.DOTALL)
+_RE_NGETTEXT_SQ = re.compile(r"N_\(\s*'((?:[^'\\]|\\.)*)'\s*\)", re.DOTALL)
+_RE_CGETTEXT_DQ = re.compile(r'C_\(\s*"[^"]*"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)', re.DOTALL)
+_RE_CGETTEXT_SQ = re.compile(r"C_\(\s*'[^']*'\s*,\s*'((?:[^'\\]|\\.)*)'\s*\)", re.DOTALL)
 _RE_GETTEXT_LS = re.compile(r'_\(\s*\[\[(.*?)\]\]\s*\)', re.DOTALL)
-ALL_PATTERNS = [_RE_GETTEXT_DQ, _RE_GETTEXT_SQ, _RE_CGETTEXT_DQ, _RE_CGETTEXT_SQ, _RE_GETTEXT_LS]
+ALL_PATTERNS = [
+    _RE_GETTEXT_DQ,
+    _RE_GETTEXT_SQ,
+    _RE_NGETTEXT_DQ,
+    _RE_NGETTEXT_SQ,
+    _RE_CGETTEXT_DQ,
+    _RE_CGETTEXT_SQ,
+    _RE_GETTEXT_LS,
+]
 
 
 def unescape_lua(value: str) -> str:
@@ -97,12 +108,12 @@ def parse_po(po_path: str) -> dict[str, str]:
 
     entries = {}
     for block in re.split(r"\n\n+", content.strip()):
-        msgid_match = re.search(r'^msgid "((?:[^"\\\\]|\\\\.)*)"', block, re.MULTILINE)
-        msgstr_match = re.search(r'^msgstr "((?:[^"\\\\]|\\\\.)*)"', block, re.MULTILINE)
+        msgid_match = re.search(r'^msgid "((?:[^"\\]|\\.)*)"', block, re.MULTILINE)
+        msgstr_match = re.search(r'^msgstr "((?:[^"\\]|\\.)*)"', block, re.MULTILINE)
         if msgid_match and msgstr_match:
-            msgid = msgid_match.group(1).replace("\\n", "\n")
+            msgid = unescape_lua(msgid_match.group(1))
             if msgid:
-                entries[msgid] = msgstr_match.group(1).replace("\\n", "\n")
+                entries[msgid] = unescape_lua(msgstr_match.group(1))
     return entries
 
 
@@ -159,9 +170,21 @@ def get_missing_per_locale(locale: str | None = None) -> dict[str, list[str]]:
     }
 
 
+def is_untranslated(locale: str, msgid: str, msgstr: str) -> bool:
+    if not msgstr:
+        return True
+    return (locale != "en"
+        and msgstr == msgid
+        and len(msgid.split()) > 1
+        and msgid not in IDENTICAL_TRANSLATION_ALLOWLIST)
+
+
 def get_untranslated_per_locale(locale: str | None = None) -> dict[str, list[str]]:
     return {
-        filename[:-3]: sorted(msgid for msgid, msgstr in parse_po(os.path.join(LOCALES_DIR, filename)).items() if not msgstr)
+        filename[:-3]: sorted(
+            msgid for msgid, msgstr in parse_po(os.path.join(LOCALES_DIR, filename)).items()
+            if is_untranslated(filename[:-3], msgid, msgstr)
+        )
         for filename in locale_files(locale)
     }
 
@@ -188,6 +211,14 @@ def restore_format_tokens(text: str, tokens: list[str]) -> str:
     return text
 
 
+def preserve_boundary_whitespace(source: str, translation: str) -> str:
+    if not translation:
+        return translation
+    leading = re.match(r"^\s*", source).group(0)
+    trailing = re.search(r"\s*$", source[len(leading):]).group(0)
+    return leading + translation.strip() + trailing
+
+
 def google_translate(text: str, locale: str, timeout: int = 20) -> str:
     """Translate English text using Google Translate's keyless web endpoint."""
     if locale == "en":
@@ -205,7 +236,7 @@ def google_translate(text: str, locale: str, timeout: int = 20) -> str:
             translated = "".join(part[0] for part in data[0] if part and part[0])
             if not translated:
                 raise ValueError("Google returned an empty translation")
-            return restore_format_tokens(translated, tokens)
+            return preserve_boundary_whitespace(text, restore_format_tokens(translated, tokens))
         except (OSError, ValueError, KeyError, IndexError, TypeError, urllib.error.URLError) as error:
             last_error = error
             if attempt < 2:
@@ -232,8 +263,14 @@ def sync_catalogs(po_files: list[str], lua_strings: set[str]) -> None:
         existing = parse_po(po_path)
         missing = sorted(lua_strings - set(existing))
         dead = sorted(set(existing) - lua_strings)
-        synced = {msgid: existing.get(msgid, "") for msgid in lua_strings}
-        untranslated = sorted(msgid for msgid, msgstr in synced.items() if not msgstr)
+        synced = {
+            msgid: preserve_boundary_whitespace(msgid, existing.get(msgid, ""))
+            for msgid in lua_strings
+        }
+        untranslated = sorted(
+            msgid for msgid, msgstr in synced.items()
+            if is_untranslated(locale, msgid, msgstr)
+        )
         print(f"[{locale}]  missing={len(missing)}  dead={len(dead)}  untranslated={len(untranslated)}")
         if untranslated:
             print(f"  -> translating {len(untranslated)} entries")

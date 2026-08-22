@@ -49,6 +49,7 @@ type Server struct {
 	closeDone      sync.Once
 	activeRequests atomic.Int32
 	backgroundJobs atomic.Int32
+	closeAfterJobs atomic.Bool
 	lastActivity   atomic.Int64
 	StartedAt      time.Time
 	readmeImages   readmeImagePreparer
@@ -324,6 +325,21 @@ func (s *Server) Close() error {
 	return nil
 }
 
+// CloseAfterBackgroundJobs requests a non-blocking shutdown that lets active
+// requests and accepted package operations finish first. Android calls this
+// from its service main thread, so waiting synchronously here would risk an ANR.
+func (s *Server) CloseAfterBackgroundJobs() error {
+	s.closeAfterJobs.Store(true)
+	return s.closeIfWorkFinished()
+}
+
+func (s *Server) closeIfWorkFinished() error {
+	if s.activeRequests.Load() == 0 && s.backgroundJobs.Load() == 0 {
+		return s.Close()
+	}
+	return nil
+}
+
 func (s *Server) signalDone() {
 	s.closeDone.Do(func() {
 		if s.done == nil {
@@ -342,8 +358,11 @@ func (s *Server) runBackground(work func()) {
 	s.touch()
 	go func() {
 		defer func() {
-			s.backgroundJobs.Add(-1)
+			remaining := s.backgroundJobs.Add(-1)
 			s.touch()
+			if remaining == 0 && s.closeAfterJobs.Load() {
+				_ = s.closeIfWorkFinished()
+			}
 		}()
 		work()
 	}()
@@ -497,8 +516,11 @@ func (s *Server) wrap(h http.HandlerFunc) http.HandlerFunc {
 		s.activeRequests.Add(1)
 		s.touch()
 		defer func() {
-			s.activeRequests.Add(-1)
+			remaining := s.activeRequests.Add(-1)
 			s.touch()
+			if remaining == 0 && s.closeAfterJobs.Load() {
+				_ = s.closeIfWorkFinished()
+			}
 		}()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")

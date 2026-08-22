@@ -6,17 +6,35 @@ msgstr ""
 "Language: es\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "\nABI: "
+msgstr "\nABI: "
+
+msgid " did not complete.\n\nCheck the debug log for details."
+msgstr " no completó.\n\nConsulte el registro de depuración para obtener más detalles."
+
 msgid " is available. Update now?"
-msgstr "está disponible. ¿Actualizar ahora?"
+msgstr " está disponible. ¿Actualizar ahora?"
 
 msgid " returned HTTP "
-msgstr "HTTP devuelto"
+msgstr " HTTP devuelto "
 
 msgid " successfully."
 msgstr " correctamente."
 
+msgid " successfully.\n\nRemove plugin settings?"
+msgstr " exitosamente.\n\n¿Eliminar la configuración del complemento?"
+
+msgid " successfully.\n\nRestart KOReader to apply the change."
+msgstr " exitosamente.\n\nReinicie KOReader para aplicar el cambio."
+
+msgid " successfully.\n\nRestart KOReader to load the plugin."
+msgstr " exitosamente.\n\nReinicie KOReader para cargar el complemento."
+
 msgid " was copied to the Kindle homepage."
-msgstr "Se copió en la página de inicio de Kindle."
+msgstr " Se copió en la página de inicio de Kindle."
+
+msgid "%d days ago"
+msgstr "%d días atrás"
 
 msgid "%d packages queued"
 msgstr "%d paquetes en cola"
@@ -27,11 +45,20 @@ msgstr "%s entra en conflicto con %s. No deben usarse juntos. ¿Instalar de todo
 msgid "(installed)"
 msgstr "(instalado)"
 
+msgid ".\n\nRestart KOReader to use the new version."
+msgstr ".\n\nReinicie KOReader para usar la nueva versión."
+
 msgid "... Please wait."
 msgstr "... Espere por favor."
 
 msgid "1 package queued"
 msgstr "1 paquete en cola"
+
+msgid "[Image: %s]"
+msgstr "[Imagen: %s]"
+
+msgid "[Image]"
+msgstr "[Imagen]"
 
 msgid "A short summary of what went wrong"
 msgstr "Un breve resumen de lo que salió mal"
@@ -48,14 +75,23 @@ msgstr "Agregar fuente"
 msgid "Added to Queue"
 msgstr "Agregado a la cola"
 
+msgid "Advanced"
+msgstr "Avanzado"
+
+msgid "All categories"
+msgstr "Todas las categorias"
+
+msgid "Allow updates"
+msgstr "Permitir actualizaciones"
+
+msgid "Always ignore"
+msgstr "ignorar siempre"
+
 msgid "Always manually pick version"
 msgstr "Elija siempre la versión manualmente"
 
 msgid "Another operation is in progress. Please wait."
 msgstr "Hay otra operacion en curso. Espera."
-
-msgid "Are you sure you want to "
-msgstr "¿Estás seguro de que quieres"
 
 msgid "Are you sure you want to clear the queue?"
 msgstr "¿Estás seguro de que quieres borrar la cola?"
@@ -64,7 +100,10 @@ msgid "Are you sure you want to perform all queued actions?"
 msgstr "¿Está seguro de que desea realizar todas las acciones en cola?"
 
 msgid "Are you sure you want to remove "
-msgstr "¿Estás seguro de que quieres eliminar?"
+msgstr "¿Estás seguro de que quieres eliminar? "
+
+msgid "Ascending"
+msgstr "Ascendente"
 
 msgid "Author: Anthony Gress (ZenLabs)"
 msgstr "Autor: Anthony Gress (ZenLabs)"
@@ -102,8 +141,8 @@ msgstr "Categoría no encontrada."
 msgid "Change version"
 msgstr "Cambiar versión"
 
-msgid "Check for updates automatically"
-msgstr "Buscar actualizaciones automáticamente"
+msgid "Changes"
+msgstr "Cambios"
 
 msgid "Check the debug log for details."
 msgstr "Consulte el registro de depuración para obtener más detalles."
@@ -112,19 +151,22 @@ msgid "Checking for update..."
 msgstr "Buscando actualizaciones..."
 
 msgid "Choose a build for "
-msgstr "Elige una construcción para"
+msgstr "Elige una construcción para "
 
 msgid "Choose a patch for "
-msgstr "Elija un parche para"
+msgstr "Elija un parche para "
 
 msgid "Clear"
 msgstr "Borrar"
 
 msgid "Companion update failed to start: "
-msgstr "La actualización complementaria no pudo iniciarse:"
+msgstr "La actualización complementaria no pudo iniciarse: "
 
 msgid "Confirm"
 msgstr "Confirmar"
+
+msgid "connect: "
+msgstr "conectar: "
 
 msgid "Continue"
 msgstr "Continuar"
@@ -136,52 +178,88 @@ msgid "Copying ZenPM to Kindle homepage..."
 msgstr "Copiando ZenPM a la página de inicio de Kindle..."
 
 msgid "Could not "
-msgstr "no pude"
+msgstr "no pude "
 
 msgid "Could not add source: "
 msgstr "No se pudo agregar la fuente: "
 
+msgid "Could not back up the existing Kindle homepage script: "
+msgstr "No se pudo realizar una copia de seguridad del script de la página de inicio de Kindle existente: "
+
+msgid "Could not back up the existing standalone ZenPM installation: "
+msgstr "No se pudo realizar una copia de seguridad de la instalación independiente existente de ZenPM: "
+
 msgid "Could not connect to "
-msgstr "No se pudo conectar a"
+msgstr "No se pudo conectar a "
 
 msgid "Could not connect to GitHub: "
-msgstr "No se pudo conectar a GitHub:"
+msgstr "No se pudo conectar a GitHub: "
 
 msgid "Could not connect to GitHub: HTTPS support is unavailable in this KOReader build."
 msgstr "No se pudo conectar a GitHub: la compatibilidad con HTTPS no está disponible en esta compilación de KOReader."
 
 msgid "Could not create ZenPM directory: "
-msgstr "No se pudo crear el directorio ZenPM:"
+msgstr "No se pudo crear el directorio ZenPM: "
 
 msgid "Could not create ZenPM settings directory: "
-msgstr "No se pudo crear el directorio de configuración de ZenPM:"
+msgstr "No se pudo crear el directorio de configuración de ZenPM: "
 
 msgid "Could not detect repo format."
 msgstr "No se pudo detectar el formato del repositorio."
 
 msgid "Could not determine which build to install: "
-msgstr "No se pudo determinar qué compilación instalar:"
+msgstr "No se pudo determinar qué compilación instalar: "
+
+msgid "Could not find KOReader's plugins directory."
+msgstr "No se pudo encontrar el directorio de complementos de KOReader."
 
 msgid "Could not install bundled ZenPM backend to: "
-msgstr "No se pudo instalar el backend ZenPM incluido en:"
+msgstr "No se pudo instalar el backend ZenPM incluido en: "
+
+msgid "Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"
+msgstr "No se pudo instalar el script de la página de inicio de Kindle: falló el cambio de nombre: %s; copia fallida: %s"
+
+msgid "Could not install the standalone ZenPM payload: "
+msgstr "No se pudo instalar la carga útil ZenPM independiente: "
+
+msgid "Could not install the updated ZenPM plugin."
+msgstr "No se pudo instalar el complemento ZenPM actualizado."
 
 msgid "Could not install the ZenPM command-line wrapper."
 msgstr "No se pudo instalar el contenedor de línea de comandos de ZenPM."
 
-msgid "Could not load GitHub releases: "
-msgstr "No se pudieron cargar las versiones de GitHub:"
+msgid "Could not load available versions: "
+msgstr "No se pudieron cargar las versiones disponibles: "
+
+msgid "Could not move the old ZenPM plugin."
+msgstr "No se pudo mover el antiguo complemento ZenPM."
+
+msgid "Could not open standalone archive."
+msgstr "No se pudo abrir el archivo independiente."
+
+msgid "Could not open update archive."
+msgstr "No se pudo abrir el archivo de actualización."
+
+msgid "Could not prepare the Kindle USB storage."
+msgstr "No se pudo preparar el almacenamiento USB del Kindle."
+
+msgid "Could not prepare the standalone installation directory."
+msgstr "No se pudo preparar el directorio de instalación independiente."
+
+msgid "Could not prepare the update directory."
+msgstr "No se pudo preparar el directorio de actualización."
+
+msgid "Could not read GitHub release information."
+msgstr "No se pudo leer la información de la versión de GitHub."
 
 msgid "Could not read log: "
 msgstr "No se pudo leer el registro: "
 
 msgid "Could not remove patch: "
-msgstr "No se pudo eliminar el parche:"
+msgstr "No se pudo eliminar el parche: "
 
 msgid "Could not remove source: "
 msgstr "No se pudo quitar la fuente: "
-
-msgid "Could not remove the ZenPM plugin."
-msgstr "No se pudo eliminar el complemento ZenPM."
 
 msgid "Could not resolve patch file."
 msgstr "No se pudo resolver el archivo de parche."
@@ -189,8 +267,23 @@ msgstr "No se pudo resolver el archivo de parche."
 msgid "Could not resolve plugin name."
 msgstr "No se pudo resolver el nombre del complemento."
 
+msgid "Could not unpack standalone archive."
+msgstr "No se pudo descomprimir el archivo independiente."
+
+msgid "Could not unpack update archive."
+msgstr "No se pudo descomprimir el archivo de actualización."
+
+msgid "Could not update the package preference: "
+msgstr "No se pudo actualizar la preferencia del paquete: "
+
+msgid "Could not verify the update download."
+msgstr "No se pudo verificar la descarga de la actualización."
+
 msgid "Debug"
 msgstr "Depurar"
+
+msgid "Descending"
+msgstr "Descendente"
 
 msgid "Description"
 msgstr "Descripcion"
@@ -199,19 +292,19 @@ msgid "Details"
 msgstr "Detalles"
 
 msgid "Detected ABI: "
-msgstr "ITB detectada:"
+msgstr "ITB detectada: "
 
 msgid "Detecting repo..."
 msgstr "Detectando repositorio..."
 
-msgid "disable"
-msgstr "desactivar"
-
 msgid "Disable"
 msgstr "Desactivar"
 
-msgid "disabled"
-msgstr "desactivado"
+msgid "disable"
+msgstr "desactivar"
+
+msgid "Discover"
+msgstr "Descubrir"
 
 msgid "downgrade"
 msgstr "degradar"
@@ -231,20 +324,29 @@ msgstr "¿Descargar y copiar la última versión independiente de ZenPM en la p�
 msgid "download failed"
 msgstr "descarga fallida"
 
-msgid "Download this asset: "
-msgstr "Descargue este recurso:"
+msgid "Download failed with HTTP "
+msgstr "La descarga falló con HTTP "
 
-msgid "Enable"
-msgstr "Permitir"
+msgid "Download support is unavailable in this KOReader build."
+msgstr "El soporte de descarga no está disponible en esta versión de KOReader."
+
+msgid "Download this asset: "
+msgstr "Descargue este recurso: "
+
+msgid "Downloaded update checksum did not match."
+msgstr "La suma de comprobación de la actualización descargada no coincide."
 
 msgid "enable"
 msgstr "permitir"
 
-msgid "enabled"
-msgstr "activado"
+msgid "Enable"
+msgstr "Permitir"
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Ingrese su nombre de usuario de GitHub para ser etiquetado en el problema"
+
+msgid "Error code: "
+msgstr "Código de error: "
 
 msgid "Failed to load package: "
 msgstr "Error al cargar el paquete: "
@@ -262,10 +364,16 @@ msgid "Failed to start package action: "
 msgstr "No se pudo iniciar la accion del paquete: "
 
 msgid "Failed to submit report: "
-msgstr "No se pudo enviar el informe:"
+msgstr "No se pudo enviar el informe: "
 
 msgid "Featured"
 msgstr "Destacados"
+
+msgid "Filter"
+msgstr "Filtrar"
+
+msgid "Filter by category"
+msgstr "Filtrar por categoría"
 
 msgid "Font preview"
 msgstr "Vista previa de fuente"
@@ -273,8 +381,14 @@ msgstr "Vista previa de fuente"
 msgid "Font size"
 msgstr "Tamaño de fuente"
 
+msgid "Fonts"
+msgstr "Fuentes"
+
 msgid "Found %d installed plugins"
 msgstr "Se encontraron complementos instalados %d"
+
+msgid "Games"
+msgstr "Juegos"
 
 msgid "Get"
 msgstr "Obtener"
@@ -286,7 +400,10 @@ msgid "GitHub download redirected too many times."
 msgstr "Descarga de GitHub redirigida demasiadas veces."
 
 msgid "GitHub download returned HTTP "
-msgstr "La descarga de GitHub devolvió HTTP"
+msgstr "La descarga de GitHub devolvió HTTP "
+
+msgid "GitHub returned HTTP "
+msgstr "GitHub devolvió HTTP "
 
 msgid "GitHub supplied an invalid download redirect."
 msgstr "GitHub proporcionó una redirección de descarga no válida."
@@ -300,6 +417,15 @@ msgstr "Nombre de usuario de GitHub (opcional)"
 msgid "HTTPS support is unavailable in this KOReader build."
 msgstr "La compatibilidad con HTTPS no esta disponible en esta version de KOReader."
 
+msgid "Ignore updates"
+msgstr "Ignorar actualizaciones"
+
+msgid "Ignore updates for %s?"
+msgstr "¿Ignorar actualizaciones para %s?"
+
+msgid "incomplete HTTP response"
+msgstr "respuesta HTTP incompleta"
+
 msgid "install"
 msgstr "instalacion"
 
@@ -312,35 +438,56 @@ msgstr "Instalar de todos modos"
 msgid "Install anyway?"
 msgstr "¿Instalar de todos modos?"
 
+msgid "Install command-line interface"
+msgstr "Instalar la interfaz de línea de comandos"
+
 msgid "Install to Kindle homepage"
 msgstr "Instalar en la página de inicio de Kindle"
-
-msgid "Installed"
-msgstr "Instalados"
 
 msgid "installed"
 msgstr "instalado"
 
+msgid "Installed"
+msgstr "Instalados"
+
+msgid "Installed date (newest first)"
+msgstr "Fecha de instalación (la más reciente primero)"
+
+msgid "Installed date (oldest first)"
+msgstr "Fecha de instalación (la más antigua primero)"
+
 msgid "Installing"
 msgstr "Instalando"
+
+msgid "invalid HTTP request path"
+msgstr "ruta de solicitud HTTP no válida"
+
+msgid "invalid HTTP response"
+msgstr "respuesta HTTP no válida"
 
 msgid "Keep settings"
 msgstr "Mantener la configuración"
 
 msgid "Kindle homepage installation failed: "
-msgstr "La instalación de la página de inicio de Kindle falló:"
+msgstr "La instalación de la página de inicio de Kindle falló: "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Se canceló la instalación de la página de inicio de Kindle."
 
-msgid "Kobo network is not ready. Please wait a moment and try again."
-msgstr "La red Kobo no está lista. Espere un momento e inténtelo de nuevo."
+msgid "Kindle standalone is not supported on this device."
+msgstr "Kindle independiente no es compatible con este dispositivo."
 
 msgid "KOReader settings are unavailable."
 msgstr "La configuración de KOReader no está disponible."
 
+msgid "KOReader's plugins directory is not writable."
+msgstr "No se puede escribir en el directorio de complementos de KOReader."
+
 msgid "Latest"
 msgstr "El último"
+
+msgid "Loading available versions..."
+msgstr "Cargando versiones disponibles..."
 
 msgid "Loading categories..."
 msgstr "Cargando categorías..."
@@ -350,9 +497,6 @@ msgstr "Cargando categoría..."
 
 msgid "Loading featured packages..."
 msgstr "Cargando paquetes destacados..."
-
-msgid "Loading GitHub releases..."
-msgstr "Cargando versiones de GitHub..."
 
 msgid "Loading installed packages..."
 msgstr "Cargando paquetes instalados..."
@@ -366,6 +510,9 @@ msgstr "Cargando paquetes, espera por favor"
 msgid "Loading packages..."
 msgstr "Cargando paquetes..."
 
+msgid "Loading release notes..."
+msgstr "Cargando notas de la versión..."
+
 msgid "Loading source..."
 msgstr "Cargando fuente..."
 
@@ -374,6 +521,9 @@ msgstr "Cargando fuentes..."
 
 msgid "Log is empty."
 msgstr "El registro esta vacio."
+
+msgid "Media"
+msgstr "Medios de comunicación"
 
 msgid "Modify"
 msgstr "Modificar"
@@ -393,14 +543,20 @@ msgstr "No se encontraron categorías."
 msgid "No categories match the filter."
 msgstr "Ninguna categoría coincide con el filtro."
 
+msgid "No compatible ZenPM release is available for this platform (expected %s)."
+msgstr "No hay ninguna versión de ZenPM compatible disponible para esta plataforma (se espera %s)."
+
+msgid "No compatible ZenPM release is available for this platform."
+msgstr "No hay ninguna versión de ZenPM compatible disponible para esta plataforma."
+
 msgid "No description"
 msgstr "Sin descripcion"
 
 msgid "No description available."
 msgstr "No hay descripcion disponible."
 
-msgid "No GitHub releases with ZIP assets were found."
-msgstr "No se encontraron versiones de GitHub con recursos ZIP."
+msgid "No installable versions were found."
+msgstr "No se encontraron versiones instalables."
 
 msgid "No installed packages match the filter."
 msgstr "Ningun paquete instalado coincide con el filtro."
@@ -429,8 +585,14 @@ msgstr "No hay operaciones en cola."
 msgid "No README available."
 msgstr "No hay archivos LÉAME disponibles."
 
+msgid "No release notes available."
+msgstr "No hay notas de versión disponibles."
+
 msgid "No repositories configured."
 msgstr "No hay repositorios configurados."
+
+msgid "No standalone Kindle ZenPM release is available."
+msgstr "No hay ninguna versión independiente de Kindle ZenPM disponible."
 
 msgid "None"
 msgstr "Ninguno"
@@ -444,8 +606,11 @@ msgstr "OK"
 msgid "Only show installable packages"
 msgstr "Mostrar solo paquetes instalables"
 
-msgid "Open ZenPM"
-msgstr "Abrir ZenPM"
+msgid "Only this version"
+msgstr "Sólo esta versión"
+
+msgid "Open ZenPM after restart"
+msgstr "Abra ZenPM después de reiniciar"
 
 msgid "Package"
 msgstr "Paquete"
@@ -455,9 +620,6 @@ msgstr "Detalles del paquete"
 
 msgid "Package has no id."
 msgstr "El paquete no tiene id."
-
-msgid "Package manager for KOReader."
-msgstr "Administrador de paquetes para KOReader."
 
 msgid "Package not found."
 msgstr "Paquete no encontrado."
@@ -484,22 +646,28 @@ msgid "Patches"
 msgstr "Parches"
 
 msgid "Platform: "
-msgstr "Plataforma:"
+msgstr "Plataforma: "
 
 msgid "Please enter a URL."
 msgstr "Introduce una URL."
 
 msgid "Plugin scan failed: "
-msgstr "Error en el análisis del complemento:"
+msgstr "Error en el análisis del complemento: "
+
+msgid "poll: "
+msgstr "encuesta: "
 
 msgid "prerelease"
 msgstr "prelanzamiento"
+
+msgid "Productivity"
+msgstr "Productividad"
 
 msgid "Queue"
 msgstr "Cola"
 
 msgid "Queue %d/%d: "
-msgstr "Cola %d/%d:"
+msgstr "Cola %d/%d: "
 
 msgid "Queue completed: %d succeeded, %d failed."
 msgstr "Cola completada: %d tuvo éxito, %d falló."
@@ -519,11 +687,17 @@ msgstr "Salir"
 msgid "README"
 msgstr "LÉAME"
 
+msgid "Recently updated"
+msgstr "Actualizado recientemente"
+
+msgid "recv: "
+msgstr "recv: "
+
 msgid "Refresh"
 msgstr "Recargar"
 
-msgid "Refresh failed: "
-msgstr "Error al actualizar: "
+msgid "Refresh failed"
+msgstr "Error al actualizar"
 
 msgid "Refreshing repositories..."
 msgstr "Actualizando repositorios..."
@@ -539,6 +713,12 @@ msgstr "reinstalado"
 
 msgid "Reinstalling"
 msgstr "Reinstalando"
+
+msgid "Reinstalling ZenPM..."
+msgstr "Reinstalando ZenPM..."
+
+msgid "Release Notes"
+msgstr "Notas de la versión"
 
 msgid "remote server"
 msgstr "servidor remoto"
@@ -603,20 +783,20 @@ msgstr "Categoría de búsqueda"
 msgid "Search category..."
 msgstr "Buscar categoría..."
 
-msgid "Search installed packages"
-msgstr "Buscar paquetes instalados"
-
-msgid "Search installed..."
-msgstr "Búsqueda instalada..."
-
 msgid "Search packages"
 msgstr "Buscar paquetes"
+
+msgid "Search source"
+msgstr "Fuente de búsqueda"
+
+msgid "Search source..."
+msgstr "Fuente de búsqueda..."
 
 msgid "Search..."
 msgstr "Buscar..."
 
-msgid "Select version for "
-msgstr "Seleccione la versión para"
+msgid "send: "
+msgstr "enviar: "
 
 msgid "Settings"
 msgstr "Ajustes"
@@ -633,11 +813,20 @@ msgstr "Mostrar imágenes README"
 msgid "Skip"
 msgstr "Saltar"
 
+msgid "socket closed while sending"
+msgstr "socket cerrado durante el envío"
+
+msgid "socket error"
+msgstr "error de enchufe"
+
 msgid "Sort"
 msgstr "Clasificar"
 
 msgid "Sort packages"
 msgstr "Ordenar paquetes"
+
+msgid "Sort sources"
+msgstr "Ordenar fuentes"
 
 msgid "Source"
 msgstr "Fuente"
@@ -647,6 +836,15 @@ msgstr "Fuente no encontrada."
 
 msgid "Sources"
 msgstr "Fuentes"
+
+msgid "Standalone archive does not contain a complete Kindle installation."
+msgstr "El archivo independiente no contiene una instalación completa de Kindle."
+
+msgid "Standalone archive has an invalid layout."
+msgstr "El archivo independiente tiene un diseño no válido."
+
+msgid "Standalone archive is empty."
+msgstr "El archivo independiente está vacío."
 
 msgid "Stars"
 msgstr "estrellas"
@@ -660,44 +858,83 @@ msgstr "Entregar"
 msgid "Submitting report…"
 msgstr "Enviando informe…"
 
+msgid "The selected ZenPM version is not available for this platform."
+msgstr "La versión de ZenPM seleccionada no está disponible para esta plataforma."
+
+msgid "The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."
+msgstr "Se instaló la carga útil independiente, pero el script de configuración de Kindle falló. Consulte %s o ejecute %s desde KUAL para volver a intentarlo."
+
+msgid "Theme"
+msgstr "Tema"
+
 msgid "This release has no ZIP assets."
 msgstr "Esta versión no tiene recursos ZIP."
 
 msgid "This will install as a \"book\" on the Kindle homescreen."
 msgstr "Esto se instalará como un \"libro\" en la pantalla de inicio de Kindle."
 
+msgid "timeout"
+msgstr "se acabó el tiempo"
+
+msgid "Title (A-Z)"
+msgstr "Título (A-Z)"
+
+msgid "Title (Z-A)"
+msgstr "Título (Z-A)"
+
 msgid "to"
 msgstr "a"
 
-msgid "Uninstall"
-msgstr "Desinstalar"
+msgid "Today"
+msgstr "Hoy"
 
 msgid "uninstall"
 msgstr "desinstalacion"
 
-msgid "Uninstall ZenPM?"
-msgstr "¿Desinstalar ZenPM?"
+msgid "Uninstall"
+msgstr "Desinstalar"
 
 msgid "uninstalled"
 msgstr "desinstalado"
 
+msgid "uninstalled successfully.\n\nRemove plugin settings?"
+msgstr "desinstalado exitosamente.\n\n¿Eliminar la configuración del complemento?"
+
 msgid "Uninstalling"
 msgstr "Desinstalando"
 
-msgid "Uninstalling ZenPM..."
-msgstr "Desinstalando ZenPM..."
+msgid "Unix socket path is too long"
+msgstr "La ruta del socket Unix es demasiado larga"
+
+msgid "Unix socket support is unavailable."
+msgstr "La compatibilidad con sockets Unix no está disponible."
+
+msgid "unknown error"
+msgstr "error desconocido"
 
 msgid "Unknown package"
 msgstr "Paquete desconocido"
 
-msgid "Update"
-msgstr "Actualizar"
-
 msgid "update"
 msgstr "actualizar"
 
+msgid "Update"
+msgstr "Actualizar"
+
 msgid "Update All"
 msgstr "Actualizar todo"
+
+msgid "Update archive does not contain a ZenPM plugin."
+msgstr "El archivo de actualización no contiene un complemento ZenPM."
+
+msgid "Update archive has an invalid layout."
+msgstr "El archivo de actualización tiene un diseño no válido."
+
+msgid "Update archive is empty."
+msgstr "El archivo de actualización está vacío."
+
+msgid "Update available"
+msgstr "Actualización disponible"
 
 msgid "Update check was cancelled."
 msgstr "Se canceló la verificación de actualización."
@@ -723,14 +960,26 @@ msgstr "Actualizando ZenPM..."
 msgid "username"
 msgstr "nombre de usuario"
 
+msgid "Utility"
+msgstr "Utilidad"
+
 msgid "Version: "
 msgstr "Version: "
+
+msgid "Versions"
+msgstr "Versiones"
 
 msgid "Welcome"
 msgstr "Bienvenido"
 
+msgid "Yesterday"
+msgstr "Ayer"
+
 msgid "Zen Package Manager frontend for KOReader."
 msgstr "Interfaz de Zen Package Manager para KOReader."
+
+msgid "ZenLabs Repo"
+msgstr "Repositorio de ZenLabs"
 
 msgid "ZenOS is installed. Most patches should not be used with ZenOS."
 msgstr "ZenOS está instalado. La mayoría de los parches no deben usarse con ZenOS."
@@ -745,7 +994,7 @@ msgid "ZenPM Android companion is not available."
 msgstr "El complemento ZenPM para Android no está disponible."
 
 msgid "ZenPM Android companion is not installed or could not start. See "
-msgstr "El complemento ZenPM para Android no está instalado o no se pudo iniciar. Ver"
+msgstr "El complemento ZenPM para Android no está instalado o no se pudo iniciar. Ver "
 
 msgid "ZenPM backend"
 msgstr "back-end de ZenPM"
@@ -756,11 +1005,17 @@ msgstr "El backend de ZenPM no se inició. Asegúrese de haber utilizado la vers
 msgid "ZenPM bug reporter"
 msgstr "Reportero de errores de ZenPM"
 
+msgid "ZenPM command-line interface installed."
+msgstr "Interfaz de línea de comandos ZenPM instalada."
+
 msgid "ZenPM Companion is checking for an update."
 msgstr "ZenPM Companion está buscando una actualización."
 
 msgid "ZenPM companion update failed."
 msgstr "Error en la actualización complementaria de ZenPM."
+
+msgid "ZenPM daemon not reachable. Re-run ZenPM installer if it is not running."
+msgstr "No se puede acceder al demonio ZenPM. Vuelva a ejecutar el instalador de ZenPM si no se está ejecutando."
 
 msgid "ZenPM font size"
 msgstr "Tamaño de fuente ZenPM"
@@ -779,3 +1034,9 @@ msgstr "ZenPMv"
 
 msgid "ZenPM.log and KOReader's crash.log (if present) will be attached to a public GitHub issue. They may contain package names, repository URLs, and file paths."
 msgstr "ZenPM.log y crash.log de KOReader (si están presentes) se adjuntarán a una edición pública de GitHub. Pueden contener nombres de paquetes, URL de repositorios y rutas de archivos."
+
+msgid "ZenPM: Open"
+msgstr "ZenPM: Abierto"
+
+msgid "ZenPM: Update All"
+msgstr "ZenPM: Actualizar todo"

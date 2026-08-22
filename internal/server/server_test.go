@@ -153,6 +153,96 @@ func TestServerIdleTimeoutWaitsForBackgroundWork(t *testing.T) {
 	}
 }
 
+func TestCloseAfterBackgroundJobsDefersShutdown(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	srv.runBackground(func() {
+		close(started)
+		<-release
+	})
+	<-started
+
+	if err := srv.CloseAfterBackgroundJobs(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-srv.done:
+		t.Fatal("server stopped while background work was active")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("server did not stop after background work completed")
+	}
+}
+
+func TestCloseAfterBackgroundJobsClosesImmediatelyWhenIdle(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	if err := srv.CloseAfterBackgroundJobs(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("idle server did not stop immediately")
+	}
+}
+
+func TestCloseAfterBackgroundJobsWaitsForRequestToStartBackgroundWork(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	requestStarted := make(chan struct{})
+	startBackground := make(chan struct{})
+	backgroundStarted := make(chan struct{})
+	releaseBackground := make(chan struct{})
+	requestDone := make(chan struct{})
+
+	handler := srv.wrap(func(w http.ResponseWriter, _ *http.Request) {
+		close(requestStarted)
+		<-startBackground
+		srv.runBackground(func() {
+			close(backgroundStarted)
+			<-releaseBackground
+		})
+		w.WriteHeader(http.StatusAccepted)
+	})
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/packages/plugin/install", nil)
+		req.RemoteAddr = "127.0.0.1:1234"
+		handler(httptest.NewRecorder(), req)
+		close(requestDone)
+	}()
+	<-requestStarted
+
+	if err := srv.CloseAfterBackgroundJobs(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-srv.done:
+		t.Fatal("server stopped while package request was active")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(startBackground)
+	<-backgroundStarted
+	<-requestDone
+	select {
+	case <-srv.done:
+		t.Fatal("server stopped after request returned but background work was active")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(releaseBackground)
+	select {
+	case <-srv.done:
+	case <-time.After(time.Second):
+		t.Fatal("server did not stop after request and background work completed")
+	}
+}
+
 func TestWrapAllowsUnixSocketRequest(t *testing.T) {
 	srv := &Server{unixSocket: true}
 	rec := httptest.NewRecorder()

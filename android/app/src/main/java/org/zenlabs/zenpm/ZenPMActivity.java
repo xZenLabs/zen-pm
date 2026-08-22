@@ -1,6 +1,7 @@
 package org.zenlabs.zenpm;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -11,7 +12,8 @@ import android.provider.Settings;
 public final class ZenPMActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        Uri data = getIntent().getData();
+        Intent incoming = getIntent();
+        Uri data = incoming == null ? null : incoming.getData();
         Intent service = new Intent(this, ZenPMService.class);
         if (data != null && "update".equals(data.getHost())) {
             String logHome = data.getQueryParameter("home");
@@ -42,34 +44,57 @@ public final class ZenPMActivity extends Activity {
                 && !Environment.isExternalStorageManager();
             boolean requestPackageInstalls = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !getPackageManager().canRequestPackageInstalls();
-            if (requestAllFilesAccess) {
-                CompanionLog.write(this, logHome, "All files access is not granted; opening Android settings.");
-            }
-            if (requestPackageInstalls) {
-                CompanionLog.write(this, logHome, "Unknown apps installs are not allowed; opening Android settings.");
-            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(service);
             } else {
                 startService(service);
             }
-            if (requestPackageInstalls) {
+            if (requestAllFilesAccess) {
+                CompanionLog.write(this, logHome, "All files access is not granted; opening Android settings.");
+                openAllFilesAccessSettings();
+            } else if (requestPackageInstalls) {
+                CompanionLog.write(this, logHome, "Unknown apps installs are not allowed; opening Android settings.");
                 Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:" + getPackageName()));
                 startActivity(settings);
-            } else if (requestAllFilesAccess) {
-                Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:" + getPackageName()));
-                startActivity(settings);
             }
-        } else if (data == null) {
-            // Keep a normal launcher entry so BOOX exposes the companion in
-            // App Info, Auto Start, and App Freeze. Tapping it opens the
-            // system management page; KOReader still starts the backend.
-            Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:" + getPackageName()));
-            startActivity(settings);
+        } else if (data == null && incoming != null && Intent.ACTION_MAIN.equals(incoming.getAction())) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !Environment.isExternalStorageManager()) {
+                openAllFilesAccessSettings();
+            } else {
+                // Keep a normal launcher entry so BOOX exposes the companion in
+                // App Info, Auto Start, and App Freeze. KOReader still starts
+                // the backend.
+                openApplicationDetailsSettings();
+            }
         }
         finish();
+    }
+
+    private void openAllFilesAccessSettings() {
+        Intent appSettings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            Uri.parse("package:" + getPackageName()));
+        if (tryStartActivity(appSettings)) return;
+
+        Intent allFilesSettings = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+        if (tryStartActivity(allFilesSettings)) return;
+
+        openApplicationDetailsSettings();
+    }
+
+    private boolean tryStartActivity(Intent intent) {
+        try {
+            startActivity(intent);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException exception) {
+            return false;
+        }
+    }
+
+    private void openApplicationDetailsSettings() {
+        Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:" + getPackageName()));
+        startActivity(settings);
     }
 }

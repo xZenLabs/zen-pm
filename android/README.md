@@ -27,12 +27,12 @@ your `PATH`.
 NDK 25 supplies a macOS compiler compatible with Apple Silicon.
 
 Install `android/app/build/outputs/apk/release/app-release.apk`. On Android 11
-and newer, the first ZenPM launch opens Android settings for **All files
-access**; grant it for KOReader package management. Android 4.4 uses the normal
-storage permission declared by the APK. The KOReader plugin starts the
-companion automatically. The companion stops when KOReader closes ZenPM or
-after five minutes without requests, so it does not keep a foreground service
-running while idle.
+and newer, launching ZenPM or starting it from KOReader opens Android settings
+for **All files access** until it is granted; grant it for KOReader package
+management. Android 4.4 uses the normal storage permission declared by the APK.
+The KOReader plugin starts the companion automatically. The companion stops
+when KOReader closes ZenPM or after five minutes without requests, so it does
+not keep a foreground service running while idle.
 
 On BOOX devices, the companion appears in Apps as **ZenPM Backend**. Ensure
 **App Freeze** is turned off for it under **Apps > App Management**, because a

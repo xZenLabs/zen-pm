@@ -1674,7 +1674,7 @@ function App:poll_backend_ready(attempt, on_ready)
             return
         end
         if attempt >= Constants.CONNECT_RETRIES then
-            self:backend_failed(Constants.DAEMON_UNAVAILABLE_MESSAGE)
+            self:backend_failed(_(Constants.DAEMON_UNAVAILABLE_MESSAGE))
             return
         end
         self:poll_backend_ready(attempt + 1, on_ready)
@@ -3089,6 +3089,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         is_patch = is_patch,
         patch_was_installed = is_patch and Models.patch_file_installed(pkg, asset) or false,
         was_installed = pkg.installed and true or false,
+        is_plugin = package_is_koreader_plugin(pkg),
         target_version = opts and opts.release or pkg.latest_version,
         prompt_restart = font_reset or (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
@@ -3172,6 +3173,21 @@ function App:patch_action_succeeded_from_db(op)
     return now_installed
 end
 
+function App:recover_interrupted_plugin_action(op)
+    if not op.is_plugin
+        or not self.client
+        or type(self.client.scan_installed_plugins) ~= "function" then
+        return false
+    end
+    local scanned = self.client:scan_installed_plugins()
+    if not scanned then return false end
+
+    local ok, packages = self:load_packages(false, true)
+    if not ok then return false end
+    local pkg = Models.find_package(packages, op.id)
+    return self:package_action_succeeded(op, pkg)
+end
+
 function App:poll_package_action(op, attempt)
     UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
         local detail = self:package_action_failure_detail(op)
@@ -3190,7 +3206,7 @@ function App:poll_package_action(op, attempt)
         -- leaves state.packages holding the updated status for the list/detail view.
         local ok, packages = self:load_packages(false, true)
         if not ok then
-            if attempt >= Constants.MAX_POLL_RETRIES then
+            if attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
                 self.busy = false
                 local message = _("Package operation status could not be checked. See Debug log.")
                 if op.on_result then
@@ -3208,6 +3224,9 @@ function App:poll_package_action(op, attempt)
         local succeeded = self:package_action_succeeded(op, pkg)
         if not succeeded then
             succeeded = self:patch_action_succeeded_from_db(op)
+        end
+        if not succeeded and attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+            succeeded = self:recover_interrupted_plugin_action(op)
         end
 
         if succeeded then
@@ -3241,7 +3260,7 @@ function App:poll_package_action(op, attempt)
                 return
             end
             finish()
-        elseif attempt >= Constants.MAX_POLL_RETRIES then
+        elseif attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
             self.busy = false
             detail = self:package_action_failure_detail(op)
             local message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " did not complete."

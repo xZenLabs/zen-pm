@@ -349,12 +349,12 @@ local function fetch_releases(force_refresh)
     end
     if response.code ~= 200 then
         log_warn("release request returned HTTP", response.code or response.status or "?")
-        return nil, "GitHub returned HTTP " .. tostring(response.code or response.status or "?")
+        return nil, _("GitHub returned HTTP ") .. tostring(response.code or response.status or "?")
     end
     local ok, releases = pcall(JSON.decode, response.body)
     if not ok or type(releases) ~= "table" or #releases == 0 then
         log_warn("release response could not be decoded")
-        return nil, "Could not read GitHub release information."
+        return nil, _("Could not read GitHub release information.")
     end
     log_info("fetched releases", #releases)
     return releases
@@ -368,7 +368,7 @@ local function download(url, path, digest)
     local ok_ltn12, ltn12 = pcall(require, "ltn12")
     if not ok_ltn12 then
         log_warn("download support is unavailable")
-        return false, "Download support is unavailable in this KOReader build."
+        return false, _("Download support is unavailable in this KOReader build.")
     end
     local file, err = io.open(path, "wb")
     if not file then
@@ -381,7 +381,7 @@ local function download(url, path, digest)
     if not response or response.code ~= 200 then
         os.remove(path)
         log_warn("update download failed", request_err or (response and response.code) or "?")
-        return false, request_err or "Download failed with HTTP " .. tostring(response and response.code or "?")
+        return false, request_err or _("Download failed with HTTP ") .. tostring(response and response.code or "?")
     end
     if valid_digest(digest) then
         local actual = sha256(path)
@@ -389,12 +389,12 @@ local function download(url, path, digest)
         if not actual then
             os.remove(path)
             log_warn("update checksum could not be calculated")
-            return false, "Could not verify the update download."
+            return false, _("Could not verify the update download.")
         end
         if actual ~= expected then
             os.remove(path)
             log_warn("update checksum did not match")
-            return false, "Downloaded update checksum did not match."
+            return false, _("Downloaded update checksum did not match.")
         end
     end
     log_info("update archive downloaded and verified")
@@ -412,7 +412,7 @@ end
 local function extract(zip_path, stage_dir)
     local archive = Archiver.Reader:new()
     if not archive:open(zip_path) then
-        return false, archive.err or "Could not open update archive."
+        return false, archive.err or _("Could not open update archive.")
     end
 
     local entries = 0
@@ -421,10 +421,10 @@ local function extract(zip_path, stage_dir)
             or (entry.mode ~= "file" and entry.mode ~= "directory")
             or (entry.path ~= RELEASE_ROOT and entry.path:sub(1, #RELEASE_ROOT + 1) ~= RELEASE_ROOT .. "/") then
             archive:close()
-            return false, "Update archive has an invalid layout."
+            return false, _("Update archive has an invalid layout.")
         end
         if not archive:extractToPath(entry.path, stage_dir .. "/" .. entry.path) then
-            local err = archive.err or "Could not unpack update archive."
+            local err = archive.err or _("Could not unpack update archive.")
             archive:close()
             return false, err
         end
@@ -432,11 +432,11 @@ local function extract(zip_path, stage_dir)
     end
     local err = archive.err
     archive:close()
-    if err or entries == 0 then return false, err or "Update archive is empty." end
+    if err or entries == 0 then return false, err or _("Update archive is empty.") end
     if not is_dir(stage_dir .. "/" .. RELEASE_ROOT)
         or not path_exists(stage_dir .. "/" .. RELEASE_ROOT .. "/_meta.lua")
         or not path_exists(stage_dir .. "/" .. RELEASE_ROOT .. "/main.lua") then
-        return false, "Update archive does not contain a ZenPM plugin."
+        return false, _("Update archive does not contain a ZenPM plugin.")
     end
     return true
 end
@@ -444,7 +444,7 @@ end
 local function extract_standalone(zip_path, stage_dir)
     local archive = Archiver.Reader:new()
     if not archive:open(zip_path) then
-        return false, archive.err or "Could not open standalone archive."
+        return false, archive.err or _("Could not open standalone archive.")
     end
 
     local entries = 0
@@ -454,10 +454,10 @@ local function extract_standalone(zip_path, stage_dir)
         local in_documents = path == "documents" or path:sub(1, 10) == "documents/"
         if unsafe_entry(path) or (entry.mode ~= "file" and entry.mode ~= "directory") or not (in_payload or in_documents) then
             archive:close()
-            return false, "Standalone archive has an invalid layout."
+            return false, _("Standalone archive has an invalid layout.")
         end
         if not archive:extractToPath(path, stage_dir .. "/" .. path) then
-            local err = archive.err or "Could not unpack standalone archive."
+            local err = archive.err or _("Could not unpack standalone archive.")
             archive:close()
             return false, err
         end
@@ -465,13 +465,13 @@ local function extract_standalone(zip_path, stage_dir)
     end
     local err = archive.err
     archive:close()
-    if err or entries == 0 then return false, err or "Standalone archive is empty." end
+    if err or entries == 0 then return false, err or _("Standalone archive is empty.") end
     if not is_dir(stage_dir .. "/" .. STANDALONE_ROOT)
         or not path_exists(stage_dir .. "/" .. STANDALONE_ROOT .. "/frontend/kindle")
         or not path_exists(stage_dir .. "/" .. STANDALONE_ROOT .. "/backend/zenpm-hf")
         or not path_exists(stage_dir .. "/" .. STANDALONE_ROOT .. "/backend/zenpm-sf")
         or not path_exists(stage_dir .. "/" .. STANDALONE_SCRIPT) then
-        return false, "Standalone archive does not contain a complete Kindle installation."
+        return false, _("Standalone archive does not contain a complete Kindle installation.")
     end
     return true
 end
@@ -484,9 +484,12 @@ local function latest_release(daemon, allow_prerelease, force_refresh)
     if not release then
         log_warn("no compatible release", "platform=", daemon:detect_platform(), "expected=", expected_asset)
         if expected_asset then
-            return false, "No compatible ZenPM release is available for this platform (expected " .. expected_asset .. ")."
+            return false, string.format(
+                _("No compatible ZenPM release is available for this platform (expected %s)."),
+                expected_asset
+            )
         end
-        return false, "No compatible ZenPM release is available for this platform."
+        return false, _("No compatible ZenPM release is available for this platform.")
     end
     log_info("selected release", release.tag, "asset=", release.asset.name)
     return true, release
@@ -511,7 +514,7 @@ end
 
 local function install_release(daemon, release)
     if not release then
-        return false, "No compatible ZenPM release is available for this platform."
+        return false, _("No compatible ZenPM release is available for this platform.")
     end
 
     local plugin_dir = Constants.PLUGIN_DIR
@@ -519,13 +522,13 @@ local function install_release(daemon, release)
     local plugin_name = plugin_dir:match("([^/]+)$")
     if not plugins_dir or not plugin_name or not is_dir(plugins_dir) then
         log_warn("KOReader plugins directory could not be found")
-        return false, "Could not find KOReader's plugins directory."
+        return false, _("Could not find KOReader's plugins directory.")
     end
     local probe = plugins_dir .. "/.zenpm-update-write-probe"
     local probe_file = io.open(probe, "wb")
     if not probe_file then
         log_warn("plugins directory is not writable")
-        return false, "KOReader's plugins directory is not writable."
+        return false, _("KOReader's plugins directory is not writable.")
     end
     probe_file:close()
     os.remove(probe)
@@ -544,7 +547,7 @@ local function install_release(daemon, release)
     if not Util.ensure_dir(stage_dir) then
         os.remove(zip_path)
         log_warn("could not create update staging directory")
-        return false, "Could not prepare the update directory."
+        return false, _("Could not prepare the update directory.")
     end
     local unpacked, unpack_err = extract(zip_path, stage_dir)
     os.remove(zip_path)
@@ -557,13 +560,13 @@ local function install_release(daemon, release)
     if had_plugin and not os.rename(plugin_dir, backup_dir) then
         remove_tree(stage_dir)
         log_warn("could not back up installed plugin")
-        return false, "Could not move the old ZenPM plugin."
+        return false, _("Could not move the old ZenPM plugin.")
     end
     if not os.rename(staged_plugin, plugin_dir) then
         if had_plugin then os.rename(backup_dir, plugin_dir) end
         remove_tree(stage_dir)
         log_warn("could not install staged plugin; restored previous version")
-        return false, "Could not install the updated ZenPM plugin."
+        return false, _("Could not install the updated ZenPM plugin.")
     end
     remove_tree(stage_dir)
     remove_tree(backup_dir)
@@ -591,19 +594,19 @@ function Updater:reinstall(daemon, tag, allow_prerelease, force_refresh)
             return install_release(daemon, entry)
         end
     end
-    return false, "The selected ZenPM version is not available for this platform."
+    return false, _("The selected ZenPM version is not available for this platform.")
 end
 
 function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refresh)
     if not daemon or type(daemon.kindle_homepage_install_supported) ~= "function"
             or not daemon:kindle_homepage_install_supported() then
-        return standalone_failure(daemon, "Kindle standalone is not supported on this device.")
+        return standalone_failure(daemon, _("Kindle standalone is not supported on this device."))
     end
     local releases, releases_err = fetch_releases(force_refresh)
     if not releases then return standalone_failure(daemon, releases_err) end
     local release = select_standalone_release(releases, allow_prerelease)
     if not release then
-        return standalone_failure(daemon, "No standalone Kindle ZenPM release is available.")
+        return standalone_failure(daemon, _("No standalone Kindle ZenPM release is available."))
     end
     standalone_log(daemon, "selected " .. release.asset.name .. " (" .. release.tag .. ")")
 
@@ -617,7 +620,7 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
     local script_path = usb_root .. "/" .. STANDALONE_SCRIPT
 
     if not Util.ensure_dir(work_dir) then
-        return standalone_failure(daemon, "Could not prepare the Kindle USB storage.")
+        return standalone_failure(daemon, _("Could not prepare the Kindle USB storage."))
     end
     remove_tree(stage_dir)
     remove_tree(payload_backup)
@@ -629,7 +632,7 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
     if not downloaded then return standalone_failure(daemon, download_err) end
     if not Util.ensure_dir(stage_dir) then
         os.remove(zip_path)
-        return standalone_failure(daemon, "Could not prepare the standalone installation directory.")
+        return standalone_failure(daemon, _("Could not prepare the standalone installation directory."))
     end
     local unpacked, unpack_err = extract_standalone(zip_path, stage_dir)
     os.remove(zip_path)
@@ -643,7 +646,7 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
         local moved, move_err = os.rename(payload_path, payload_backup)
         if not moved then
             remove_tree(stage_dir)
-            return standalone_failure(daemon, "Could not back up the existing standalone ZenPM installation: " .. tostring(move_err))
+            return standalone_failure(daemon, _("Could not back up the existing standalone ZenPM installation: ") .. tostring(move_err))
         end
     end
     if path_exists(script_path) then
@@ -651,7 +654,7 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
         if not moved then
             os.rename(payload_backup, payload_path)
             remove_tree(stage_dir)
-            return standalone_failure(daemon, "Could not back up the existing Kindle homepage script: " .. tostring(move_err))
+            return standalone_failure(daemon, _("Could not back up the existing Kindle homepage script: ") .. tostring(move_err))
         end
     end
     local payload_moved, payload_move_err = os.rename(stage_dir .. "/" .. STANDALONE_ROOT, payload_path)
@@ -659,7 +662,7 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
         os.rename(script_backup, script_path)
         os.rename(payload_backup, payload_path)
         remove_tree(stage_dir)
-        return standalone_failure(daemon, "Could not install the standalone ZenPM payload: " .. tostring(payload_move_err))
+        return standalone_failure(daemon, _("Could not install the standalone ZenPM payload: ") .. tostring(payload_move_err))
     end
     local staged_script = stage_dir .. "/" .. STANDALONE_SCRIPT
     local script_moved, script_move_err = os.rename(staged_script, script_path)
@@ -672,8 +675,11 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
         os.rename(script_backup, script_path)
         os.rename(payload_backup, payload_path)
         remove_tree(stage_dir)
-        return standalone_failure(daemon, "Could not install the Kindle homepage script: rename failed: "
-            .. tostring(script_move_err) .. "; copy failed: " .. tostring(script_copy_err))
+        return standalone_failure(daemon, string.format(
+            _("Could not install the Kindle homepage script: rename failed: %s; copy failed: %s"),
+            tostring(script_move_err),
+            tostring(script_copy_err)
+        ))
     end
     os.execute("chmod +x " .. Util.sh_quote(script_path))
     remove_tree(stage_dir)
@@ -681,7 +687,11 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
     standalone_log(daemon, "configuring Kindle standalone installation")
     local installer_log = daemon and daemon:state_home() .. "/ZenPM.log" or "/tmp/ZenPM-standalone.log"
     if os.execute("ZENPM_NO_LAUNCH=1 sh " .. Util.sh_quote(script_path) .. " >>" .. Util.sh_quote(installer_log) .. " 2>&1") ~= 0 then
-        return standalone_failure(daemon, "The standalone payload was installed, but its Kindle setup script failed. See " .. installer_log .. " or run " .. script_path .. " from KUAL to retry.")
+        return standalone_failure(daemon, string.format(
+            _("The standalone payload was installed, but its Kindle setup script failed. See %s or run %s from KUAL to retry."),
+            installer_log,
+            script_path
+        ))
     end
 
     remove_tree(payload_backup)

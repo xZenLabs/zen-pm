@@ -2,6 +2,7 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
 
 local ffi = require("ffi")
+package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ffi/posix_h"] = function()
     ffi.cdef[[
         typedef long ssize_t;

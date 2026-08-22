@@ -6,6 +6,7 @@ local Markdown = require("ui/markdown")
 
 local measured_image
 local scheduled_callbacks = {}
+package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ui/widget/imageviewer"] = function() return { new = function() return {} end } end
 package.preload["ui/primitives"] = function()
     return {

@@ -1,3 +1,5 @@
+local _ = require("gettext")
+
 local UnixHTTP = {
     -- AF_UNIX is fixed by the Linux userspace ABI. Older KOReader FFI headers
     -- do not declare the constant even though they expose Unix socket calls.
@@ -6,7 +8,7 @@ local UnixHTTP = {
 
 function UnixHTTP.parse_response(raw)
     if type(raw) ~= "string" then
-        return nil, "invalid HTTP response"
+        return nil, _("invalid HTTP response")
     end
     local header_end = raw:find("\r\n\r\n", 1, true)
     local separator_length = 4
@@ -15,14 +17,14 @@ function UnixHTTP.parse_response(raw)
         separator_length = 2
     end
     if not header_end then
-        return nil, "invalid HTTP response"
+        return nil, _("invalid HTTP response")
     end
 
     local header_block = raw:sub(1, header_end - 1)
     local status_line = header_block:match("^([^\r\n]+)")
     local status = status_line and tonumber(status_line:match("^HTTP/%d+%.%d+%s+(%d%d%d)"))
     if not status then
-        return nil, "invalid HTTP response"
+        return nil, _("invalid HTTP response")
     end
 
     local headers = {}
@@ -37,7 +39,7 @@ function UnixHTTP.parse_response(raw)
     local content_length = tonumber(headers["content-length"])
     if content_length then
         if #body < content_length then
-            return nil, "incomplete HTTP response"
+            return nil, _("incomplete HTTP response")
         end
         body = body:sub(1, content_length)
     end
@@ -91,7 +93,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
         local abstract = socket_path:sub(1, 1) == "@"
         local path_length = abstract and #socket_path or #socket_path + 1
         if path_length > path_capacity then
-            error("Unix socket path is too long")
+            error(_("Unix socket path is too long"))
         end
         address.sun_family = UnixHTTP.AF_UNIX
         local address_length = ffi.sizeof(address)
@@ -105,12 +107,12 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             ffi.copy(address.sun_path, socket_path)
         end
         if C.connect(fd, ffi.cast("const struct sockaddr *", address), address_length) ~= 0 then
-            error("connect: " .. strerror())
+            error(_("connect: ") .. strerror())
         end
 
         if type(path) ~= "string" or path:sub(1, 1) ~= "/"
             or path:find("\r", 1, true) or path:find("\n", 1, true) then
-            error("invalid HTTP request path")
+            error(_("invalid HTTP request path"))
         end
         local lines = {
             method .. " " .. path .. " HTTP/1.0",
@@ -133,20 +135,20 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             pollfd[0].revents = 0
             local remaining = math.floor((deadline - now()) * 1000)
             if remaining <= 0 then
-                error("timeout")
+                error(_("timeout"))
             end
             local result
             repeat
                 result = C.poll(pollfd, 1, remaining)
             until result >= 0 or ffi.errno() ~= C.EINTR
             if result == 0 then
-                error("timeout")
+                error(_("timeout"))
             end
             if result < 0 then
-                error("poll: " .. strerror())
+                error(_("poll: ") .. strerror())
             end
             if bit.band(pollfd[0].revents, C.POLLERR) ~= 0 then
-                error("socket error")
+                error(_("socket error"))
             end
         end
 
@@ -158,10 +160,10 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             local count = tonumber(C.send(fd, request_pointer + sent, #request - sent, send_flags))
             if count < 0 then
                 if ffi.errno() ~= C.EINTR then
-                    error("send: " .. strerror())
+                    error(_("send: ") .. strerror())
                 end
             elseif count == 0 then
-                error("socket closed while sending")
+                error(_("socket closed while sending"))
             else
                 sent = sent + count
             end
@@ -176,7 +178,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
                 break
             elseif count < 0 then
                 if ffi.errno() ~= C.EINTR then
-                    error("recv: " .. strerror())
+                    error(_("recv: ") .. strerror())
                 end
             else
                 table.insert(chunks, ffi.string(buffer, count))
