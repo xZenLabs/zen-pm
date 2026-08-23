@@ -191,9 +191,6 @@ func seedReposDB(s *State) error {
 	defaults := []RepoEntry{
 		{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true},
 	}
-	if s.kindleWAFAllowed {
-		defaults = append(defaults, RepoEntry{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true})
-	}
 
 	// Allow override via env var for custom setups.
 	if url := os.Getenv("ZENPM_DEFAULT_REPO_URL"); url != "" {
@@ -213,7 +210,6 @@ func reconcileDefaultRepos(s *State) error {
 	}
 	changed := false
 	hasZenLabs := false
-	hasKindleForge := false
 
 	filtered := repos[:0]
 	for i := range repos {
@@ -228,18 +224,11 @@ func reconcileDefaultRepos(s *State) error {
 			}
 		}
 		if IsKindleForgeRepo(repos[i].Name, repos[i].URL) {
-			if !s.kindleWAFAllowed {
+			// KindleForge used to be an automatic default. Remove that legacy
+			// entry so frontends can expose it as an explicit opt-in instead.
+			if !s.kindleWAFAllowed || repos[i].Default {
 				changed = true
 				continue
-			}
-			hasKindleForge = true
-			if repos[i].Name != DefaultKindleForgeRepoName || repos[i].URL != DefaultKindleForgeRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
-				repos[i].Name = DefaultKindleForgeRepoName
-				repos[i].URL = DefaultKindleForgeRepoURL
-				repos[i].Priority = 10
-				repos[i].Trust = "trusted"
-				repos[i].Default = true
-				changed = true
 			}
 		}
 		filtered = append(filtered, repos[i])
@@ -248,10 +237,6 @@ func reconcileDefaultRepos(s *State) error {
 
 	if !hasZenLabs {
 		repos = append([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true}}, repos...)
-		changed = true
-	}
-	if s.kindleWAFAllowed && !hasKindleForge {
-		repos = append(repos, RepoEntry{Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL, Priority: 10, Trust: "trusted", Default: true})
 		changed = true
 	}
 	if !changed {

@@ -255,6 +255,9 @@ msgstr "Could not read GitHub release information."
 msgid "Could not read log: "
 msgstr "Could not read log: "
 
+msgid "Could not refresh repositories: "
+msgstr "Could not refresh repositories: "
+
 msgid "Could not remove patch: "
 msgstr "Could not remove patch: "
 
@@ -272,6 +275,9 @@ msgstr "Could not unpack standalone archive."
 
 msgid "Could not unpack update archive."
 msgstr "Could not unpack update archive."
+
+msgid "Could not update Kindle Scriptlets: "
+msgstr "Could not update Kindle Scriptlets: "
 
 msgid "Could not update the package preference: "
 msgstr "Could not update the package preference: "
@@ -473,6 +479,9 @@ msgstr "Kindle homepage installation failed: "
 
 msgid "Kindle homepage installation was cancelled."
 msgstr "Kindle homepage installation was cancelled."
+
+msgid "Kindle Scriptlets"
+msgstr "Kindle Scriptlets"
 
 msgid "Kindle standalone is not supported on this device."
 msgstr "Kindle standalone is not supported on this device."
@@ -804,6 +813,9 @@ msgstr "Settings"
 msgid "Show all builds"
 msgstr "Show all builds"
 
+msgid "Show Kindle Scriptlets"
+msgstr "Show Kindle Scriptlets"
+
 msgid "Show more"
 msgstr "Show more"
 
@@ -953,6 +965,9 @@ msgstr "Updated: %d packages"
 
 msgid "Updating"
 msgstr "Updating"
+
+msgid "Updating Kindle Scriptlets..."
+msgstr "Updating Kindle Scriptlets..."
 
 msgid "Updating ZenPM..."
 msgstr "Updating ZenPM..."

@@ -72,18 +72,56 @@ function Models.category_label(category)
     return I18n.dynamic_or(category and category.label, tostring(category and category.id or ""))
 end
 
-function Models.category_for_id(id)
+local function is_kindle_scriptlets_category(category)
+    return normalize_category(category and category.id) == normalize_category(Constants.KINDLE_SCRIPTLETS_CATEGORY.id)
+end
+
+function Models.category_for_id(id, show_kindle_scriptlets)
     id = normalize_category(id)
     for _, category in ipairs(Constants.CATEGORIES) do
         if normalize_category(category.id) == id or normalize_category(category.label) == id then
             return category
         end
     end
+    local category = Constants.KINDLE_SCRIPTLETS_CATEGORY
+    if show_kindle_scriptlets
+            and (normalize_category(category.id) == id or normalize_category(category.label) == id) then
+        return category
+    end
     return nil
+end
+
+function Models.is_kindle_scriptlet(pkg)
+    if not pkg then return false end
+    if pkg.repo == Constants.REPO_KINDLEFORGE_NAME then return true end
+    for _, platform in ipairs(type(pkg.platforms) == "table" and pkg.platforms or {}) do
+        platform = Util.trim(tostring(platform or "")):lower()
+        if platform == "kindle" or platform == "kindleforge" then
+            return true
+        end
+    end
+    return false
+end
+
+function Models.filter_kindle_scriptlets(packages, show_kindle_scriptlets)
+    if show_kindle_scriptlets then return packages or {} end
+    local out = {}
+    for _, pkg in ipairs(packages or {}) do
+        if not Models.is_kindle_scriptlet(pkg) then
+            table.insert(out, pkg)
+        end
+    end
+    return out
 end
 
 function Models.package_in_category(pkg, category)
     if not pkg or not category then
+        return false
+    end
+    if Models.is_kindle_scriptlet(pkg) then
+        return is_kindle_scriptlets_category(category)
+    end
+    if is_kindle_scriptlets_category(category) then
         return false
     end
     local wanted = normalize_category(category.id)
@@ -110,20 +148,27 @@ function Models.packages_in_category(packages, category)
     return out
 end
 
-function Models.filter_packages_by_category(packages, category_id)
+function Models.filter_packages_by_category(packages, category_id, show_kindle_scriptlets)
     if normalize_category(category_id) == "" then
         return packages or {}
     end
-    local category = Models.category_for_id(category_id)
+    local category = Models.category_for_id(category_id, show_kindle_scriptlets)
     if not category then
         return {}
     end
     return Models.packages_in_category(packages, category)
 end
 
-function Models.category_cards(packages)
+function Models.category_cards(packages, show_kindle_scriptlets)
     local cards = {}
+    local categories = {}
     for _, category in ipairs(Constants.CATEGORIES) do
+        table.insert(categories, category)
+    end
+    if show_kindle_scriptlets then
+        table.insert(categories, Constants.KINDLE_SCRIPTLETS_CATEGORY)
+    end
+    for _, category in ipairs(categories) do
         local count = 0
         for _, pkg in ipairs(packages or {}) do
             if Models.package_in_category(pkg, category) then

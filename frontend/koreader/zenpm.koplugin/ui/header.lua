@@ -114,7 +114,8 @@ end
 function Header.draw_installed_category_button(view, bb, x, y)
     local h = Theme.scale(42)
     local icon = Theme.scale(24)
-    local category = Models.category_for_id(view.app.state.filters.installed)
+    local category = Models.category_for_id(
+        view.app.state.filters.installed, view.app.state.show_kindle_scriptlets)
     local label = category and Models.category_label(category) or _("Filter")
     local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
     local w = Theme.scale(10) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)

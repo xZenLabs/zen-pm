@@ -185,9 +185,10 @@ zpm doctor
 zpm list
 ~~~
 
-The first launch seeds the ZenLabs repository. Compatible Kindles also seed
-KindleForge. User-added
-repositories are refreshed from their URL and assigned trust automatically.
+The first launch seeds the ZenLabs repository. In the KOReader plugin on a
+compatible Kindle, **Show Kindle Scriptlets** adds KindleForge as an opt-in
+source. User-added repositories are refreshed from their URL and assigned
+trust automatically.
 
 ### Updates and removal
 

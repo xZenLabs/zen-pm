@@ -148,7 +148,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	}
 }
 
-func TestReconcileDefaultReposRemovesKindleForgeWhenUnsupported(t *testing.T) {
+func TestReconcileDefaultReposDoesNotAddKindleForge(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
 
@@ -161,14 +161,20 @@ func TestReconcileDefaultReposRemovesKindleForgeWhenUnsupported(t *testing.T) {
 		t.Fatal(err)
 	}
 	repos, err := st.ReadRepos()
-	if err != nil || !hasRepo(repos, DefaultKindleForgeRepoName) {
+	if err != nil || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("supported repos = %#v, %v", repos, err)
+	}
+
+	legacy := RepoEntry{
+		Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL,
+		Priority: 10, Trust: "trusted", Default: true,
+	}
+	if err := st.WriteRepos(append(repos, legacy)); err != nil {
+		t.Fatal(err)
 	}
 	if err := st.WriteCatalog([]CatalogEntry{{ID: "kindle-package", Repo: DefaultKindleForgeRepoName}}); err != nil {
 		t.Fatal(err)
 	}
-
-	st.kindleWAFAllowed = false
 	if err := reconcileDefaultRepos(st); err != nil {
 		t.Fatal(err)
 	}
@@ -182,6 +188,30 @@ func TestReconcileDefaultReposRemovesKindleForgeWhenUnsupported(t *testing.T) {
 	catalog, err := st.ReadCatalog()
 	if err != nil || len(catalog) != 0 {
 		t.Fatalf("catalog after KindleForge removal = %#v, %v", catalog, err)
+	}
+
+	optedIn := RepoEntry{
+		Name: DefaultKindleForgeRepoName, URL: DefaultKindleForgeRepoURL,
+		Priority: 100, Trust: "trusted",
+	}
+	if err := st.WriteRepos(append(repos, optedIn)); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileDefaultRepos(st); err != nil {
+		t.Fatal(err)
+	}
+	repos, err = st.ReadRepos()
+	if err != nil || !hasRepo(repos, DefaultKindleForgeRepoName) {
+		t.Fatalf("opted-in repos = %#v, %v", repos, err)
+	}
+
+	st.kindleWAFAllowed = false
+	if err := reconcileDefaultRepos(st); err != nil {
+		t.Fatal(err)
+	}
+	repos, err = st.ReadRepos()
+	if err != nil || hasRepo(repos, DefaultKindleForgeRepoName) {
+		t.Fatalf("unsupported repos = %#v, %v", repos, err)
 	}
 }
 

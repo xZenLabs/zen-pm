@@ -47,4 +47,9 @@ return {
         { id = "theme", label = N_("Theme"), icon = "theme.svg" },
         { id = "utility", label = N_("Utility"), icon = "utility.svg" },
     },
+    KINDLE_SCRIPTLETS_CATEGORY = {
+        id = "kindle-scriptlets",
+        label = N_("Kindle Scriptlets"),
+        icon = "kindleforge.svg",
+    },
 }
