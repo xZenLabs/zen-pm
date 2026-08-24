@@ -695,7 +695,6 @@ func koreaderRootCandidates(plat string) []string {
 	}
 	switch plat {
 	case platform.Kindle:
-		add("/mnt/us/kmc/kpm/packages/koreader/koreader")
 		add("/mnt/us/koreader")
 	case platform.Kobo:
 		add("/mnt/onboard/.adds/koreader")

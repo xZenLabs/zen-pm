@@ -59,5 +59,6 @@ return {
     },
     ["1.4.2"] = {
         "Disable Kindle scriptlets and Kindleforge by default (enable via settings)",
+        "Use stable koreader location for kpm installs",
     },
 }

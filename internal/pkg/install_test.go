@@ -1882,14 +1882,17 @@ func TestInstallEnvFallsBackToKopluginAssetPattern(t *testing.T) {
 	}
 }
 
-func TestInstallEnvPassesKOReaderPathCandidates(t *testing.T) {
+func TestInstallEnvUsesStandardKindleKOReaderPath(t *testing.T) {
+	t.Setenv("ZENPM_KOREADER_DIR", "")
+	t.Setenv("ZENPM_KOREADER_ROOT", "")
+	t.Setenv("KOREADER_DIR", "")
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", "")
 	m := &Manager{plat: "kindle"}
 	env := m.installEnv(&repo.CatalogEntry{ID: "patch"}, "")
 
-	paths := strings.Split(env["ZENPM_KOREADER_PATHS"], ":")
-	wantFirst := "/mnt/us/kmc/kpm/packages/koreader/koreader"
-	if len(paths) == 0 || paths[0] != wantFirst {
-		t.Fatalf("ZENPM_KOREADER_PATHS = %q, want first path %q", env["ZENPM_KOREADER_PATHS"], wantFirst)
+	want := "/mnt/us/koreader"
+	if got := env["ZENPM_KOREADER_PATHS"]; got != want {
+		t.Fatalf("ZENPM_KOREADER_PATHS = %q, want %q", got, want)
 	}
 }
 
