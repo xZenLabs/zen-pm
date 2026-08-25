@@ -249,10 +249,12 @@ unsigned or plain-HTTP repositories accordingly. See the
 
 ## Build and develop
 
-Building requires Go 1.22+ and FontTools (pyftsubset). Builds use the SemVer
-version already in `VERSION` and overwrite the prior `dist/` artifacts. Update
-`VERSION` and `frontend/koreader/zenpm.koplugin/_meta.lua` together only when
-preparing a new release, then run:
+Building requires Go 1.26.6+ and FontTools (pyftsubset). The 32-bit ARM
+e-reader binaries use a separately bootstrapped, patched Go 1.26.6 toolchain
+for old-kernel compatibility. Builds use the SemVer version already in
+`VERSION` and overwrite the prior `dist/` artifacts. Update `VERSION` and
+`frontend/koreader/zenpm.koplugin/_meta.lua` together only when preparing a new
+release, then run:
 
 ~~~sh
 ./build.sh

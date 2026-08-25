@@ -20,7 +20,7 @@ build() {
     out="app/src/main/jniLibs/$abi/libzenpm.so"
     [ -x "$cc" ] || { echo "Android NDK compiler not found: $cc" >&2; exit 1; }
     mkdir -p "$(dirname "$out")"
-    GOOS=android GOARCH="$goarch" CGO_ENABLED=1 CC="$cc" GOTOOLCHAIN=go1.20.14 \
+    GOOS=android GOARCH="$goarch" CGO_ENABLED=1 CC="$cc" \
         go build -buildmode=c-shared -ldflags "-s -w -X github.com/xZenLabs/zen-pm/internal/androidbackend.Version=$version" -o "$out" ./backend
 }
 
