@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+PROJECT_DIR=$(CDPATH='' cd -- "$SCRIPT_DIR/../.." && pwd)
 VERSION=$(sed -n '1p' "$SCRIPT_DIR/VERSION")
 PATCH_LEVEL='ZenPM Linux/ARM old-kernel patch 2'
 ARCHIVE="$VERSION.src.tar.gz"

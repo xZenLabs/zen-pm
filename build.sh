@@ -326,7 +326,7 @@ build_go() {
         echo "Bootstrap toolchains/legacy or set ZENPM_LEGACY_GO; unpatched/EOL Go is not accepted." >&2
         exit 1
     }
-    LEGACY_ROOT=$(CDPATH= cd -- "$(dirname "$LEGACY_GO")/.." && pwd)
+    LEGACY_ROOT=$(CDPATH='' cd -- "$(dirname "$LEGACY_GO")/.." && pwd)
     ACTUAL_PATCH_LEVEL=$(sed -n '1p' "$LEGACY_ROOT/ZENPM_PATCH_LEVEL" 2>/dev/null || true)
     [ "$ACTUAL_PATCH_LEVEL" = "$LEGACY_PATCH_LEVEL" ] || {
         echo "Legacy ARM compiler patch level mismatch: expected $LEGACY_PATCH_LEVEL, found ${ACTUAL_PATCH_LEVEL:-none}." >&2
