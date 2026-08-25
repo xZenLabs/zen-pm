@@ -49,4 +49,4 @@ separate from a native ZenPM install.
 - Device-aware package filter: Kindle, Kobo, or host
 
 The Kindle WAF frontend remains the visual reference. Shared labels, retry
-counts, and repository constants are mirrored in `constants.lua`.
+counts, and repository constants are mirrored in `zenpm_constants.lua`.

@@ -1,4 +1,4 @@
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Util = require("zenpm_util")
 local _ = require("gettext")

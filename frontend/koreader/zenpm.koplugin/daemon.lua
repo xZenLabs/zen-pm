@@ -1,7 +1,7 @@
 local socket = require("socket")
 local _ = require("gettext")
 
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local Util = require("zenpm_util")
 
 local ok_datastorage, DataStorage = pcall(require, "datastorage")

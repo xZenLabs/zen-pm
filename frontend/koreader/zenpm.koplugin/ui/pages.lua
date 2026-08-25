@@ -3,7 +3,7 @@
 -- shared state and hitbox registration.
 
 local Cards = require("ui/cards")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local Markdown = require("ui/markdown")

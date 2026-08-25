@@ -4,7 +4,7 @@ local ltn12 = require("ltn12")
 local socket = require("socket")
 local _ = require("gettext")
 
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 
 local ok_https, https = pcall(require, "ssl.https")
 local ok_socketutil, socketutil = pcall(require, "socketutil")

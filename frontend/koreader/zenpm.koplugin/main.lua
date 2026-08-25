@@ -4,7 +4,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
 local Launcher = require("launcher")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 I18n.install()
 local Daemon = require("daemon")

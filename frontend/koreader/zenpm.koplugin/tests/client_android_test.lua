@@ -45,7 +45,7 @@ package.preload["logger"] = function()
         info = function(message) table.insert(log_messages, message) end,
     }
 end
-package.preload["constants"] = function()
+package.preload["zenpm_constants"] = function()
     return {
         API_BASE = "http://127.0.0.1:18765",
         PLUGIN_DIR = root,

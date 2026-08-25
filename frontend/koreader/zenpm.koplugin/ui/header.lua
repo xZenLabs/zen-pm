@@ -5,7 +5,7 @@ local InlineIcons = require("ui/inline_icon_map")
 local Models = require("models")
 
 local Geom = require("ui/geometry")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local P = require("ui/primitives")
 local Theme = require("ui/theme")

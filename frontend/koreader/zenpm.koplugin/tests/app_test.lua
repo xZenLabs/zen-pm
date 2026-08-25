@@ -58,7 +58,7 @@ package.preload["logger"] = function()
 end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
-package.preload["constants"] = function()
+package.preload["zenpm_constants"] = function()
     return {
         PLUGIN_DIR = root,
         PACKAGE_ERROR_NOTICE_SECONDS = 1,

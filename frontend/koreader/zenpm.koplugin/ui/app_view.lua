@@ -15,7 +15,7 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local UIManager = require("ui/uimanager")
 
 local Header = require("ui/header")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Nav = require("ui/nav")
 local P = require("ui/primitives")

@@ -2,7 +2,7 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
-package.preload["constants"] = function()
+package.preload["zenpm_constants"] = function()
     return {
         PLUGIN_DIR = root,
         REPO_ZENLABS_NAME = "ZenLabs",

@@ -7,7 +7,7 @@ local ok_logger, logger = pcall(require, "logger")
 
 local AppView = require("ui/app_view")
 local BugReporter = require("bugreporter")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 -- KOReader or another plugin may already have modules with these generic
 -- names loaded. Load our implementations explicitly so cache entries cannot
 -- replace them.

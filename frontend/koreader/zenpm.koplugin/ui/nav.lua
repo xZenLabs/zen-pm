@@ -1,7 +1,7 @@
 -- Bottom tab bar rendering for AppView. Takes the AppView instance to register
 -- per-tab hitboxes.
 
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local Font = require("ui/font")
 local Images = require("ui/images")
 local P = require("ui/primitives")

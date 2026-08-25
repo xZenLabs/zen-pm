@@ -1,5 +1,5 @@
 local source = debug.getinfo(1, "S").source or ""
-local plugin_dir = source:match("^@(.+)/constants%.lua$") or "plugins/zenpm.koplugin"
+local plugin_dir = source:match("^@(.+)/zenpm_constants%.lua$") or "plugins/zenpm.koplugin"
 local api_port = 18765
 local function N_(value) return value end
 return {

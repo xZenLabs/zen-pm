@@ -1,5 +1,5 @@
 local Models = require("models")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local P = require("ui/primitives")
