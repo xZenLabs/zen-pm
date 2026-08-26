@@ -9,7 +9,7 @@ local constants = {
     PORT = 18765,
     UNIX_SOCKET = "/tmp/zenpm.sock",
 }
-package.preload["constants"] = function() return constants end
+package.preload["zenpm_constants"] = function() return constants end
 local datastorage = {
     getSettingsDir = function() return "./settings" end,
     getFullDataDir = function() return "/mnt/us/koreader" end,

@@ -2,12 +2,17 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. package.path
 
-package.preload["constants"] = function()
+package.preload["zenpm_constants"] = function()
     return {
         PLUGIN_DIR = root,
         REPO_ZENLABS_NAME = "ZenLabs",
         REPO_ZENLABS_DISPLAY = "ZenLabs",
         REPO_KINDLEFORGE_NAME = "KindleForge",
+        KINDLE_SCRIPTLETS_CATEGORY = {
+            id = "kindle-scriptlets",
+            label = "Kindle Scriptlets",
+            icon = "kindleforge.svg",
+        },
         CATEGORIES = {
             { id = "fonts", label = "Fonts" },
             { id = "games", label = "Games" },
@@ -139,12 +144,28 @@ local categorized = {
     { id = "font", category = "fonts" },
     { id = "game", category = "other", tags = { "Games" } },
     { id = "utility", category = "utility" },
+    { id = "scriptlet", category = "games", repo = "KindleForge" },
+    { id = "zenlabs-scriptlet", category = "utility", repo = "ZenLabs", platforms = { "kindle" } },
+    { id = "zenlabs-koreader-kindle", category = "utility", repo = "ZenLabs", platforms = { "kindle", "koreader" } },
 }
 assert(Models.filter_packages_by_category(categorized, "") == categorized)
 local games = Models.filter_packages_by_category(categorized, "games")
 assert(#games == 1 and games[1].id == "game")
 local utilities = Models.filter_packages_by_category(categorized, "utilities")
 assert(#utilities == 1 and utilities[1].id == "utility")
+assert(Models.category_for_id("kindle-scriptlets", false) == nil)
+local scriptlet_category = Models.category_for_id("kindle-scriptlets", true)
+assert(scriptlet_category.label == "Kindle Scriptlets")
+local scriptlets = Models.filter_packages_by_category(categorized, "kindle-scriptlets", true)
+assert(#scriptlets == 3 and scriptlets[1].id == "scriptlet"
+    and scriptlets[2].id == "zenlabs-scriptlet"
+    and scriptlets[3].id == "zenlabs-koreader-kindle")
+assert(#Models.filter_kindle_scriptlets(categorized, false) == 3)
+assert(Models.filter_kindle_scriptlets(categorized, true) == categorized)
+assert(#Models.category_cards(categorized, false) == 3)
+local category_cards = Models.category_cards(categorized, true)
+assert(#category_cards == 4)
+assert(category_cards[4].id == "kindle-scriptlets" and category_cards[4].count == 3)
 
 local notes = {
     release_notes_url = "https://example.invalid/RELEASE_NOTES.md",

@@ -5,7 +5,7 @@ package.path = root .. "/?.lua;" .. root .. "/ui/?.lua;" .. package.path
 local painted_text = {}
 local hit_callbacks = {}
 
-package.preload["constants"] = function() return { PLUGIN_DIR = root } end
+package.preload["zenpm_constants"] = function() return { PLUGIN_DIR = root } end
 package.preload["i18n"] = function()
     return { dynamic_or = function(value, fallback) return value or fallback end }
 end

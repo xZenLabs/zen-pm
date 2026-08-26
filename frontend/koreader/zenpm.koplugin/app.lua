@@ -7,7 +7,7 @@ local ok_logger, logger = pcall(require, "logger")
 
 local AppView = require("ui/app_view")
 local BugReporter = require("bugreporter")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 -- KOReader or another plugin may already have modules with these generic
 -- names loaded. Load our implementations explicitly so cache entries cannot
 -- replace them.
@@ -150,6 +150,7 @@ function App:new(plugin)
             manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
             show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
+            show_kindle_scriptlets = App.load_setting("show_kindle_scriptlets", false),
             show_readme_images = App.load_setting("show_readme_images", true),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", categories = "", category = "", installed = "", source = "" },
@@ -1228,7 +1229,8 @@ function App:refresh_queue_package_state()
     self.state.packages = packages
     local installed = Models.installed_packages(packages)
     self.state.installed_packages = installed
-    local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
+    local visible = Models.filter_packages_by_category(
+        installed, self.state.filters.installed, self.state.show_kindle_scriptlets)
     self.state.visible_packages = self:sorted_packages("installed", visible)
 end
 
@@ -1432,9 +1434,9 @@ function App:show()
     if self.backend_ready then
         App.schedule_android_backend_health_check(self)
         self:finish_deferred_font_uninstalls()
+        self:refresh_catalog_on_open()
         self:navigate(self.state.active_tab or "home")
         self:schedule_plugin_scan_after_open()
-        self:refresh_catalog_on_open()
     else
         self.t_open = socket.gettime()
         self:set_loading(_("Loading packages, please wait"))
@@ -1646,6 +1648,7 @@ function App:backend_started(data, on_ready)
         self:log_timing("backend ready (open -> health ok)", self.t_open)
     end
     self:clear_status()
+    self:refresh_catalog_on_open()
     self:finish_deferred_font_uninstalls()
     if on_ready then
         on_ready()
@@ -1653,7 +1656,6 @@ function App:backend_started(data, on_ready)
         self:refresh()
     end
     self:schedule_plugin_scan_after_open()
-    self:refresh_catalog_on_open()
 end
 
 function App:backend_failed(message)
@@ -1760,6 +1762,10 @@ function App:platform()
 end
 
 function App:package_platforms()
+    if self.daemon:detect_platform() == "kindle"
+            and self.state.show_kindle_scriptlets ~= true then
+        return "koreader"
+    end
     return self.daemon:package_platform_filter()
 end
 
@@ -1992,7 +1998,8 @@ function App:load_packages(check_updates, force)
         if not ok then
             return false, {}, data
         end
-        local packages = type(data) == "table" and data or {}
+        local packages = Models.filter_kindle_scriptlets(
+            type(data) == "table" and data or {}, self.state.show_kindle_scriptlets)
         self.state.packages = packages
         return true, packages
     end
@@ -2006,6 +2013,7 @@ function App:load_packages(check_updates, force)
     local seen = {}
     merge_compatible_packages(packages, seen, type(data) == "table" and data or {}, capability_set)
     if #packages > 0 or #capabilities <= 1 then
+        packages = Models.filter_kindle_scriptlets(packages, self.state.show_kindle_scriptlets)
         self.state.packages = packages
         return true, packages
     end
@@ -2016,6 +2024,7 @@ function App:load_packages(check_updates, force)
         end
         merge_compatible_packages(packages, seen, type(data) == "table" and data or {}, capability_set)
     end
+    packages = Models.filter_kindle_scriptlets(packages, self.state.show_kindle_scriptlets)
     self.state.packages = packages
     return true, packages
 end
@@ -2128,7 +2137,7 @@ function App:show_categories()
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local categories = Models.category_cards(packages)
+    local categories = Models.category_cards(packages, self.state.show_kindle_scriptlets)
     self.state.packages = packages
     self.state.categories = categories
     self.state.visible_categories = Models.filter_categories(categories, self.state.filters.categories)
@@ -2142,7 +2151,7 @@ function App:show_category_details(category_id)
     self.state.active_tab = "categories"
     if not self:ensure_backend() then return end
     self:set_loading(_("Loading category..."))
-    local category = Models.category_for_id(category_id)
+    local category = Models.category_for_id(category_id, self.state.show_kindle_scriptlets)
     if not category then
         self:set_error(_("Category not found."))
         return
@@ -2174,7 +2183,8 @@ function App:show_installed()
     local installed = Models.installed_packages(packages)
     self.state.packages = packages
     self.state.installed_packages = installed
-    local visible = Models.filter_packages_by_category(installed, self.state.filters.installed)
+    local visible = Models.filter_packages_by_category(
+        installed, self.state.filters.installed, self.state.show_kindle_scriptlets)
     self.state.visible_packages = self:sorted_packages("installed", visible)
     self:clear_status()
     self:refresh()
@@ -2463,7 +2473,7 @@ function App:set_sort(kind, value)
 end
 
 function App:set_installed_category_filter(category_id)
-    local category = Models.category_for_id(category_id)
+    local category = Models.category_for_id(category_id, self.state.show_kindle_scriptlets)
     self.state.filters.installed = category and category.id or ""
     self:reset_scroll("installed")
     self:show_installed()
@@ -2478,7 +2488,8 @@ function App:prompt_installed_category_filter()
             callback = function() self:set_installed_category_filter("") end,
         },
     }
-    for _, category in ipairs(Models.category_cards(self.state.installed_packages)) do
+    for _, category in ipairs(Models.category_cards(
+            self.state.installed_packages, self.state.show_kindle_scriptlets)) do
         if category.count > 0 then
             local item = category
             table.insert(rows, {
@@ -3400,6 +3411,70 @@ end
 function App:toggle_beta_updates()
     self.state.beta_updates = not self.state.beta_updates
     App.save_setting("beta_updates", self.state.beta_updates)
+end
+
+function App:kindle_scriptlets_available()
+    return self.daemon:detect_platform() == "kindle" and not self.daemon:kindle_kpm_installed()
+end
+
+function App:toggle_kindle_scriptlets()
+    if self.busy or not self:kindle_scriptlets_available() then return end
+    self.busy = true
+    Modals.status(_("Updating Kindle Scriptlets..."))
+    local enabled = not self.state.show_kindle_scriptlets
+    local ok, repos_or_error = self.client:list_repos()
+    local repo_entry
+    if ok then
+        repo_entry = Util.table_find(repos_or_error, function(repo)
+            return repo.name == Constants.REPO_KINDLEFORGE_NAME
+                or tostring(repo.url or ""):gsub("/+$", "") == Constants.REPO_KINDLEFORGE_URL
+        end)
+        if enabled and not repo_entry then
+            ok, repos_or_error = self.client:add_repo(
+                Constants.REPO_KINDLEFORGE_NAME, Constants.REPO_KINDLEFORGE_URL)
+        elseif not enabled and repo_entry then
+            ok, repos_or_error = self.client:remove_repo(repo_entry.name)
+        end
+    end
+    if not ok then
+        self.busy = false
+        Modals.close_status()
+        Modals.info(_("Could not update Kindle Scriptlets: ") .. tostring(repos_or_error))
+        return
+    end
+
+    self.state.show_kindle_scriptlets = enabled
+    App.save_setting("show_kindle_scriptlets", enabled)
+    self.state.packages = {}
+    self.state.repos = {}
+    if not enabled then
+        self.state.filters.installed = ""
+        if self.state.current_category
+                and self.state.current_category.id == Constants.KINDLE_SCRIPTLETS_CATEGORY.id then
+            self.state.current_category = nil
+            if self.settings_origin and self.settings_origin.page == "category_details" then
+                self.settings_origin.page = "categories"
+                self.settings_origin.active_tab = "categories"
+            end
+        end
+    end
+
+    local refreshed, refresh_error = self.client:refresh_repos()
+    self.busy = false
+    Modals.close_status()
+    if refreshed then
+        self.state.readme_cache = {}
+        self.image_files = {}
+        Images.invalidate_cache()
+    else
+        Modals.info(_("Could not refresh repositories: ") .. tostring(refresh_error))
+    end
+    if self.state.page == "settings" then
+        self.settings_requires_reload = true
+        self:refresh()
+    else
+        self:reload_current_page()
+    end
 end
 
 function App:toggle_readme_images()

@@ -1,5 +1,5 @@
 local source = debug.getinfo(1, "S").source or ""
-local plugin_dir = source:match("^@(.+)/constants%.lua$") or "plugins/zenpm.koplugin"
+local plugin_dir = source:match("^@(.+)/zenpm_constants%.lua$") or "plugins/zenpm.koplugin"
 local api_port = 18765
 local function N_(value) return value end
 return {
@@ -46,5 +46,10 @@ return {
         { id = "productivity", label = N_("Productivity"), icon = "productivity.svg" },
         { id = "theme", label = N_("Theme"), icon = "theme.svg" },
         { id = "utility", label = N_("Utility"), icon = "utility.svg" },
+    },
+    KINDLE_SCRIPTLETS_CATEGORY = {
+        id = "kindle-scriptlets",
+        label = N_("Kindle Scriptlets"),
+        icon = "kindleforge.svg",
     },
 }

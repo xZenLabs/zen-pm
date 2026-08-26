@@ -3,7 +3,7 @@
 -- shared state and hitbox registration.
 
 local Cards = require("ui/cards")
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local Markdown = require("ui/markdown")
@@ -37,10 +37,11 @@ local function patch_row_height(list_h, gap)
     return math.max(Theme.metrics().touch_min, math.floor((list_h - gap * (PATCH_ROWS_PER_SCREEN - 1)) / PATCH_ROWS_PER_SCREEN))
 end
 
-local function compact_row_height(list_h, gap)
+local function compact_row_height(list_h, gap, rows_per_screen)
     local m = Theme.metrics()
+    rows_per_screen = math.max(1, tonumber(rows_per_screen) or COMPACT_ROWS_PER_SCREEN)
     return math.max(m.touch_min, math.min(m.category_h,
-        math.floor((list_h - gap * (COMPACT_ROWS_PER_SCREEN - 1)) / COMPACT_ROWS_PER_SCREEN)))
+        math.floor((list_h - gap * (rows_per_screen - 1)) / rows_per_screen)))
 end
 
 local function patch_asset_meta(asset)
@@ -262,7 +263,10 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, m.category_h + m.card_gap)
         return 0
     end
-    local row_h = compact_row_height(list_h, m.card_gap)
+    -- The list renderer omits partially clipped rows, so fit the complete
+    -- category set whenever the device has enough room above touch_min.
+    local row_h = compact_row_height(
+        list_h, m.card_gap, math.max(COMPACT_ROWS_PER_SCREEN, #categories))
     return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, {
@@ -342,6 +346,14 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             end,
         },
     }
+    if view.app:kindle_scriptlets_available() then
+        table.insert(rows, 3, {
+            text = _("Show Kindle Scriptlets"),
+            toggle = true,
+            value = function() return view.app.state.show_kindle_scriptlets end,
+            callback = function() view.app:toggle_kindle_scriptlets() end,
+        })
+    end
     if view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
         table.insert(rows, 2, {
             text = _("Install to Kindle homepage"),

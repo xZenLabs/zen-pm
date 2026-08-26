@@ -1,0 +1,71 @@
+name: Security
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: true
+      - name: Install the pinned vulnerability scanner
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - run: govulncheck ./...
+
+  osv:
+    name: OSV dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
+        with:
+          scan-args: |-
+            --recursive
+            .
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v5.0.0
+        with:
+          fail-on-severity: high
+
+  required:
+    name: Security required checks
+    if: always()
+    needs: [govulncheck, osv, dependency-review]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require scanners (dependency review is PR-only)
+        env:
+          GOVULN: ${{ needs.govulncheck.result }}
+          OSV: ${{ needs.osv.result }}
+          REVIEW: ${{ needs.dependency-review.result }}
+        run: |
+          test "$GOVULN" = success
+          test "$OSV" = success
+          case "$REVIEW" in success|skipped) ;; *) exit 1 ;; esac

@@ -316,10 +316,24 @@ build_go() {
     echo "Building Go backend..."
     GOFLAGS="-trimpath -buildvcs=false"
     LDFLAGS="-s -w -buildid= -X main.version=$VERSION"
-    # Older e-readers need legacy Go runtimes. Go 1.19 retains the epoll_wait
-    # syscall required by Kindle PW1 firmware.
-    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" GOTOOLCHAIN=go1.20.14 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
-    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" GOTOOLCHAIN=go1.19.13 go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-sf" ./cmd/zenpm
+    LEGACY_PATCH_LEVEL='ZenPM Linux/ARM old-kernel patch 2'
+    LEGACY_GO=${ZENPM_LEGACY_GO:-$ROOT_DIR/.toolchains/go1.26.6-kindle-p2/bin/go}
+    if [ ! -x "$LEGACY_GO" ] && [ -z "${ZENPM_LEGACY_GO:-}" ]; then
+        "$ROOT_DIR/toolchains/legacy/bootstrap.sh"
+    fi
+    [ -x "$LEGACY_GO" ] || {
+        echo "Patched supported legacy ARM compiler is unavailable." >&2
+        echo "Bootstrap toolchains/legacy or set ZENPM_LEGACY_GO; unpatched/EOL Go is not accepted." >&2
+        exit 1
+    }
+    LEGACY_ROOT=$(CDPATH='' cd -- "$(dirname "$LEGACY_GO")/.." && pwd)
+    ACTUAL_PATCH_LEVEL=$(sed -n '1p' "$LEGACY_ROOT/ZENPM_PATCH_LEVEL" 2>/dev/null || true)
+    [ "$ACTUAL_PATCH_LEVEL" = "$LEGACY_PATCH_LEVEL" ] || {
+        echo "Legacy ARM compiler patch level mismatch: expected $LEGACY_PATCH_LEVEL, found ${ACTUAL_PATCH_LEVEL:-none}." >&2
+        exit 1
+    }
+    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" "$LEGACY_GO" build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
+    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" "$LEGACY_GO" build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-sf" ./cmd/zenpm
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-arm64" ./cmd/zenpm
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-amd64" ./cmd/zenpm
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm

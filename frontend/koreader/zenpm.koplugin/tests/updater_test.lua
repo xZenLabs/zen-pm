@@ -37,7 +37,7 @@ package.preload["socket"] = function() return { gettime = function() return 0 en
 -- Some KOReader builds expose socketutil without the timeout helpers.
 package.preload["socketutil"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
-package.preload["constants"] = function() return {} end
+package.preload["zenpm_constants"] = function() return {} end
 package.preload["zenpm_util"] = function() return { path_exists = function() return false end } end
 package.preload["ssl.https"] = function()
     return {

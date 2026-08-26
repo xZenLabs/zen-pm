@@ -17,7 +17,7 @@ jobs:
       - name: Run shellcheck
         run: |
           set -eu
-          find installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          find installers scripts toolchains -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
           echo build.sh >> /tmp/zenpm-shell-files.txt
           xargs shellcheck -x < /tmp/zenpm-shell-files.txt
 
@@ -29,7 +29,7 @@ jobs:
       - name: Validate shell syntax
         run: |
           set -eu
-          find installers -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
+          find installers scripts toolchains -type f -name '*.sh' > /tmp/zenpm-shell-files.txt
           echo build.sh >> /tmp/zenpm-shell-files.txt
           while IFS= read -r file; do sh -n "$file"; done < /tmp/zenpm-shell-files.txt
 
@@ -51,7 +51,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.26.6'
+          cache: true
 
       - name: Run Go tests
         run: go test ./...
@@ -68,7 +69,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.26.6'
+          cache: true
 
       - uses: actions/setup-java@v4
         with:
@@ -169,7 +171,9 @@ jobs:
 
       - name: Build release assets
         if: steps.version_check.outputs.skip == 'false'
-        run: sh build.sh
+        run: |
+          sh scripts/verify-legacy-toolchain.sh
+          sh build.sh
 
       - name: Add Android companion APK to release assets
         if: steps.version_check.outputs.skip == 'false'

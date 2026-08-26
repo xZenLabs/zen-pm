@@ -1,0 +1,44 @@
+diff --git a/src/internal/runtime/syscall/linux/defs_linux_arm.go b/src/internal/runtime/syscall/linux/defs_linux_arm.go
+index 5b8c9da..7d78286 100644
+--- a/src/internal/runtime/syscall/linux/defs_linux_arm.go
++++ b/src/internal/runtime/syscall/linux/defs_linux_arm.go
+@@ -10,7 +10,12 @@ const (
+ 	SYS_MPROTECT      = 125
+ 	SYS_PRCTL         = 172
+ 	SYS_EPOLL_CTL     = 251
+-	SYS_EPOLL_PWAIT   = 346
++	// ZenPM's 32-bit e-reader runtime deliberately uses epoll_wait (252).
++	// Several supported Kindle kernels return ENOSYS for epoll_pwait (346),
++	// which otherwise makes the current Go runtime fail before main starts.
++	// EpollWait passes the same first four arguments; the two unused Syscall6
++	// registers are ignored by the older syscall.
++	SYS_EPOLL_PWAIT   = 252
+ 	SYS_EPOLL_CREATE1 = 357
+ 	SYS_EPOLL_PWAIT2  = 441
+ 	SYS_EVENTFD2      = 356
+diff --git a/src/syscall/zsyscall_linux_arm.go b/src/syscall/zsyscall_linux_arm.go
+index cc91122..eb1379a 100644
+--- a/src/syscall/zsyscall_linux_arm.go
++++ b/src/syscall/zsyscall_linux_arm.go
+@@ -1090 +1090,20 @@ func accept4(s int, rsa *RawSockaddrAny, addrlen *_Socklen, flags int) (fd int,
+-	r0, _, e1 := Syscall6(SYS_ACCEPT4, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)), uintptr(flags), 0, 0)
++	r0, _, e1 := Syscall6(SYS_ACCEPT4, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)), uintptr(flags), 0, 0)
++	// Kindle Paperwhite 1 kernels predate accept4. Fall back to accept and
++	// apply the requested descriptor flags separately, matching Go's former
++	// old-kernel behavior for this Linux/ARM-only toolchain.
++	if e1 == ENOSYS && flags&^(SOCK_NONBLOCK|SOCK_CLOEXEC) == 0 {
++		r0, _, e1 = Syscall(SYS_ACCEPT, uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
++		if e1 == 0 {
++			fd = int(r0)
++			if flags&SOCK_CLOEXEC != 0 {
++				CloseOnExec(fd)
++			}
++			if flags&SOCK_NONBLOCK != 0 {
++				if err = SetNonblock(fd, true); err != nil {
++					Close(fd)
++					return -1, err
++				}
++			}
++			return fd, nil
++		}
++	}

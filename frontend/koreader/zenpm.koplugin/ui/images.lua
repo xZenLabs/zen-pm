@@ -1,4 +1,4 @@
-local Constants = require("constants")
+local Constants = require("zenpm_constants")
 local Util = require("zenpm_util")
 local sha256 = require("ffi/sha2").sha256
 local ok_datastorage, DataStorage = pcall(require, "datastorage")

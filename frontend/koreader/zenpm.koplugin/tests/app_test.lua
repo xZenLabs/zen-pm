@@ -58,12 +58,15 @@ package.preload["logger"] = function()
 end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
-package.preload["constants"] = function()
+package.preload["zenpm_constants"] = function()
     return {
         PLUGIN_DIR = root,
         PACKAGE_ERROR_NOTICE_SECONDS = 1,
         PACKAGE_ACTION_MAX_POLL_RETRIES = 20,
         ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
+        REPO_KINDLEFORGE_NAME = "KindleForge",
+        REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
+        KINDLE_SCRIPTLETS_CATEGORY = { id = "kindle-scriptlets" },
     }
 end
 package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
@@ -145,6 +148,20 @@ package.preload["models"] = function()
             }
         end,
         category_label = function(category) return category.label end,
+        filter_kindle_scriptlets = function(packages, show)
+            if show then return packages end
+            local visible = {}
+            for _, pkg in ipairs(packages or {}) do
+                local kindle = false
+                for _, platform in ipairs(pkg.platforms or {}) do
+                    kindle = kindle or platform == "kindle" or platform == "kindleforge"
+                end
+                if pkg.repo ~= "KindleForge" and not kindle then
+                    table.insert(visible, pkg)
+                end
+            end
+            return visible
+        end,
         changes_packages = function(packages, days, limit, sort_key)
             model_changes_days = days
             model_changes_limit = limit
@@ -177,6 +194,11 @@ package.preload["zenpm_util"] = function()
     return {
         trim = function(value)
             return tostring(value or ""):match("^%s*(.-)%s*$")
+        end,
+        table_find = function(list, predicate)
+            for index, item in ipairs(list or {}) do
+                if predicate(item, index) then return item, index end
+            end
         end,
     }
 end
@@ -227,6 +249,97 @@ App.toggle_beta_updates(app)
 
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
+
+local filtered_app = {
+    state = {
+        packages = {},
+        filter_installable = false,
+        beta_updates = false,
+        show_kindle_scriptlets = false,
+    },
+    client = {
+        list_packages = function()
+            return true, {
+                { id = "reader", repo = "ZenLabs" },
+                { id = "scriptlet", repo = "KindleForge" },
+                { id = "zenlabs-scriptlet", repo = "ZenLabs", platforms = { "kindle" } },
+                { id = "zenlabs-koreader-kindle", repo = "ZenLabs", platforms = { "kindle", "koreader" } },
+            }
+        end,
+    },
+}
+local packages_ok, visible_packages = App.load_packages(filtered_app)
+assert(packages_ok and #visible_packages == 1 and visible_packages[1].id == "reader")
+filtered_app.state.show_kindle_scriptlets = true
+packages_ok, visible_packages = App.load_packages(filtered_app, false, true)
+assert(packages_ok and #visible_packages == 4)
+
+local platform_app = {
+    state = { show_kindle_scriptlets = false },
+    daemon = {
+        detect_platform = function() return "kindle" end,
+        package_platform_filter = function() return "kindle,koreader" end,
+    },
+}
+assert(App.package_platforms(platform_app) == "koreader")
+platform_app.state.show_kindle_scriptlets = true
+assert(App.package_platforms(platform_app) == "kindle,koreader")
+
+local kindle_repo_actions = {}
+local kindle_settings_refreshes = 0
+local kindle_app = {
+    busy = false,
+    state = {
+        page = "settings",
+        show_kindle_scriptlets = false,
+        packages = { { id = "reader" } },
+        repos = { { name = "ZenLabs" } },
+        filters = { installed = "" },
+        readme_cache = { reader = {} },
+    },
+    image_files = { reader = "cover.png" },
+    daemon = {
+        detect_platform = function() return "kindle" end,
+        kindle_kpm_installed = function() return false end,
+    },
+    client = {
+        list_repos = function() return true, { { name = "ZenLabs" } } end,
+        add_repo = function(_, name, url)
+            table.insert(kindle_repo_actions, { action = "add", name = name, url = url })
+            return true
+        end,
+        refresh_repos = function()
+            table.insert(kindle_repo_actions, { action = "refresh" })
+            return true
+        end,
+    },
+    kindle_scriptlets_available = App.kindle_scriptlets_available,
+    refresh = function() kindle_settings_refreshes = kindle_settings_refreshes + 1 end,
+}
+assert(App.kindle_scriptlets_available(kindle_app))
+App.toggle_kindle_scriptlets(kindle_app)
+assert(kindle_app.state.show_kindle_scriptlets)
+assert(settings.show_kindle_scriptlets == true)
+assert(kindle_repo_actions[1].action == "add")
+assert(kindle_repo_actions[1].name == "KindleForge")
+assert(kindle_repo_actions[1].url == "https://kf.penguins184.xyz")
+assert(kindle_repo_actions[2].action == "refresh")
+assert(#kindle_app.state.packages == 0 and #kindle_app.state.repos == 0)
+assert(next(kindle_app.state.readme_cache) == nil and next(kindle_app.image_files) == nil)
+assert(kindle_app.settings_requires_reload and kindle_settings_refreshes == 1)
+
+kindle_app.client.list_repos = function()
+    return true, { { name = "KindleForge", url = "https://kf.penguins184.xyz" } }
+end
+kindle_app.client.remove_repo = function(_, name)
+    table.insert(kindle_repo_actions, { action = "remove", name = name })
+    return true
+end
+App.toggle_kindle_scriptlets(kindle_app)
+assert(not kindle_app.state.show_kindle_scriptlets)
+assert(settings.show_kindle_scriptlets == false)
+assert(kindle_repo_actions[3].action == "remove" and kindle_repo_actions[3].name == "KindleForge")
+assert(kindle_repo_actions[4].action == "refresh")
 
 app.state.advanced = false
 App.toggle_advanced(app)
@@ -551,28 +664,40 @@ modal_rows[1].callback()
 assert(selected_changes_sort == "published_at_asc")
 
 local shown_catalog_refreshes = 0
+local show_sequence = {}
 App.show({
     view = {},
     backend_ready = true,
     state = { active_tab = "home" },
     intercept_koreader_exit = function() end,
     finish_deferred_font_uninstalls = function() end,
-    navigate = function() end,
+    navigate = function() table.insert(show_sequence, "navigate") end,
     schedule_plugin_scan_after_open = function() end,
-    refresh_catalog_on_open = function() shown_catalog_refreshes = shown_catalog_refreshes + 1 end,
+    refresh_catalog_on_open = function()
+        shown_catalog_refreshes = shown_catalog_refreshes + 1
+        table.insert(show_sequence, "refresh")
+    end,
 })
 assert(shown_catalog_refreshes == 1)
+assert(show_sequence[1] == "refresh")
+assert(show_sequence[2] == "navigate")
 
 local started_catalog_refreshes = 0
+local backend_start_sequence = {}
 App.backend_started({
     state = {},
     finish_deferred_font_uninstalls = function() end,
     clear_status = function() end,
     refresh = function() end,
     schedule_plugin_scan_after_open = function() end,
-    refresh_catalog_on_open = function() started_catalog_refreshes = started_catalog_refreshes + 1 end,
-}, {})
+    refresh_catalog_on_open = function()
+        started_catalog_refreshes = started_catalog_refreshes + 1
+        table.insert(backend_start_sequence, "refresh")
+    end,
+}, {}, function() table.insert(backend_start_sequence, "ready") end)
 assert(started_catalog_refreshes == 1)
+assert(backend_start_sequence[1] == "refresh")
+assert(backend_start_sequence[2] == "ready")
 
 local UIManager = require("ui/uimanager")
 local original_schedule_in = UIManager.scheduleIn

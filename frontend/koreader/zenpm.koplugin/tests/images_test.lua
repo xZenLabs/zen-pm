@@ -7,7 +7,7 @@ local cache_root = os.tmpname()
 os.remove(cache_root)
 assert(lfs.mkdir(cache_root))
 
-package.preload["constants"] = function()
+package.preload["zenpm_constants"] = function()
     return {
         ASSET_DIR = root .. "/assets",
         CATEGORIES = {},

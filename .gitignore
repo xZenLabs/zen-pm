@@ -21,6 +21,7 @@ README.current-reference.md
 
 # Build artifacts
 dist/
+.toolchains/
 .env
 .dev-kodev.pid
 __pycache__

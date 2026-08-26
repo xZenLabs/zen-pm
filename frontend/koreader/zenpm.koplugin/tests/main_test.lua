@@ -1,5 +1,6 @@
 local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
+package.path = root .. "/?.lua;" .. package.path
 
 local stopped = 0
 local uninstalled = 0
@@ -38,7 +39,12 @@ package.preload["launcher"] = function()
         open_after_restart = function(plugin) reopened = plugin end,
     }
 end
-package.preload["constants"] = function() return { PLUGIN_DIR = root } end
+-- KOReader shares package.loaded across plugins. A generic module cached by
+-- another plugin must not replace ZenPM's constants.
+package.loaded["constants"] = {}
+package.loaded["zenpm_constants"] = nil
+local Constants = require("zenpm_constants")
+assert(Constants.PLUGIN_DIR == root)
 package.preload["daemon"] = function()
     return {
         new = function()
