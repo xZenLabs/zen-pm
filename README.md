@@ -147,7 +147,9 @@ Select a package to install it. For an installed package, choose **Update**,
 **Reinstall**, or **Remove** as appropriate. ZenPM resolves the compatible
 asset before it runs the operation. The KOReader plugin also offers automatic
 update checks, a beta-update switch, an installable-package filter, and an
-installed-plugin scan.
+installed-plugin scan. When ZenOS is installed, newly installed KOReader
+plugins with a launchable menu are added to its Launcher after restart. Existing
+or scan-discovered plugins and ordinary package updates are left unchanged.
 
 ### Command line
 

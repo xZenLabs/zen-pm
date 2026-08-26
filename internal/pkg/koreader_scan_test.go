@@ -43,6 +43,9 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 	got := map[string]state.InstalledEntry{}
 	for _, entry := range installed {
 		got[entry.ID] = entry
+		if entry.LauncherAddPending {
+			t.Fatalf("scan-discovered plugin marked for Launcher: %#v", entry)
+		}
 	}
 	if got["mapped-package"].Version != "1.2.3" || got["fallback"].Version != "0.0.0" ||
 		got["unmatched"].Version != "99.0.0" || got["unmatched"].Name != "unmatched" ||

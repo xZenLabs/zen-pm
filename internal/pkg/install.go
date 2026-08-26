@@ -39,20 +39,20 @@ func (m *Manager) Install(id string) error {
 }
 
 func (m *Manager) CheckInstall(id string) error {
-	_, _, _, err := m.installPlan(id)
+	_, _, _, _, err := m.installPlan(id)
 	return err
 }
 
 // InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
 // When empty, the asset is auto-selected for the current device.
 func (m *Manager) InstallAsset(id, assetOverride string) error {
-	return m.installAssetRelease(id, assetOverride, "")
+	return m.installAssetRelease(id, assetOverride, "", true)
 }
 
 // InstallRelease installs a specific release and records its tag as the
 // installed version.
 func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
-	return m.installAssetRelease(id, assetOverride, tag)
+	return m.installAssetRelease(id, assetOverride, tag, true)
 }
 
 // Reinstall removes an installed package before installing it again. When tag
@@ -66,13 +66,13 @@ func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 		return fmt.Errorf("uninstall %s: %w", id, err)
 	}
 	if tag != "" {
-		return m.InstallRelease(id, tag, assetOverride)
+		return m.installAssetRelease(id, assetOverride, tag, false)
 	}
-	return m.InstallAsset(id, assetOverride)
+	return m.installAssetRelease(id, assetOverride, "", false)
 }
 
-func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (retErr error) {
-	catalog, plan, installedSet, err := m.installPlan(id)
+func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, markTargetNew bool) (retErr error) {
+	catalog, plan, installedSet, launcherPendingSet, err := m.installPlan(id)
 	if err != nil {
 		return err
 	}
@@ -126,6 +126,8 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (ret
 			log.Infof("Installing %s %s from repo %s", entry.ID, displayVersion(installEntry.Version), entry.Repo)
 		}
 		genericInstaller := m.nativeKOReaderInstaller(entry, override)
+		launcherAddPending := genericInstaller == genericPluginInstaller &&
+			(launcherPendingSet[pkgID] || (!installedSet[pkgID] && (pkgID != id || markTargetNew)))
 		if genericInstaller == genericPluginInstaller {
 			override, err = m.prepareKOReaderPluginInstall(entry, override)
 			if err != nil {
@@ -149,7 +151,6 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (ret
 				return fmt.Errorf("install script failed for %s: %w", pkgID, err)
 			}
 		}
-
 		if genericInstaller == "" {
 			if err := m.cacheUninstallScript(entry); err != nil {
 				log.Warnf("Could not cache uninstall script for %s: %v", pkgID, err)
@@ -189,6 +190,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (ret
 		if err := m.st.AppendInstalled(state.InstalledEntry{
 			ID: pkgID, Name: entry.Name, Version: installedVersion, Repo: entry.Repo,
 			Asset: selectedName, AssetArch: selectedArch, InstallPath: installedPath,
+			LauncherAddPending: launcherAddPending,
 		}); err != nil {
 			return err
 		}
@@ -198,18 +200,24 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string) (ret
 	return nil
 }
 
-func (m *Manager) installPlan(id string) ([]*repo.CatalogEntry, []string, map[string]bool, error) {
+func (m *Manager) installPlan(id string) ([]*repo.CatalogEntry, []string, map[string]bool, map[string]bool, error) {
 	catalog, err := m.repos.ReadCatalog()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("read catalog: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("read catalog: %w", err)
 	}
 	installed, _ := m.st.ReadInstalled()
 	installedSet := m.installedDependencySet(installed)
+	launcherPendingSet := make(map[string]bool)
+	for _, entry := range installed {
+		if entry.LauncherAddPending {
+			launcherPendingSet[entry.ID] = true
+		}
+	}
 	plan, err := ResolvePlanWithInstalled(id, catalog, installedSet)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return catalog, plan, installedSet, nil
+	return catalog, plan, installedSet, launcherPendingSet, nil
 }
 
 func (m *Manager) installedDependencySet(installed []state.InstalledEntry) map[string]bool {
@@ -285,7 +293,8 @@ func (m *Manager) Uninstall(id, asset string) (retErr error) {
 
 	entry := m.findCatalogEntry(id)
 	trackedUnmatchedPlugin := trackedPluginPath != "" &&
-		m.nativeKOReaderInstaller(entry, asset) != genericPluginInstaller
+		(!validKOReaderPluginName(filepath.Base(trackedPluginPath)) ||
+			m.nativeKOReaderInstaller(entry, asset) != genericPluginInstaller)
 	if !trackedUnmatchedPlugin &&
 		(entry == nil || (entry.UninstallURL == "" && m.nativeKOReaderInstaller(entry, asset) == "")) {
 		log.Warnf("Package %s uninstall script missing from catalog; refreshing catalog", id)

@@ -22,6 +22,12 @@ const (
 	genericFontInstaller   = "font"
 )
 
+func validKOReaderPluginName(name string) bool {
+	return filepath.Base(name) == name &&
+		strings.HasSuffix(name, ".koplugin") &&
+		strings.TrimSuffix(name, ".koplugin") != ""
+}
+
 var chmodInstallStage = os.Chmod
 
 func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
@@ -224,7 +230,7 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 	} else if strings.HasSuffix(archiveRoot, ".koplugin") {
 		name = archiveRoot
 	}
-	if filepath.Base(name) != name || !strings.HasSuffix(name, ".koplugin") {
+	if !validKOReaderPluginName(name) {
 		return "", "", fmt.Errorf("invalid KOReader plugin directory %q", name)
 	}
 	destination := filepath.Join(pluginsDir, name)
@@ -411,7 +417,7 @@ func removeKOReaderFont(root, id, fontDir string) error {
 
 func removeKOReaderPlugin(root, name string) error {
 	pluginsDir := koreaderPluginDir(root)
-	if filepath.Base(name) != name || !strings.HasSuffix(name, ".koplugin") {
+	if !validKOReaderPluginName(name) {
 		return fmt.Errorf("invalid KOReader plugin name %q", name)
 	}
 	destination := filepath.Join(pluginsDir, name)
@@ -663,12 +669,15 @@ func pathWithinRoot(root, path string) bool {
 
 func pluginTrackingName(entry *repo.CatalogEntry, assetName string) string {
 	name := strings.TrimSuffix(filepath.Base(assetName), ".zip")
-	if !strings.HasSuffix(name, ".koplugin") {
+	if !validKOReaderPluginName(name) {
 		name = strings.TrimSpace(entry.PluginModule)
 		if name == "" {
-			name = entry.ID
+			name = strings.TrimSpace(entry.ID)
 		}
 		name = strings.TrimSuffix(name, ".zip")
+		if name == "" {
+			return ""
+		}
 		if !strings.HasSuffix(name, ".koplugin") {
 			name += ".koplugin"
 		}

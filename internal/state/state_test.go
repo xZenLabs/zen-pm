@@ -81,7 +81,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if len(repos) != 1 || !hasRepo(repos, DefaultZenLabsRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("repos = %#v", repos)
 	}
-	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo", UpdateIgnored: true}); err != nil {
+	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo", LauncherAddPending: true, UpdateIgnored: true}); err != nil {
 		t.Fatal(err)
 	}
 	ok, version := st.IsInstalled("pkg")
@@ -96,7 +96,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 		t.Fatalf("updated IsInstalled = %v, %q", ok, version)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" || installed[0].InstallPath != "/opt/pkg" || !installed[0].UpdateIgnored {
+	if err != nil || len(installed) != 1 || installed[0].Asset != "pkg-armv7.zip" || installed[0].AssetArch != "armv7" || installed[0].InstallPath != "/opt/pkg" || !installed[0].LauncherAddPending || !installed[0].UpdateIgnored {
 		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 	if err := st.SetInstalledUpdateIgnored("pkg", false); err != nil {
@@ -294,7 +294,7 @@ func TestSQLiteStoreAddsSourceAssetColumnToExistingCatalogTable(t *testing.T) {
 	}
 }
 
-func TestSQLiteStoreAddsUpdateIgnoreColumnsToExistingInstalledPackages(t *testing.T) {
+func TestSQLiteStoreAddsInstalledPackageColumnsWithSafeDefaults(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	stateDir := filepath.Join(home, "state")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -334,7 +334,7 @@ func TestSQLiteStoreAddsUpdateIgnoreColumnsToExistingInstalledPackages(t *testin
 		t.Fatal(err)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].UpdateIgnored || installed[0].UpdateIgnoredVersion != "1.1.0" {
+	if err != nil || len(installed) != 1 || installed[0].LauncherAddPending || installed[0].UpdateIgnored || installed[0].UpdateIgnoredVersion != "1.1.0" {
 		t.Fatalf("installed = %#v, %v", installed, err)
 	}
 }
