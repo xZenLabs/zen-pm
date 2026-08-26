@@ -61,4 +61,7 @@ return {
         "Disable Kindle scriptlets and Kindleforge by default (enable via settings)",
         "Use stable koreader location for kpm installs",
     },
+    ["1.5.0"] = {
+        "Add new KOReader plugins to the ZenOS Launcher automatically",
+    },
 }
