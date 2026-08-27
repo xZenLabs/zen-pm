@@ -425,7 +425,7 @@ func (m *Manager) cacheUninstallScript(entry *repo.CatalogEntry) error {
 
 func (m *Manager) device() assets.Device {
 	devicePlatform := strings.SplitN(m.plat, ",", 2)[0]
-	dev := assets.Device{Platform: devicePlatform, OS: runtime.GOOS}
+	dev := assets.Device{Platform: devicePlatform, OS: runtime.GOOS, Arch: runtime.GOARCH}
 	if devicePlatform == platform.Kindle {
 		dev.KindleHF = platform.KindleABI() == "hf"
 		dev.CortexA9 = platform.KindleIsCortexA9()

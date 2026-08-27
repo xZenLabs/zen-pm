@@ -2154,9 +2154,10 @@ func TestSelectAssetUsesAndroidDeviceForAndroidKOReaderCapabilities(t *testing.T
 	}
 }
 
-func TestManagerDeviceIncludesHostOS(t *testing.T) {
-	if got := (&Manager{plat: "host"}).device().OS; got != runtime.GOOS {
-		t.Fatalf("device OS = %q, want %q", got, runtime.GOOS)
+func TestManagerDeviceIncludesRuntime(t *testing.T) {
+	dev := (&Manager{plat: "host"}).device()
+	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH {
+		t.Fatalf("device runtime = %q/%q, want %q/%q", dev.OS, dev.Arch, runtime.GOOS, runtime.GOARCH)
 	}
 }
 

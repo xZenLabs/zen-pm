@@ -62,6 +62,7 @@ return {
         "Use stable koreader location for kpm installs",
     },
     ["1.5.0"] = {
-        "Add new KOReader plugins to the ZenOS Launcher automatically",
+        "Add/remove new KOReader plugins to the ZenOS Launcher automatically",
+        "Add auto selection for ZenFM"
     },
 }
