@@ -1446,6 +1446,36 @@ assert(recovery_load_calls == 2)
 assert(recovery_result[1] == true and recovery_result[2] == nil)
 assert(not recovery_app.busy)
 
+local zenfm_companion_updates = 0
+table.insert(pluginloader.loaded_plugins, {
+    path = "/tmp/zenfm.koplugin",
+    daemon = {
+        open_android = function(_, action)
+            assert(action == "update")
+            zenfm_companion_updates = zenfm_companion_updates + 1
+            return true
+        end,
+    },
+})
+local zenfm_update_result
+App.poll_package_action({
+    busy = true,
+    daemon = { is_android = function() return true end },
+    package_action_failure_detail = function() return nil end,
+    load_packages = function()
+        return true, {{ id = "zenfm", installed = true, installed_version = "1.2.3" }}
+    end,
+    package_action_succeeded = function() return true end,
+    patch_action_succeeded_from_db = function() return false end,
+}, {
+    id = "zenfm",
+    name = "ZenFM",
+    action = "update",
+    on_result = function(ok, detail) zenfm_update_result = { ok, detail } end,
+}, 1)
+assert(zenfm_companion_updates == 1)
+assert(zenfm_update_result[1] == true and zenfm_update_result[2] == nil)
+
 local failed_scan_calls = 0
 local failed_result
 App.poll_package_action({
