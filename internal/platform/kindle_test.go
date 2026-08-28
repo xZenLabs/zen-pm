@@ -25,22 +25,13 @@ func TestKindleHasKUALChecksConfigFile(t *testing.T) {
 }
 
 func TestKindleWAFAllowed(t *testing.T) {
-	oldKPMDir := kindleKPMDir
-	defer func() { kindleKPMDir = oldKPMDir }()
-
-	root := t.TempDir()
-	kindleKPMDir = filepath.Join(root, "kpm")
-
 	if KindleWAFAllowed(Host) {
 		t.Fatal("KindleWAFAllowed returned true for host")
 	}
 	if !KindleWAFAllowed(Kindle) {
-		t.Fatal("KindleWAFAllowed returned false for a Kindle without KPM")
+		t.Fatal("KindleWAFAllowed returned false for Kindle")
 	}
-	if err := os.MkdirAll(kindleKPMDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if KindleWAFAllowed(Kindle) {
-		t.Fatal("KindleWAFAllowed returned true with KPM installed")
+	if !KindleWAFAllowed(Kindle + ",koreader") {
+		t.Fatal("KindleWAFAllowed returned false for Kindle KOReader")
 	}
 }

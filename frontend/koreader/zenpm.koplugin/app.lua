@@ -3445,7 +3445,7 @@ function App:toggle_beta_updates()
 end
 
 function App:kindle_scriptlets_available()
-    return self.daemon:detect_platform() == "kindle" and not self.daemon:kindle_kpm_installed()
+    return self.daemon:detect_platform() == "kindle"
 end
 
 function App:toggle_kindle_scriptlets()

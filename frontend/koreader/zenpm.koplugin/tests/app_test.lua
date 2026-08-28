@@ -317,6 +317,8 @@ local kindle_app = {
     refresh = function() kindle_settings_refreshes = kindle_settings_refreshes + 1 end,
 }
 assert(App.kindle_scriptlets_available(kindle_app))
+kindle_app.daemon.kindle_kpm_installed = function() return true end
+assert(App.kindle_scriptlets_available(kindle_app))
 App.toggle_kindle_scriptlets(kindle_app)
 assert(kindle_app.state.show_kindle_scriptlets)
 assert(settings.show_kindle_scriptlets == true)
