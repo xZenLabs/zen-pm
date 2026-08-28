@@ -904,6 +904,7 @@ function Daemon:start(prepared)
     end
     self:log_cli("starting backend " .. backend
         .. " platform=" .. platform
+        .. " arch=" .. self:uname_machine()
         .. " abi=" .. self:ereader_backend_suffix())
     local serve_args = " serve --socket " .. Util.sh_quote(self:unix_socket_path())
     -- Some Android e-reader shells do not provide nohup. Ignore SIGHUP with

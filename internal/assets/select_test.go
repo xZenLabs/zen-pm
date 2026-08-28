@@ -48,6 +48,13 @@ func TestSelectKoboUsesPlainKindle(t *testing.T) {
 	}
 }
 
+func TestSelectARM64KoboGetsRakuyomiAArch64(t *testing.T) {
+	r := Select(rakuyomiAssets, Device{Platform: "kobo", Arch: "arm64"})
+	if r.NeedsChoice || r.Auto != "rakuyomi-aarch64.zip" {
+		t.Fatalf("got %+v, want auto rakuyomi-aarch64.zip", r)
+	}
+}
+
 func TestSelectEReadersGetCombinedEReaderZip(t *testing.T) {
 	for _, dev := range []Device{
 		{Platform: "kindle"},

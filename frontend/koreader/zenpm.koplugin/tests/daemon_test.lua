@@ -131,6 +131,7 @@ assert(pocketbook_backend:installed_backend_version() == "1.2.3")
 local start_commands = {}
 local start_logs = {}
 pocketbook_backend.detect_platform = function() return "ereader" end
+pocketbook_backend.uname_machine = function() return "armv7l" end
 pocketbook_backend.bundled_backend_dir = function()
     return assert(source_path:match("^(.*)/[^/]+$"))
 end
@@ -147,6 +148,7 @@ assert(#start_commands == 1)
 assert(start_commands[1]:find("exec '" .. source_path .. "' serve --socket '/tmp/zenpm.sock'", 1, true))
 assert(start_commands[1]:find("ZENPM_HOME='./settings/ZenPM'", 1, true))
 assert(start_logs[1]:find("starting backend " .. source_path, 1, true))
+assert(start_logs[1]:find("arch=armv7l", 1, true))
 assert(start_logs[1]:find("abi=sf", 1, true))
 
 local no_wrapper = Daemon:new()

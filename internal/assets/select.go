@@ -151,7 +151,15 @@ func Select(raw string, dev Device) Result {
 		}
 	case "kobo":
 		if dev.Arch == "arm64" {
-			pick = find(func(n string) bool { return strings.Contains(n, "linux") })
+			for _, a := range cands {
+				if strings.EqualFold(strings.TrimSpace(a.Arch), dev.Arch) {
+					pick = a.Asset
+					break
+				}
+			}
+			if pick == "" {
+				pick = find(func(n string) bool { return strings.Contains(n, "linux") })
+			}
 			break
 		}
 		fallthrough
