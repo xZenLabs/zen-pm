@@ -12,6 +12,8 @@ local Renderer = {}
 local PTF_HEADER = "\u{FFF1}"
 local PTF_BOLD_START = "\u{FFF2}"
 local PTF_BOLD_END = "\u{FFF3}"
+local LINK_START = "\30"
+local LINK_END = "\31"
 local PREPARED_IMAGE_POLL_SECONDS = 0.2
 local PREPARED_IMAGE_POLL_LIMIT = 150
 
@@ -60,14 +62,62 @@ local function underscore_emphasis(value, marker, bold)
     return table.concat(output)
 end
 
+local function visible_length(value)
+    value = tostring(value or "")
+        :gsub(PTF_HEADER, "")
+        :gsub(PTF_BOLD_START, "")
+        :gsub(PTF_BOLD_END, "")
+    local _, count = value:gsub("[^\128-\191]", "")
+    return count
+end
+
+local function trim_url_punctuation(value)
+    local url = value
+    local suffix = ""
+    while url ~= "" do
+        local last = url:sub(-1)
+        local trim = last:match("[%.,;:!%?\"']") ~= nil or last == "]" or last == "}"
+        if last == ")" then
+            local _, opens = url:gsub("%(", "")
+            local _, closes = url:gsub("%)", "")
+            trim = closes > opens
+        end
+        if not trim then break end
+        suffix = last .. suffix
+        url = url:sub(1, -2)
+    end
+    return url, suffix
+end
+
 function Renderer.inline_text(value, base_url, plain)
     if plain then
-        return tostring(value or "")
+        return tostring(value or ""), {}
     end
+    value = tostring(value or "")
+    value = value:gsub("<[aA]%s+([^>]*)>(.-)</[aA]>", function(attributes, label)
+        local target = attributes:match("[hH][rR][eE][fF]%s*=%s*\"([^\"]+)\"")
+            or attributes:match("[hH][rR][eE][fF]%s*=%s*'([^']+)'")
+        return target and ("[" .. strip_html(label) .. "](" .. target .. ")") or label
+    end)
+    value = value:gsub("<(https?://[^>]+)>", "%1")
     value = strip_html(value)
+
+    local link_values = {}
+    local function placeholder(label, url)
+        table.insert(link_values, { label = label, url = url })
+        return LINK_START .. tostring(#link_values) .. LINK_END
+    end
     value = value:gsub("%[([^%]]+)%]%(([^%)]+)%)", function(label, target)
         local url = Markdown.resolve_url(base_url, target:match("^%s*([^%s]+)") or target)
-        return label .. " (" .. url .. ")"
+        return placeholder(label, url)
+    end)
+    value = value:gsub("(https?://[^%s<>]+)", function(candidate)
+        local url, suffix = trim_url_punctuation(candidate)
+        return placeholder(url, url) .. suffix
+    end)
+    value = value:gsub(LINK_START .. "(%d+)" .. LINK_END, function(index)
+        local link = link_values[tonumber(index)]
+        return LINK_START .. index .. ":" .. link.label .. LINK_END
     end)
     value = value:gsub("`([^`]+)`", "%1")
     local formatted = false
@@ -80,19 +130,55 @@ function Renderer.inline_text(value, base_url, plain)
     value = underscore_emphasis(value, "__", bold)
     value = value:gsub("%*([^*]+)%*", bold)
     value = underscore_emphasis(value, "_", bold)
-    return formatted and PTF_HEADER .. value or value
+
+    local output = {}
+    local links = {}
+    local position = 1
+    local visible = 0
+    while position <= #value do
+        local first, last, index = value:find(LINK_START .. "(%d+):", position)
+        if not first then
+            local text = value:sub(position)
+            table.insert(output, text)
+            break
+        end
+        local text = value:sub(position, first - 1)
+        table.insert(output, text)
+        visible = visible + visible_length(text)
+        local closing = value:find(LINK_END, last + 1, true)
+        if not closing then
+            table.insert(output, value:sub(first))
+            break
+        end
+        local label = value:sub(last + 1, closing - 1)
+        local start_idx = visible + 1
+        table.insert(output, label)
+        visible = visible + visible_length(label)
+        if visible >= start_idx then
+            table.insert(links, {
+                start_idx = start_idx,
+                end_idx = visible,
+                url = link_values[tonumber(index)].url,
+            })
+        end
+        position = closing + 1
+    end
+    value = table.concat(output)
+    return formatted and PTF_HEADER .. value or value, links
 end
 
 local function add_text(layout, block, base_url, width)
     local role = "small"
     local opts = {}
     local pad = 0
-    local text = Renderer.inline_text(block.text, base_url, block.plain or block.kind == "code")
+    local source = block.text
+    if block.kind == "quote" then
+        source = "│ " .. tostring(source or ""):gsub("\n", "\n│ ")
+    end
+    local text, links = Renderer.inline_text(source, base_url, block.plain or block.kind == "code")
     if block.kind == "heading" then
         role = block.level == 1 and "heading" or "small"
         opts.bold = true
-    elseif block.kind == "quote" then
-        text = "│ " .. text:gsub("\n", "\n│ ")
     elseif block.kind == "code" then
         role = "mono"
         pad = Theme.scale(8)
@@ -108,6 +194,7 @@ local function add_text(layout, block, base_url, width)
         h = math.max(line_height, lines * line_height) + pad * 2,
         line_height = line_height,
         pad = pad,
+        links = links,
     })
 end
 
@@ -196,10 +283,10 @@ local function table_row(cells, base_url, column_width, bold)
     local row = { cells = {}, bold = bold }
     local row_height = 1
     for _, cell in ipairs(cells) do
-        local text = Renderer.inline_text(cell, base_url)
+        local text, links = Renderer.inline_text(cell, base_url)
         local lines, line_height = P.paragraph_metrics(text, column_width, "mono", { bold = bold, line_height = 0.1 })
         row_height = math.max(row_height, math.max(line_height, lines * line_height))
-        table.insert(row.cells, text)
+        table.insert(row.cells, { text = text, links = links })
     end
     row.h = row_height
     return row
@@ -360,11 +447,14 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
                         if index == 1 then
                             P.rect(bb, x, row_y, width, row.h, Theme.soft)
                         end
-                        for cell_index, text in ipairs(row.cells) do
+                        for cell_index, cell in ipairs(row.cells) do
                             local cell_x = x + (cell_index - 1) * (entry.column_width + entry.column_gap)
-                            P.paragraph(bb, text, cell_x, row_y, entry.column_width, row.h, "mono", {
+                            P.paragraph(bb, cell.text, cell_x, row_y, entry.column_width, row.h, "mono", {
                                 bold = row.bold,
                                 line_height = 0.1,
+                                links = cell.links,
+                                link_view = view,
+                                link_callback = function(url) view.app:open_external_link(url) end,
                             })
                         end
                         if index < #entry.rows then
@@ -380,6 +470,9 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
                 if text_h < entry.line_height then
                     goto next_entry
                 end
+                entry.opts.links = entry.links
+                entry.opts.link_view = view
+                entry.opts.link_callback = function(url) view.app:open_external_link(url) end
                 P.scrollable_paragraph(bb, entry.text, x, visible_y, width, text_h, entry.role, visible_y - entry_y, entry.opts)
             end
         end

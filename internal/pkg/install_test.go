@@ -482,13 +482,13 @@ func TestInstallGenericPluginReplacesUntrackedPluginRecordWithSameAsset(t *testi
 
 func TestRemoveKOReaderPluginResolvesRelativePluginDirectory(t *testing.T) {
 	root := t.TempDir()
-	plugin := filepath.Join(root, "plugins", "storefront.koplugin")
+	plugin := filepath.Join(root, "plugins", "reader.koplugin")
 	if err := os.MkdirAll(plugin, 0755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", "plugins")
 
-	if err := removeKOReaderPlugin(root, "storefront.koplugin"); err != nil {
+	if err := removeKOReaderPlugin(root, "reader.koplugin"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(plugin); !os.IsNotExist(err) {

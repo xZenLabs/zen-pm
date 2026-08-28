@@ -8,7 +8,14 @@ local function trim(value)
 end
 
 local function append_text_block(blocks, text)
-    text = trim(tostring(text or ""):gsub("<!%-%-.-%-%->", ""):gsub("<[^>]->", ""))
+    text = tostring(text or ""):gsub("<!%-%-.-%-%->", "")
+    text = text:gsub("<[aA]%s+([^>]*)>(.-)</[aA]>", function(attributes, label)
+        local target = attributes:match("[hH][rR][eE][fF]%s*=%s*\"([^\"]+)\"")
+            or attributes:match("[hH][rR][eE][fF]%s*=%s*'([^']+)'")
+        label = label:gsub("<[^>]->", "")
+        return target and ("[" .. label .. "](" .. target .. ")") or label
+    end)
+    text = trim(text:gsub("<[^>]->", ""))
     if text ~= "" then
         table.insert(blocks, { kind = "paragraph", text = text })
     end
@@ -18,6 +25,43 @@ local function image_target(value)
     value = trim(value)
     local target = value:match("^<([^>]+)>") or value:match("^([^%s]+)")
     return trim(target)
+end
+
+local function is_shields_image(value)
+    local target = image_target(value):lower()
+    local host = target:match("^https?://([^/%?#]+)") or target:match("^//([^/%?#]+)")
+    return host == "img.shields.io" or host == "shields.io"
+end
+
+local function strip_badges(value)
+    local badge_references = {}
+    for line in (value .. "\n"):gmatch("(.-)\n") do
+        local name, target = line:match("^%s*%[([^%]]+)%]:%s*(%S+)")
+        if name and (name:lower():match("^badge[-_]") or is_shields_image(target)) then
+            badge_references[trim(name):lower()] = true
+        end
+    end
+    local function strip_reference_badge(markup, reference)
+        reference = trim(reference):lower()
+        return (badge_references[reference] or reference:match("^badge[-_]")) and "" or markup
+    end
+    value = value:gsub("(%[!%[[^%]]*%]%[([^%]]+)%]%]%[[^%]]+%])", strip_reference_badge)
+    value = value:gsub("(%[!%[[^%]]*%]%[([^%]]+)%]%]%([^%)]+%))", strip_reference_badge)
+    value = value:gsub("(!%[[^%]]*%]%[([^%]]+)%])", strip_reference_badge)
+    value = value:gsub("(%[!%[[^%]]*%]%([^%)]+%)%]%([^%)]+%))", function(markup)
+        local target = markup:match("!%[[^%]]*%]%(([^%)]+)%)")
+        return is_shields_image(target) and "" or markup
+    end)
+    value = value:gsub("(!%[[^%]]*%]%([^%)]+%))", function(markup)
+        local target = markup:match("!%[[^%]]*%]%(([^%)]+)%)")
+        return is_shields_image(target) and "" or markup
+    end)
+    value = value:gsub("(<[iI][mM][gG]%s+[^>]->)", function(tag)
+        local target = tag:match("[sS][rR][cC]%s*=%s*\"([^\"]+)\"")
+            or tag:match("[sS][rR][cC]%s*=%s*'([^']+)'")
+        return target and is_shields_image(target) and "" or tag
+    end)
+    return ("\n" .. value):gsub("\n[ \t]*%[[^%]]+%]:[^\n]*", ""):sub(2)
 end
 
 local function split_images(blocks, text)
@@ -147,7 +191,7 @@ end
 
 function Markdown.parse(value)
     local lines = {}
-    value = tostring(value or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+    value = strip_badges(tostring(value or "")):gsub("\r\n", "\n"):gsub("\r", "\n")
     for line in (value .. "\n"):gmatch("(.-)\n") do
         table.insert(lines, line)
     end
@@ -213,7 +257,24 @@ function Markdown.parse(value)
                     table.insert(rows, row)
                     i = i + 1
                 end
-                table.insert(blocks, { kind = "table", header = header, rows = rows })
+                local image_blocks = #rows == 1 and {} or nil
+                if image_blocks then
+                    for column, cell in ipairs(rows[1]) do
+                        local parsed = {}
+                        split_images(parsed, cell)
+                        if #parsed ~= 1 or parsed[1].kind ~= "image" then
+                            image_blocks = nil
+                            break
+                        end
+                        table.insert(image_blocks, { kind = "heading", level = 3, text = header[column] })
+                        table.insert(image_blocks, parsed[1])
+                    end
+                end
+                if image_blocks then
+                    for _, block in ipairs(image_blocks) do table.insert(blocks, block) end
+                else
+                    table.insert(blocks, { kind = "table", header = header, rows = rows })
+                end
             else
                 local paragraph = { line }
                 i = i + 1

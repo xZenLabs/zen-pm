@@ -439,6 +439,44 @@ local function koreader_plugin_instance(pkg)
     return nil
 end
 
+function App:open_external_link(url)
+    local rows = {}
+    local ok_device, Device = pcall(require, "device")
+    local ok_qr, QRMessage = pcall(require, "ui/widget/qrmessage")
+    if ok_device and Device.screen and ok_qr and QRMessage then
+        table.insert(rows, {
+            icon = "qrcode",
+            text = _("Show QR code"),
+            callback = function()
+                UIManager:show(QRMessage:new{
+                    text = url,
+                    width = Device.screen:getWidth(),
+                    height = Device.screen:getHeight(),
+                })
+            end,
+        })
+    end
+    local wallabag = koreader_plugin_instance({ plugin_module = "wallabag" })
+    if wallabag and type(wallabag.onAddWallabagArticle) == "function" then
+        table.insert(rows, {
+            icon = "wallabag",
+            text = _("Add to Wallabag"),
+            callback = function() wallabag:onAddWallabagArticle(url) end,
+        })
+    end
+    local can_open = ok_device and type(Device.canOpenLink) == "function"
+        and select(2, pcall(Device.canOpenLink, Device)) == true
+    if can_open then
+        table.insert(rows, {
+            icon = "browser",
+            text = _("Open in browser"),
+            callback = function() Device:openLink(url) end,
+        })
+    end
+    Modals.actions(url, rows, { show_cancel = false, align = "left" })
+    return true
+end
+
 local function plugin_has_delete_settings(inst)
     return type(inst) == "table"
         and type(inst.deletePluginSettings) == "function"

@@ -134,6 +134,40 @@ function P.text(bb, text, x, y, width, role, opts)
     return size
 end
 
+local function paint_text_links(bb, widget, x, y, width, height, opts)
+    if type(opts.links) ~= "table" or not opts.link_view or not opts.link_callback then return end
+    local first_line = widget.virtual_line_num or 1
+    local last_line = math.min(
+        first_line + (widget.lines_per_page or #(widget.vertical_string_list or {})) - 1,
+        #(widget.vertical_string_list or {})
+    )
+    local thickness = math.max(1, Theme.scale(1))
+    for _, link in ipairs(opts.links) do
+        local rects
+        if widget.use_xtext then
+            rects = widget:getXtextHighlightRects(link.start_idx, link.end_idx, first_line, last_line)
+        else
+            rects = widget:getNonXtextHighlightRects(link.start_idx, link.end_idx, first_line, last_line)
+        end
+        local url = link.url
+        for _, rect in ipairs(rects or {}) do
+            local left = math.max(0, rect.x)
+            local right = math.min(width, rect.x + rect.w)
+            local top = math.max(0, rect.y)
+            local bottom = math.min(height, rect.y + rect.h)
+            if right > left and bottom > top then
+                local underline_y = rect.y + rect.h - thickness
+                if underline_y >= 0 and underline_y + thickness <= height then
+                    P.rect(bb, x + left, y + underline_y, right - left, thickness, Theme.ink)
+                end
+                P.hit(opts.link_view, x + left, y + top, right - left, bottom - top, function()
+                    opts.link_callback(url)
+                end, "readme-link:" .. url)
+            end
+        end
+    end
+end
+
 function P.paragraph(bb, text, x, y, width, height, role, opts)
     opts = opts or {}
     local widget = TextBoxWidget:new{
@@ -148,6 +182,7 @@ function P.paragraph(bb, text, x, y, width, height, role, opts)
         line_height = opts.line_height,
     }
     widget:paintTo(bb, x, y)
+    paint_text_links(bb, widget, x, y, width, height, opts)
     local size = widget:getSize()
     widget:free()
     return size
@@ -170,6 +205,7 @@ function P.scrollable_paragraph(bb, text, x, y, width, height, role, scroll, opt
         virtual_line_num = top_line,
     }
     widget:paintTo(bb, x, y)
+    paint_text_links(bb, widget, x, y, width, height, opts)
     local total_lines = #(widget.vertical_string_list or {})
     local visible_lines = widget.lines_per_page or total_lines
     line_height = widget.line_height_px or line_height

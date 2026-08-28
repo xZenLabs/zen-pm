@@ -12,6 +12,7 @@ local status_message
 local queued_ticks
 local modal_title
 local modal_rows
+local modal_options
 local plugin_settings_prompt
 local package_modify_callbacks
 local ignore_updates_prompt
@@ -22,6 +23,7 @@ local updater_reinstall_requests = 0
 local logged_warnings = {}
 local network_connected = true
 local network_retry_callback
+local browser_url
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function()
     return { new = function(_, name) return name end }
@@ -55,6 +57,16 @@ package.preload["logger"] = function()
     return {
         warn = function(message) table.insert(logged_warnings, message) end,
     }
+end
+package.preload["device"] = function()
+    return {
+        screen = { getWidth = function() return 600 end, getHeight = function() return 800 end },
+        canOpenLink = function() return true end,
+        openLink = function(_, url) browser_url = url end,
+    }
+end
+package.preload["ui/widget/qrmessage"] = function()
+    return { new = function(_, options) return options end }
 end
 package.preload["ui/app_view"] = function() return {} end
 package.preload["bugreporter"] = function() return {} end
@@ -92,9 +104,10 @@ package.preload["ui/modals"] = function()
         status = function(message) status_message = message end,
         close_status = function() end,
         confirm = function() end,
-        actions = function(title, rows)
+        actions = function(title, rows, options)
             modal_title = title
             modal_rows = rows
+            modal_options = options
         end,
         package_modify = function(_, callbacks)
             package_modify_callbacks = callbacks
@@ -240,6 +253,36 @@ end
 local App = require("app")
 dofile = original_dofile
 assert(updater_dofile_loads == 1)
+
+local reader_link_url
+local wallabag_url
+local pluginloader = require("pluginloader")
+table.insert(pluginloader.loaded_plugins, {
+    path = "/tmp/wallabag.koplugin",
+    onAddWallabagArticle = function(_, url) wallabag_url = url end,
+})
+App.open_external_link({
+    plugin = { ui = { link = {
+        onGoToExternalLink = function(_, url) reader_link_url = url end,
+    } } },
+}, "https://example.com/fallback")
+assert(reader_link_url == nil)
+assert(modal_title == "https://example.com/fallback")
+assert(#modal_rows == 3)
+assert(modal_rows[1].text == "Show QR code" and modal_rows[1].icon == "qrcode")
+assert(modal_rows[2].text == "Add to Wallabag" and modal_rows[2].icon == "wallabag")
+assert(modal_rows[3].text == "Open in browser" and modal_rows[3].icon == "browser")
+assert(modal_options.show_cancel == false and modal_options.align == "left")
+modal_rows[2].callback()
+modal_rows[3].callback()
+assert(wallabag_url == "https://example.com/fallback")
+assert(browser_url == "https://example.com/fallback")
+table.remove(pluginloader.loaded_plugins)
+App.open_external_link({ plugin = { ui = {} } }, "https://example.com/no-wallabag")
+assert(#modal_rows == 2)
+for _, row in ipairs(modal_rows) do
+    assert(row.text ~= "Add to Wallabag")
+end
 
 local app = {
     state = { beta_updates = false },

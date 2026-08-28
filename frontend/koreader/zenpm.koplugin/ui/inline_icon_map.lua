@@ -29,6 +29,9 @@ local nerd_icons = {
     enable = "\u{F040A}",
     remove = "\u{F0374}",
     remove_queue = "\u{F0A7A}",
+    qrcode = "\u{F0432}",
+    wallabag = "\u{F00C5}", -- mdi-bookmark-plus
+    browser = "\u{F03CC}", -- mdi-open-in-new
 }
 
 function M.icon(name)

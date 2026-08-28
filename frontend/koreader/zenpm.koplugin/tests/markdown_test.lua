@@ -58,6 +58,11 @@ local tests = {
         input = "| Name | Value |\n| --- | --- |\n| One | Two |",
         want = "table",
     },
+    {
+        name = "image-only table",
+        input = "| First | Second |\n| :---: | :---: |\n| ![First](https://example.com/first.png) | ![Second](https://example.com/second.png) |",
+        want = "heading,image,heading,image",
+    },
 }
 
 for _, test in ipairs(tests) do
@@ -72,6 +77,36 @@ local table_blocks = Markdown.parse("Name | Value\n:--- | ---:\nOne | Two")
 assert(table_blocks[1].kind == "table")
 assert(table_blocks[1].header[1] == "Name" and table_blocks[1].rows[1][2] == "Two")
 
+local badge_blocks = Markdown.parse([=[
+[![Build](https://img.shields.io/badge/build-passing.svg)](https://example.com/build)
+<img src="https://img.shields.io/badge/version-1.0.svg">
+[![Discord][badge-discord]][link-discord]
+[![AGPL Licence][badge-license]](LICENSE)
+[![Custom][shield-image]][custom-link]
+
+[badge-discord]: https://example.com/discord.svg
+[badge-license]: https://example.com/license.svg
+[shield-image]: https://img.shields.io/badge/custom-badge.svg
+[link-discord]: https://example.com/discord
+[custom-link]: https://example.com/custom
+
+Kept
+]=])
+assert(#badge_blocks == 1 and badge_blocks[1].text == "Kept")
+
+local zenos_blocks = Markdown.parse([[
+<p>
+  <a href="https://zen-labs.org/zen-os">Website</a> ·
+  <a href="docs/installation.md">Installation guide</a>
+</p>
+]])
+assert(#zenos_blocks == 1)
+local zenos_text, zenos_links = Renderer.inline_text(zenos_blocks[1].text, "https://github.com/xZenLabs/zen-os/")
+assert(zenos_text == "Website ·\n  Installation guide")
+assert(#zenos_links == 2)
+assert(zenos_links[1].url == "https://zen-labs.org/zen-os")
+assert(zenos_links[2].url == "https://github.com/xZenLabs/zen-os/docs/installation.md")
+
 assert(Markdown.resolve_url("https://repo.zen-labs.org/packages/demo/", "images/shot.png") == "https://repo.zen-labs.org/packages/demo/images/shot.png")
 assert(Markdown.resolve_url("https://repo.zen-labs.org/packages/demo/", "../shared/logo.png") == "https://repo.zen-labs.org/packages/shared/logo.png")
 assert(Markdown.resolve_url("https://repo.zen-labs.org/packages/demo/", "/assets/logo.png") == "https://repo.zen-labs.org/assets/logo.png")
@@ -84,6 +119,28 @@ assert(Markdown.resolve_url(Markdown.source_base_url("https://github.com/xZenLab
 local formatted = Renderer.inline_text("zen_ui.koplugin and _bold_", "")
 assert(formatted:find("zen_ui.koplugin", 1, true))
 assert(formatted ~= "zen_ui.koplugin and _bold_")
+
+local linked, links = Renderer.inline_text(
+    "Read [the docs](guide.md) or https://example.com/path.",
+    "https://repo.example/demo/"
+)
+assert(linked == "Read the docs or https://example.com/path.")
+assert(#links == 2)
+assert(linked:sub(links[1].start_idx, links[1].end_idx) == "the docs")
+assert(links[1].url == "https://repo.example/demo/guide.md")
+assert(linked:sub(links[2].start_idx, links[2].end_idx) == "https://example.com/path")
+assert(links[2].url == "https://example.com/path")
+
+local html_linked, html_links = Renderer.inline_text(
+    '<a href="https://example.com/html">HTML link</a> and <https://example.com/auto>',
+    ""
+)
+assert(html_linked == "HTML link and https://example.com/auto")
+assert(#html_links == 2)
+
+local quoted, quoted_links = Renderer.inline_text("│ [quote](https://example.com/quote)", "")
+assert(quoted == "│ quote")
+assert(quoted_links[1].start_idx == 3 and quoted_links[1].end_idx == 7)
 
 local queued_images = {}
 local image_view = {
