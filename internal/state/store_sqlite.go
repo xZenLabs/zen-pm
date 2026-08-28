@@ -65,6 +65,7 @@ func (s *sqliteStore) migrate() error {
 			asset TEXT NOT NULL DEFAULT '',
 			asset_arch TEXT NOT NULL DEFAULT '',
 			install_path TEXT NOT NULL DEFAULT '',
+			launcher_add_pending INTEGER NOT NULL DEFAULT 0,
 			update_ignored INTEGER NOT NULL DEFAULT 0,
 			update_ignored_version TEXT NOT NULL DEFAULT '',
 			installed_at TEXT NOT NULL
@@ -137,6 +138,9 @@ func (s *sqliteStore) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("installed_packages", "install_path", "install_path TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("installed_packages", "launcher_add_pending", "launcher_add_pending INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("installed_packages", "update_ignored", "update_ignored INTEGER NOT NULL DEFAULT 0"); err != nil {
@@ -366,7 +370,7 @@ func (s *sqliteStore) WriteRepos(repos []RepoEntry) error {
 }
 
 func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
-	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, install_path, update_ignored, update_ignored_version, installed_at FROM installed_packages ORDER BY name, id`)
+	rows, err := s.db.Query(`SELECT id, name, version, repo, asset, asset_arch, install_path, launcher_add_pending, update_ignored, update_ignored_version, installed_at FROM installed_packages ORDER BY name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +378,7 @@ func (s *sqliteStore) ReadInstalled() ([]InstalledEntry, error) {
 	var entries []InstalledEntry
 	for rows.Next() {
 		var e InstalledEntry
-		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstallPath, &e.UpdateIgnored, &e.UpdateIgnoredVersion, &e.InstalledAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.Version, &e.Repo, &e.Asset, &e.AssetArch, &e.InstallPath, &e.LauncherAddPending, &e.UpdateIgnored, &e.UpdateIgnoredVersion, &e.InstalledAt); err != nil {
 			return nil, err
 		}
 		if e.Name == "" {
@@ -393,12 +397,14 @@ func (s *sqliteStore) AppendInstalled(e InstalledEntry) error {
 		e.Name = e.ID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO installed_packages(id, name, version, repo, asset, asset_arch, install_path, update_ignored, update_ignored_version, installed_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO installed_packages(id, name, version, repo, asset, asset_arch, install_path, launcher_add_pending, update_ignored, update_ignored_version, installed_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		 name = excluded.name, version = excluded.version, repo = excluded.repo, asset = excluded.asset,
-		 asset_arch = excluded.asset_arch, install_path = excluded.install_path, installed_at = excluded.installed_at`,
-		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstallPath, e.UpdateIgnored, e.UpdateIgnoredVersion, e.InstalledAt,
+		 asset_arch = excluded.asset_arch, install_path = excluded.install_path,
+		 launcher_add_pending = MAX(installed_packages.launcher_add_pending, excluded.launcher_add_pending),
+		 installed_at = excluded.installed_at`,
+		e.ID, e.Name, e.Version, e.Repo, e.Asset, e.AssetArch, e.InstallPath, e.LauncherAddPending, e.UpdateIgnored, e.UpdateIgnoredVersion, e.InstalledAt,
 	)
 	return err
 }

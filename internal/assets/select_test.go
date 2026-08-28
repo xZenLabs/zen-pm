@@ -13,6 +13,13 @@ const rakuyomiAssets = `[
   {"arch":"kindle","asset":"rakuyomi-kindlehf.zip"}
 ]`
 
+const zenFMAssets = `[
+  {"asset":"ZenFM-koreader-android-1.0.1.zip"},
+  {"asset":"ZenFM-koreader-ereader-1.0.1.zip"},
+  {"asset":"ZenFM-koreader-linux-1.0.1.zip"},
+  {"asset":"ZenFM-koreader-macos-1.0.1.zip"}
+]`
+
 func TestSelectKindleHardFloat(t *testing.T) {
 	r := Select(rakuyomiAssets, Device{Platform: "kindle", KindleHF: true})
 	if r.NeedsChoice || r.Auto != "rakuyomi-kindlehf.zip" {
@@ -38,6 +45,41 @@ func TestSelectKoboUsesPlainKindle(t *testing.T) {
 	r := Select(rakuyomiAssets, Device{Platform: "kobo"})
 	if r.NeedsChoice || r.Auto != "rakuyomi-kindle.zip" {
 		t.Fatalf("got %+v, want auto rakuyomi-kindle.zip", r)
+	}
+}
+
+func TestSelectARM64KoboGetsRakuyomiAArch64(t *testing.T) {
+	r := Select(rakuyomiAssets, Device{Platform: "kobo", Arch: "arm64"})
+	if r.NeedsChoice || r.Auto != "rakuyomi-aarch64.zip" {
+		t.Fatalf("got %+v, want auto rakuyomi-aarch64.zip", r)
+	}
+}
+
+func TestSelectEReadersGetCombinedEReaderZip(t *testing.T) {
+	for _, dev := range []Device{
+		{Platform: "kindle"},
+		{Platform: "kindle", KindleHF: true},
+		{Platform: "kobo", Arch: "arm"},
+		{Platform: "ereader", Arch: "arm"},
+	} {
+		r := Select(zenFMAssets, dev)
+		if r.NeedsChoice || r.Auto != "ZenFM-koreader-ereader-1.0.1.zip" {
+			t.Fatalf("%+v got %+v, want combined e-reader asset", dev, r)
+		}
+	}
+}
+
+func TestSelectLinuxHostGetsLinuxZip(t *testing.T) {
+	r := Select(zenFMAssets, Device{Platform: "host", OS: "linux"})
+	if r.NeedsChoice || r.Auto != "ZenFM-koreader-linux-1.0.1.zip" {
+		t.Fatalf("got %+v, want Linux asset", r)
+	}
+}
+
+func TestSelectARM64KoboGetsLinuxZip(t *testing.T) {
+	r := Select(zenFMAssets, Device{Platform: "kobo", Arch: "arm64"})
+	if r.NeedsChoice || r.Auto != "ZenFM-koreader-linux-1.0.1.zip" {
+		t.Fatalf("got %+v, want Linux asset", r)
 	}
 }
 

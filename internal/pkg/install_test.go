@@ -143,8 +143,16 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 		t.Fatalf("installed version = %q, want 1.2.3", version)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].Asset != "plugin.koplugin.zip" || installed[0].AssetArch != "any" {
+	if err != nil || len(installed) != 1 || installed[0].Asset != "plugin.koplugin.zip" || installed[0].AssetArch != "any" || !installed[0].LauncherAddPending {
 		t.Fatalf("installed = %#v, %v", installed, err)
+	}
+	metadata = `return { version = "1.2.4" }`
+	if err := manager.Install("plugin"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err = st.ReadInstalled()
+	if err != nil || len(installed) != 1 || installed[0].Version != "1.2.4" || !installed[0].LauncherAddPending {
+		t.Fatalf("launcher pending flag after update = %#v, %v", installed, err)
 	}
 	if err := manager.Uninstall("plugin", ""); err != nil {
 		t.Fatal(err)
@@ -159,6 +167,121 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 	if _, version := st.IsInstalled("plugin"); version != "" {
 		t.Fatalf("installed version = %q, want empty", version)
+	}
+}
+
+func TestInstallSourcePluginUsesPackageIDForGenericAssetPattern(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	koHome := t.TempDir()
+	t.Setenv("HOME", koHome)
+	koRoot := filepath.Join(koHome, ".config", "koreader")
+	plugins := filepath.Join(koRoot, "plugins")
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write(zipContents(t, map[string]string{
+			"connections.koplugin-main/_meta.lua": `return { name = "nytconnections" }`,
+			"connections.koplugin-main/main.lua":  "return {}\n",
+		}))
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "connections", Name: "Connections", Version: "source", Repo: "ZenLabs",
+		Platforms: []string{"koreader"}, SourceType: "source", SourceURL: srv.URL,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Install("connections"); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(plugins, "connections.koplugin")
+	if _, err := os.Stat(filepath.Join(destination, "main.lua")); err != nil {
+		t.Fatalf("source plugin was not installed using its package ID: %v", err)
+	}
+	installed, err := st.ReadInstalled()
+	if err != nil || len(installed) != 1 || !installed[0].LauncherAddPending {
+		t.Fatalf("source plugin launcher pending flag = %#v, %v", installed, err)
+	}
+	if _, err := os.Stat(filepath.Join(plugins, ".koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("blank plugin directory exists after source install: %v", err)
+	}
+}
+
+func TestPluginTrackingNameUsesCatalogIdentityForGenericAssetPattern(t *testing.T) {
+	entry := &repo.CatalogEntry{ID: "package-id", PluginModule: "plugin-module"}
+	if got := pluginTrackingName(entry, ".koplugin.zip"); got != "plugin-module.koplugin" {
+		t.Fatalf("pluginTrackingName() = %q, want catalog plugin module", got)
+	}
+	entry.PluginModule = ""
+	if got := pluginTrackingName(entry, ".koplugin.zip"); got != "package-id.koplugin" {
+		t.Fatalf("pluginTrackingName() = %q, want package ID fallback", got)
+	}
+}
+
+func TestInstallKOReaderPluginRejectsBlankArchiveRoot(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	root := t.TempDir()
+	plugins := filepath.Join(root, "plugins")
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := zipContents(t, map[string]string{
+		".koplugin/_meta.lua": "return {}\n",
+		".koplugin/main.lua":  "return {}\n",
+	})
+
+	_, _, err = (&Manager{st: st}).installKOReaderPlugin(
+		&repo.CatalogEntry{ID: "connections"}, root, ".koplugin.zip", data,
+	)
+	if err == nil || !strings.Contains(err.Error(), `invalid KOReader plugin directory ".koplugin"`) {
+		t.Fatalf("installKOReaderPlugin() error = %v, want blank plugin directory rejection", err)
+	}
+	if _, err := os.Stat(filepath.Join(plugins, ".koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("blank plugin directory exists after rejected install: %v", err)
+	}
+}
+
+func TestUninstallRemovesTrackedBlankPluginRoot(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	blankRoot := filepath.Join(plugins, ".koplugin")
+	if err := os.MkdirAll(blankRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "connections", Name: "Connections", Repo: "ZenLabs", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "connections", Name: "Connections", Repo: "ZenLabs",
+		Asset: ".koplugin.zip", InstallPath: blankRoot,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").Uninstall("connections", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(blankRoot); !os.IsNotExist(err) {
+		t.Fatalf("tracked blank plugin root remains after uninstall: %v", err)
 	}
 }
 
@@ -359,13 +482,13 @@ func TestInstallGenericPluginReplacesUntrackedPluginRecordWithSameAsset(t *testi
 
 func TestRemoveKOReaderPluginResolvesRelativePluginDirectory(t *testing.T) {
 	root := t.TempDir()
-	plugin := filepath.Join(root, "plugins", "storefront.koplugin")
+	plugin := filepath.Join(root, "plugins", "reader.koplugin")
 	if err := os.MkdirAll(plugin, 0755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", "plugins")
 
-	if err := removeKOReaderPlugin(root, "storefront.koplugin"); err != nil {
+	if err := removeKOReaderPlugin(root, "reader.koplugin"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(plugin); !os.IsNotExist(err) {
@@ -719,7 +842,8 @@ func TestTransitionalManifestUpdatesExistingLegacyRootInPlace(t *testing.T) {
 		t.Fatalf("transitional update created canonical root: %v", err)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != legacyPath {
+	if err != nil || len(installed) != 1 || installed[0].Asset != "zen_ui.koplugin.zip" ||
+		installed[0].InstallPath != legacyPath || installed[0].LauncherAddPending {
 		t.Fatalf("transitional installed record = %#v, %v", installed, err)
 	}
 }
@@ -909,7 +1033,8 @@ func TestUpdateGenericPluginStaysOnExistingAliasRoot(t *testing.T) {
 	}
 	installed, err := st.ReadInstalled()
 	if err != nil || len(installed) != 1 || installed[0].Name != "ZenOS" ||
-		installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != legacyPath {
+		installed[0].Asset != "zen_ui.koplugin.zip" || installed[0].InstallPath != legacyPath ||
+		installed[0].LauncherAddPending {
 		t.Fatalf("updated installed record = %#v, %v", installed, err)
 	}
 }
@@ -2029,9 +2154,10 @@ func TestSelectAssetUsesAndroidDeviceForAndroidKOReaderCapabilities(t *testing.T
 	}
 }
 
-func TestManagerDeviceIncludesHostOS(t *testing.T) {
-	if got := (&Manager{plat: "host"}).device().OS; got != runtime.GOOS {
-		t.Fatalf("device OS = %q, want %q", got, runtime.GOOS)
+func TestManagerDeviceIncludesRuntime(t *testing.T) {
+	dev := (&Manager{plat: "host"}).device()
+	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH {
+		t.Fatalf("device runtime = %q/%q, want %q/%q", dev.OS, dev.Arch, runtime.GOOS, runtime.GOARCH)
 	}
 }
 

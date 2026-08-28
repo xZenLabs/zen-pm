@@ -439,6 +439,44 @@ local function koreader_plugin_instance(pkg)
     return nil
 end
 
+function App:open_external_link(url)
+    local rows = {}
+    local ok_device, Device = pcall(require, "device")
+    local ok_qr, QRMessage = pcall(require, "ui/widget/qrmessage")
+    if ok_device and Device.screen and ok_qr and QRMessage then
+        table.insert(rows, {
+            icon = "qrcode",
+            text = _("Show QR code"),
+            callback = function()
+                UIManager:show(QRMessage:new{
+                    text = url,
+                    width = Device.screen:getWidth(),
+                    height = Device.screen:getHeight(),
+                })
+            end,
+        })
+    end
+    local wallabag = koreader_plugin_instance({ plugin_module = "wallabag" })
+    if wallabag and type(wallabag.onAddWallabagArticle) == "function" then
+        table.insert(rows, {
+            icon = "wallabag",
+            text = _("Add to Wallabag"),
+            callback = function() wallabag:onAddWallabagArticle(url) end,
+        })
+    end
+    local can_open = ok_device and type(Device.canOpenLink) == "function"
+        and select(2, pcall(Device.canOpenLink, Device)) == true
+    if can_open then
+        table.insert(rows, {
+            icon = "browser",
+            text = _("Open in browser"),
+            callback = function() Device:openLink(url) end,
+        })
+    end
+    Modals.actions(url, rows, { show_cancel = false, align = "left" })
+    return true
+end
+
 local function plugin_has_delete_settings(inst)
     return type(inst) == "table"
         and type(inst.deletePluginSettings) == "function"
@@ -1248,6 +1286,7 @@ function App:finish_queue_batch(batch)
         end
 
         local result = self:queue_result_text(batch)
+        if batch.warning then result = result .. "\n\n" .. batch.warning end
         local queue_completed = #batch.failed == 0
         self.state.queue_running = false
         self:refresh()
@@ -1322,6 +1361,7 @@ function App:run_next_queue_operation(batch)
                     table.insert(batch.settings_cleanup, { name = entry.name, callback = entry.settings_deleter })
                 end
                 if entry.prompt_restart then batch.prompt_restart = true end
+                if detail and detail ~= "" then batch.warning = detail end
             else
                 table.insert(batch.failed, { entry = entry, detail = detail })
             end
@@ -3168,6 +3208,21 @@ function App:package_action_succeeded(op, pkg)
     return pkg and pkg.installed
 end
 
+function App:update_zenfm_android_companion(op, pkg)
+    if op.action ~= "update" or tostring(op.id or ""):lower() ~= "zenfm" then return true end
+    if not (self.daemon and type(self.daemon.is_android) == "function" and self.daemon:is_android()) then
+        return true
+    end
+    local plugin = koreader_plugin_instance(pkg)
+    local daemon = plugin and plugin.daemon
+    if not daemon or type(daemon.open_android) ~= "function" then
+        return false, _("ZenFM's Android companion updater is unavailable.")
+    end
+    local called, ok, detail = pcall(daemon.open_android, daemon, "update")
+    if not called then return false, ok end
+    return ok == true, detail
+end
+
 function App:patch_action_succeeded_from_db(op)
     if not (op.is_patch and op.asset and op.asset ~= "") then
         return false
@@ -3243,8 +3298,16 @@ function App:poll_package_action(op, attempt)
         if succeeded then
             self.busy = false
             local done = action_done(op.action)
+            local companion_ok, companion_detail = App.update_zenfm_android_companion(self, op, pkg)
+            local companion_warning
+            if not companion_ok then
+                companion_warning = _("ZenFM plugin updated, but its Android companion updater could not start.")
+                if companion_detail and tostring(companion_detail) ~= "" then
+                    companion_warning = companion_warning .. "\n" .. tostring(companion_detail)
+                end
+            end
             if op.on_result then
-                op.on_result(true, nil, op)
+                op.on_result(true, companion_warning, op)
                 return
             end
             local finish = function()
@@ -3253,11 +3316,17 @@ function App:poll_package_action(op, attempt)
                     if op.is_patch or op.action == "uninstall" then
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
+                    if companion_warning then
+                        tail = _(" successfully.\n\n") .. companion_warning
+                            .. _("\n\nRestart KOReader to load the plugin.")
+                    end
                     Modals.restart_koreader(op.name .. " " .. done .. tail, function(reopen_after_restart)
                         self:restart_koreader(reopen_after_restart)
                     end)
                 else
-                    Modals.info_for(op.name .. " " .. done .. _(" successfully."), Constants.PACKAGE_NOTICE_SECONDS)
+                    local message = op.name .. " " .. done .. _(" successfully.")
+                    if companion_warning then message = message .. "\n\n" .. companion_warning end
+                    Modals.info_for(message, Constants.PACKAGE_NOTICE_SECONDS)
                 end
                 if op.on_done then op.on_done() end
             end
@@ -3414,7 +3483,7 @@ function App:toggle_beta_updates()
 end
 
 function App:kindle_scriptlets_available()
-    return self.daemon:detect_platform() == "kindle" and not self.daemon:kindle_kpm_installed()
+    return self.daemon:detect_platform() == "kindle"
 end
 
 function App:toggle_kindle_scriptlets()

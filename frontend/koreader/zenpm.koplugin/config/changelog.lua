@@ -61,4 +61,11 @@ return {
         "Disable Kindle scriptlets and Kindleforge by default (enable via settings)",
         "Use stable koreader location for kpm installs",
     },
+    ["1.5.0"] = {
+        "Add/remove new KOReader plugins to the ZenOS Launcher automatically",
+        "Add auto selection for ZenFM",
+        "Update ZenFM's Android companion APK alongside the plugin",
+        "Better arch selection",
+        "Improve README url/image handling"
+    },
 }

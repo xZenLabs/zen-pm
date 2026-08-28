@@ -329,6 +329,7 @@ type InstalledEntry struct {
 	Asset                string // selected release asset, empty when ZenPM did not install it
 	AssetArch            string // selected release asset architecture
 	InstallPath          string // native install location, when ZenPM needs it for removal
+	LauncherAddPending   bool   // new KOReader plugin install awaiting ZenOS Launcher handling
 	UpdateIgnored        bool   // excludes this installed package from bulk updates
 	UpdateIgnoredVersion string // suppresses only this offered update version
 	InstalledAt          string

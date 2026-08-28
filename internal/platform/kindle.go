@@ -5,10 +5,7 @@ import (
 	"strings"
 )
 
-var (
-	kindleKUALConfigPath = "/mnt/us/extensions/KUAL.cfg"
-	kindleKPMDir         = "/mnt/us/kmc/kpm"
-)
+var kindleKUALConfigPath = "/mnt/us/extensions/KUAL.cfg"
 
 // KindleABI returns "hf" (hard-float) or "sf" (soft-float) based on the linker present.
 func KindleABI() string {
@@ -37,13 +34,10 @@ func KindleHasKUAL() bool {
 
 // KindleWAFAllowed reports whether the Kindle WAF may run on this device.
 func KindleWAFAllowed(platformName string) bool {
-	if platformName != Kindle {
-		return false
+	for _, name := range strings.Split(platformName, ",") {
+		if strings.TrimSpace(name) == Kindle {
+			return true
+		}
 	}
-	if info, err := os.Stat(kindleKPMDir); err == nil && info.IsDir() {
-		return false
-	} else if err != nil && !os.IsNotExist(err) {
-		return false
-	}
-	return true
+	return false
 }

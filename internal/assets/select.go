@@ -16,8 +16,9 @@ type Asset struct {
 
 // Device describes the running hardware used to pick an asset.
 type Device struct {
-	Platform string // "kindle", "kobo", "pocketbook", "remarkable", "android", "host", ...
+	Platform string // "kindle", "kobo", "ereader", "android", "host", ...
 	OS       string // host OS, for example "darwin" (only meaningful on host)
+	Arch     string // Go CPU architecture, for example "arm" or "arm64"
 	KindleHF bool   // hard-float linker present (only meaningful on kindle)
 	CortexA9 bool   // ARM Cortex-A9 CPU (needs A9-optimized build)
 }
@@ -87,6 +88,8 @@ func isSoftFloatKindle(n string) bool {
 	return strings.Contains(n, "kindlesf")
 }
 
+func isEReader(n string) bool { return strings.Contains(n, "ereader") }
+
 // Select picks the best asset for dev, or flags that the user must choose.
 func Select(raw string, dev Device) Result {
 	all := Parse(raw)
@@ -131,6 +134,9 @@ func Select(raw string, dev Device) Result {
 		if pick == "" {
 			pick = find(isPlainKindle)
 		}
+		if pick == "" {
+			pick = find(isEReader)
+		}
 	case "android":
 		pick = find(func(n string) bool { return strings.Contains(n, "android") })
 	case "host":
@@ -140,9 +146,28 @@ func Select(raw string, dev Device) Result {
 		if pick == "" {
 			pick = find(func(n string) bool { return strings.Contains(n, "desktop") })
 		}
+		if pick == "" && dev.OS == "linux" {
+			pick = find(func(n string) bool { return strings.Contains(n, "linux") })
+		}
+	case "kobo":
+		if dev.Arch == "arm64" {
+			for _, a := range cands {
+				if strings.EqualFold(strings.TrimSpace(a.Arch), dev.Arch) {
+					pick = a.Asset
+					break
+				}
+			}
+			if pick == "" {
+				pick = find(func(n string) bool { return strings.Contains(n, "linux") })
+			}
+			break
+		}
+		fallthrough
 	default:
-		// Kobo, PocketBook, reMarkable and other ARM e-readers use the plain Kindle build.
-		pick = find(isPlainKindle)
+		pick = find(isEReader)
+		if pick == "" {
+			pick = find(isPlainKindle)
+		}
 	}
 
 	if pick != "" {
