@@ -288,6 +288,9 @@ func (m *Manager) koreaderPluginDirs() ([]string, error) {
 			return
 		}
 		path = filepath.Clean(path)
+		if absolute, err := filepath.Abs(path); err == nil {
+			path = absolute
+		}
 		if !seen[path] {
 			seen[path] = true
 			dirs = append(dirs, path)

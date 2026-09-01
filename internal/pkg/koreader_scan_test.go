@@ -451,6 +451,27 @@ func TestScanKOReaderPluginsDoesNotMarkUnavailableOrEmptyCatalog(t *testing.T) {
 	}
 }
 
+func TestKOReaderPluginDirsDeduplicatesRelativeAndAbsolutePaths(t *testing.T) {
+	root := t.TempDir()
+	plugins := filepath.Join(root, "plugins")
+	if err := os.Mkdir(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	t.Setenv("ZENPM_KOREADER_DIR", root)
+	t.Setenv("ZENPM_KOREADER_ROOT", "")
+	t.Setenv("KOREADER_DIR", ".")
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", "plugins")
+
+	dirs, err := (&Manager{plat: "ereader"}).koreaderPluginDirs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dirs) != 1 || dirs[0] != plugins {
+		t.Fatalf("KOReader plugin directories = %#v, want [%q]", dirs, plugins)
+	}
+}
+
 func TestUnmanagedKOReaderPatchesListsOnlyUntrackedPatchFiles(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	root := filepath.Join(t.TempDir(), "koreader")

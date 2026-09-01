@@ -68,4 +68,7 @@ return {
         "Better arch selection",
         "Improve README url/image handling"
     },
+    ["1.5.1"] = {
+        "Fix absolute vs relative plugin path on some devices",
+    },
 }
