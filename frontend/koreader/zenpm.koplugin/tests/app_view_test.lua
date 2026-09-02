@@ -97,6 +97,7 @@ assert(header_y == 17)
 assert(content_y == 17)
 assert(status_freed)
 assert(paint_view._zen_status_dimen.h == 12)
+assert(paint_view.koreader_menu_zone == paint_view._zen_status_dimen)
 AppView._zen_status_refresh(paint_view)
 assert(dirty.widget == paint_view and dirty.mode == "ui")
 assert(dirty.region == paint_view._zen_status_dimen)
@@ -148,6 +149,9 @@ assert(hardware_actions == 1)
 _G.G_reader_settings = {
     readSetting = function() return "tap" end,
 }
+local status_gesture = { pos = { x = 50, y = 10 } }
+assert(AppView.tap_should_pass_to_koreader_menu(paint_view, status_gesture))
+assert(AppView.gesture_in_menu_zone(paint_view, status_gesture))
 local menu_tap_view = {
     koreader_menu_zone = { x = 0, y = 0, w = 100, h = 50 },
     koreader_menu_tap_guard = { x = 70, y = 0, w = 30, h = 50 },

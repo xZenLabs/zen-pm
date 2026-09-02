@@ -660,6 +660,9 @@ function AppView:paintTo(bb, x, y)
         end
     end
     content_top = Header.draw(self, bb, x, content_top, m.screen_w)
+    if self._zen_status_dimen then
+        self.koreader_menu_zone = self._zen_status_dimen
+    end
     if self.app.state.page == "queue" then
         self:draw_content(bb, x, content_top, m.screen_w, y + m.screen_h - content_top)
         return
