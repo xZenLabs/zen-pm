@@ -391,6 +391,53 @@ App.toggle_advanced(app)
 assert(app.state.advanced)
 assert(settings.advanced_queue == true)
 
+local advanced_app = {
+    state = {
+        page = "settings",
+        active_tab = "home",
+        scroll = {},
+        advanced = false,
+        manual_version_picker = false,
+        show_all_builds = false,
+        beta_updates = false,
+        direct_github = false,
+        filter_installable = true,
+        packages = { { id = "reader" } },
+    },
+    client = {},
+    daemon = { state_home = function() return "/tmp/zenpm-missing-token-dir" end },
+    reset_scroll = App.reset_scroll,
+    clear_status = function() end,
+    refresh = function() end,
+    settings_origin = { page = "home", active_tab = "home" },
+}
+App.show_advanced_settings(advanced_app)
+assert(advanced_app.state.page == "advanced_settings")
+assert(advanced_app.state.scroll.advanced_settings == 0)
+App.toggle_filter_installable(advanced_app)
+assert(not advanced_app.state.filter_installable)
+assert(#advanced_app.state.packages == 0)
+assert(advanced_app.settings_requires_reload)
+App.toggle_direct_github(advanced_app)
+assert(advanced_app.state.direct_github)
+assert(settings.direct_github == true)
+App.show_settings(advanced_app)
+assert(advanced_app.state.page == "settings")
+assert(advanced_app.settings_origin.page == "home")
+
+local direct_release_action
+App.start_package_action({
+    state = { direct_github = true },
+    prompt_default_package_version = function(_, _, _, action)
+        direct_release_action = action
+    end,
+}, {
+    id = "reader",
+    source = "https://github.com/owner/reader",
+    platforms = { "koreader" },
+}, "install")
+assert(direct_release_action == "install")
+
 local cli_installs = 0
 local cli_app = {
     daemon = {
@@ -630,6 +677,7 @@ local back_routes = {
     source_details = "show_sources",
     package_details = "go_back_from_details",
     queue = "close_queue",
+    advanced_settings = "show_settings",
     settings = "close_settings",
 }
 for page, method in pairs(back_routes) do

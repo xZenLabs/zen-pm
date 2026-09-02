@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -258,6 +259,9 @@ func githubRequest(path, accept string) ([]byte, error) {
 	req.Header.Set("Accept", accept)
 	req.Header.Set("User-Agent", "ZenPackageManager")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if token := githubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	client := cabundle.Client(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -275,6 +279,27 @@ func githubRequest(path, accept string) ([]byte, error) {
 		return nil, fmt.Errorf("GitHub response is too large")
 	}
 	return data, nil
+}
+
+func githubToken() string {
+	path := strings.TrimSpace(os.Getenv("ZENPM_GITHUB_TOKEN_FILE"))
+	if path == "" {
+		return ""
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, 4098))
+	if err != nil || len(data) > 4097 {
+		return ""
+	}
+	token := strings.TrimSpace(string(data))
+	if len(token) > 4096 || strings.IndexFunc(token, unicode.IsSpace) >= 0 {
+		return ""
+	}
+	return token
 }
 
 func NormalizeVersion(value string) string {

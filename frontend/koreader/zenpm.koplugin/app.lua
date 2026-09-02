@@ -147,6 +147,7 @@ function App:new(plugin)
             active_tab = "home",
             filter_installable = App.load_setting("filter_installable", true),
             advanced = App.load_setting("advanced_queue", false),
+            direct_github = App.load_setting("direct_github", false),
             manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
             show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
@@ -270,6 +271,10 @@ end
 
 local function package_uses_source(pkg)
     return Util.trim(tostring(pkg and pkg.source_type or "")):lower() == "source"
+end
+
+local function package_has_github_source(pkg)
+    return tostring(pkg and pkg.source or ""):match("^https://github%.com/[^/]+/[^/]+/?$") ~= nil
 end
 
 local function action_present(action)
@@ -1232,7 +1237,9 @@ function App:show_queue_entry_modify(entry)
         end or nil,
         updates_ignored = queued_update and pkg.update_ignored == true or nil,
         toggle_updates = queued_update and toggle_queued_update or nil,
-        downgrade = Models.has_version_history(pkg) and not package_is_kindle_only(pkg) and function()
+        downgrade = (Models.has_version_history(pkg)
+            or (self.state.direct_github and package_has_github_source(pkg)))
+            and not package_is_kindle_only(pkg) and function()
             self:prompt_package_versions(pkg)
         end or nil,
         uninstall = entry.action ~= "uninstall" and function()
@@ -2435,6 +2442,8 @@ function App:go_back()
         self:go_back_from_details()
     elseif page == "queue" then
         self:close_queue()
+    elseif page == "advanced_settings" then
+        self:show_settings()
     elseif page == "settings" then
         self:close_settings()
     else
@@ -2736,6 +2745,8 @@ function App:perform_package_action(pkg, on_done)
     end
     if pkg.installed then
         local is_koplugin = package_is_koreader_plugin(pkg)
+        local has_versions = Models.has_version_history(pkg)
+            or (self.state.direct_github and package_has_github_source(pkg))
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             info = self.state.page ~= "package_details" and function()
@@ -2752,7 +2763,7 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+            downgrade = has_versions and not Models.is_font_package(pkg)
                 and not package_is_kindle_only(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
@@ -2880,7 +2891,8 @@ end
 
 function App:load_package_releases(pkg, allow_empty)
     Modals.status(_("Loading available versions..."))
-    local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
+    local direct_github = self.state and self.state.direct_github and package_has_github_source(pkg)
+    local ok, data = self.client:get_package_releases(pkg.id or pkg.name, direct_github)
     Modals.close_status()
     if not ok then
         Modals.info(_("Could not load available versions: ") .. tostring(data))
@@ -3020,6 +3032,11 @@ function App:start_package_action(pkg, action, on_done, opts)
         self:queue_self_update(pkg, opts)
         return
     end
+    if action_installs_package(action) and self.state and self.state.direct_github
+        and package_has_github_source(pkg) and not package_is_kindle_only(pkg) then
+        self:prompt_default_package_version(pkg, on_done, action)
+        return
+    end
     if action_installs_package(action) and opts and opts.release then
         self:queue_package_action(pkg, action, nil, opts)
         return
@@ -3121,7 +3138,8 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     self.busy = true
     Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
         .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
-    local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
+    local direct_github = self.state and self.state.direct_github and package_has_github_source(pkg)
+    local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil, direct_github)
     if not ok then
         self.busy = false
         local message = _("Failed to start package action: ") .. tostring(err)
@@ -3454,7 +3472,7 @@ function App:toggle_filter_installable()
     self.state.filter_installable = not self.state.filter_installable
     App.save_setting("filter_installable", self.state.filter_installable)
     self.state.packages = {}
-    if self.state.page == "settings" then
+    if self.state.page == "settings" or self.state.page == "advanced_settings" then
         self.settings_requires_reload = true
         self:refresh()
         return
@@ -3465,6 +3483,71 @@ end
 function App:toggle_advanced()
     self.state.advanced = not self.state.advanced
     App.save_setting("advanced_queue", self.state.advanced)
+end
+
+function App:toggle_direct_github()
+    self.state.direct_github = not self.state.direct_github
+    App.save_setting("direct_github", self.state.direct_github)
+end
+
+local function clean_github_token(value)
+    value = Util.trim(tostring(value or ""))
+    if value == "" or #value > 4096 or value:find("%s") then return nil end
+    return value
+end
+
+function App:github_token()
+    local file = io.open(self.daemon:state_home() .. "/github_token.txt", "rb")
+    if not file then return "" end
+    local value = file:read(4098)
+    file:close()
+    return clean_github_token(value) or ""
+end
+
+function App:write_github_token(value)
+    local path = self.daemon:state_home() .. "/github_token.txt"
+    local stage = path .. ".zen-write"
+    local file, err = io.open(stage, "wb")
+    if not file then return false, err end
+    local wrote, write_err = file:write(value == "" and "" or value .. "\n")
+    local closed, close_err = file:close()
+    if not wrote or not closed or os.execute("chmod 600 " .. Util.sh_quote(stage)) ~= 0 then
+        os.remove(stage)
+        return false, write_err or close_err or _("Could not secure the GitHub token file.")
+    end
+    local renamed, rename_err = os.rename(stage, path)
+    if not renamed then os.remove(stage) end
+    return renamed ~= nil, rename_err
+end
+
+function App:prompt_github_token()
+    Modals.input(
+        _("GitHub token"), self:github_token(), _("github_pat_..."), _("Save"),
+        function(value)
+            value = clean_github_token(value)
+            if not value then
+                Modals.info(_("Enter a valid GitHub token without spaces."))
+                return
+            end
+            local ok, err = self:write_github_token(value)
+            if not ok then Modals.info(_("Could not save GitHub token: ") .. tostring(err)) end
+        end,
+        function()
+            local ok, err = self:write_github_token("")
+            if not ok then Modals.info(_("Could not clear GitHub token: ") .. tostring(err)) end
+        end,
+        {
+            description = _("Stored locally as plain text and used only for GitHub API requests."),
+            text_type = "password",
+        }
+    )
+end
+
+function App:show_advanced_settings()
+    self.state.page = "advanced_settings"
+    self:reset_scroll("advanced_settings")
+    self:clear_status()
+    self:refresh()
 end
 
 function App:toggle_manual_version_picker()
@@ -3622,11 +3705,13 @@ function App:show_actions(anchor)
 end
 
 function App:show_settings()
-    self.settings_origin = {
-        page = self.state.page,
-        active_tab = self.state.active_tab,
-    }
-    self.settings_requires_reload = false
+    if self.state.page ~= "settings" and self.state.page ~= "advanced_settings" then
+        self.settings_origin = {
+            page = self.state.page,
+            active_tab = self.state.active_tab,
+        }
+        self.settings_requires_reload = false
+    end
     self.state.page = "settings"
     self:reset_scroll("settings")
     self:clear_status()

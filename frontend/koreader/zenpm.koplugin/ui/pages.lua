@@ -6,6 +6,7 @@ local Cards = require("ui/cards")
 local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
+local InlineIcons = require("ui/inline_icon_map")
 local Markdown = require("ui/markdown")
 local MarkdownRenderer = require("ui/markdown_renderer")
 local Models = require("models")
@@ -285,13 +286,19 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
     end)
 end
 
-function Pages.settings(view, bb, x, y, w, h, scroll)
-    local m = Theme.metrics()
-    local pad = m.pad
-    local gap = m.card_gap
-    local row_h = math.max(m.touch_min, Theme.scale(58))
+local function advanced_settings_rows(view)
+    local function toggle(callback)
+        return function()
+            callback(view.app)
+            view:refresh()
+        end
+    end
+    local function token_status()
+        local value = view.app:github_token()
+        if value == "" then return _("Not set") end
+        return #value <= 4 and "••••" or "••••" .. value:sub(-4)
+    end
     local rows = {
-        { text = _("Scan installed plugins"), callback = function() view.app:scan_installed_plugins() end },
         {
             text = _("Only show installable packages"),
             toggle = true,
@@ -299,93 +306,132 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_filter_installable() end,
         },
         {
-            text = _("Advanced"),
+            text = _("Queue mode"),
             toggle = true,
             value = function() return view.app.state.advanced end,
-            callback = function()
-                view.app:toggle_advanced()
-                view:refresh()
-            end,
-        },
-        {
-            text = _("Font size"),
-            value = function() return tostring(view.app.state.base_font_size) end,
-            callback = function() view.app:prompt_base_font_size() end,
-        },
-        {
-            text = _("Show README images"),
-            toggle = true,
-            value = function() return view.app.state.show_readme_images end,
-            callback = function() view.app:toggle_readme_images() end,
+            callback = toggle(view.app.toggle_advanced),
         },
         {
             text = _("Always manually pick version"),
             toggle = true,
             value = function() return view.app.state.manual_version_picker end,
-            callback = function()
-                view.app:toggle_manual_version_picker()
-                view:refresh()
-            end,
+            callback = toggle(view.app.toggle_manual_version_picker),
         },
         {
             text = _("Show all builds"),
             toggle = true,
             value = function() return view.app.state.show_all_builds end,
-            callback = function()
-                view.app:toggle_show_all_builds()
-                view:refresh()
-            end,
+            callback = toggle(view.app.toggle_show_all_builds),
         },
         {
             text = _("Beta updates"),
             toggle = true,
             value = function() return view.app.state.beta_updates end,
-            callback = function()
-                view.app:toggle_beta_updates()
-                view:refresh()
-            end,
+            callback = toggle(view.app.toggle_beta_updates),
+        },
+        {
+            text = _("Fetch releases directly from GitHub"),
+            toggle = true,
+            value = function() return view.app.state.direct_github end,
+            callback = toggle(view.app.toggle_direct_github),
+        },
+        {
+            text = _("GitHub token"),
+            value = token_status,
+            callback = function() view.app:prompt_github_token() end,
         },
     }
-    if view.app:kindle_scriptlets_available() then
+    if not view.app.daemon:is_android() and not view.app.daemon:is_pocketbook() then
+        rows[#rows + 1] = {
+            text = _("Install command-line interface"),
+            callback = function() view.app:install_cli() end,
+        }
+    end
+    return rows
+end
+
+function Pages.settings(view, bb, x, y, w, h, scroll)
+    local m = Theme.metrics()
+    local gap = 0
+    local row_h = math.max(m.touch_min, Theme.scale(69))
+    local advanced = view.app.state.page == "advanced_settings"
+    local rows = advanced and advanced_settings_rows(view) or {
+        { text = _("Scan installed plugins"), icon = "plugin", callback = function() view.app:scan_installed_plugins() end },
+        {
+            text = _("Advanced"),
+            icon = "settings_advanced",
+            callback = function() view.app:show_advanced_settings() end,
+        },
+        {
+            text = _("Font size"),
+            icon = "title",
+            value = function() return tostring(view.app.state.base_font_size) end,
+            callback = function() view.app:prompt_base_font_size() end,
+        },
+        {
+            text = _("Show README images"),
+            icon = "wallpaper",
+            toggle = true,
+            value = function() return view.app.state.show_readme_images end,
+            callback = function() view.app:toggle_readme_images() end,
+        },
+    }
+    if not advanced and view.app:kindle_scriptlets_available() then
         table.insert(rows, 3, {
             text = _("Show Kindle Scriptlets"),
+            icon = "plugin",
             toggle = true,
             value = function() return view.app.state.show_kindle_scriptlets end,
             callback = function() view.app:toggle_kindle_scriptlets() end,
         })
     end
-    if view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
+    if not advanced and view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
         table.insert(rows, 2, {
             text = _("Install to Kindle homepage"),
+            icon = "download",
             callback = function() view.app:install_to_kindle_homepage() end,
         })
     end
-    if not view.app.daemon:is_android() and not view.app.daemon:is_pocketbook() then
-        table.insert(rows, 2, {
-            text = _("Install command-line interface"),
-            callback = function() view.app:install_cli() end,
-        })
-    end
-    local list_y = y + Theme.scale(8)
-    local list_h = h - Theme.scale(16)
+    local list_y = y
+    local list_h = h
+    local divider_h = math.max(1, Theme.scale(1))
+    local settings_left = Theme.scale(25)
+    local settings_icon_w = Theme.scale(62)
+    local settings_icon_gap = Theme.scale(5)
+    local text_inset = settings_left + settings_icon_w + settings_icon_gap
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        local row_x = x + pad
-        local row_w = w - pad * 2 - gutter
-        P.box(bb, row_x, row_y, row_w, row_h)
+        local row_x = x
+        local row_w = w - gutter
+        P.box(bb, row_x, row_y, row_w, row_h, { border = false, radius = false })
+        P.rect(bb, row_x, row_y + row_h - divider_h, row_w, divider_h, Theme.soft)
+        local icon = row.icon and InlineIcons.icon(row.icon)
+        if icon then
+            P.center_text_box(bb, icon, row_x + settings_left, row_y,
+                settings_icon_w, row_h, "small", { bold = true })
+        end
         local value = row.value and row.value() or nil
         local checkbox = row.toggle
-        local right = checkbox and nil or (value == nil and "›" or value)
-        local toggle_w = Theme.scale(56)
-        local toggle_h = Theme.scale(28)
-        local right_size = checkbox and { w = toggle_w } or P.text_size(right, Theme.scale(96), "small", { bold = true })
-        local text_w = row_w - pad * 2 - right_size.w - Theme.scale(12)
-        P.vcenter_text(bb, row.text, row_x + pad, row_y, text_w, row_h, "small", { bold = true })
-        local right_x = row_x + row_w - pad - right_size.w
+        local has_caret = not checkbox and value == nil
+        local toggle_w = Theme.scale(51)
+        local toggle_h = Theme.scale(25)
+        local caret_size = Theme.scale(25)
+        local right_padding = Theme.scale(5)
+        local right_size = checkbox and { w = toggle_w + Theme.scale(10) + caret_size }
+            or has_caret and { w = caret_size }
+            or P.text_size(value, Theme.scale(96), "small", { bold = true })
+        local text_w = math.max(1,
+            row_w - text_inset - right_padding - right_size.w - Theme.scale(5))
+        P.vcenter_text(bb, row.text, row_x + text_inset, row_y, text_w, row_h, "small", { bold = true })
+        local right_x = row_x + row_w - right_padding - right_size.w
         if checkbox then
             P.zen_toggle(bb, right_x, row_y + math.floor((row_h - toggle_h) / 2), toggle_w, toggle_h, value == true)
+        elseif has_caret then
+            P.image(bb, Images.asset("chevron.right.svg"), right_x,
+                row_y + math.floor((row_h - caret_size) / 2), caret_size, caret_size,
+                { is_icon = true })
         else
-            P.vcenter_text(bb, right, right_x, row_y, right_size.w, row_h, "small", { bold = true, color = Theme.ink })
+            P.vcenter_text(bb, value, right_x, row_y, right_size.w, row_h, "small", { bold = true, color = Theme.ink })
         end
         P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
         P.focus_control(view, bb, "setting:" .. row.text, row_x, row_y, row_w, row_h, row.callback, {
@@ -399,6 +445,8 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
         })
     end)
 end
+
+Pages.advanced_settings = Pages.settings
 
 function Pages.source_details(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()

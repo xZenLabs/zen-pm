@@ -46,18 +46,32 @@ func (m *Manager) CheckInstall(id string) error {
 // InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
 // When empty, the asset is auto-selected for the current device.
 func (m *Manager) InstallAsset(id, assetOverride string) error {
-	return m.installAssetRelease(id, assetOverride, "", true)
+	return m.installAssetRelease(id, assetOverride, "", true, false)
 }
 
 // InstallRelease installs a specific release and records its tag as the
 // installed version.
 func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
-	return m.installAssetRelease(id, assetOverride, tag, true)
+	return m.installAssetRelease(id, assetOverride, tag, true, false)
+}
+
+// InstallGitHubRelease resolves release metadata directly from GitHub.
+func (m *Manager) InstallGitHubRelease(id, tag, assetOverride string) error {
+	return m.installAssetRelease(id, assetOverride, tag, true, true)
 }
 
 // Reinstall removes an installed package before installing it again. When tag
 // is non-empty, it installs that specific release.
 func (m *Manager) Reinstall(id, assetOverride, tag string) error {
+	return m.reinstall(id, assetOverride, tag, false)
+}
+
+// ReinstallGitHubRelease resolves release metadata directly from GitHub.
+func (m *Manager) ReinstallGitHubRelease(id, assetOverride, tag string) error {
+	return m.reinstall(id, assetOverride, tag, true)
+}
+
+func (m *Manager) reinstall(id, assetOverride, tag string, directGitHub bool) error {
 	uninstallAsset := ""
 	if m.isPatchFileInstalled(id, assetOverride) {
 		uninstallAsset = assetOverride
@@ -66,12 +80,12 @@ func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 		return fmt.Errorf("uninstall %s: %w", id, err)
 	}
 	if tag != "" {
-		return m.installAssetRelease(id, assetOverride, tag, false)
+		return m.installAssetRelease(id, assetOverride, tag, false, directGitHub)
 	}
-	return m.installAssetRelease(id, assetOverride, "", false)
+	return m.installAssetRelease(id, assetOverride, "", false, directGitHub)
 }
 
-func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, markTargetNew bool) (retErr error) {
+func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, markTargetNew, directGitHub bool) (retErr error) {
 	catalog, plan, installedSet, launcherPendingSet, err := m.installPlan(id)
 	if err != nil {
 		return err
@@ -138,7 +152,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		installedPath := ""
 		if genericInstaller != "" {
 			var err error
-			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller)
+			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller, directGitHub && pkgID == id)
 			if err != nil {
 				return fmt.Errorf("install %s: %w", pkgID, err)
 			}

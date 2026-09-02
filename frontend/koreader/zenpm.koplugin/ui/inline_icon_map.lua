@@ -32,6 +32,11 @@ local nerd_icons = {
     qrcode = "\u{F0432}",
     wallabag = "\u{F00C5}", -- mdi-bookmark-plus
     browser = "\u{F03CC}", -- mdi-open-in-new
+    plugin = "\u{F06A5}",
+    download = "\u{F01DA}",
+    title = "\u{F04BB}",
+    wallpaper = "\u{F05DA}",
+    settings_advanced = "\u{F1064}",
 }
 
 function M.icon(name)

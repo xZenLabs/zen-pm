@@ -150,7 +150,8 @@ function Modals.ignore_updates(pkg, ignore_all_callback, ignore_version_callback
     Modals.close_status()
 end
 
-function Modals.input(title, input, hint, ok_text, callback, clear_callback)
+function Modals.input(title, input, hint, ok_text, callback, clear_callback, options)
+    options = options or {}
     local dialog
     local buttons = {
         {
@@ -182,8 +183,10 @@ function Modals.input(title, input, hint, ok_text, callback, clear_callback)
     end
     dialog = InputDialog:new{
         title = title,
+        description = options.description,
         input = input or "",
         input_hint = hint,
+        text_type = options.text_type,
         keyboard_visible = not ok_android,
         buttons = buttons,
     }

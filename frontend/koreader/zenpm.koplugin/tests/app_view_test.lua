@@ -44,14 +44,30 @@ package.preload["ui/primitives"] = function()
         end,
     }
 end
-package.preload["ui/pages"] = function() return {} end
-package.preload["ui/scroll"] = function() return {} end
+local rendered_advanced_settings = false
+package.preload["ui/pages"] = function()
+    return {
+        advanced_settings = function()
+            rendered_advanced_settings = true
+            return 0
+        end,
+    }
+end
+package.preload["ui/scroll"] = function() return { draw_scrollbar = function() end } end
 package.preload["ui/theme"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
 
 local AppView = require("ui/app_view")
 local closed = 0
 local view = { app = { close = function() closed = closed + 1 end } }
+
+AppView.draw_content({
+    app = {
+        state = { page = "advanced_settings", scroll = {} },
+        scroll_key = function() return "advanced_settings" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_advanced_settings)
 
 has_keys = true
 has_dpad = false

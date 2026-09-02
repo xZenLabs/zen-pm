@@ -35,6 +35,7 @@ type State struct {
 	CABundle         string
 	RSACABundle      string
 	LogFile          string
+	GitHubTokenFile  string
 	SeededRepoURL    string // non-empty only when the database was just created
 	kindleWAFAllowed bool
 	store            Store
@@ -93,6 +94,7 @@ func Init(platformName string) (*State, error) {
 		CABundle:         filepath.Join(home, "cacert.pem"),
 		RSACABundle:      filepath.Join(home, "cacert-rsa.pem"),
 		LogFile:          filepath.Join(home, "ZenPM.log"),
+		GitHubTokenFile:  filepath.Join(home, "github_token.txt"),
 		kindleWAFAllowed: deviceplatform.KindleWAFAllowed(platformName),
 	}
 
@@ -110,6 +112,17 @@ func Init(platformName string) (*State, error) {
 	if err := cabundle.WriteRSAFile(s.RSACABundle); err != nil {
 		return nil, fmt.Errorf("write RSA CA bundle: %w", err)
 	}
+	token, err := os.OpenFile(s.GitHubTokenFile, os.O_CREATE, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("create GitHub token file: %w", err)
+	}
+	if err := token.Close(); err != nil {
+		return nil, fmt.Errorf("close GitHub token file: %w", err)
+	}
+	if err := os.Chmod(s.GitHubTokenFile, 0600); err != nil {
+		return nil, fmt.Errorf("restrict GitHub token file: %w", err)
+	}
+	_ = os.Setenv("ZENPM_GITHUB_TOKEN_FILE", s.GitHubTokenFile)
 	StartupTrace("State initialization: directories ready.")
 
 	store, err := newSQLiteStore(s)

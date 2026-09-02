@@ -580,6 +580,16 @@ func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *test
 	}
 }
 
+func TestDownloadInstallAssetDirectRequiresGitHubSource(t *testing.T) {
+	entry := &repo.CatalogEntry{
+		ID: "plugin", Source: "https://example.com/owner/plugin", SourceAsset: "plugin.koplugin.zip",
+		Platforms: []string{"koreader"},
+	}
+	if _, _, _, err := (&Manager{}).downloadInstallAssetMode(entry, "", "v2.0.0", true); err == nil || !strings.Contains(err.Error(), "GitHub repository") {
+		t.Fatalf("direct GitHub error = %v", err)
+	}
+}
+
 func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("zip contents"))

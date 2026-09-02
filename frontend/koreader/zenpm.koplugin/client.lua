@@ -311,7 +311,7 @@ function Client:list_packages(platform, check_updates, allow_prerelease)
     return self:request("GET", path, nil, PACKAGE_LIST_TIMEOUT)
 end
 
-function Client:package_action(id, action, asset, release)
+function Client:package_action(id, action, asset, release, direct_github)
     local path = "/packages/" .. url_encode(id) .. "/" .. action
     local query = {}
     if asset and asset ~= "" then
@@ -319,6 +319,9 @@ function Client:package_action(id, action, asset, release)
     end
     if release and release ~= "" then
         table.insert(query, "release=" .. url_encode(release))
+    end
+    if direct_github then
+        table.insert(query, "github=1")
     end
     if #query > 0 then
         path = path .. "?" .. table.concat(query, "&")
@@ -356,8 +359,10 @@ function Client:get_package_release_notes(id, prerelease)
     return self:request("GET", path, nil)
 end
 
-function Client:get_package_releases(id)
-    return self:request("GET", "/packages/" .. url_encode(id) .. "/releases", nil, PACKAGE_RELEASES_TIMEOUT)
+function Client:get_package_releases(id, direct_github)
+    local path = "/packages/" .. url_encode(id) .. "/releases"
+    if direct_github then path = path .. "?github=1" end
+    return self:request("GET", path, nil, PACKAGE_RELEASES_TIMEOUT)
 end
 
 function Client:get_log(tail)

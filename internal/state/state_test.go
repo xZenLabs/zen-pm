@@ -74,6 +74,16 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if _, err := os.Stat(st.SQLiteDB); err != nil {
 		t.Fatalf("sqlite db missing: %v", err)
 	}
+	if data, err := os.ReadFile(st.GitHubTokenFile); err != nil || len(data) != 0 {
+		t.Fatalf("GitHub token placeholder = %q, %v", data, err)
+	}
+	info, err := os.Stat(st.GitHubTokenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("GitHub token permissions = %v", info.Mode().Perm())
+	}
 	repos, err := st.ReadRepos()
 	if err != nil {
 		t.Fatal(err)

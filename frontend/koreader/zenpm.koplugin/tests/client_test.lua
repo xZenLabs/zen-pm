@@ -140,4 +140,20 @@ assert(client:get_package_releases("example"))
 assert(requested_timeout.block == 10)
 assert(requested_timeout.total == 15)
 
+client.request = function(_, method, path, body)
+    assert(method == "GET")
+    assert(path == "/packages/example/releases?github=1")
+    assert(body == nil)
+    return true, {}
+end
+assert(client:get_package_releases("example", true))
+
+client.request = function(_, method, path, body)
+    assert(method == "POST")
+    assert(path == "/packages/example/install?release=v2.0.0&github=1")
+    assert(body == nil)
+    return true, {}
+end
+assert(client:package_action("example", "install", nil, "v2.0.0", true))
+
 print("client tests passed")

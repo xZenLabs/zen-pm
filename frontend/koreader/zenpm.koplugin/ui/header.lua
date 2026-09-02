@@ -64,6 +64,8 @@ function Header.page_title(view)
         return _("Queue") .. " (" .. tostring(view.app:queue_count()) .. ")"
     elseif page == "settings" then
         return _("Settings")
+    elseif page == "advanced_settings" then
+        return _("Advanced")
     elseif page == "debug" then
         return _("Debug")
     end
@@ -130,8 +132,8 @@ function Header.draw_installed_category_button(view, bb, x, y)
     return w
 end
 
-function Header.draw_back(view, bb, x, y, callback)
-    local s = Theme.scale(46)
+function Header.draw_back(view, bb, x, y, callback, size)
+    local s = size or Theme.scale(46)
     P.box(bb, x, y, s, s, { border = false })
     if not P.image(bb, Images.asset("chevron.left.svg"), x + Theme.scale(8), y + Theme.scale(8), s - Theme.scale(16), s - Theme.scale(16), { is_icon = true }) then
         P.center_text(bb, "<", x, y + Theme.scale(13), s, "title", { bold = true })
@@ -142,7 +144,7 @@ function Header.draw_back(view, bb, x, y, callback)
 end
 
 function Header.draw_close(view, bb, x, y)
-    local s = Theme.scale(46)
+    local s = Theme.scale(44)
     P.box(bb, x, y, s, s, { border = false })
     if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(6), y + Theme.scale(6), s - Theme.scale(12), s - Theme.scale(12), { is_icon = true }) then
         P.center_text(bb, "×", x, y + Theme.scale(10), s, "title", { bold = true })
@@ -201,6 +203,8 @@ local function page_back_callback(view, page)
         return function() view.app:go_back_from_details() end
     elseif page == "queue" then
         return function() view.app:close_queue() end
+    elseif page == "advanced_settings" then
+        return function() view.app:show_settings() end
     end
 end
 
@@ -227,19 +231,33 @@ end
 
 local function draw_title_bar(view, bb, x, y, w)
     local m = Theme.metrics()
-    local h = m.titlebar_h
     local page = view.app.state.page
+    local settings_page = page == "settings" or page == "advanced_settings"
+    local h = settings_page and Theme.scale(58) or m.titlebar_h
     local pad = m.pad
     local title_x = x + pad
     local title_right = x + w - pad
     local top_right_control_x
+    local settings_left = Theme.scale(25)
+    local settings_leading_w = Theme.scale(62)
+    local settings_title_gap = Theme.scale(5)
+    if settings_page then title_x = x + settings_left end
     P.box(bb, x, y, w, h, { border = false, background = Theme.panel })
     local back_callback = page_back_callback(view, page)
     if back_callback then
-        title_x = title_x + Header.draw_back(view, bb, title_x, toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
+        if settings_page then
+            local back_size = Theme.scale(44)
+            Header.draw_back(view, bb,
+                title_x + math.floor((settings_leading_w - back_size) / 2),
+                toolbar_y(y, h, back_size), back_callback, back_size)
+            title_x = title_x + settings_leading_w + settings_title_gap
+        else
+            title_x = title_x + Header.draw_back(view, bb, title_x,
+                toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
+        end
     end
-    if page == "settings" then
-        local close_s = Theme.scale(46)
+    if settings_page then
+        local close_s = Theme.scale(44)
         local close_x = title_right - close_s
         Header.draw_close(view, bb, close_x, toolbar_y(y, h, close_s))
         top_right_control_x = close_x
@@ -251,7 +269,18 @@ local function draw_title_bar(view, bb, x, y, w)
         top_right_control_x = action_x
         title_right = action_x - Theme.scale(8)
     end
-    if page == "home" then
+    if page == "settings" then
+        local logo = Theme.scale(32)
+        local logo_x = title_x + math.floor((settings_leading_w - logo) / 2)
+        if not P.image(bb, Images.asset("zenpm.svg"), logo_x,
+                toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
+            P.center_text_box(bb, "Z", logo_x, toolbar_y(y, h, logo),
+                logo, logo, "title", { bold = true })
+        end
+        title_x = title_x + settings_leading_w + settings_title_gap
+        P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y,
+            math.max(0, title_right - title_x), h, "heading", { bold = true })
+    elseif page == "home" then
         local logo = Theme.scale(52)
         if not P.image(bb, Images.asset("zenpm.svg"), title_x, toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
             P.center_text_box(bb, "Z", title_x, toolbar_y(y, h, logo), logo, logo, "title", { bold = true })
@@ -259,7 +288,14 @@ local function draw_title_bar(view, bb, x, y, w)
         title_x = title_x + logo + Theme.scale(14)
         P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
     else
-        P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
+        local title_size = P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
+        if page == "advanced_settings" then
+            P.hit(view, title_x, y, title_size.w, h, back_callback, "back-title")
+        end
+    end
+    if settings_page then
+        local divider_h = math.max(1, Theme.scale(2))
+        P.rect(bb, x, y + h - divider_h, w, divider_h, Theme.soft)
     end
     view.koreader_menu_zone = { x = x, y = y, w = w, h = h }
     -- Taps near ZenPM's top-right control should not leak through to

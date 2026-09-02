@@ -1035,6 +1035,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 
 	asset := r.URL.Query().Get("asset")
 	releaseTag := r.URL.Query().Get("release")
+	directGitHub := r.URL.Query().Get("github") == "1" || r.URL.Query().Get("github") == "true"
 
 	if action == "install" || action == "reinstall" {
 		if err := s.pkgs.CheckInstall(id); err != nil {
@@ -1049,13 +1050,19 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	s.runBackground(func() {
 		var err error
 		if action == "install" {
-			if releaseTag != "" {
+			if directGitHub {
+				err = s.pkgs.InstallGitHubRelease(id, releaseTag, asset)
+			} else if releaseTag != "" {
 				err = s.pkgs.InstallRelease(id, releaseTag, asset)
 			} else {
 				err = s.pkgs.InstallAsset(id, asset)
 			}
 		} else if action == "reinstall" {
-			err = s.pkgs.Reinstall(id, asset, releaseTag)
+			if directGitHub {
+				err = s.pkgs.ReinstallGitHubRelease(id, asset, releaseTag)
+			} else {
+				err = s.pkgs.Reinstall(id, asset, releaseTag)
+			}
 		} else {
 			err = s.pkgs.Uninstall(id, asset)
 		}
@@ -1127,17 +1134,17 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageReleaseMetadata(id string) (string, string, string, []string, error) {
+func (s *Server) packageReleaseMetadata(id string) (string, string, string, string, []string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", "", "", nil, err
+		return "", "", "", "", nil, err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			return strings.TrimSpace(entry.VersionsURL), strings.ToLower(strings.TrimSpace(entry.SourceType)), strings.TrimSpace(entry.SourceAsset), entry.SourceAssetAliases, nil
+			return strings.TrimSpace(entry.VersionsURL), strings.TrimSpace(entry.Source), strings.ToLower(strings.TrimSpace(entry.SourceType)), strings.TrimSpace(entry.SourceAsset), entry.SourceAssetAliases, nil
 		}
 	}
-	return "", "", "", nil, fmt.Errorf("package %q not found", id)
+	return "", "", "", "", nil, fmt.Errorf("package %q not found", id)
 }
 
 func (s *Server) packageReadmeMetadata(id string) (string, string, error) {
@@ -1254,13 +1261,16 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	versionsURL, sourceType, sourceAsset, sourceAssetAliases, err := s.packageReleaseMetadata(id)
+	versionsURL, source, sourceType, sourceAsset, sourceAssetAliases, err := s.packageReleaseMetadata(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	items := []releases.Release{}
-	if versionsURL != "" {
+	directGitHub := r.URL.Query().Get("github") == "1" || r.URL.Query().Get("github") == "true"
+	if directGitHub {
+		items, err = releases.FetchGitHubReleases(source, 100)
+	} else if versionsURL != "" {
 		items, err = releases.FetchVersions(versionsURL)
 	}
 	if err != nil {

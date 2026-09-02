@@ -50,8 +50,8 @@ func (m *Manager) nativeKOReaderInstaller(entry *repo.CatalogEntry, override str
 
 // installGenericKOReader performs the work of the repository's generic shell
 // installers in-process, so it does not depend on curl, wget, or BusyBox.
-func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, releaseTag, kind string) (string, string, error) {
-	assetName, _, data, err := m.downloadInstallAsset(entry, override, releaseTag)
+func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, releaseTag, kind string, directGitHub bool) (string, string, error) {
+	assetName, _, data, err := m.downloadInstallAssetMode(entry, override, releaseTag, directGitHub)
 	if err != nil {
 		return "", "", err
 	}
@@ -76,8 +76,29 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 }
 
 func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, releaseTag string) (string, string, []byte, error) {
+	return m.downloadInstallAssetMode(entry, override, releaseTag, false)
+}
+
+func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, releaseTag string, directGitHub bool) (string, string, []byte, error) {
 	assetName := m.installAssetName(entry, override)
 	assetURL := ""
+	if assetName == "" {
+		assetName = strings.TrimSpace(entry.SourceAsset)
+	}
+	if assetName == "" && genericKOReaderInstaller(entry) == genericPluginInstaller {
+		assetName = ".koplugin.zip"
+	}
+	if directGitHub {
+		_, asset, err := releases.ResolveGitHubReleaseAsset(entry.Source, releaseTag, assetName)
+		if err != nil {
+			return "", "", nil, err
+		}
+		data, err := repo.FetchBytes(asset.URL)
+		if err != nil {
+			return "", "", nil, fmt.Errorf("fetch %s: %w", asset.URL, err)
+		}
+		return asset.Name, asset.URL, data, nil
+	}
 	if isFontPackage(entry) {
 		selected, selectedOK := selectedAsset(entry.Assets, assetName)
 		if selectedOK && strings.TrimSpace(selected.URL) != "" {
@@ -91,13 +112,6 @@ func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, relea
 			assetURL = strings.TrimSpace(selected.URL)
 		}
 	}
-	if assetName == "" {
-		assetName = strings.TrimSpace(entry.SourceAsset)
-	}
-	if assetName == "" && genericKOReaderInstaller(entry) == genericPluginInstaller {
-		assetName = ".koplugin.zip"
-	}
-
 	if assetURL == "" && usesSourcePackage(entry) && strings.TrimSpace(releaseTag) != "" && strings.TrimSpace(entry.VersionsURL) != "" {
 		items, err := releases.FetchVersions(entry.VersionsURL)
 		if err != nil {
