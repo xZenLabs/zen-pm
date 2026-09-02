@@ -6,6 +6,8 @@ local has_keys = false
 local has_keyboard = false
 local has_dpad = false
 local scheduled
+local dirty
+local header_y
 package.preload["device"] = function()
     return {
         hasKeys = function() return has_keys end,
@@ -28,17 +30,23 @@ package.preload["ui/widget/container/inputcontainer"] = function()
 end
 package.preload["ui/uimanager"] = function()
     return {
+        setDirty = function(_, widget, mode, region)
+            dirty = { widget = widget, mode = mode, region = region }
+        end,
         scheduleIn = function(_, _, callback) scheduled = callback end,
         unschedule = function(_, callback)
             if scheduled == callback then scheduled = nil end
         end,
     }
 end
-package.preload["ui/header"] = function() return {} end
+package.preload["ui/header"] = function()
+    return { draw = function(_, _, _, y) header_y = y return y end }
+end
 package.preload["i18n"] = function() return {} end
-package.preload["ui/nav"] = function() return {} end
+package.preload["ui/nav"] = function() return { draw = function() end } end
 package.preload["ui/primitives"] = function()
     return {
+        rect = function() end,
         contains = function(box, x, y)
             return x >= box.x and x < box.x + box.w and y >= box.y and y < box.y + box.h
         end,
@@ -47,6 +55,7 @@ end
 local rendered_advanced_settings = false
 package.preload["ui/pages"] = function()
     return {
+        featured = function() return 0 end,
         advanced_settings = function()
             rendered_advanced_settings = true
             return 0
@@ -54,12 +63,44 @@ package.preload["ui/pages"] = function()
     }
 end
 package.preload["ui/scroll"] = function() return { draw_scrollbar = function() end } end
-package.preload["ui/theme"] = function() return {} end
+package.preload["ui/theme"] = function()
+    return {
+        metrics = function()
+            return { screen_w = 100, screen_h = 200, nav_h = 20, nav_bottom_margin = 0 }
+        end,
+    }
+end
 package.preload["gettext"] = function() return function(value) return value end end
 
 local AppView = require("ui/app_view")
 local closed = 0
 local view = { app = { close = function() closed = closed + 1 end } }
+
+local status_y
+local status_freed = false
+local content_y
+_G.__ZENOS_BUILD_STATUS_ROW = function(width)
+    assert(width == 100)
+    return {
+        getSize = function() return { h = 12 } end,
+        paintTo = function(_, _, _, y) status_y = y end,
+        free = function() status_freed = true end,
+    }
+end
+local paint_view = setmetatable({
+    app = { state = { page = "home" }, queue_count = function() return 0 end },
+    draw_content = function(_, _, _, y) content_y = y end,
+}, { __index = AppView })
+AppView.paintTo(paint_view, {}, 3, 5)
+assert(status_y == 5)
+assert(header_y == 17)
+assert(content_y == 17)
+assert(status_freed)
+assert(paint_view._zen_status_dimen.h == 12)
+AppView._zen_status_refresh(paint_view)
+assert(dirty.widget == paint_view and dirty.mode == "ui")
+assert(dirty.region == paint_view._zen_status_dimen)
+_G.__ZENOS_BUILD_STATUS_ROW = nil
 
 AppView.draw_content({
     app = {

@@ -417,9 +417,8 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
         local toggle_h = Theme.scale(25)
         local caret_size = Theme.scale(25)
         local right_padding = Theme.scale(5)
-        local right_size = checkbox and { w = toggle_w + Theme.scale(10) + caret_size }
-            or has_caret and { w = caret_size }
-            or P.text_size(value, Theme.scale(96), "small", { bold = true })
+        local right_size = has_caret and { w = caret_size }
+            or { w = toggle_w + Theme.scale(10) + caret_size }
         local text_w = math.max(1,
             row_w - text_inset - right_padding - right_size.w - Theme.scale(5))
         P.vcenter_text(bb, row.text, row_x + text_inset, row_y, text_w, row_h, "small", { bold = true })

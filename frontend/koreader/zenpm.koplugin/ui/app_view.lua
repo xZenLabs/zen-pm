@@ -612,6 +612,12 @@ function AppView:refresh(full)
     UIManager:setDirty(self, full and "full" or "ui", self.dimen)
 end
 
+function AppView:_zen_status_refresh()
+    if self._zen_status_dimen then
+        UIManager:setDirty(self, "ui", self._zen_status_dimen)
+    end
+end
+
 function AppView:onCloseWidget()
     self:_cancel_navbar_focus_hold()
     UIManager:setDirty("all", "flashui", self.dimen)
@@ -637,6 +643,22 @@ function AppView:paintTo(bb, x, y)
     P.rect(bb, x, y, m.screen_w, m.screen_h, Theme.bg)
 
     local content_top = y
+    self._zen_status_dimen = nil
+    local build_status_row = rawget(_G, "__ZENOS_BUILD_STATUS_ROW")
+    if type(build_status_row) == "function" then
+        local ok, status_row = pcall(build_status_row, m.screen_w)
+        if ok and status_row and status_row.getSize and status_row.paintTo then
+            local status_size = status_row:getSize()
+            if status_size and status_size.h and status_size.h > 0 then
+                status_row:paintTo(bb, x, content_top)
+                self._zen_status_dimen = Geom:new{
+                    x = x, y = content_top, w = m.screen_w, h = status_size.h,
+                }
+                content_top = content_top + status_size.h
+            end
+            if status_row.free then status_row:free() end
+        end
+    end
     content_top = Header.draw(self, bb, x, content_top, m.screen_w)
     if self.app.state.page == "queue" then
         self:draw_content(bb, x, content_top, m.screen_w, y + m.screen_h - content_top)
