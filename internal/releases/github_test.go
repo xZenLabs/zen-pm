@@ -221,6 +221,15 @@ func TestVersionGreaterPrefersStableOverSameVersionPrerelease(t *testing.T) {
 	}
 }
 
+func TestVersionGreaterOrdersAlphaBelowBeta(t *testing.T) {
+	if !VersionGreater("2.5.4-beta1", "2.5.4-alpha9") {
+		t.Fatal("beta did not rank above alpha")
+	}
+	if VersionGreater("2.5.4-alpha9", "2.5.4-beta1") {
+		t.Fatal("alpha ranked above beta")
+	}
+}
+
 func TestLatestGitHubReleasePrefersStableOverMatchingPrerelease(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[

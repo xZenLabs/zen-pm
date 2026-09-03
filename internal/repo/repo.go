@@ -252,7 +252,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule, PluginModuleAliases: e.PluginModuleAliases, SourceAssetAliases: e.SourceAssetAliases, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
-			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
+			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion, AlphaVersion: e.AlphaVersion,
 		})
 	}
 	return out
@@ -269,7 +269,7 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule, PluginModuleAliases: e.PluginModuleAliases, SourceAssetAliases: e.SourceAssetAliases, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
-			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
+			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion, AlphaVersion: e.AlphaVersion,
 		}
 		entry.ensurePluginModule()
 		out = append(out, entry)

@@ -367,6 +367,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		ReleaseNotesURL:       "https://example.invalid/release-notes.md",
 		PrereleaseNotesURL:    "https://example.invalid/prerelease-notes.md",
 		PrereleaseVersion:     "1.3.0-rc.1",
+		AlphaVersion:          "1.3.0-alpha1",
 		PluginModule:          "zenos",
 		PluginModuleAliases:   []string{"zen_ui"},
 		SourceAssetAliases:    []string{"zen_ui.koplugin.zip"},
@@ -388,7 +389,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	if got.PluginModule != "zenos" || len(got.PluginModuleAliases) != 1 || got.PluginModuleAliases[0] != "zen_ui" || len(got.SourceAssetAliases) != 1 || got.SourceAssetAliases[0] != "zen_ui.koplugin.zip" {
 		t.Fatalf("plugin identity aliases = %#v", got)
 	}
-	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.VersionsURL != entry.VersionsURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.VersionsURL != entry.VersionsURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || got.AlphaVersion != entry.AlphaVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
 	}
 }
@@ -465,6 +466,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"versions_url": "packages/koreader/koreader-rsvp-plugin/versions.json",
 				"release_notes_url": "packages/koreader/koreader-rsvp-plugin/RELEASE_NOTES.md",
 				"prerelease_version": "1.1.0-rc.1",
+				"alpha_version": "1.1.0-alpha1",
 				"prerelease_notes_url": "packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md",
 				"published_at": "2026-07-24T12:00:00Z",
 				"featured_order": 10,
@@ -518,6 +520,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].PrereleaseNotesURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md" || entries[0].PrereleaseVersion != "1.1.0-rc.1" {
 		t.Fatalf("prerelease notes = %q / %q", entries[0].PrereleaseNotesURL, entries[0].PrereleaseVersion)
+	}
+	if entries[0].AlphaVersion != "1.1.0-alpha1" {
+		t.Fatalf("AlphaVersion = %q", entries[0].AlphaVersion)
 	}
 	if entries[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", entries[0].PublishedAt)

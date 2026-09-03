@@ -320,6 +320,17 @@ func VersionGreater(a, b string) bool {
 		if aPrerelease != bPrerelease {
 			return !aPrerelease
 		}
+		if aPrerelease {
+			aLabel := strings.ToLower(strings.TrimRightFunc(strings.SplitN(a, "-", 2)[1], func(r rune) bool {
+				return !unicode.IsLetter(r)
+			}))
+			bLabel := strings.ToLower(strings.TrimRightFunc(strings.SplitN(b, "-", 2)[1], func(r rune) bool {
+				return !unicode.IsLetter(r)
+			}))
+			if aLabel != bLabel {
+				return aLabel > bLabel
+			}
+		}
 	}
 	an := versionNumbers(a)
 	bn := versionNumbers(b)

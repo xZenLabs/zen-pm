@@ -53,11 +53,21 @@ package.preload["ui/primitives"] = function()
     }
 end
 local rendered_advanced_settings = false
+local rendered_updates_settings = false
+local rendered_about_settings = false
 package.preload["ui/pages"] = function()
     return {
         featured = function() return 0 end,
         advanced_settings = function()
             rendered_advanced_settings = true
+            return 0
+        end,
+        updates_settings = function()
+            rendered_updates_settings = true
+            return 0
+        end,
+        about_settings = function()
+            rendered_about_settings = true
             return 0
         end,
     }
@@ -110,6 +120,22 @@ AppView.draw_content({
     },
 }, {}, 0, 0, 100, 100)
 assert(rendered_advanced_settings)
+
+AppView.draw_content({
+    app = {
+        state = { page = "updates_settings", scroll = {} },
+        scroll_key = function() return "updates_settings" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_updates_settings)
+
+AppView.draw_content({
+    app = {
+        state = { page = "about_settings", scroll = {} },
+        scroll_key = function() return "about_settings" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_about_settings)
 
 has_keys = true
 has_dpad = false

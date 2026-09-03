@@ -70,5 +70,8 @@ return {
     },
     ["1.5.1"] = {
         "Fix absolute vs relative plugin path on some devices",
+        "Update settings layout",
+        "Add status bar from ZenOS",
+        "Add alpha support"
     },
 }

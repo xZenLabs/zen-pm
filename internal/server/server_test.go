@@ -399,7 +399,7 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
 		Platforms: []string{"host"}, Featured: true, FeaturedOrder: &featuredOrder,
 		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md", VersionsURL: "https://repo.zen-labs.org/packages/host/pkg/versions.json", ReleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md",
-		PrereleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md", PrereleaseVersion: "1.1.0-rc.1", PublishedAt: "2026-07-24T12:00:00Z",
+		PrereleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md", PrereleaseVersion: "1.1.0-rc.1", AlphaVersion: "1.1.0-alpha1", PublishedAt: "2026-07-24T12:00:00Z",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +422,7 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	if packages[0].VersionsURL != "https://repo.zen-labs.org/packages/host/pkg/versions.json" {
 		t.Fatalf("VersionsURL = %q", packages[0].VersionsURL)
 	}
-	if packages[0].ReleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md" || packages[0].PrereleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md" || packages[0].PrereleaseVersion != "1.1.0-rc.1" {
+	if packages[0].ReleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md" || packages[0].PrereleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md" || packages[0].PrereleaseVersion != "1.1.0-rc.1" || packages[0].AlphaVersion != "1.1.0-alpha1" {
 		t.Fatalf("release notes metadata = %#v", packages[0])
 	}
 	if packages[0].PublishedAt != "2026-07-24T12:00:00Z" {
@@ -614,14 +614,14 @@ func TestPackageListIncludesConflicts(t *testing.T) {
 func TestApplyUpdateInfoRequiresKnownInstalledVersion(t *testing.T) {
 	for _, installedVersion := range []string{"", "0.0.0", "v0.0.0"} {
 		item := pkgJSON{Version: "1.2.0", InstalledVer: installedVersion}
-		applyUpdateInfo(&item, false)
+		applyUpdateInfo(&item, false, false)
 		if item.UpdateAvail {
 			t.Errorf("installed version %q marked update available", installedVersion)
 		}
 	}
 
 	item := pkgJSON{Version: "1.2.0", InstalledVer: "1.1.0"}
-	applyUpdateInfo(&item, false)
+	applyUpdateInfo(&item, false, false)
 	if !item.UpdateAvail || item.LatestRelease != "1.2.0" {
 		t.Fatalf("update info = %#v", item)
 	}
@@ -632,7 +632,7 @@ func TestApplyUpdateInfoIgnoresTagCommitSuffixForSameRelease(t *testing.T) {
 		Version:      "v1.0.41-7779138817115c22c74fe1c0630436b1f0fb63ff",
 		InstalledVer: "1.0.41",
 	}
-	applyUpdateInfo(&item, false)
+	applyUpdateInfo(&item, false, false)
 	if item.UpdateAvail || item.LatestRelease != "" {
 		t.Fatalf("update info = %#v", item)
 	}
@@ -645,7 +645,7 @@ func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
 		{"1.0.0-rc2", "1.0.0-rc1"},
 	} {
 		item := pkgJSON{Version: versions[0], InstalledVer: versions[1]}
-		applyUpdateInfo(&item, false)
+		applyUpdateInfo(&item, false, false)
 		if !item.UpdateAvail || item.LatestRelease != versions[0] {
 			t.Errorf("latest %q, installed %q: update info = %#v", versions[0], versions[1], item)
 		}
@@ -654,7 +654,7 @@ func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
 
 func TestApplyUpdateInfoDoesNotOfferSameVersionPrereleaseToStableInstall(t *testing.T) {
 	item := pkgJSON{Version: "2.5.4-beta2", InstalledVer: "2.5.4"}
-	applyUpdateInfo(&item, true)
+	applyUpdateInfo(&item, true, false)
 	if item.UpdateAvail {
 		t.Fatalf("update info = %#v, want no update", item)
 	}
@@ -662,9 +662,34 @@ func TestApplyUpdateInfoDoesNotOfferSameVersionPrereleaseToStableInstall(t *test
 
 func TestApplyUpdateInfoUsesNewerCatalogPrerelease(t *testing.T) {
 	item := pkgJSON{Version: "1.2.0", PrereleaseVersion: "1.3.0-beta.1", InstalledVer: "1.2.0"}
-	applyUpdateInfo(&item, true)
+	applyUpdateInfo(&item, true, false)
 	if !item.UpdateAvail || item.LatestVersion != "1.3.0-beta.1" || item.LatestRelease != "1.3.0-beta.1" {
 		t.Fatalf("update info = %#v", item)
+	}
+}
+
+func TestApplyUpdateInfoAlphaChannelExcludesBeta(t *testing.T) {
+	item := pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", AlphaVersion: "1.3.0-alpha9", InstalledVer: "1.2.0"}
+	applyUpdateInfo(&item, false, false)
+	if item.LatestVersion != "1.2.0" {
+		t.Fatalf("disabled prerelease update info = %#v", item)
+	}
+
+	applyUpdateInfo(&item, true, true)
+	if item.LatestVersion != "1.3.0-alpha9" || !item.UpdateAvail {
+		t.Fatalf("alpha update info = %#v", item)
+	}
+
+	item = pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", InstalledVer: "1.2.0"}
+	applyUpdateInfo(&item, true, true)
+	if item.LatestVersion != "1.2.0" || item.UpdateAvail {
+		t.Fatalf("alpha channel without alpha = %#v", item)
+	}
+
+	item.ID = "other"
+	applyUpdateInfo(&item, false, true)
+	if item.LatestVersion != "1.2.0" {
+		t.Fatalf("non-ZenOS alpha update info = %#v", item)
 	}
 }
 

@@ -229,6 +229,18 @@ paths:
           schema:
             type: string
           example: kindle,koreader
+        - name: beta
+          in: query
+          required: false
+          description: Set to `1` to include beta updates.
+          schema:
+            type: boolean
+        - name: alpha
+          in: query
+          required: false
+          description: Set to `1` to include ZenOS alpha updates.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Package list. If the catalog has not been built yet, this may be an empty array.
@@ -854,6 +866,12 @@ components:
         latest_version:
           type: string
           description: Latest stable or enabled prerelease version declared by the repository.
+        prerelease_version:
+          type: string
+          description: Latest beta version declared by the repository.
+        alpha_version:
+          type: string
+          description: Latest ZenOS alpha version declared by the repository.
         update_available:
           type: boolean
           description: True when `latest_version` is newer than `installed_version`.

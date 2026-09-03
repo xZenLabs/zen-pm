@@ -293,6 +293,26 @@ App.toggle_beta_updates(app)
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
 
+app.state.alpha_updates = false
+app.state.alpha_updates_unlocked = false
+app.state.update_version_taps = 0
+App.toggle_alpha_updates(app)
+assert(not app.state.alpha_updates)
+for _ = 1, 9 do
+    assert(not App.tap_update_version(app))
+end
+assert(App.tap_update_version(app))
+assert(app.state.alpha_updates_unlocked)
+assert(settings.alpha_updates_unlocked == true)
+App.toggle_alpha_updates(app)
+assert(app.state.alpha_updates)
+assert(settings.alpha_updates == true)
+app.state.packages = { { latest_version = "2.0.0-alpha1" } }
+App.toggle_alpha_updates(app)
+assert(not app.state.alpha_updates)
+assert(settings.alpha_updates == false)
+assert(#app.state.packages == 0 and app.settings_requires_reload)
+
 local filtered_app = {
     state = {
         packages = {},
@@ -421,6 +441,12 @@ assert(advanced_app.settings_requires_reload)
 App.toggle_direct_github(advanced_app)
 assert(advanced_app.state.direct_github)
 assert(settings.direct_github == true)
+App.show_updates_settings(advanced_app)
+assert(advanced_app.state.page == "updates_settings")
+assert(advanced_app.state.scroll.updates_settings == 0)
+App.show_about(advanced_app)
+assert(advanced_app.state.page == "about_settings")
+assert(advanced_app.state.scroll.about_settings == 0)
 App.show_settings(advanced_app)
 assert(advanced_app.state.page == "settings")
 assert(advanced_app.settings_origin.page == "home")
@@ -474,6 +500,48 @@ local zenpm_versions = App.load_package_releases({
     },
 }, zenpm_package)
 assert(release_requests == 1)
+
+local channel_releases = App.load_package_releases({
+    state = { beta_updates = true, alpha_updates = false },
+    client = {
+        get_package_releases = function()
+            return true, { releases = {
+                { tag_name = "v2.0.0-alpha1" },
+                { tag_name = "v2.0.0-beta1", prerelease = true },
+                { tag_name = "v1.0.0" },
+            } }
+        end,
+    },
+}, { id = "zen-ui" })
+assert(#channel_releases == 2 and channel_releases[1].tag_name == "v2.0.0-beta1")
+
+local alpha_channel_releases = App.load_package_releases({
+    state = { beta_updates = true, alpha_updates = true },
+    client = {
+        get_package_releases = function()
+            return true, { releases = {
+                { tag_name = "v2.0.0-alpha1", prerelease = true },
+                { tag_name = "v2.0.0-beta1", prerelease = true },
+                { tag_name = "v1.0.0" },
+            } }
+        end,
+    },
+}, { id = "zen-ui" })
+assert(#alpha_channel_releases == 2 and alpha_channel_releases[1].tag_name == "v2.0.0-alpha1"
+    and alpha_channel_releases[2].tag_name == "v1.0.0")
+
+local non_zenos_alpha_releases = App.load_package_releases({
+    state = { beta_updates = false, alpha_updates = true },
+    client = {
+        get_package_releases = function()
+            return true, { releases = {
+                { tag_name = "v2.0.0-alpha1", prerelease = true },
+                { tag_name = "v1.0.0" },
+            } }
+        end,
+    },
+}, { id = "other-package" })
+assert(#non_zenos_alpha_releases == 1 and non_zenos_alpha_releases[1].tag_name == "v1.0.0")
 
 local source_fallback_action
 App.prompt_latest_package_build({
@@ -547,14 +615,9 @@ local about_app = {
     daemon = {
         plugin_version = function() error("About must not use the plugin version") end,
         installed_backend_version = function() return "1.2.3" end,
-        detect_platform = function() return "ereader" end,
-        ereader_backend_suffix = function() return "sf" end,
     },
-    package_platforms = function() return "ereader,koreader" end,
 }
-App.show_about(about_app)
-assert(modal_message:find("Version: 1.2.3", 1, true))
-assert(modal_message:find("ABI: sf", 1, true))
+assert(App.current_version(about_app) == "1.2.3")
 
 modal_message = nil
 local failed_refresh_app = {
@@ -678,6 +741,8 @@ local back_routes = {
     package_details = "go_back_from_details",
     queue = "close_queue",
     advanced_settings = "show_settings",
+    updates_settings = "show_settings",
+    about_settings = "show_settings",
     settings = "close_settings",
 }
 for page, method in pairs(back_routes) do
@@ -857,9 +922,13 @@ App.show_actions({
     show_sources = function() sources_menu_calls = sources_menu_calls + 1 end,
 })
 assert(modal_title == "ZenPM")
-assert(modal_rows[4].text == "Sources")
-assert(modal_rows[5].text == "Report a Bug")
-modal_rows[4].callback()
+assert(#modal_rows == 5)
+assert(modal_rows[2].text == "Sources")
+assert(modal_rows[3].text == "Report a Bug")
+for _, row in ipairs(modal_rows) do
+    assert(row.text ~= "About" and row.text ~= "Update")
+end
+modal_rows[2].callback()
 assert(sources_menu_calls == 1)
 
 local update_result
@@ -992,6 +1061,21 @@ App.queue_package_action({
     queue_self_update = function() self_update_queued = self_update_queued + 1 return true end,
 }, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 2)
+
+local conflict_target = { id = "zen-ui", conflicts = { "simpleui" } }
+local conflict_app = {
+    state = {
+        packages = {
+            conflict_target,
+            { id = "simpleui", name = "SimpleUI", installed = true, platforms = { "koreader" } },
+        },
+        queue = {},
+    },
+    package_disabled = function() return true end,
+}
+assert(#App.conflicting_packages(conflict_app, conflict_target) == 0)
+conflict_app.package_disabled = function() return false end
+assert(#App.conflicting_packages(conflict_app, conflict_target) == 1)
 
 local simple_queue_opened = 0
 modal_message = nil
@@ -1538,6 +1622,12 @@ assert(recovery_scan_calls == 1)
 assert(recovery_load_calls == 2)
 assert(recovery_result[1] == true and recovery_result[2] == nil)
 assert(not recovery_app.busy)
+assert(not App.package_action_succeeded({}, {
+    action = "update", target_version = "3.3.0-beta1",
+}, { installed = true, installed_version = "3.3.0-alpha9" }))
+assert(App.package_action_succeeded({}, {
+    action = "update", target_version = "3.3.0-alpha9",
+}, { installed = true, installed_version = "3.3.0-beta1" }))
 
 local zenfm_companion_updates = 0
 table.insert(pluginloader.loaded_plugins, {

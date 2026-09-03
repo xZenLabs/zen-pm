@@ -151,6 +151,9 @@ function App:new(plugin)
             manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
             show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
+            alpha_updates = App.load_setting("alpha_updates", false),
+            alpha_updates_unlocked = App.load_setting("alpha_updates_unlocked", false),
+            update_version_taps = 0,
             show_kindle_scriptlets = App.load_setting("show_kindle_scriptlets", false),
             show_readme_images = App.load_setting("show_readme_images", true),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
@@ -1094,7 +1097,8 @@ function App:conflicting_packages(pkg)
     local target_conflicts = conflict_set(pkg)
     local conflicts = {}
     for candidate_id, candidate in pairs(present) do
-        if target_conflicts[candidate_id] or conflict_set(candidate)[id] then
+        if (target_conflicts[candidate_id] or conflict_set(candidate)[id])
+            and not self:package_disabled(candidate) then
             table.insert(conflicts, candidate)
         end
     end
@@ -1970,19 +1974,29 @@ local function version_gt(a, b)
     a = normalized_version(a)
     b = normalized_version(b)
     local function parts(value)
+        local base, prerelease = value:match("^([%d%.]+)%-(.+)$")
+        if not base then base = value end
         local out = {}
-        for n in value:gmatch("%d+") do
+        for n in base:gmatch("%d+") do
             table.insert(out, tonumber(n) or 0)
         end
-        return out
+        local label = prerelease and prerelease:lower():match("^([%a]+)") or nil
+        local number = prerelease and tonumber(prerelease:match("(%d+)$")) or 0
+        return out, label, number
     end
-    local ap, bp = parts(a), parts(b)
+    local ap, a_label, a_number = parts(a)
+    local bp, b_label, b_number = parts(b)
     local max = math.max(#ap, #bp)
     for i = 1, max do
         local av, bv = ap[i] or 0, bp[i] or 0
         if av > bv then return true end
         if av < bv then return false end
     end
+    if a_label ~= b_label then
+        if not a_label or not b_label then return a_label == nil end
+        return a_label > b_label
+    end
+    if a_label then return a_number > b_number end
     if max > 0 then return false end
     return a > b
 end
@@ -2041,7 +2055,7 @@ function App:load_packages(check_updates, force)
         return true, self.state.packages
     end
     if not self.state.filter_installable then
-        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates)
+        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates, self.state.alpha_updates)
         if not ok then
             return false, {}, data
         end
@@ -2052,7 +2066,7 @@ function App:load_packages(check_updates, force)
     end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
-    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates)
+    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates, self.state.alpha_updates)
     if not ok then
         return false, {}, data
     end
@@ -2065,7 +2079,7 @@ function App:load_packages(check_updates, force)
         return true, packages
     end
     for _, platform in ipairs(capabilities) do
-        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates)
+        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates, self.state.alpha_updates)
         if not ok then
             return false, {}, data
         end
@@ -2442,7 +2456,7 @@ function App:go_back()
         self:go_back_from_details()
     elseif page == "queue" then
         self:close_queue()
-    elseif page == "advanced_settings" then
+    elseif page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
         self:show_settings()
     elseif page == "settings" then
         self:close_settings()
@@ -2899,9 +2913,12 @@ function App:load_package_releases(pkg, allow_empty)
         return
     end
     local allow_prerelease = self.state.beta_updates
+    local allow_alpha = self.state.alpha_updates and package_id(pkg) == "zen-ui"
     local releases = {}
     for _, release in ipairs(type(data) == "table" and data.releases or {}) do
-        if release.tag_name and (allow_prerelease or not release.prerelease) then
+        local alpha = tostring(release.tag_name or ""):lower():find("-alpha", 1, true) ~= nil
+        if release.tag_name and ((alpha and allow_alpha)
+                or (not alpha and (not release.prerelease or (allow_prerelease and not allow_alpha)))) then
             table.insert(releases, release)
         end
     end
@@ -3550,6 +3567,20 @@ function App:show_advanced_settings()
     self:refresh()
 end
 
+function App:show_updates_settings()
+    self.state.page = "updates_settings"
+    self:reset_scroll("updates_settings")
+    self:clear_status()
+    self:refresh()
+end
+
+function App:show_about()
+    self.state.page = "about_settings"
+    self:reset_scroll("about_settings")
+    self:clear_status()
+    self:refresh()
+end
+
 function App:toggle_manual_version_picker()
     self.state.manual_version_picker = not self.state.manual_version_picker
     App.save_setting("manual_version_picker", self.state.manual_version_picker)
@@ -3563,6 +3594,23 @@ end
 function App:toggle_beta_updates()
     self.state.beta_updates = not self.state.beta_updates
     App.save_setting("beta_updates", self.state.beta_updates)
+end
+
+function App:toggle_alpha_updates()
+    if not self.state.alpha_updates_unlocked then return end
+    self.state.alpha_updates = not self.state.alpha_updates
+    App.save_setting("alpha_updates", self.state.alpha_updates)
+    self.state.packages = {}
+    self.settings_requires_reload = true
+end
+
+function App:tap_update_version()
+    if self.state.alpha_updates_unlocked then return false end
+    self.state.update_version_taps = (self.state.update_version_taps or 0) + 1
+    if self.state.update_version_taps < 10 then return false end
+    self.state.alpha_updates_unlocked = true
+    App.save_setting("alpha_updates_unlocked", true)
+    return true
 end
 
 function App:kindle_scriptlets_available()
@@ -3659,16 +3707,6 @@ end
 function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
         {
-            text = _("About"),
-            icon = "details",
-            callback = function() self:show_about() end,
-        },
-        {
-            text = _("Update"),
-            icon = "upgrade",
-            callback = function() self:start_update() end,
-        },
-        {
             text = _("Refresh"),
             icon = "refresh",
             callback = function() self:refresh_repos() end,
@@ -3705,7 +3743,8 @@ function App:show_actions(anchor)
 end
 
 function App:show_settings()
-    if self.state.page ~= "settings" and self.state.page ~= "advanced_settings" then
+    if self.state.page ~= "settings" and self.state.page ~= "advanced_settings"
+            and self.state.page ~= "updates_settings" and self.state.page ~= "about_settings" then
         self.settings_origin = {
             page = self.state.page,
             active_tab = self.state.active_tab,
@@ -3732,19 +3771,12 @@ function App:close_settings()
     self:refresh()
 end
 
-function App:show_about()
+function App:current_version()
     local version = self.daemon:installed_backend_version()
     if version == "" then
         version = self.version or "?"
     end
-    version = tostring(version):gsub("^v", "")
-    local platform = tostring(self:package_platforms())
-    local device_platform = self.daemon:detect_platform()
-    local abi = nil
-    if device_platform == "kindle" or device_platform == "kobo" or device_platform == "ereader" then
-        abi = _("\nABI: ") .. tostring(self.daemon:ereader_backend_suffix())
-    end
-    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. (abi or "") .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
+    return tostring(version):gsub("^v", "")
 end
 
 function App:start_update()

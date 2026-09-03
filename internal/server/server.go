@@ -101,6 +101,7 @@ type pkgJSON struct {
 	ReleaseNotesURL       string            `json:"release_notes_url,omitempty"`
 	PrereleaseNotesURL    string            `json:"prerelease_notes_url,omitempty"`
 	PrereleaseVersion     string            `json:"prerelease_version,omitempty"`
+	AlphaVersion          string            `json:"alpha_version,omitempty"`
 	PublishedAt           string            `json:"published_at,omitempty"`
 	Stars                 string            `json:"stars,omitempty"`
 	PluginModule          string            `json:"plugin_module,omitempty"`
@@ -776,6 +777,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	}
 	plat := r.URL.Query().Get("platform")
 	allowPrerelease := r.URL.Query().Get("beta") == "1" || r.URL.Query().Get("beta") == "true"
+	allowAlpha := r.URL.Query().Get("alpha") == "1" || r.URL.Query().Get("alpha") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		// Catalog doesn't exist yet — return empty list so WAF can show "no packages" instead of error.
@@ -851,6 +853,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			ReleaseNotesURL:       e.ReleaseNotesURL,
 			PrereleaseNotesURL:    e.PrereleaseNotesURL,
 			PrereleaseVersion:     e.PrereleaseVersion,
+			AlphaVersion:          e.AlphaVersion,
 			PublishedAt:           e.PublishedAt,
 			Stars:                 e.Stars,
 			PluginModule:          e.PluginModule,
@@ -867,7 +870,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
-			applyUpdateInfo(&item, allowPrerelease)
+			applyUpdateInfo(&item, allowPrerelease, allowAlpha)
 			item.UpdateIgnored = updateIgnored[e.ID]
 			if item.UpdateAvail && updateIgnoredVersion[e.ID] == item.LatestVersion {
 				item.UpdateIgnored = true
@@ -923,13 +926,17 @@ func platformValues(platform string) []string {
 	return out
 }
 
-func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
+func applyUpdateInfo(item *pkgJSON, allowPrerelease, allowAlpha bool) {
 	if item == nil {
 		return
 	}
 	latest := item.Version
-	if allowPrerelease && prereleaseIsNewer(item.Version, item.PrereleaseVersion) {
+	alphaChannel := allowAlpha && item.ID == "zen-ui"
+	if allowPrerelease && !alphaChannel && releases.VersionGreater(item.PrereleaseVersion, latest) {
 		latest = item.PrereleaseVersion
+	}
+	if alphaChannel && releases.VersionGreater(item.AlphaVersion, latest) {
+		latest = item.AlphaVersion
 	}
 	if latest == "" || !hasKnownVersion(item.InstalledVer) {
 		return
@@ -961,18 +968,6 @@ func sameReleaseWithCommitSuffix(latest, installed string) bool {
 		}
 	}
 	return true
-}
-
-func prereleaseIsNewer(stable, prerelease string) bool {
-	if strings.TrimSpace(prerelease) == "" {
-		return false
-	}
-	if strings.TrimSpace(stable) == "" {
-		return true
-	}
-	stableBase := strings.SplitN(releases.NormalizeVersion(stable), "-", 2)[0]
-	prereleaseBase := strings.SplitN(releases.NormalizeVersion(prerelease), "-", 2)[0]
-	return stableBase != prereleaseBase && releases.VersionGreater(prerelease, stable)
 }
 
 func hasKnownVersion(version string) bool {

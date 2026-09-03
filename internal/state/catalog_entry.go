@@ -39,4 +39,5 @@ type CatalogEntry struct {
 	ReleaseNotesURL       string
 	PrereleaseNotesURL    string
 	PrereleaseVersion     string
+	AlphaVersion          string
 }

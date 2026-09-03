@@ -66,6 +66,10 @@ function Header.page_title(view)
         return _("Settings")
     elseif page == "advanced_settings" then
         return _("Advanced")
+    elseif page == "updates_settings" then
+        return _("Updates")
+    elseif page == "about_settings" then
+        return _("About")
     elseif page == "debug" then
         return _("Debug")
     end
@@ -203,7 +207,7 @@ local function page_back_callback(view, page)
         return function() view.app:go_back_from_details() end
     elseif page == "queue" then
         return function() view.app:close_queue() end
-    elseif page == "advanced_settings" then
+    elseif page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
         return function() view.app:show_settings() end
     end
 end
@@ -233,6 +237,7 @@ local function draw_title_bar(view, bb, x, y, w)
     local m = Theme.metrics()
     local page = view.app.state.page
     local settings_page = page == "settings" or page == "advanced_settings"
+        or page == "updates_settings" or page == "about_settings"
     local h = settings_page and Theme.scale(58) or m.titlebar_h
     local pad = m.pad
     local title_x = x + pad
@@ -289,7 +294,7 @@ local function draw_title_bar(view, bb, x, y, w)
         P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
     else
         local title_size = P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
-        if page == "advanced_settings" then
+        if page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
             P.hit(view, title_x, y, title_size.w, h, back_callback, "back-title")
         end
     end

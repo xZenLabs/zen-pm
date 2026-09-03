@@ -4,6 +4,7 @@
 
 local Cards = require("ui/cards")
 local Constants = require("zenpm_constants")
+local Font = require("ui/font")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
 local InlineIcons = require("ui/inline_icon_map")
@@ -324,12 +325,6 @@ local function advanced_settings_rows(view)
             callback = toggle(view.app.toggle_show_all_builds),
         },
         {
-            text = _("Beta updates"),
-            toggle = true,
-            value = function() return view.app.state.beta_updates end,
-            callback = toggle(view.app.toggle_beta_updates),
-        },
-        {
             text = _("Fetch releases directly from GitHub"),
             toggle = true,
             value = function() return view.app.state.direct_github end,
@@ -350,18 +345,69 @@ local function advanced_settings_rows(view)
     return rows
 end
 
+local function updates_settings_rows(view)
+    local function toggle(callback)
+        return function()
+            callback(view.app)
+            view:refresh()
+        end
+    end
+    local rows = {
+        {
+            text = _("Beta updates"),
+            toggle = true,
+            value = function() return view.app.state.beta_updates end,
+            callback = toggle(view.app.toggle_beta_updates),
+        },
+    }
+    if view.app.state.alpha_updates_unlocked then
+        rows[#rows + 1] = {
+            text = _("Alpha updates"),
+            toggle = true,
+            value = function() return view.app.state.alpha_updates end,
+            callback = toggle(view.app.toggle_alpha_updates),
+        }
+    end
+    rows[#rows + 1] = {
+        text = _("Current version"),
+        value = function() return "v" .. view.app:current_version() end,
+        callback = function()
+            if view.app:tap_update_version() then view:refresh() end
+        end,
+    }
+    rows[#rows + 1] = {
+        text = _("Update ZenPM"),
+        callback = function() view.app:start_update() end,
+    }
+    return rows
+end
+
+local function about_settings_rows(view)
+    local rows = {
+        { text = _("ZenPM") },
+        { text = _("Version: ") .. view.app:current_version() },
+        { text = _("Platform: ") .. tostring(view.app:package_platforms()) },
+    }
+    local platform = view.app.daemon:detect_platform()
+    if platform == "kindle" or platform == "kobo" or platform == "ereader" then
+        rows[#rows + 1] = { text = _("ABI: ") .. tostring(view.app.daemon:ereader_backend_suffix()) }
+    end
+    rows[#rows + 1] = { text = _("Author: Anthony Gress (ZenLabs)") }
+    return rows
+end
+
 function Pages.settings(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local gap = 0
     local row_h = math.max(m.touch_min, Theme.scale(69))
-    local advanced = view.app.state.page == "advanced_settings"
-    local rows = advanced and advanced_settings_rows(view) or {
-        { text = _("Scan installed plugins"), icon = "plugin", callback = function() view.app:scan_installed_plugins() end },
-        {
-            text = _("Advanced"),
-            icon = "settings_advanced",
-            callback = function() view.app:show_advanced_settings() end,
-        },
+    local page = view.app.state.page
+    local advanced = page == "advanced_settings"
+    local updates = page == "updates_settings"
+    local about = page == "about_settings"
+    local rows = advanced and advanced_settings_rows(view)
+        or updates and updates_settings_rows(view)
+        or about and about_settings_rows(view) or {
+        { text = _("Scan installed plugins"), icon = "scan_plugins", callback = function() view.app:scan_installed_plugins() end },
         {
             text = _("Font size"),
             icon = "title",
@@ -375,8 +421,26 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             value = function() return view.app.state.show_readme_images end,
             callback = function() view.app:toggle_readme_images() end,
         },
+        {
+            text = _("Advanced"),
+            icon = "settings_advanced",
+            submenu = true,
+            callback = function() view.app:show_advanced_settings() end,
+        },
+        {
+            text = _("Updates"),
+            icon = "upgrade",
+            submenu = true,
+            callback = function() view.app:show_updates_settings() end,
+        },
+        {
+            text = _("About"),
+            icon = "details",
+            submenu = true,
+            callback = function() view.app:show_about() end,
+        },
     }
-    if not advanced and view.app:kindle_scriptlets_available() then
+    if not advanced and not updates and not about and view.app:kindle_scriptlets_available() then
         table.insert(rows, 3, {
             text = _("Show Kindle Scriptlets"),
             icon = "plugin",
@@ -385,7 +449,7 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_kindle_scriptlets() end,
         })
     end
-    if not advanced and view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
+    if not advanced and not updates and not about and view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
         table.insert(rows, 2, {
             text = _("Install to Kindle homepage"),
             icon = "download",
@@ -399,6 +463,9 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
     local settings_icon_w = Theme.scale(62)
     local settings_icon_gap = Theme.scale(5)
     local text_inset = settings_left + settings_icon_w + settings_icon_gap
+    local settings_face = Theme.face("small")
+    local settings_icon_face = Font:getFace(settings_face.orig_font or "smallinfofont",
+        math.floor(settings_face.orig_size * 1.25 + 0.5)) or settings_face
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
         local row_x = x
@@ -408,20 +475,22 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
         local icon = row.icon and InlineIcons.icon(row.icon)
         if icon then
             P.center_text_box(bb, icon, row_x + settings_left, row_y,
-                settings_icon_w, row_h, "small", { bold = true })
+                settings_icon_w, row_h, "small", { face = settings_icon_face })
         end
         local value = row.value and row.value() or nil
         local checkbox = row.toggle
-        local has_caret = not checkbox and value == nil
+        local has_caret = row.submenu == true
         local toggle_w = Theme.scale(51)
         local toggle_h = Theme.scale(25)
         local caret_size = Theme.scale(25)
         local right_padding = Theme.scale(5)
         local right_size = has_caret and { w = caret_size }
-            or { w = toggle_w + Theme.scale(10) + caret_size }
+            or checkbox and { w = toggle_w + Theme.scale(10) + caret_size }
+            or value ~= nil and { w = toggle_w + Theme.scale(10) + caret_size }
+            or { w = 0 }
         local text_w = math.max(1,
             row_w - text_inset - right_padding - right_size.w - Theme.scale(5))
-        P.vcenter_text(bb, row.text, row_x + text_inset, row_y, text_w, row_h, "small", { bold = true })
+        P.vcenter_text(bb, row.text, row_x + text_inset, row_y, text_w, row_h, "small")
         local right_x = row_x + row_w - right_padding - right_size.w
         if checkbox then
             P.zen_toggle(bb, right_x, row_y + math.floor((row_h - toggle_h) / 2), toggle_w, toggle_h, value == true)
@@ -429,23 +498,27 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             P.image(bb, Images.asset("chevron.right.svg"), right_x,
                 row_y + math.floor((row_h - caret_size) / 2), caret_size, caret_size,
                 { is_icon = true })
-        else
-            P.vcenter_text(bb, value, right_x, row_y, right_size.w, row_h, "small", { bold = true, color = Theme.ink })
+        elseif value ~= nil then
+            P.vcenter_text(bb, value, right_x, row_y, right_size.w, row_h, "small", { color = Theme.ink })
         end
-        P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
-        P.focus_control(view, bb, "setting:" .. row.text, row_x, row_y, row_w, row_h, row.callback, {
-            focus_type = "setting",
-            focus_column = "main",
-            focus_content = true,
-            focus_primary = true,
-            list_group = "settings",
-            list_index = index,
-            list_count = count,
-        })
+        if row.callback then
+            P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
+            P.focus_control(view, bb, "setting:" .. row.text, row_x, row_y, row_w, row_h, row.callback, {
+                focus_type = "setting",
+                focus_column = "main",
+                focus_content = true,
+                focus_primary = true,
+                list_group = "settings",
+                list_index = index,
+                list_count = count,
+            })
+        end
     end)
 end
 
 Pages.advanced_settings = Pages.settings
+Pages.updates_settings = Pages.settings
+Pages.about_settings = Pages.settings
 
 function Pages.source_details(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()

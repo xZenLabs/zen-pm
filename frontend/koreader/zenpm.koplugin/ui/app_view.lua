@@ -712,6 +712,10 @@ function AppView:draw_content(bb, x, y, w, h)
         max_scroll = Pages.settings(self, bb, x, y, w, h, scroll)
     elseif page == "advanced_settings" then
         max_scroll = Pages.advanced_settings(self, bb, x, y, w, h, scroll)
+    elseif page == "updates_settings" then
+        max_scroll = Pages.updates_settings(self, bb, x, y, w, h, scroll)
+    elseif page == "about_settings" then
+        max_scroll = Pages.about_settings(self, bb, x, y, w, h, scroll)
     elseif page == "category_details" then
         local category = state.current_category or {}
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)

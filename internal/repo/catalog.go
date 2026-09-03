@@ -34,7 +34,7 @@ const (
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url|plugin_module_aliases|source_asset_aliases
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url|plugin_module_aliases|source_asset_aliases|alpha_version
 type CatalogEntry struct {
 	Repo                  string
 	Priority              int
@@ -74,6 +74,7 @@ type CatalogEntry struct {
 	ReleaseNotesURL       string
 	PrereleaseNotesURL    string
 	PrereleaseVersion     string
+	AlphaVersion          string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -133,6 +134,7 @@ func (e *CatalogEntry) serialize() string {
 		e.VersionsURL,
 		strings.Join(e.PluginModuleAliases, ","),
 		strings.Join(e.SourceAssetAliases, ","),
+		e.AlphaVersion,
 	}, "|")
 }
 
@@ -260,6 +262,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	}
 	if len(parts) >= 38 && parts[37] != "" {
 		e.SourceAssetAliases = strings.Split(parts[37], ",")
+	}
+	if len(parts) >= 39 {
+		e.AlphaVersion = parts[38]
 	}
 	e.ensurePluginModule()
 	return e, nil
@@ -394,6 +399,7 @@ type manifestJSON struct {
 		ReleaseNotesURL       string          `json:"release_notes_url,omitempty"`
 		PrereleaseNotesURL    string          `json:"prerelease_notes_url,omitempty"`
 		PrereleaseVersion     string          `json:"prerelease_version,omitempty"`
+		AlphaVersion          string          `json:"alpha_version,omitempty"`
 		PublishedAt           string          `json:"published_at,omitempty"`
 		Stars                 string          `json:"stars,omitempty"`
 		Assets                json.RawMessage `json:"assets,omitempty"`
@@ -521,6 +527,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			ReleaseNotesURL:       resolveURL(repoURL, p.ReleaseNotesURL),
 			PrereleaseNotesURL:    resolveURL(repoURL, p.PrereleaseNotesURL),
 			PrereleaseVersion:     strings.TrimSpace(p.PrereleaseVersion),
+			AlphaVersion:          strings.TrimSpace(p.AlphaVersion),
 			PublishedAt:           strings.TrimSpace(p.PublishedAt),
 			Stars:                 strings.TrimSpace(p.Stars),
 			Assets:                resolveAssetURLs(repoURL, p.Assets),
