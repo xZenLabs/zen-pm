@@ -336,6 +336,13 @@ local function advanced_settings_rows(view)
             callback = function() view.app:prompt_github_token() end,
         },
     }
+    if view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
+        rows[#rows + 1] = {
+            text = _("Install to Kindle homepage"),
+            icon = "download",
+            callback = function() view.app:install_to_kindle_homepage() end,
+        }
+    end
     if not view.app.daemon:is_android() and not view.app.daemon:is_pocketbook() then
         rows[#rows + 1] = {
             text = _("Install command-line interface"),
@@ -449,13 +456,6 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_kindle_scriptlets() end,
         })
     end
-    if not advanced and not updates and not about and view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
-        table.insert(rows, 2, {
-            text = _("Install to Kindle homepage"),
-            icon = "download",
-            callback = function() view.app:install_to_kindle_homepage() end,
-        })
-    end
     local list_y = y
     local list_h = h
     local divider_h = math.max(1, Theme.scale(1))
@@ -484,9 +484,12 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
         local toggle_h = Theme.scale(25)
         local caret_size = Theme.scale(25)
         local right_padding = Theme.scale(5)
+        local value_w = value ~= nil and math.min(
+            math.max(1, row_w - text_inset - right_padding - Theme.scale(5)),
+            math.max(toggle_w + Theme.scale(10) + caret_size, P.text_size(value, row_w, "small").w)) or 0
         local right_size = has_caret and { w = caret_size }
             or checkbox and { w = toggle_w + Theme.scale(10) + caret_size }
-            or value ~= nil and { w = toggle_w + Theme.scale(10) + caret_size }
+            or value ~= nil and { w = value_w }
             or { w = 0 }
         local text_w = math.max(1,
             row_w - text_inset - right_padding - right_size.w - Theme.scale(5))
