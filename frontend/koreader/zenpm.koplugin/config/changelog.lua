@@ -68,7 +68,7 @@ return {
         "Better arch selection",
         "Improve README url/image handling"
     },
-    ["1.5.1"] = {
+    ["1.6.0"] = {
         "Fix absolute vs relative plugin path on some devices",
         "Update settings layout",
         "Add status bar from ZenOS",
