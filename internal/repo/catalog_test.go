@@ -98,6 +98,9 @@ func TestRefreshKeepsCatalogWhenRepositoriesAreUnavailable(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.WriteValue(state.CatalogPublishedAtRefreshKey, "1"); err != nil {
+		t.Fatal(err)
+	}
 
 	err = New(st).Refresh()
 	if err == nil {
@@ -109,6 +112,61 @@ func TestRefreshKeepsCatalogWhenRepositoriesAreUnavailable(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].ID != "cached" {
 		t.Fatalf("catalog after failed refresh = %#v, want cached entry", catalog)
+	}
+	if marker, _ := st.ReadValue(state.CatalogPublishedAtRefreshKey); marker != "1" {
+		t.Fatal("failed refresh cleared the metadata refresh requirement")
+	}
+	if New(st).CatalogAge() < 24*time.Hour {
+		t.Fatal("failed refresh marked the cached catalog fresh")
+	}
+}
+
+func TestRefreshPartialAndEmptyCatalogs(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{"packages":[{"id":"new","name":"New"}]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	repos := []state.RepoEntry{{Name: "online", URL: "file://" + dir}, {Name: "offline", URL: "file://" + dir + "/missing"}}
+	if err := st.WriteRepos(repos); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "cached", Repo: "offline"}}); err != nil {
+		t.Fatal(err)
+	}
+	m := New(st)
+	if err := m.Refresh(); err == nil {
+		t.Fatal("partial refresh should report the unavailable repo")
+	}
+	catalog, err := m.ReadCatalog()
+	if err != nil || len(catalog) != 2 || m.CatalogAge() < 24*time.Hour {
+		t.Fatalf("partial catalog = %#v, error = %v, age = %v", catalog, err, m.CatalogAge())
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{"packages":[]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "removed", Repo: "online"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Refresh(); err == nil {
+		t.Fatal("partial refresh should report the unavailable repo")
+	}
+	if catalog, err := m.ReadCatalog(); err != nil || len(catalog) != 0 {
+		t.Fatalf("empty reachable repo retained removed packages: %#v, %v", catalog, err)
+	}
+	if err := st.WriteRepos(repos[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err = m.ReadCatalog()
+	if err != nil || len(catalog) != 0 || m.CatalogAge() > time.Minute {
+		t.Fatalf("empty catalog = %#v, error = %v, age = %v", catalog, err, m.CatalogAge())
 	}
 }
 

@@ -5,9 +5,50 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
 )
+
+func TestScriptOutputStreamsBeforeExitAndStaysBounded(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "zenpm.log")
+	log.Init(logPath)
+	defer log.Init("")
+	releasePath := filepath.Join(dir, "release")
+	scriptPath := filepath.Join(dir, "script.sh")
+	script := "#!/bin/sh\necho streaming\nwhile [ ! -f \"$ZENPM_TEST_RELEASE\" ]; do sleep 0.01; done\nhead -c 3145728 /dev/zero | tr '\\000' x\necho final-message >&2\nexit 7\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- ExecuteScriptWithEnv(scriptPath, map[string]string{"ZENPM_TEST_RELEASE": releasePath})
+	}()
+	streamed := false
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		data, _ := os.ReadFile(logPath)
+		if strings.Contains(string(data), "streaming") {
+			streamed = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := os.WriteFile(releasePath, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err == nil {
+		t.Fatal("lost the script's nonzero exit status")
+	}
+	if !streamed {
+		t.Fatal("output was buffered until the script exited")
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil || len(data) > log.MaxBytes || !strings.Contains(string(data), "final-message") {
+		t.Fatalf("log bytes=%d error=%v", len(data), err)
+	}
+}
 
 func TestExecuteScriptWithEnvSetsFallbackHome(t *testing.T) {
 	oldHome, hadHome := os.LookupEnv("HOME")

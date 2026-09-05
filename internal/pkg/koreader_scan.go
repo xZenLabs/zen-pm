@@ -15,10 +15,7 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
-const (
-	koreaderPluginsScannedKey     = "koreader_plugins_scanned"
-	koreaderPluginsScannedVersion = "3"
-)
+const koreaderPluginDirsKey = "koreader_plugin_dirs"
 
 // UnmanagedKOReaderPatch is a user patch found on disk without a ZenPM package
 // record. It deliberately has no catalog package ID.
@@ -29,11 +26,10 @@ type UnmanagedKOReaderPatch struct {
 
 // KOReaderPluginScanResult describes one scan of KOReader's external plugins.
 type KOReaderPluginScanResult struct {
-	Scanned int  `json:"scanned"`
-	Matched int  `json:"matched"`
-	Added   int  `json:"added"`
-	Updated int  `json:"updated"`
-	Skipped bool `json:"skipped,omitempty"`
+	Scanned int `json:"scanned"`
+	Matched int `json:"matched"`
+	Added   int `json:"added"`
+	Updated int `json:"updated"`
 }
 
 // Keep this in step with KOReader's PluginLoader.BUILTIN_PLUGINS. Built-in and
@@ -56,17 +52,26 @@ var koreaderMetaVersion = regexp.MustCompile(`\bversion\s*=\s*["']([^"']+)["']`)
 
 // ScanKOReaderPlugins records installed external KOReader plugins. Catalog
 // matches use catalog metadata; unmatched plugins use their directory name.
-// force bypasses the one-time scan marker.
-func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, error) {
+// pluginDirs replaces the paths reported by KOReader; nil reuses saved paths.
+// Always reconcile disk contents, including installs made outside ZenPM.
+func (m *Manager) ScanKOReaderPlugins(pluginDirs []string) (KOReaderPluginScanResult, error) {
 	var result KOReaderPluginScanResult
-	if !force {
-		value, err := m.st.ReadValue(koreaderPluginsScannedKey)
-		if err != nil {
-			return result, fmt.Errorf("read KOReader plugin scan marker: %w", err)
+	if err := m.st.LockAcquire("operation"); err != nil {
+		return result, err
+	}
+	defer m.st.LockRelease("operation")
+	if pluginDirs != nil {
+		for _, dir := range pluginDirs {
+			if !filepath.IsAbs(dir) || strings.ContainsRune(dir, '\x00') {
+				return result, fmt.Errorf("KOReader plugin directory must be an absolute path: %q", dir)
+			}
 		}
-		if value == koreaderPluginsScannedVersion {
-			result.Skipped = true
-			return result, nil
+		data, err := json.Marshal(pluginDirs)
+		if err != nil {
+			return result, err
+		}
+		if err := m.st.WriteValue(koreaderPluginDirsKey, string(data)); err != nil {
+			return result, fmt.Errorf("save KOReader plugin directories: %w", err)
 		}
 	}
 
@@ -92,7 +97,7 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 		}
 	}
 
-	pluginDirs, err := m.koreaderPluginDirs()
+	pluginDirs, err = m.koreaderPluginDirs()
 	if err != nil {
 		return result, err
 	}
@@ -233,9 +238,6 @@ func (m *Manager) ScanKOReaderPlugins(force bool) (KOReaderPluginScanResult, err
 		}
 	}
 
-	if err := m.st.WriteValue(koreaderPluginsScannedKey, koreaderPluginsScannedVersion); err != nil {
-		return result, fmt.Errorf("write KOReader plugin scan marker: %w", err)
-	}
 	return result, nil
 }
 
@@ -279,7 +281,7 @@ func isScannableKOReaderPluginDir(pluginDir string, entry os.DirEntry) bool {
 	return err == nil && info.IsDir()
 }
 
-func (m *Manager) koreaderPluginDirs() ([]string, error) {
+func (m *Manager) koreaderPluginDirs(additionalDirs ...string) ([]string, error) {
 	seen := map[string]bool{}
 	var dirs []string
 	add := func(path string) {
@@ -297,8 +299,30 @@ func (m *Manager) koreaderPluginDirs() ([]string, error) {
 		}
 	}
 
+	for _, dir := range additionalDirs {
+		add(dir)
+	}
 	for _, root := range koreaderRootCandidates(m.plat) {
 		add(koreaderPluginDir(root))
+		add(filepath.Join(root, "plugins"))
+	}
+	if dir := os.Getenv("ZENPM_KOREADER_PLUGIN_DIR"); filepath.IsAbs(dir) {
+		add(dir)
+	}
+	if m.st != nil {
+		value, err := m.st.ReadValue(koreaderPluginDirsKey)
+		if err != nil {
+			return nil, fmt.Errorf("read KOReader plugin directories: %w", err)
+		}
+		if value != "" {
+			var paths []string
+			if err := json.Unmarshal([]byte(value), &paths); err != nil {
+				return nil, fmt.Errorf("decode KOReader plugin directories: %w", err)
+			}
+			for _, path := range paths {
+				add(path)
+			}
+		}
 	}
 
 	var existing []string

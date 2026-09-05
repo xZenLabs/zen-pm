@@ -102,6 +102,24 @@ assert(Images.cached_file("android", url) == nil)
 assert(Images.file_for(client, "android", url) == updated)
 assert(downloads == 4)
 
+Images.invalidate_cache(false)
+assert(Images.file_for(client, "android", url) == updated)
+assert(downloads == 4)
+local ref_path = cache_root .. "/ZenPM/cache/koreader-images/url-" .. hashes[url] .. ".ref"
+local yesterday = os.time() - 86401
+assert(lfs.touch(ref_path, yesterday, yesterday))
+Images.invalidate_cache(false)
+assert(Images.cached_file("android", url) == nil)
+assert(Images.file_for(client, "android", url) == updated)
+assert(downloads == 5)
+Images.invalidate_cache(false)
+assert(Images.file_for(client, "android", url) == updated)
+assert(downloads == 5, "unchanged images must renew their freshness timestamp")
+assert(lfs.touch(ref_path, yesterday, yesterday))
+Images.invalidate_cache(false)
+assert(Images.file_for({ download = function() return false end }, "android", url) == updated)
+assert(lfs.attributes(ref_path, "modification") == yesterday, "failed downloads must not renew freshness")
+
 for i = 1, 256 do
     payload = "image " .. i
     local extra_url = "https://example.invalid/image-" .. i .. ".png"

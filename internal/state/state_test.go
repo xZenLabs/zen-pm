@@ -305,6 +305,31 @@ func TestSQLiteStoreAddsSourceAssetColumnToExistingCatalogTable(t *testing.T) {
 	}
 }
 
+func TestCloseReleasesDatabaseAndAllowsReopen(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteValue("test", "persisted"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ReadValue("test"); err == nil {
+		t.Fatal("database connection remained open")
+	}
+	st, err = Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if value, err := st.ReadValue("test"); err != nil || value != "persisted" {
+		t.Fatalf("reopened value = %q, %v", value, err)
+	}
+}
+
 func TestSQLiteStoreAddsInstalledPackageColumnsWithSafeDefaults(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	stateDir := filepath.Join(home, "state")

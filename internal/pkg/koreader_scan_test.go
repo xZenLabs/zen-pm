@@ -28,7 +28,7 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := manager.ScanKOReaderPlugins(false)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,10 +53,6 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 		got["patch"].InstallPath != filepath.Join(plugins, "patch.koplugin") || len(got) != 4 {
 		t.Fatalf("installed = %#v, want matched and unmatched plugin directories", got)
 	}
-	marker, err := st.ReadValue(koreaderPluginsScannedKey)
-	if err != nil || marker != koreaderPluginsScannedVersion {
-		t.Fatalf("scan marker = %q, %v; want %s, nil", marker, err, koreaderPluginsScannedVersion)
-	}
 }
 
 func TestScanKOReaderPluginsMatchesSharedModuleByVersion(t *testing.T) {
@@ -72,7 +68,7 @@ func TestScanKOReaderPluginsMatchesSharedModuleByVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := manager.ScanKOReaderPlugins(false)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +94,7 @@ func TestScanKOReaderPluginsDoesNotMatchSharedModuleWithoutIdentity(t *testing.T
 	})
 	writeKOReaderPlugin(t, plugins, "zlibrary", `return { fullname = "Z-library" }`)
 
-	result, err := manager.ScanKOReaderPlugins(false)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +129,7 @@ func TestScanKOReaderPluginsKeepsTrackedSharedModuleWithoutMetadata(t *testing.T
 		t.Fatal(err)
 	}
 
-	result, err := manager.ScanKOReaderPlugins(true)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +156,7 @@ func TestScanKOReaderPluginsReadsVersionFallbackFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := manager.ScanKOReaderPlugins(false); err != nil {
+	if _, err := manager.ScanKOReaderPlugins(nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, version := st.IsInstalled("version-file"); version != "1.2.3" {
@@ -180,7 +176,7 @@ func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *tes
 		t.Fatal(err)
 	}
 
-	result, err := manager.ScanKOReaderPlugins(true)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +206,7 @@ func TestScanKOReaderPluginsReconcilesCanonicalModuleAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := manager.ScanKOReaderPlugins(true)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +230,7 @@ func TestScanKOReaderPluginsTracksLegacyModuleAlias(t *testing.T) {
 	}})
 	writeKOReaderPlugin(t, plugins, "zen_ui", `return { version = "2.5.4" }`)
 
-	if _, err := manager.ScanKOReaderPlugins(true); err != nil {
+	if _, err := manager.ScanKOReaderPlugins(nil); err != nil {
 		t.Fatal(err)
 	}
 	installed, err := st.ReadInstalled()
@@ -273,7 +269,7 @@ func TestScanKOReaderPluginsPreservesTrackedAliasSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := manager.ScanKOReaderPlugins(true)
+	result, err := manager.ScanKOReaderPlugins(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +290,7 @@ func TestScanKOReaderPluginsRejectsCanonicalAndAliasRootsBeforeTracking(t *testi
 	writeKOReaderPlugin(t, plugins, "zenos", `return { version = "3.0.0" }`)
 	writeKOReaderPlugin(t, plugins, "zen_ui", `return { version = "3.0.0" }`)
 
-	if _, err := manager.ScanKOReaderPlugins(true); err == nil || !strings.Contains(err.Error(), "multiple KOReader plugin directories") {
+	if _, err := manager.ScanKOReaderPlugins(nil); err == nil || !strings.Contains(err.Error(), "multiple KOReader plugin directories") {
 		t.Fatalf("ScanKOReaderPlugins() error = %v", err)
 	}
 	installed, err := st.ReadInstalled()
@@ -331,7 +327,7 @@ func TestScanKOReaderPluginsRejectsAliasSymlinkDuplicateBeforeTracking(t *testin
 		t.Fatal(err)
 	}
 
-	if _, err := manager.ScanKOReaderPlugins(true); err == nil || !strings.Contains(err.Error(), "multiple KOReader plugin directories") {
+	if _, err := manager.ScanKOReaderPlugins(nil); err == nil || !strings.Contains(err.Error(), "multiple KOReader plugin directories") {
 		t.Fatalf("ScanKOReaderPlugins() error = %v", err)
 	}
 	installed, err := st.ReadInstalled()
@@ -351,7 +347,7 @@ func TestScanKOReaderPluginsRemovesPreviouslyScannedPluginMissingFromDisk(t *tes
 		ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
 	}})
 	writeKOReaderPlugin(t, plugins, "reader", `return { version = "1.2.3" }`)
-	if _, err := manager.ScanKOReaderPlugins(false); err != nil {
+	if _, err := manager.ScanKOReaderPlugins(nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.AppendInstalled(state.InstalledEntry{
@@ -363,7 +359,7 @@ func TestScanKOReaderPluginsRemovesPreviouslyScannedPluginMissingFromDisk(t *tes
 	if err := os.RemoveAll(filepath.Join(plugins, "reader.koplugin")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.ScanKOReaderPlugins(true); err != nil {
+	if _, err := manager.ScanKOReaderPlugins(nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -381,7 +377,7 @@ func TestUninstallUnmatchedKOReaderPluginRemovesDetectedDirectory(t *testing.T) 
 	}})
 	writeKOReaderPlugin(t, plugins, "local-plugin", `return { version = "1.2.3" }`)
 
-	if _, err := manager.ScanKOReaderPlugins(false); err != nil {
+	if _, err := manager.ScanKOReaderPlugins(nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := manager.Uninstall("local-plugin", ""); err != nil {
@@ -395,14 +391,18 @@ func TestUninstallUnmatchedKOReaderPluginRemovesDetectedDirectory(t *testing.T) 
 	}
 }
 
-func TestScanKOReaderPluginsAutomaticOnceManualRescans(t *testing.T) {
+func TestScanKOReaderPluginsRescansExternalChanges(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
 		ID: "reader", Name: "Reader", Version: "9.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
 	}})
 	meta := writeKOReaderPlugin(t, plugins, "reader", `return { version = "1.0.0" }`)
 
-	if result, err := manager.ScanKOReaderPlugins(false); err != nil || result.Added != 1 {
+	if result, err := manager.ScanKOReaderPlugins(nil); err != nil || result.Added != 1 {
 		t.Fatalf("first scan = %+v, %v", result, err)
+	}
+	// An existing installation's legacy marker must not prevent future scans.
+	if err := st.WriteValue("koreader_plugins_scanned", "3"); err != nil {
+		t.Fatal(err)
 	}
 	if err := st.AppendInstalled(state.InstalledEntry{
 		ID: "reader", Name: "Reader", Version: "1.0.0", Repo: "ZenLabs", Asset: "reader-armv7.koplugin.zip", AssetArch: "armv7",
@@ -412,42 +412,111 @@ func TestScanKOReaderPluginsAutomaticOnceManualRescans(t *testing.T) {
 	if err := os.WriteFile(meta, []byte(`return { version = "2.0.0" }`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if result, err := manager.ScanKOReaderPlugins(false); err != nil || !result.Skipped {
-		t.Fatalf("second automatic scan = %+v, %v; want skipped", result, err)
-	}
-	if _, version := st.IsInstalled("reader"); version != "1.0.0" {
-		t.Fatalf("version after skipped scan = %q, want 1.0.0", version)
-	}
-	if result, err := manager.ScanKOReaderPlugins(true); err != nil || result.Updated != 1 {
-		t.Fatalf("manual scan = %+v, %v", result, err)
+	writeKOReaderPlugin(t, plugins, "storefront-installed", `return { version = "1.0.0" }`)
+	if result, err := manager.ScanKOReaderPlugins(nil); err != nil || result.Updated != 1 || result.Added != 1 {
+		t.Fatalf("second automatic scan = %+v, %v; want one update and one addition", result, err)
 	}
 	if _, version := st.IsInstalled("reader"); version != "2.0.0" {
-		t.Fatalf("version after manual scan = %q, want 2.0.0", version)
+		t.Fatalf("version after automatic scan = %q, want 2.0.0", version)
 	}
 	installed, err := st.ReadInstalled()
-	if err != nil || len(installed) != 1 || installed[0].Asset != "reader-armv7.koplugin.zip" || installed[0].AssetArch != "armv7" {
-		t.Fatalf("installed after manual scan = %#v, %v", installed, err)
+	if err != nil || len(installed) != 2 || installed[0].Asset != "reader-armv7.koplugin.zip" || installed[0].AssetArch != "armv7" {
+		t.Fatalf("installed after automatic scan = %#v, %v", installed, err)
+	}
+	if result, err := manager.ScanKOReaderPlugins(nil); err != nil || result.Updated != 0 || result.Added != 0 {
+		t.Fatalf("unchanged manual scan = %+v, %v", result, err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader"},
+		{ID: "new-catalog-id", Name: "Storefront Installed", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "storefront-installed"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := manager.ScanKOReaderPlugins(nil); err != nil || result.Matched != 2 || result.Added != 1 {
+		t.Fatalf("scan after catalog change = %+v, %v", result, err)
+	}
+	if installed, version := st.IsInstalled("new-catalog-id"); !installed || version != "1.0.0" {
+		t.Fatalf("new catalog match = %t, %q", installed, version)
+	}
+	if installed, _ := st.IsInstalled("storefront-installed"); installed {
+		t.Fatal("unmatched record remains after catalog match")
 	}
 }
 
-func TestScanKOReaderPluginsDoesNotMarkUnavailableOrEmptyCatalog(t *testing.T) {
-	manager, st, _ := newKOReaderScanner(t, []state.CatalogEntry{{
+func TestScanKOReaderPluginsExtraPathsPersistForScanUpdateAndRemoval(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Version: "2.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}})
+	if err := os.MkdirAll(plugins, 0755); err != nil {
+		t.Fatal(err)
+	}
+	extra := t.TempDir()
+	if _, err := manager.ScanKOReaderPlugins([]string{extra, extra, plugins}); err != nil {
+		t.Fatal(err)
+	}
+	writeKOReaderPlugin(t, extra, "reader", `return { version = "1.0.0" }`)
+	// A new manager, as on daemon restart, must reuse the reported paths.
+	manager = New(st, repo.New(st), "host")
+	if result, err := manager.ScanKOReaderPlugins(nil); err != nil || result.Added != 1 || result.Scanned != 1 {
+		t.Fatalf("extra path scan = %+v, %v", result, err)
+	}
+	data := zipContents(t, map[string]string{"reader.koplugin/_meta.lua": `return { version = "2.0.0" }`})
+	version, path, err := manager.installKOReaderPlugin(&repo.CatalogEntry{ID: "reader", PluginModule: "reader"}, filepath.Dir(plugins), "reader.koplugin.zip", data)
+	if err != nil || version != "2.0.0" || path != filepath.Join(extra, "reader.koplugin") {
+		t.Fatalf("extra path update = %q, %q, %v", version, path, err)
+	}
+	if _, err := os.Stat(filepath.Join(plugins, "reader.koplugin")); !os.IsNotExist(err) {
+		t.Fatalf("update created a duplicate in default directory: %v", err)
+	}
+	if err := manager.Uninstall("reader", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("plugin remains in extra path after uninstall: %v", err)
+	}
+	if _, err := manager.ScanKOReaderPlugins([]string{"relative/plugins"}); err == nil {
+		t.Fatal("relative path from another process accepted")
+	}
+	if _, err := manager.ScanKOReaderPlugins([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	dirs, err := manager.koreaderPluginDirs()
+	if err != nil || len(dirs) != 1 || dirs[0] != plugins {
+		t.Fatalf("directories after clearing extra paths = %v, %v", dirs, err)
+	}
+}
+
+func TestScanKOReaderPluginsRespectsPackageOperationLock(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "reader", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}})
+	writeKOReaderPlugin(t, plugins, "reader", `return { version = "1.0.0" }`)
+	if err := st.LockAcquire("operation"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ScanKOReaderPlugins(nil); err == nil || !strings.Contains(err.Error(), "operation lock busy") {
+		t.Fatalf("scan during package operation = %v", err)
+	}
+	if installed, _ := st.IsInstalled("reader"); installed {
+		t.Fatal("scan changed installed packages while operation was running")
+	}
+	st.LockRelease("operation")
+	if result, err := manager.ScanKOReaderPlugins(nil); err != nil || result.Added != 1 {
+		t.Fatalf("scan after package operation = %+v, %v", result, err)
+	}
+}
+
+func TestScanKOReaderPluginsRejectsUnavailableOrEmptyCatalog(t *testing.T) {
+	manager, _, _ := newKOReaderScanner(t, []state.CatalogEntry{{
 		ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
 	}})
-	if _, err := manager.ScanKOReaderPlugins(false); err == nil {
+	if _, err := manager.ScanKOReaderPlugins(nil); err == nil {
 		t.Fatal("scan without a plugins directory succeeded")
 	}
-	if marker, _ := st.ReadValue(koreaderPluginsScannedKey); marker != "" {
-		t.Fatalf("marker after unavailable scan = %q, want empty", marker)
-	}
-
-	emptyManager, emptyState, plugins := newKOReaderScanner(t, nil)
+	emptyManager, _, plugins := newKOReaderScanner(t, nil)
 	writeKOReaderPlugin(t, plugins, "reader", `return { version = "1.0.0" }`)
-	if _, err := emptyManager.ScanKOReaderPlugins(false); err == nil {
+	if _, err := emptyManager.ScanKOReaderPlugins(nil); err == nil {
 		t.Fatal("scan with empty catalog succeeded")
-	}
-	if marker, _ := emptyState.ReadValue(koreaderPluginsScannedKey); marker != "" {
-		t.Fatalf("marker after empty catalog scan = %q, want empty", marker)
 	}
 }
 

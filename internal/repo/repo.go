@@ -92,6 +92,7 @@ func (m *Manager) Refresh() error {
 	var all []*CatalogEntry
 	failed := make(map[string]bool)
 	var failures []string
+	refreshed := 0
 	for _, r := range repos {
 		if IsKindleForgeRepo(r.Name, r.URL) && !m.st.AllowsKindleWAF() {
 			log.Infof("Skipping KindleForge on an unsupported device")
@@ -106,29 +107,30 @@ func (m *Manager) Refresh() error {
 			continue
 		}
 		log.Infof("Repo %s: %d packages", r.Name, len(entries))
+		refreshed++
 		all = append(all, entries...)
+	}
+	if refreshed == 0 && len(failures) > 0 {
+		return fmt.Errorf("no repositories could be refreshed: %s", strings.Join(failures, "; "))
 	}
 	for _, entry := range previous {
 		if entry != nil && failed[entry.Repo] {
 			all = append(all, entry)
 		}
 	}
-	if len(all) == 0 && len(failures) > 0 {
-		return fmt.Errorf("no repositories could be refreshed: %s", strings.Join(failures, "; "))
-	}
 	merged := MergeCatalogs(all)
 	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
 		return fmt.Errorf("write merged catalog: %w", err)
 	}
-	if err := m.st.WriteValue(state.CatalogPublishedAtRefreshKey, ""); err != nil {
-		log.Warnf("Could not clear catalog metadata refresh marker: %v", err)
-	}
 	m.CacheInstalledUninstallScripts(merged)
-	m.touchRefreshMarker()
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
 	if len(failures) > 0 {
 		return fmt.Errorf("catalog refreshed with cached packages for unavailable repositories: %s", strings.Join(failures, "; "))
 	}
+	if err := m.st.WriteValue(state.CatalogPublishedAtRefreshKey, ""); err != nil {
+		log.Warnf("Could not clear catalog metadata refresh marker: %v", err)
+	}
+	m.touchRefreshMarker()
 	return nil
 }
 
@@ -144,14 +146,12 @@ func (m *Manager) touchRefreshMarker() {
 	}
 }
 
-// CatalogAge returns how long ago the catalog was last refreshed, or 0 when no
-// refresh marker exists yet. A missing marker means we can't prove staleness
-// (e.g. catalog written by an older build), so callers treat it as fresh and
-// rely on the empty-catalog check instead of forcing a surprise refresh.
+// CatalogAge treats missing or future timestamps as stale, including after a
+// device clock correction. Only a complete successful refresh proves freshness.
 func (m *Manager) CatalogAge() time.Duration {
 	info, err := os.Stat(m.refreshMarkerPath())
-	if err != nil {
-		return 0
+	if err != nil || info.ModTime().After(time.Now()) {
+		return time.Duration(1<<63 - 1)
 	}
 	return time.Since(info.ModTime())
 }

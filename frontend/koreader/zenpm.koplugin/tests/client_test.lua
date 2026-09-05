@@ -75,6 +75,35 @@ assert(unix_request.path == "/koreader/plugins/scan")
 assert(unix_request.body == nil)
 assert(unix_request.timeout == 60)
 
+local original_request = client.request
+local original_lfs = package.loaded["libs/libkoreader-lfs"]
+package.loaded["libs/libkoreader-lfs"] = { currentdir = function() return "/koreader" end }
+local extra_plugin_paths
+_G.G_reader_settings = {
+    readSetting = function(_, key)
+        assert(key == "extra_plugin_paths")
+        return extra_plugin_paths
+    end,
+}
+local scan_dirs
+client.request = function(_, method, path, body)
+    assert(method == "POST" and path == "/koreader/plugins/scan")
+    scan_dirs = body.plugin_dirs
+    return true
+end
+extra_plugin_paths = "/mnt/us/extra plugins"
+assert(client:scan_installed_plugins())
+assert(#scan_dirs == 2 and scan_dirs[1] == "/koreader/plugins" and scan_dirs[2] == extra_plugin_paths)
+extra_plugin_paths = { "plugins-user", "/mnt/us/extra plugins" }
+assert(client:scan_installed_plugins())
+assert(#scan_dirs == 3 and scan_dirs[2] == "/koreader/plugins-user" and scan_dirs[3] == extra_plugin_paths[2])
+extra_plugin_paths = nil
+assert(client:scan_installed_plugins())
+assert(#scan_dirs == 1 and scan_dirs[1] == "/koreader/plugins")
+_G.G_reader_settings = nil
+package.loaded["libs/libkoreader-lfs"] = original_lfs
+client.request = original_request
+
 ok, response = client:get_log(5000)
 assert(ok and response.ok)
 assert(unix_request.method == "GET")
@@ -163,5 +192,17 @@ client.request = function(_, method, path, body)
     return true, {}
 end
 assert(client:package_action("example", "install", nil, "v2.0.0", true))
+
+local refresh_requests = {}
+client.request = function(_, method, path, _, timeout)
+    refresh_requests[#refresh_requests + 1] = { method, path, timeout.total }
+    return true, {}
+end
+assert(client:refresh_repos())
+assert(client:refresh_repos(true))
+assert(client:repo_refresh_status())
+assert(refresh_requests[1][1] == "POST" and refresh_requests[1][2] == "/repo/refresh" and refresh_requests[1][3] == 60)
+assert(refresh_requests[2][1] == "POST" and refresh_requests[2][2] == "/repo/refresh?async=1" and refresh_requests[2][3] == 1)
+assert(refresh_requests[3][1] == "GET" and refresh_requests[3][2] == "/repo/refresh" and refresh_requests[3][3] == 1)
 
 print("client tests passed")

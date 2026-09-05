@@ -451,13 +451,13 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 
 	// Try ZenPM format first (object with "packages" key).
 	var manifest manifestJSON
-	if err := json.Unmarshal(data, &manifest); err == nil && len(manifest.Packages) > 0 {
+	if err := json.Unmarshal(data, &manifest); err == nil && manifest.Packages != nil {
 		return parseZenPMCatalog(repoName, repoURL, priority, manifest), nil
 	}
 
 	// Try KindleForge format (top-level array).
 	var kfEntries []kfRegistryEntry
-	if err := json.Unmarshal(data, &kfEntries); err == nil && len(kfEntries) > 0 {
+	if err := json.Unmarshal(data, &kfEntries); err == nil && kfEntries != nil {
 		return parseKindleForgeCatalog(repoName, repoURL, priority, kfEntries), nil
 	}
 

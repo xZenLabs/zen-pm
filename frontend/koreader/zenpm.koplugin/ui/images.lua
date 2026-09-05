@@ -6,6 +6,7 @@ local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 
 local CACHE_MAX_BYTES = 32 * 1024 * 1024
 local CACHE_MAX_FILES = 256
+local CACHE_MAX_AGE = 24 * 60 * 60
 local CACHE_FILE_PREFIX = "image-"
 local CACHE_REF_PREFIX = "url-"
 
@@ -139,8 +140,14 @@ local function prune_cache(dir, keep_path)
     end
 end
 
-local function persistent_file(dir, value)
+local function persistent_file(dir, value, allow_stale)
     local url_key = cache_key(value)
+    if ok_lfs and not allow_stale then
+        local modified = lfs.attributes(cache_ref_path(dir, url_key), "modification")
+        if modified and (os.time() - modified >= CACHE_MAX_AGE or modified > os.time()) then
+            return nil
+        end
+    end
     local name = read_ref(dir, url_key)
     if not name then
         return nil
@@ -298,7 +305,7 @@ function Images.file_for(client, platform, value)
     local ok, data, _, headers = client:download(value)
     if not ok or type(data) ~= "string" or data == "" then
         Images.failed[value] = true
-        return nil
+        return persistent_file(dir, value, true)
     end
     if #data > CACHE_MAX_BYTES then
         Images.failed[value] = true
@@ -327,6 +334,9 @@ function Images.file_for(client, platform, value)
         os.remove(dir .. "/" .. old_name)
     end
     Images.cached[value] = path
+    if ok_lfs and lfs.touch then
+        pcall(lfs.touch, cache_ref_path(dir, url_key))
+    end
     prune_cache(dir, path)
     return path
 end
@@ -355,10 +365,10 @@ function Images.cached_file(platform, value)
     return nil
 end
 
-function Images.invalidate_cache()
+function Images.invalidate_cache(force)
     Images.cached = {}
     Images.failed = {}
-    Images.refresh_required = true
+    Images.refresh_required = force ~= false
 end
 
 function Images.is_failed(value)

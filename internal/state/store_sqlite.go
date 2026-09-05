@@ -12,6 +12,8 @@ type sqliteStore struct {
 	db *sql.DB
 }
 
+func (s *sqliteStore) Close() error { return s.db.Close() }
+
 func newSQLiteStore(s *State) (*sqliteStore, error) {
 	StartupTrace("SQLite initialization: opening database.")
 	db, err := sql.Open(sqliteDriver, s.SQLiteDB)

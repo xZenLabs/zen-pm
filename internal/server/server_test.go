@@ -2,7 +2,9 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +22,77 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
+
+func TestCatalogRefreshRunsInBackgroundAndSharesRequests(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}, 1), make(chan struct{})
+	var requests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-release
+		io.WriteString(w, `{"packages":[{"id":"fresh","name":"Fresh"}]}`)
+	}))
+	defer upstream.Close()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "test", URL: upstream.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	job := srv.startCatalogRefresh() // Same entry point used by daemon startup.
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("refresh did not start")
+	}
+	for range 3 {
+		rec := httptest.NewRecorder()
+		srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?async=1", nil))
+		if rec.Code != http.StatusAccepted || srv.startCatalogRefresh() != job {
+			t.Fatalf("refresh was not shared: HTTP %d", rec.Code)
+		}
+	}
+	status := httptest.NewRecorder()
+	srv.handleRepoRefresh(status, httptest.NewRequest(http.MethodGet, "/repo/refresh", nil))
+	if !strings.Contains(status.Body.String(), `"refreshing":true`) {
+		t.Fatalf("running status = %s", status.Body.String())
+	}
+	close(release)
+	select {
+	case <-job.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("refresh did not finish")
+	}
+	status = httptest.NewRecorder()
+	srv.handleRepoRefresh(status, httptest.NewRequest(http.MethodGet, "/repo/refresh", nil))
+	if requests.Load() != 1 || !strings.Contains(status.Body.String(), `"refreshing":false`) || job.err != nil {
+		t.Fatalf("requests=%d status=%s error=%v", requests.Load(), status.Body.String(), job.err)
+	}
+	catalog, err := repos.ReadCatalog()
+	if err != nil || len(catalog) != 1 || catalog[0].ID != "fresh" {
+		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
+	// The synchronous endpoint used by older clients still waits for completion.
+	rec := httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh", nil))
+	if rec.Code != http.StatusOK || requests.Load() != 2 {
+		t.Fatalf("synchronous refresh: status=%d requests=%d", rec.Code, requests.Load())
+	}
+}
 
 func TestTailLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "zenpm.log")
@@ -58,6 +132,11 @@ func TestTailLog(t *testing.T) {
 	}
 	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
 		t.Fatalf("tailing one line allocated %d bytes", allocated)
+	}
+	// Even a huge line or an arbitrarily large tail request has a fixed ceiling.
+	got, err = tailLog(path, 1000000)
+	if err != nil || len(got) > log.MaxBytes || !strings.HasSuffix(got, "\nprevious\nlast") {
+		t.Fatalf("bounded tail: bytes=%d error=%v", len(got), err)
 	}
 }
 
@@ -340,6 +419,13 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 	repos := repo.New(st)
 	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	if _, needsRefresh := srv.initialCatalogState(); !needsRefresh {
+		t.Fatal("catalog without a refresh timestamp was considered fresh")
+	}
+	marker := filepath.Join(st.CacheDir, "catalog.refreshed")
+	if err := os.WriteFile(marker, []byte("refreshed"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	catalog, needsRefresh := srv.initialCatalogState()
 	if needsRefresh {
@@ -347,6 +433,13 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].ID != "pkg" {
 		t.Fatalf("catalog = %#v", catalog)
+	}
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(marker, future, future); err != nil {
+		t.Fatal(err)
+	}
+	if _, needsRefresh := srv.initialCatalogState(); !needsRefresh {
+		t.Fatal("catalog from before a clock correction was considered fresh")
 	}
 }
 
@@ -822,6 +915,72 @@ func TestKOReaderPluginScanEndpoint(t *testing.T) {
 	}
 	if !response.OK || response.Scanned != 1 || response.Matched != 1 || response.Added != 1 || response.Updated != 0 {
 		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestKOReaderPluginAutoScanFindsStorefrontUpdates(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	plugins, extra := t.TempDir(), t.TempDir()
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := []state.CatalogEntry{
+		{ID: "bookends", Name: "Bookends", Version: "5.24.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "bookends"},
+		{ID: "bookshelf", Name: "Bookshelf", Version: "4.4.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "bookshelf"},
+		{ID: "simple-ui", Name: "Simple UI", Version: "2.7.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "simple_ui"},
+	}
+	if err := st.WriteCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	// Report extra paths even when they are still empty, then simulate Storefront.
+	body, err := json.Marshal(map[string]interface{}{"plugin_dirs": []string{extra}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	srv.handleKOReaderPluginScan(rec, httptest.NewRequest(http.MethodPost, "/koreader/plugins/scan", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("initial scan = %d: %s", rec.Code, rec.Body.String())
+	}
+	if err := st.WriteValue("koreader_plugins_scanned", "3"); err != nil {
+		t.Fatal(err)
+	}
+	versions := []string{"5.23.1", "4.3.5", "2.6.0"}
+	for i, entry := range catalog {
+		dir := filepath.Join(extra, entry.PluginModule+".koplugin")
+		if i == 0 {
+			dir = filepath.Join(plugins, entry.PluginModule+".koplugin")
+		}
+		if err := os.Mkdir(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "_meta.lua"), []byte(fmt.Sprintf(`return { version = %q }`, versions[i])), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv.autoScanKOReaderPlugins()
+	rec = httptest.NewRecorder()
+	srv.handlePackageList(rec, httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil))
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 3 {
+		t.Fatalf("packages = %#v", packages)
+	}
+	for _, item := range packages {
+		if !item.Installed || !item.UpdateAvail {
+			t.Fatalf("Storefront update missing: %#v", item)
+		}
+		for i, entry := range catalog {
+			if item.ID == entry.ID && (item.InstalledVer != versions[i] || item.LatestVersion != entry.Version) {
+				t.Fatalf("incorrect Storefront versions: %#v", item)
+			}
+		}
 	}
 }
 

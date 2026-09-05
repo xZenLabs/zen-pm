@@ -54,6 +54,12 @@ type Server struct {
 	lastActivity   atomic.Int64
 	StartedAt      time.Time
 	readmeImages   readmeImagePreparer
+	catalogRefresh *catalogRefresh
+}
+
+type catalogRefresh struct {
+	done chan struct{}
+	err  error // read only after done is closed
 }
 
 type readmeImagePreparer interface {
@@ -166,29 +172,6 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
 	mux.HandleFunc("/uninstall", s.wrap(s.handleUninstall))
 
-	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
-	state.StartupTrace("HTTP server: reading catalog state.")
-	catalog, needsRefresh := s.initialCatalogState()
-	state.StartupTrace("HTTP server: catalog state ready.")
-	if needsRefresh {
-		s.runBackground(func() {
-			if err := s.repos.Refresh(); err != nil {
-				log.Warnf("Initial refresh failed: %v", err)
-				return
-			}
-			s.autoScanKOReaderPlugins()
-		})
-	} else {
-		s.autoScanKOReaderPlugins()
-		s.runBackground(func() {
-			s.repos.CacheInstalledUninstallScripts(catalog)
-		})
-	}
-
-	// Keep the catalog fresh in the background so the client never has to fetch
-	// repo manifests itself: refresh once a day for long-running daemons.
-	go s.periodicRefresh()
-
 	state.StartupTrace("HTTP server: binding " + addr + ".")
 	httpServer := &http.Server{Handler: mux}
 	s.mu.Lock()
@@ -217,6 +200,18 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	} else {
 		log.Infof("ZenPM server listening on %s", addr)
 	}
+	// Bind before starting work so a duplicate daemon cannot refresh the same DB.
+	// Disk scanning must also stay off the path to the first health response.
+	s.runBackground(func() {
+		catalog, needsRefresh := s.initialCatalogState()
+		if needsRefresh {
+			s.startCatalogRefresh()
+		} else {
+			s.autoScanKOReaderPlugins()
+			s.repos.CacheInstalledUninstallScripts(catalog)
+		}
+	})
+	go s.periodicRefresh()
 	if s.IdleTimeout > 0 {
 		go s.stopWhenIdle()
 	}
@@ -425,42 +420,62 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 		log.Info("Catalog metadata needs refresh")
 		return catalog, true
 	}
-	if age := s.repos.CatalogAge(); age >= catalogMaxAge {
-		log.Infof("Catalog is %s old — running repo refresh", age.Round(time.Hour))
+	if s.repos.CatalogAge() >= catalogMaxAge {
+		log.Info("Catalog is stale or has no valid refresh timestamp — running repo refresh")
 		return catalog, true
 	}
 	return catalog, false
 }
 
-// periodicRefresh refreshes the catalog once per catalogMaxAge for the lifetime
-// of the daemon. Errors are logged and the loop continues.
+// Check the age regularly so a failed startup refresh retries, and a catalog
+// already nearly a day old at startup does not wait another full day.
 func (s *Server) periodicRefresh() {
-	ticker := time.NewTicker(catalogMaxAge)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-s.done:
 			return
 		case <-ticker.C:
-			log.Info("Periodic catalog refresh")
-			s.runBackground(func() {
-				if err := s.repos.Refresh(); err != nil {
-					log.Warnf("Periodic refresh failed: %v", err)
-				}
-			})
+			if s.repos.CatalogAge() >= catalogMaxAge {
+				s.startCatalogRefresh()
+			}
 		}
 	}
 }
 
+// Startup, manual and periodic requests share one refresh and its result.
+func (s *Server) startCatalogRefresh() *catalogRefresh {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if job := s.catalogRefresh; job != nil {
+		select {
+		case <-job.done:
+		default:
+			return job
+		}
+	}
+	job := &catalogRefresh{done: make(chan struct{})}
+	s.catalogRefresh = job
+	s.runBackground(func() {
+		defer close(job.done)
+		job.err = s.repos.Refresh()
+		if job.err != nil {
+			log.Warnf("Catalog refresh failed: %v", job.err)
+		}
+		// Partial refreshes still supply useful catalog entries for scanning.
+		s.autoScanKOReaderPlugins()
+	})
+	return job
+}
+
 func (s *Server) autoScanKOReaderPlugins() {
-	result, err := s.pkgs.ScanKOReaderPlugins(false)
+	result, err := s.pkgs.ScanKOReaderPlugins(nil)
 	if err != nil {
 		log.Infof("KOReader plugin auto-scan not completed: %v", err)
 		return
 	}
-	if !result.Skipped {
-		log.Infof("KOReader plugin scan: scanned=%d matched=%d added=%d updated=%d", result.Scanned, result.Matched, result.Added, result.Updated)
-	}
+	log.Infof("KOReader plugin scan: scanned=%d matched=%d added=%d updated=%d", result.Scanned, result.Matched, result.Added, result.Updated)
 }
 
 const accessErrorBodyLimit = 1024
@@ -740,11 +755,39 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.mu.Lock()
+		job := s.catalogRefresh
+		s.mu.Unlock()
+		result := map[string]interface{}{"refreshing": false, "ok": true}
+		if job != nil {
+			select {
+			case <-job.done:
+				if job.err != nil {
+					result["ok"], result["error"] = false, job.err.Error()
+				}
+			default:
+				result["refreshing"] = true
+			}
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-	err := s.repos.Refresh()
+	job := s.startCatalogRefresh()
+	if r.URL.Query().Get("async") == "1" {
+		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
+		return
+	}
+	select {
+	case <-r.Context().Done():
+		return
+	case <-job.done:
+	}
+	err := job.err
 	logTail, _ := tailLog(s.st.LogFile, 200)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -760,7 +803,14 @@ func (s *Server) handleKOReaderPluginScan(w http.ResponseWriter, r *http.Request
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-	result, err := s.pkgs.ScanKOReaderPlugins(true)
+	var request struct {
+		PluginDirs []string `json:"plugin_dirs"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	result, err := s.pkgs.ScanKOReaderPlugins(request.PluginDirs)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"ok": false, "error": err.Error()})
 		return
@@ -1405,7 +1455,7 @@ func tailLog(path string, n int) (string, error) {
 	// Grow the window only when the requested lines do not fit. Status polling
 	// must not read and allocate the entire accumulated log every few seconds.
 	for window := int64(4096); ; window *= 2 {
-		window = min(window, info.Size())
+		window = min(window, info.Size(), log.MaxBytes)
 		start := info.Size() - window
 		data := make([]byte, window)
 		read, err := f.ReadAt(data, start)
@@ -1416,7 +1466,7 @@ func tailLog(path string, n int) (string, error) {
 		if len(lines) > n {
 			return strings.Join(lines[len(lines)-n:], "\n"), nil
 		}
-		if start == 0 {
+		if start == 0 || window == log.MaxBytes {
 			return strings.Join(lines, "\n"), nil
 		}
 	}

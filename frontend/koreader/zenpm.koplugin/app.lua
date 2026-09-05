@@ -1508,19 +1508,42 @@ function App:refresh_catalog_on_open()
         return
     end
     self.catalog_refreshing = true
-    self:run_update_task(function()
-        return pcall(self.client.refresh_repos, self.client)
-    end, nil, function(completed, called, ok)
+    local view = self.view
+    local function poll(attempt)
+        if self.view ~= view then return end
+        if not self.backend_ready then
+            self.catalog_refreshing = false
+            return
+        end
+        local ok, data = self.client:repo_refresh_status()
+        local ready = ok and type(data) == "table" and not data.refreshing
+        if ready then
+            ready = self:load_packages(false, true, PACKAGE_POLL_TIMEOUT)
+        end
+        if not ready then
+            if attempt < 300 then
+                UIManager:scheduleIn(1, function() poll(attempt + 1) end)
+            else
+                self.catalog_refreshing = false
+            end
+            return
+        end
         self.catalog_refreshing = false
-        -- Self-update can stop the backend while this refresh is in flight.
-        if not completed or not called or not ok or not self.view or not self.backend_ready then return end
+        -- A partial refresh can update reachable repos even when another fails.
         self.state.readme_cache = {}
+        self.state.release_notes_cache = {}
         self.image_files = {}
-        Images.invalidate_cache()
-        self:load_packages(false, true)
+        Images.invalidate_cache(false)
         self:load_repos(true)
         self:reload_current_page()
-    end)
+    end
+    -- The backend owns the network work; no fork or long UI-thread request.
+    local ok = self.client:refresh_repos(true)
+    if not ok then
+        self.catalog_refreshing = false
+        return
+    end
+    UIManager:scheduleIn(1, function() poll(1) end)
 end
 
 function App:intercept_koreader_exit()
@@ -1549,6 +1572,7 @@ end
 
 function App:close()
     self:restore_koreader_exit()
+    self.catalog_refreshing = false
     -- Scheduled callbacks cannot be removed portably across KOReader builds.
     -- Invalidate them so reopening ZenPM can start a fresh health-check loop.
     self.backend_health_check_generation = (self.backend_health_check_generation or 0) + 1
@@ -1647,7 +1671,8 @@ function App:scan_plugins_after_open(attempt)
         self:reload_current_page()
         return
     end
-    if tostring(data):find("non-empty catalog", 1, true)
+    if (tostring(data):find("non-empty catalog", 1, true)
+        or tostring(data):find("operation lock busy", 1, true))
         and attempt < Constants.MAX_POLL_RETRIES then
         UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
             if not self.view then return end
@@ -2139,8 +2164,8 @@ end
 
 -- Poll the catalog after a first-run background refresh until packages appear.
 function App:reload_featured_until_ready(attempt)
-    if self.state.page ~= "home" then return end
-    local ok, packages = self:load_packages()
+    if not self.view or self.state.page ~= "home" then return end
+    local ok, packages = self:load_packages(false, false, PACKAGE_POLL_TIMEOUT)
     if ok and #packages > 0 then
         self.state.packages = packages
         self.state.featured_packages = Models.select_featured(packages)
@@ -3374,6 +3399,7 @@ function App:refresh_repos()
     end
 
     self.state.readme_cache = {}
+    self.state.release_notes_cache = {}
     self.image_files = {}
     Images.invalidate_cache()
     local found, packages = self:load_packages(false, true)

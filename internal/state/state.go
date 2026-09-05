@@ -42,6 +42,7 @@ type State struct {
 }
 
 type Store interface {
+	Close() error
 	ReadRepos() ([]RepoEntry, error)
 	WriteRepos([]RepoEntry) error
 	ReadInstalled() ([]InstalledEntry, error)
@@ -133,9 +134,11 @@ func Init(platformName string) (*State, error) {
 	StartupTrace("State initialization: SQLite ready.")
 
 	if err := seedReposDB(s); err != nil {
+		store.Close()
 		return nil, err
 	}
 	if err := reconcileDefaultRepos(s); err != nil {
+		store.Close()
 		return nil, err
 	}
 	StartupTrace("State initialization: repositories ready.")
@@ -145,6 +148,9 @@ func Init(platformName string) (*State, error) {
 
 	return s, nil
 }
+
+// Close releases the database connection and its background goroutines.
+func (s *State) Close() error { return s.store.Close() }
 
 func cleanupLegacyJournal(home string) {
 	path := filepath.Join(home, "journal")

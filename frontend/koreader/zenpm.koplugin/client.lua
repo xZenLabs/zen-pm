@@ -285,12 +285,38 @@ function Client:remove_repo(name)
     return self:request("DELETE", "/repos/" .. url_encode(name), nil)
 end
 
-function Client:refresh_repos()
+function Client:refresh_repos(async)
+    if async then
+        return self:request("POST", "/repo/refresh?async=1", nil, { block = 1, total = 1 })
+    end
     return self:request("POST", "/repo/refresh", nil, REPO_REFRESH_TIMEOUT)
 end
 
+function Client:repo_refresh_status()
+    return self:request("GET", "/repo/refresh", nil, { block = 1, total = 1 })
+end
+
 function Client:scan_installed_plugins()
-    return self:request("POST", "/koreader/plugins/scan", nil, PLUGIN_SCAN_TIMEOUT)
+    local body
+    local settings = rawget(_G, "G_reader_settings")
+    local ok, lfs = pcall(require, "libs/libkoreader-lfs")
+    local cwd = ok and lfs.currentdir()
+    if settings and cwd then
+        -- Resolve relative paths in KOReader's working directory, which may
+        -- differ from the backend's (especially with the Android companion).
+        local dirs = { cwd .. "/plugins" }
+        local extra = settings:readSetting("extra_plugin_paths")
+        if type(extra) == "string" then extra = { extra } end
+        if type(extra) == "table" then
+            for _, path in ipairs(extra) do
+                if type(path) == "string" and path ~= "" then
+                    table.insert(dirs, path:sub(1, 1) == "/" and path or cwd .. "/" .. path)
+                end
+            end
+        end
+        body = { plugin_dirs = dirs }
+    end
+    return self:request("POST", "/koreader/plugins/scan", body, PLUGIN_SCAN_TIMEOUT)
 end
 
 function Client:list_packages(platform, check_updates, allow_prerelease, allow_alpha, timeout)

@@ -73,6 +73,8 @@ return {
         "Update settings layout",
         "Add status bar from ZenOS",
         "Merge Changes tab into Discover",
-        "Add alpha support"
+        "Add alpha support",
+        "Bug fixes",
+        "Performance improvements"
     },
 }

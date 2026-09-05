@@ -154,13 +154,41 @@ paths:
         "404":
           $ref: "#/components/responses/JsonError"
   /repo/refresh:
+    get:
+      tags:
+        - Repositories
+      summary: Read the status of the latest catalog refresh
+      operationId: repoRefreshStatus
+      responses:
+        "200":
+          description: Status remains available after completion, including partial refresh errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refreshing:
+                    type: boolean
+                  ok:
+                    type: boolean
+                  error:
+                    type: string
     post:
       tags:
         - Repositories
       summary: Refresh the merged package catalog
       description: Fetches all configured repositories, merges catalog entries by priority, and caches uninstall scripts for installed packages.
       operationId: refreshRepos
+      parameters:
+        - in: query
+          name: async
+          schema:
+            type: string
+            enum: ["1"]
+          description: Return immediately and poll GET /repo/refresh for completion. Concurrent requests share the active refresh.
       responses:
+        "202":
+          description: Background refresh accepted.
         "200":
           description: Catalog refresh completed.
           content:
@@ -190,8 +218,23 @@ paths:
       description: |
         Forces a scan of external `.koplugin` directories, excluding KOReader
         built-ins and patch packages. Matching catalog packages are recorded as
-        installed using their `_meta.lua` version.
+        installed using their `_meta.lua` version. Scans also run on backend
+        startup and after catalog refreshes, including after a previous scan.
+        Optional plugin directories reported by KOReader are saved for future
+        scans and package operations, alongside the configured/default paths.
       operationId: scanKOReaderPlugins
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plugin_dirs:
+                  type: array
+                  description: Absolute paths, including KOReader extra_plugin_paths. Omit to reuse saved paths; an empty array clears them.
+                  items:
+                    type: string
       responses:
         "200":
           description: Plugin scan completed.
@@ -205,6 +248,8 @@ paths:
                 matched: 2
                 added: 1
                 updated: 1
+        "400":
+          $ref: "#/components/responses/JsonError"
         "405":
           $ref: "#/components/responses/TextError"
         "500":

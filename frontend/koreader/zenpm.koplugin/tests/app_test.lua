@@ -71,6 +71,8 @@ package.preload["zenpm_constants"] = function()
     return {
         PLUGIN_DIR = root,
         PACKAGE_ERROR_NOTICE_SECONDS = 1,
+        MAX_POLL_RETRIES = 20,
+        POLL_DELAY_SECONDS = 0.1,
         PACKAGE_ACTION_MAX_POLL_RETRIES = 20,
         ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
         REPO_KINDLEFORGE_NAME = "KindleForge",
@@ -656,6 +658,8 @@ assert(next(refreshed_app.state.readme_cache) == nil)
 
 local open_refreshes = 0
 local open_catalog_reloads = 0
+local open_status_polls = 0
+local open_catalog_loads = 0
 local opened_app = {
     backend_ready = true,
     view = {},
@@ -663,22 +667,29 @@ local opened_app = {
         readme_cache = { reader = { readme = "Cached README" } },
     },
     client = {
-        refresh_repos = function()
+        refresh_repos = function(_, async)
+            assert(async == true)
             open_refreshes = open_refreshes + 1
             return true
         end,
+        repo_refresh_status = function()
+            open_status_polls = open_status_polls + 1
+            if open_status_polls == 1 then return false, "timeout" end
+            return true, { refreshing = open_status_polls == 2, ok = false }
+        end,
     },
-    run_update_task = function(_, task, _, callback)
-        local called, ok = task()
-        callback(true, called, ok)
+    load_packages = function(_, check_updates, force, timeout)
+        assert(not check_updates and force and timeout.total == 1)
+        open_catalog_loads = open_catalog_loads + 1
+        return open_catalog_loads > 1
     end,
-    load_packages = function() end,
     load_repos = function() end,
     reload_current_page = function() open_catalog_reloads = open_catalog_reloads + 1 end,
     refresh_catalog_on_open = App.refresh_catalog_on_open,
 }
 App.refresh_catalog_on_open(opened_app)
 assert(open_refreshes == 1)
+assert(open_status_polls == 4)
 assert(next(opened_app.state.readme_cache) == nil)
 assert(open_catalog_reloads == 1)
 
@@ -709,25 +720,30 @@ local interrupted_catalog_app = {
     },
     client = {
         refresh_repos = function() return true end,
+        repo_refresh_status = function() error("must not poll a stopped backend") end,
     },
-    run_update_task = function(_, task, _, callback)
-        local called, ok = task()
-        interrupted_catalog_callback = function()
-            callback(true, called, ok)
-        end
-    end,
     load_packages = function() interrupted_catalog_loads = interrupted_catalog_loads + 1 end,
     load_repos = function() end,
     reload_current_page = function() interrupted_catalog_reloads = interrupted_catalog_reloads + 1 end,
 }
+local refresh_ui = require("ui/uimanager")
+local original_refresh_schedule = refresh_ui.scheduleIn
+refresh_ui.scheduleIn = function(_, _, callback) interrupted_catalog_callback = callback end
 App.refresh_catalog_on_open(interrupted_catalog_app)
 assert(interrupted_catalog_app.catalog_refreshing)
+App.refresh_catalog_on_open(interrupted_catalog_app)
 interrupted_catalog_app.backend_ready = false
 interrupted_catalog_callback()
+refresh_ui.scheduleIn = original_refresh_schedule
 assert(not interrupted_catalog_app.catalog_refreshing)
 assert(interrupted_catalog_loads == 0)
 assert(interrupted_catalog_reloads == 0)
 assert(interrupted_catalog_app.state.readme_cache.reader.readme == "Cached README")
+interrupted_catalog_app.view = {}
+interrupted_catalog_app.backend_ready = true
+interrupted_catalog_app.catalog_refreshing = true
+interrupted_catalog_callback()
+assert(interrupted_catalog_app.catalog_refreshing, "an old callback must not alter a reopened view")
 
 local reload_tab
 local reload_full_refresh
@@ -937,6 +953,26 @@ stale_backend_health_callback()
 assert(backend_health_checks == 2)
 assert(backend_health_restarts == 1)
 UIManager.scheduleIn = original_schedule_in
+
+do
+    local scan_calls, reloads = 0, 0
+    local scan_app = {
+        view = {},
+        scan_plugins_on_open = true,
+        state = { packages = {{ id = "reader" }} },
+        client = {
+            scan_installed_plugins = function()
+                scan_calls = scan_calls + 1
+                if scan_calls == 1 then return false, "operation lock busy: operation" end
+                return true
+            end,
+        },
+        scan_plugins_after_open = App.scan_plugins_after_open,
+        reload_current_page = function() reloads = reloads + 1 end,
+    }
+    App.scan_plugins_after_open(scan_app, 1)
+    assert(scan_calls == 2 and reloads == 1 and not scan_app.scan_plugins_on_open)
+end
 
 local sources_menu_calls = 0
 App.show_actions({

@@ -202,9 +202,9 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 	pluginsDir := koreaderPluginDir(root)
 	var identityPluginDirs []string
 	var existingRoot *koreaderPluginRootMatch
-	if len(koreaderPluginModules(entry)) > 1 {
+	if len(koreaderPluginModules(entry)) > 0 {
 		var err error
-		identityPluginDirs, err = m.koreaderPluginDirs()
+		identityPluginDirs, err = m.koreaderPluginDirs(pluginsDir)
 		if err != nil {
 			return "", "", err
 		}
@@ -359,7 +359,7 @@ func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind
 	}
 	switch kind {
 	case genericPluginInstaller:
-		if len(koreaderPluginModules(entry)) > 1 {
+		if len(koreaderPluginModules(entry)) > 0 {
 			return m.removeResolvedKOReaderPlugin(entry)
 		}
 		return removeKOReaderPlugin(root, pluginTrackingName(entry, asset))
