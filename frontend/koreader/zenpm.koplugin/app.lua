@@ -129,6 +129,11 @@ end
 function App:new(plugin)
     local saved_sorts = App.load_setting("sorts", {})
     if type(saved_sorts) ~= "table" then saved_sorts = {} end
+    if not App.load_setting("discover_sort_migrated", false) then
+        saved_sorts.search = "published_at_desc"
+        App.save_setting("sorts", saved_sorts)
+        App.save_setting("discover_sort_migrated", true)
+    end
     local o = {
         plugin = plugin,
         client = Client:new(),
@@ -159,9 +164,8 @@ function App:new(plugin)
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", categories = "", category = "", installed = "", source = "" },
             sorts = {
-                search = saved_sorts.search or "stars",
-                changes = saved_sorts.changes or "published_at_desc",
-                installed = saved_sorts.installed or "name_asc",
+                search = saved_sorts.search or "published_at_desc",
+                installed = saved_sorts.installed ~= "update_available" and saved_sorts.installed or "name_asc",
                 sources = saved_sorts.sources or "name_asc",
                 category = saved_sorts.category or "stars",
                 source = saved_sorts.source or "stars",
@@ -169,7 +173,6 @@ function App:new(plugin)
             scroll = {},
             packages = {},
             visible_packages = {},
-            changes_packages = {},
             featured_packages = {},
             installed_packages = {},
             categories = {},
@@ -1934,8 +1937,6 @@ function App:navigate(tab_id, full_refresh)
     self._full_refresh = full_refresh ~= false
     if tab_id == "home" then
         self:show_featured()
-    elseif tab_id == "changes" then
-        self:show_changes()
     elseif tab_id == "categories" then
         self:show_categories()
     elseif tab_id == "sources" then
@@ -2166,24 +2167,6 @@ function App:show_search()
     end
     self.state.packages = packages
     self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(packages, self.state.filters.search))
-    self:clear_status()
-    self:refresh()
-end
-
-function App:show_changes()
-    self.state.page = "changes"
-    self.state.active_tab = "changes"
-    if not self:ensure_backend() then return end
-    self:set_loading(_("Loading packages..."))
-    local ok, packages, err = self:load_packages()
-    if not ok then
-        self:set_error(_("Failed to load packages: ") .. tostring(err))
-        return
-    end
-    self.state.packages = packages
-    local changes = Models.changes_packages(packages, 14, 40, self.state.sorts.changes)
-    self.state.changes_packages = changes
-    self.state.visible_packages = changes
     self:clear_status()
     self:refresh()
 end
@@ -2487,7 +2470,7 @@ function App:show_debug()
 end
 
 function App:sorted_packages(kind, packages)
-    return Models.sort_packages(packages, self.state.sorts[kind])
+    return Models.sort_packages(packages, self.state.sorts[kind], kind)
 end
 
 function App:sorted_repos(repos)
@@ -2517,13 +2500,11 @@ function App:set_filter(kind, value)
 end
 
 function App:set_sort(kind, value)
-    self.state.sorts[kind] = value or (kind == "changes" and "published_at_desc" or "stars")
+    self.state.sorts[kind] = value or (kind == "search" and "published_at_desc" or "stars")
     App.save_setting("sorts", self.state.sorts)
     self:reset_scroll(self:scroll_key())
     if kind == "installed" then
         self:show_installed()
-    elseif kind == "changes" then
-        self:show_changes()
     elseif kind == "sources" then
         self:show_sources()
     elseif kind == "category" and self.state.current_category then
@@ -2566,27 +2547,10 @@ function App:prompt_installed_category_filter()
 end
 
 function App:prompt_sort(kind)
-    local current = self.state.sorts[kind] or (kind == "changes" and "published_at_desc" or "stars")
+    local current = self.state.sorts[kind] or (kind == "search" and "published_at_desc" or "stars")
     local title = kind == "sources" and _("Sort sources") or _("Sort packages")
     local function selected(key)
         return function() return current == key end
-    end
-    if kind == "changes" then
-        Modals.actions(title, {
-            {
-                icon = "sort_asc",
-                text = _("Ascending"),
-                checked_func = selected("published_at_asc"),
-                callback = function() self:set_sort(kind, "published_at_asc") end,
-            },
-            {
-                icon = "sort_desc",
-                text = _("Descending"),
-                checked_func = selected("published_at_desc"),
-                callback = function() self:set_sort(kind, "published_at_desc") end,
-            },
-        }, { show_cancel = false, align = "left" })
-        return
     end
     if kind == "installed" or kind == "sources" then
         local rows = {
@@ -2604,12 +2568,6 @@ function App:prompt_sort(kind)
             },
         }
         if kind == "installed" then
-            table.insert(rows, {
-                icon = "update",
-                text = _("Update available"),
-                checked_func = selected("update_available"),
-                callback = function() self:set_sort(kind, "update_available") end,
-            })
             table.insert(rows, {
                 icon = "date",
                 text = _("Installed date (newest first)"),
@@ -2641,7 +2599,7 @@ function App:prompt_sort(kind)
         },
     }
     if kind == "search" then
-        table.insert(rows, 2, {
+        table.insert(rows, 1, {
             icon = "date",
             text = _("Recently updated"),
             checked_func = selected("published_at_desc"),

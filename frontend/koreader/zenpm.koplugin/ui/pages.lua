@@ -143,7 +143,8 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         local gutter = scrollable and Theme.scale(14) or 0
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
-            meta_suffix = kind == "changes" and Models.friendly_published_at(pkg) or nil,
+            meta_suffix = (kind == "search" or (kind == "installed" and pkg.update_available and not pkg.update_ignored))
+                and Models.friendly_published_at(pkg) or nil,
             focus_group = kind,
             focus_index = index,
             focus_count = count,

@@ -31,7 +31,6 @@ return {
 
     TABS = {
         { id = "home", label = N_("Featured") },
-        { id = "changes", label = N_("Changes") },
         { id = "categories", label = N_("Categories") },
         { id = "installed", label = N_("Installed") },
         -- { id = "debug", label = N_("Debug") },

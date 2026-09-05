@@ -72,6 +72,7 @@ return {
         "Fix absolute vs relative plugin path on some devices",
         "Update settings layout",
         "Add status bar from ZenOS",
+        "Merge Changes tab into Discover",
         "Add alpha support"
     },
 }

@@ -104,34 +104,64 @@ end
 assert(painted_text[1] == "By Zen Labs")
 
 painted_text = {}
-local opened_changes_details
+local opened_update_details
 Cards.package({
     app = {
-        state = { page = "changes", active_tab = "changes", queue = {} },
+        state = { page = "installed", active_tab = "installed", queue = {} },
         package_disabled = function() return false end,
         package_icon_file = function() return "reader.svg" end,
         perform_package_action = function() end,
         show_package_details = function(_, ...)
-            opened_changes_details = { ... }
+            opened_update_details = { ... }
         end,
     },
 }, {}, {
     id = "reader",
     name = "Reader",
+    installed = true,
+    update_available = true,
     version = "1.0.0",
     repo = "ZenLabs",
 }, 0, 0, 300, { meta_suffix = "Yesterday" })
 
 hit_callbacks["package:reader:"]()
-assert(opened_changes_details[1] == "reader")
-assert(opened_changes_details[2] == "changes")
-assert(opened_changes_details[3] == false)
-assert(opened_changes_details[4] == "release_notes")
+assert(opened_update_details[1] == "reader")
+assert(opened_update_details[2] == "installed")
+assert(opened_update_details[3] == false)
+assert(opened_update_details[4] == "release_notes")
 
-local found_changes_meta = false
+local found_update_meta = false
 for _, text in ipairs(painted_text) do
-    if text == "v1.0.0 • Yesterday" then found_changes_meta = true end
+    if text == "v1.0.0 • Yesterday" then found_update_meta = true end
     assert(text ~= "v1.0.0 • ZenLabs")
 end
-assert(found_changes_meta)
+assert(found_update_meta)
+
+for _, page in ipairs({ "search", "installed", "category_details" }) do
+    for _, status in ipairs({ "update", "ignored", "current", "uninstalled" }) do
+        painted_text = {}
+        Cards.package({
+            app = {
+                state = { page = page, active_tab = page, queue = {} },
+                package_disabled = function() return false end,
+                package_icon_file = function() return "reader.svg" end,
+                show_package_details = function(_, ...)
+                    opened_update_details = { ... }
+                end,
+            },
+        }, {}, {
+            id = "reader",
+            name = "Reader",
+            version = "1.0.0",
+            repo = "ZenLabs",
+            installed = status ~= "uninstalled",
+            update_available = status == "update" or status == "ignored",
+            update_ignored = status == "ignored",
+        }, 0, 0, 300, { meta_suffix = "" })
+        hit_callbacks["package:reader:"]()
+        local expected_tab = page ~= "category_details" and status == "update" and "release_notes" or nil
+        assert(opened_update_details[4] == expected_tab)
+        assert(table.concat(painted_text, "\n"):find("v1.0.0 • ZenLabs", 1, true))
+    end
+end
 print("cards tests passed")

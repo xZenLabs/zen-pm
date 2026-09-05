@@ -96,7 +96,8 @@ local function package_version_repo_text(pkg, meta_suffix)
         local v = tostring(version):gsub("^[vV]", "")
         table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
-    table.insert(parts, meta_suffix or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
+    table.insert(parts, meta_suffix and meta_suffix ~= "" and meta_suffix
+        or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     return table.concat(parts, " • ")
 end
 
@@ -174,7 +175,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local focus_key = "package:" .. id .. ":" .. asset
     local action_focus_key = "package-action:" .. id .. ":" .. asset
     local function show_details()
-        local details_tab = view.app.state.page == "changes" and "release_notes" or nil
+        local details_tab = (view.app.state.page == "installed" or view.app.state.page == "search")
+            and pkg.installed and pkg.update_available and not pkg.update_ignored and "release_notes" or nil
         view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, details_tab, pkg.patch_asset)
     end
 

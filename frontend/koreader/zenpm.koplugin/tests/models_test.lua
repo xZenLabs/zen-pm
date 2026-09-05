@@ -63,15 +63,6 @@ assert(newest[1].id == "third" and newest[2].id == "second" and newest[3].id == 
 local oldest = Models.sort_packages(installed, "installed_at_asc")
 assert(oldest[1].id == "first" and oldest[2].id == "second" and oldest[3].id == "third")
 
-local updates = Models.sort_packages({
-    { id = "current", name = "Current" },
-    { id = "beta", name = "Beta", update_available = false },
-    { id = "zulu", name = "Zulu", update_available = true },
-    { id = "alpha", name = "Alpha", update_available = true },
-    { id = "ignored", name = "Aardvark", update_available = true, update_ignored = true },
-}, "update_available")
-assert(updates[1].id == "alpha" and updates[2].id == "zulu" and updates[3].id == "ignored" and updates[4].id == "beta" and updates[5].id == "current")
-
 local published = {
     { id = "first", name = "First", published_at = "2026-07-21T10:00:00Z" },
     { id = "second", name = "Second", published_at = "2026-07-22T10:00:00Z" },
@@ -80,50 +71,48 @@ local published = {
 local recent = Models.sort_packages(published, "published_at_desc")
 assert(recent[1].id == "third" and recent[2].id == "second" and recent[3].id == "first")
 
-local change_candidates = {
-    { id = "old-installed", name = "Old installed", installed = true, update_available = true, published_at = "2026-07-19T11:59:59Z" },
-    { id = "older-installed", name = "Older installed", installed = true, published_at = "2026-07-20T12:00:00Z" },
+local discover_candidates = {
+    { id = "old-installed", name = "Old installed", installed = true, update_available = true, published_at = "2026-07-25T11:59:59Z" },
+    { id = "older-installed", name = "Older installed", installed = true, published_at = "2026-07-24T12:00:00Z" },
     { id = "new", name = "New", published_at = "2026-08-02T11:00:00Z" },
     { id = "new-installed", name = "New installed", installed = true, update_available = true, published_at = "2026-08-01T10:00:00Z" },
+    { id = "recent-installed", name = "Recent installed", installed = true, published_at = "2026-08-02T10:00:00Z" },
     { id = "undated-update", name = "Undated update", installed = true, update_available = true },
     { id = "ignored", name = "Ignored", installed = true, update_available = true, update_ignored = true, published_at = "2026-08-02T11:30:00Z" },
-    { id = "future", name = "Future", published_at = "2026-08-03T10:00:00Z" },
-    { id = "invalid", name = "Invalid", published_at = "2026-07-99T10:00:00Z" },
+    { id = "future", name = "Future", installed = true, update_available = true, published_at = "2026-08-03T10:00:00Z" },
+    { id = "invalid", name = "Invalid", installed = true, update_available = true, published_at = "2026-07-99T10:00:00Z" },
     { id = "undated", name = "Undated" },
+    { id = "edge", name = "Edge", installed = true, published_at = "2026-07-26T12:00:00Z" },
+    { id = "outside", name = "Outside", installed = true, published_at = "2026-07-26T11:59:59Z" },
 }
-local changes = Models.changes_packages(change_candidates, 14, 40, "published_at_desc", 1785672000)
-assert(#changes == 4)
-assert(changes[1].id == "new-installed")
-assert(changes[2].id == "old-installed")
-assert(changes[3].id == "undated-update")
-assert(changes[4].id == "new")
+local discover = Models.sort_packages(discover_candidates, nil, "search", 1785672000)
+assert(#discover == #discover_candidates)
+for index, id in ipairs({ "recent-installed", "new-installed", "edge", "future" }) do
+    assert(discover[index].id == id, "Discover priority: " .. id)
+end
+assert(discover_candidates[1].id == "old-installed")
+local named_discover = Models.sort_packages(discover_candidates, "name", "search", 1785672000)
+for index, id in ipairs({ "edge", "new-installed", "recent-installed", "future" }) do
+    assert(named_discover[index].id == id, "Discover name priority: " .. id)
+end
+assert(Models.sort_packages(published, nil, "search", 1785672000)[1].id == "third")
 
-local ascending_changes = Models.changes_packages(change_candidates, 14, 40, "published_at_asc", 1785672000)
-assert(ascending_changes[1].id == "old-installed")
-assert(ascending_changes[2].id == "new-installed")
-assert(ascending_changes[3].id == "undated-update")
-assert(ascending_changes[4].id == "new")
-
-local edge = Models.changes_packages({
-    { id = "outside", published_at = "2026-07-19T11:59:59Z" },
-    { id = "edge", published_at = "2026-07-19T12:00:00Z" },
-}, 14, 20, "published_at_desc", 1785672000)
-assert(#edge == 1 and edge[1].id == "edge")
-
-local fallback = Models.changes_packages({
-    { id = "latest", published_at = "2026-07-10T12:00:00Z" },
-    { id = "second", published_at = "2026-07-09T12:00:00Z" },
-    { id = "oldest", published_at = "2026-07-08T12:00:00Z" },
-}, 14, 2, "published_at_desc", 1785672000)
-assert(#fallback == 2)
-assert(fallback[1].id == "latest" and fallback[2].id == "second")
-
-local ascending_fallback = Models.changes_packages({
-    { id = "latest", published_at = "2026-07-10T12:00:00Z" },
-    { id = "second", published_at = "2026-07-09T12:00:00Z" },
-    { id = "oldest", published_at = "2026-07-08T12:00:00Z" },
-}, 14, 2, "published_at_asc", 1785672000)
-assert(ascending_fallback[1].id == "second" and ascending_fallback[2].id == "latest")
+local installed_candidates = {
+    { id = "a", installed = true, installed_at = "2026-08-04", stars = 40 },
+    { id = "b", installed = true, installed_at = "2026-08-03", stars = 30, update_available = true, update_ignored = true },
+    { id = "c", installed = true, installed_at = "2026-08-02", stars = 20, update_available = true },
+    { id = "d", installed = true, installed_at = "2026-08-01", stars = 10, update_available = true },
+}
+for sort_key, expected in pairs({
+    name_asc = "cdab", name_desc = "dcba", installed_at_desc = "cdab", installed_at_asc = "dcba", stars = "cdab",
+}) do
+    local sorted = Models.sort_packages(installed_candidates, sort_key, "installed")
+    local ids = {}
+    for _, pkg in ipairs(sorted) do table.insert(ids, pkg.id) end
+    assert(table.concat(ids) == expected, "Installed priority: " .. sort_key)
+end
+assert(Models.sort_packages(installed_candidates, "stars", "category")[1].id == "a")
+assert(#Models.sort_packages({}, nil, "search", 1785672000) == 0)
 
 assert(Models.friendly_published_at({ published_at = "2026-08-02T01:00:00Z" }, 1785672000) == "Today")
 assert(Models.friendly_published_at({ published_at = "2026-08-01T23:00:00Z" }, 1785672000) == "Yesterday")

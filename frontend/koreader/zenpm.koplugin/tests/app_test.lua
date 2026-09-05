@@ -16,9 +16,6 @@ local modal_options
 local plugin_settings_prompt
 local package_modify_callbacks
 local ignore_updates_prompt
-local model_changes_days
-local model_changes_limit
-local model_changes_sort
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 local network_connected = true
@@ -79,9 +76,12 @@ package.preload["zenpm_constants"] = function()
         REPO_KINDLEFORGE_NAME = "KindleForge",
         REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
         KINDLE_SCRIPTLETS_CATEGORY = { id = "kindle-scriptlets" },
+        CATEGORIES = { { id = "fonts", label = "Fonts" } },
     }
 end
-package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
+package.preload["daemon"] = function()
+    return { new = function() return {} end, state_home = function() return "/tmp" end }
+end
 package.preload["i18n"] = function() return {} end
 package.preload["ui/images"] = function()
     return {
@@ -126,7 +126,12 @@ package.preload["ui/modals"] = function()
     }
 end
 package.preload["models"] = function()
+    local models = dofile(root .. "/models.lua")
     return {
+        sort_packages = models.sort_packages,
+        filter_packages = models.filter_packages,
+        installed_packages = models.installed_packages,
+        filter_packages_by_category = models.filter_packages_by_category,
         has_release_notes = function(pkg, allow_prerelease)
             if allow_prerelease and pkg.prerelease_notes_url then return true end
             return pkg.release_notes_url ~= nil
@@ -175,15 +180,15 @@ package.preload["models"] = function()
             end
             return visible
         end,
-        changes_packages = function(packages, days, limit, sort_key)
-            model_changes_days = days
-            model_changes_limit = limit
-            model_changes_sort = sort_key
-            return { packages[1] }
-        end,
     }
 end
-package.preload["ui/theme"] = function() return {} end
+package.preload["ui/theme"] = function()
+    return {
+        get_base_font_size = function() return 20 end,
+        normalize_base_font_size = function(value) return value end,
+        set_base_font_size = function() end,
+    }
+end
 local updater_stub = {
     update = function()
         return true, "1.2.4-beta3"
@@ -243,7 +248,7 @@ end
 local original_dofile = dofile
 local updater_dofile_loads = 0
 dofile = function(path)
-    if path == root .. "/client.lua" then return {} end
+    if path == root .. "/client.lua" then return { new = function() return {} end } end
     if path == root .. "/updater.lua" then
         updater_dofile_loads = updater_dofile_loads + 1
         return updater_stub
@@ -774,52 +779,67 @@ App.navigate(navigation_app, "home", false)
 assert(navigation_refreshes[1] == true)
 assert(navigation_refreshes[2] == false)
 
-local changes_refreshes = 0
-local changes_app = {
-    state = {
-        sorts = { changes = "published_at_desc" },
-    },
-    ensure_backend = function() return true end,
-    set_loading = function() end,
-    load_packages = function()
-        return true, {
-            { id = "reader", installed = true },
-            { id = "browser" },
-        }
-    end,
-    clear_status = function() end,
-    refresh = function() changes_refreshes = changes_refreshes + 1 end,
-}
-App.show_changes(changes_app)
-assert(changes_app.state.page == "changes" and changes_app.state.active_tab == "changes")
-assert(model_changes_days == 14)
-assert(model_changes_limit == 40)
-assert(model_changes_sort == "published_at_desc")
-assert(#changes_app.state.changes_packages == 1)
-assert(#changes_app.state.visible_packages == 1)
-assert(changes_refreshes == 1)
+do
+    local tabs = dofile(root .. "/zenpm_constants.lua").TABS
+    assert(#tabs == 4)
+    for _, tab in ipairs(tabs) do assert(tab.id ~= "changes") end
 
-local changes_sort_shown = 0
-local changes_sort_app = {
-    state = { sorts = { changes = "published_at_desc" } },
-    scroll_key = function() return "changes" end,
-    reset_scroll = function() end,
-    show_changes = function() changes_sort_shown = changes_sort_shown + 1 end,
-}
-App.set_sort(changes_sort_app, "changes", "published_at_asc")
-assert(changes_sort_app.state.sorts.changes == "published_at_asc")
-assert(changes_sort_shown == 1)
+    local list_app = App:new({})
+    assert(list_app.state.sorts.search == "published_at_desc")
+    assert(list_app.state.sorts.installed == "name_asc")
+    settings.sorts = { search = "stars", installed = "update_available" }
+    settings.discover_sort_migrated = nil
+    local saved_app = App:new({})
+    assert(saved_app.state.sorts.search == "published_at_desc")
+    assert(settings.sorts.search == "published_at_desc")
+    assert(settings.discover_sort_migrated == true)
+    assert(saved_app.state.sorts.installed == "name_asc")
+    settings.sorts = nil
 
-local selected_changes_sort
-App.prompt_sort({
-    state = { sorts = { changes = "published_at_desc" } },
-    set_sort = function(_, _, value) selected_changes_sort = value end,
-}, "changes")
-assert(#modal_rows == 2)
-assert(modal_rows[1].text == "Ascending" and modal_rows[2].text == "Descending")
-assert(modal_rows[2].checked_func())
-modal_rows[1].callback()
-assert(selected_changes_sort == "published_at_asc")
+    local packages = {
+        { id = "alpha", name = "Alpha", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 100 },
+        { id = "zulu", name = "Zulu", installed = true, update_available = true, stars = 2 },
+        { id = "beta", name = "Beta", installed = true, category = "fonts", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 1 },
+        { id = "gamma", name = "Gamma", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 24 * 60 * 60), stars = 200 },
+    }
+    local refreshes = 0
+    list_app.ensure_backend = function() return true end
+    list_app.set_loading = function() end
+    list_app.load_packages = function() return true, packages end
+    list_app.clear_status = function() end
+    list_app.refresh = function() refreshes = refreshes + 1 end
+    list_app:navigate("search")
+    assert(list_app.state.page == "search" and list_app.state.active_tab == "search")
+    assert(#list_app.state.visible_packages == 4 and refreshes == 1)
+    assert(list_app.state.visible_packages[1].id == "beta")
+    assert(list_app.state.visible_packages[2].id == "alpha")
+    assert(list_app.state.visible_packages[3].id == "gamma")
+    assert(list_app.state.visible_packages[4].id == "zulu")
+    list_app:prompt_sort("search")
+    assert(modal_rows[1].text == "Recently updated" and modal_rows[1].checked_func())
+    modal_rows[2].callback()
+    assert(list_app.state.sorts.search == "stars")
+    assert(list_app.state.visible_packages[1].id == "beta")
+    assert(list_app.state.visible_packages[2].id == "gamma")
+    assert(App:new({}).state.sorts.search == "stars")
+    list_app:set_filter("search", "zulu")
+    assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "zulu")
+
+    list_app:navigate("installed")
+    assert(list_app.state.page == "installed" and list_app.state.active_tab == "installed")
+    assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "zulu")
+    list_app:prompt_sort("installed")
+    assert(#modal_rows == 4 and modal_rows[1].checked_func())
+    list_app:set_installed_category_filter("fonts")
+    assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "beta")
+    list_app:set_installed_category_filter("")
+    list_app:refresh_queue_package_state()
+    assert(list_app.state.visible_packages[1].id == "zulu")
+    packages[2].update_available = false
+    list_app:refresh_queue_package_state()
+    assert(list_app.state.visible_packages[1].id == "beta")
+    settings.sorts = nil
+end
 
 local shown_catalog_refreshes = 0
 local show_sequence = {}
