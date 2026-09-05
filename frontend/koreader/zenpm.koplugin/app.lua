@@ -22,6 +22,8 @@ local Updater = dofile(Constants.PLUGIN_DIR .. "/updater.lua")
 local Util = require("zenpm_util")
 
 local App = {}
+-- Status probes run on KOReader's UI thread and retry on the next poll.
+local PACKAGE_POLL_TIMEOUT = { block = 1, total = 1 }
 
 local function content_load_error_code(status_code, detail)
     local error_code = tonumber(status_code)
@@ -2051,12 +2053,12 @@ end
 -- catalog already carries every field the UI needs, so once loaded we reuse it
 -- across tab/filter/sort/detail navigation with no further /packages calls.
 -- force=true (install/uninstall/refresh) or check_updates bypass the cache.
-function App:load_packages(check_updates, force)
+function App:load_packages(check_updates, force, timeout)
     if not force and not check_updates and self.state.packages and #self.state.packages > 0 then
         return true, self.state.packages
     end
     if not self.state.filter_installable then
-        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates, self.state.alpha_updates)
+        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates, self.state.alpha_updates, timeout)
         if not ok then
             return false, {}, data
         end
@@ -2067,7 +2069,7 @@ function App:load_packages(check_updates, force)
     end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
-    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates, self.state.alpha_updates)
+    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates, self.state.alpha_updates, timeout)
     if not ok then
         return false, {}, data
     end
@@ -2080,7 +2082,7 @@ function App:load_packages(check_updates, force)
         return true, packages
     end
     for _, platform in ipairs(capabilities) do
-        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates, self.state.alpha_updates)
+        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates, self.state.alpha_updates, timeout)
         if not ok then
             return false, {}, data
         end
@@ -3145,7 +3147,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
 end
 
 function App:package_action_failure_stats(op)
-    local ok, log_text = self.client:get_log(200)
+    local ok, log_text = self.client:get_log(200, PACKAGE_POLL_TIMEOUT)
     if not ok or type(log_text) ~= "string" then
         return 0, nil
     end
@@ -3220,7 +3222,7 @@ function App:patch_action_succeeded_from_db(op)
     if not (op.is_patch and op.asset and op.asset ~= "") then
         return false
     end
-    local ok, data = self.client:list_packages(nil, false)
+    local ok, data = self.client:list_packages(nil, false, nil, nil, PACKAGE_POLL_TIMEOUT)
     if not ok or type(data) ~= "table" then
         return false
     end
@@ -3263,7 +3265,7 @@ function App:poll_package_action(op, attempt)
         -- Force a fresh catalog read each tick: the session cache would mask the
         -- install/uninstall status change we're polling for. On success this also
         -- leaves state.packages holding the updated status for the list/detail view.
-        local ok, packages = self:load_packages(false, true)
+        local ok, packages = self:load_packages(false, true, PACKAGE_POLL_TIMEOUT)
         if not ok then
             if attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
                 self.busy = false

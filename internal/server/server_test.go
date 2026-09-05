@@ -3,11 +3,13 @@ package server
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,47 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/repo"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
+
+func TestTailLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zenpm.log")
+	for _, content := range []string{"", "\n\n", "one", "one\n\n", "one\ntwo\nthree\n", strings.Repeat("long line", 2000) + "\nlast\n"} {
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range []int{1, 2, 200} {
+			lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+			if len(lines) > n {
+				lines = lines[len(lines)-n:]
+			}
+			want := strings.Join(lines, "\n")
+			if got, err := tailLog(path, n); err != nil || got != want {
+				t.Fatalf("tailLog(%d bytes, %d) = %q, %v; want %q", len(content), n, got, err, want)
+			}
+		}
+	}
+	// Polling a large log must not allocate space for its entire history.
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.Seek(8<<20, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(f, "\nprevious\nlast\n"); err != nil {
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	got, err := tailLog(path, 1)
+	runtime.ReadMemStats(&after)
+	if err != nil || got != "last" {
+		t.Fatalf("large log tail = %q, %v", got, err)
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
+		t.Fatalf("tailing one line allocated %d bytes", allocated)
+	}
+}
 
 type fakeReadmeImagePreparer struct {
 	refs     map[string]string

@@ -293,7 +293,7 @@ function Client:scan_installed_plugins()
     return self:request("POST", "/koreader/plugins/scan", nil, PLUGIN_SCAN_TIMEOUT)
 end
 
-function Client:list_packages(platform, check_updates, allow_prerelease, allow_alpha)
+function Client:list_packages(platform, check_updates, allow_prerelease, allow_alpha, timeout)
     local path = "/packages"
     local query = {}
     if platform and platform ~= "" then
@@ -311,7 +311,7 @@ function Client:list_packages(platform, check_updates, allow_prerelease, allow_a
     if #query > 0 then
         path = path .. "?" .. table.concat(query, "&")
     end
-    return self:request("GET", path, nil, PACKAGE_LIST_TIMEOUT)
+    return self:request("GET", path, nil, timeout or PACKAGE_LIST_TIMEOUT)
 end
 
 function Client:package_action(id, action, asset, release, direct_github)
@@ -368,8 +368,8 @@ function Client:get_package_releases(id, direct_github)
     return self:request("GET", path, nil, PACKAGE_RELEASES_TIMEOUT)
 end
 
-function Client:get_log(tail)
-    return self:request("GET", "/log?tail=" .. tostring(tail or 500), nil, LOG_TIMEOUT)
+function Client:get_log(tail, timeout)
+    return self:request("GET", "/log?tail=" .. tostring(tail or 500), nil, timeout or LOG_TIMEOUT)
 end
 
 function Client:start_update()

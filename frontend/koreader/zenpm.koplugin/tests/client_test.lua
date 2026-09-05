@@ -81,6 +81,14 @@ assert(unix_request.method == "GET")
 assert(unix_request.path == "/log?tail=5000")
 assert(unix_request.timeout == 30)
 
+local poll_timeout = { block = 1, total = 1 }
+assert(client:get_log(200, poll_timeout))
+assert(unix_request.timeout == 1)
+assert(client:list_packages("kobo,koreader", false, false, false, poll_timeout))
+assert(unix_request.timeout == 1)
+assert(client:list_packages("kobo,koreader", false))
+assert(unix_request.timeout == 20)
+
 client.request = function(_, method, path, body)
     assert(method == "GET")
     assert(path == "/packages/example%20package/release-notes?prerelease=1")

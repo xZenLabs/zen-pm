@@ -210,6 +210,7 @@ local updater_stub = {
 package.loaded["updater"] = {}
 package.preload["zenpm_util"] = function()
     return {
+        split_lines = dofile(root .. "/zenpm_util.lua").split_lines,
         trim = function(value)
             return tostring(value or ""):match("^%s*(.-)%s*$")
         end,
@@ -1566,6 +1567,40 @@ local local_plugin_entry = App.queue_entry_for({
     platforms = { "koreader" },
 }, "uninstall")
 assert(type(local_plugin_entry.settings_deleter) == "function")
+
+-- A stalled backend must use short probes and leave the queue waiting for
+-- the existing operation, then complete it when the backend responds again.
+do
+    local responding = false
+    local completed = false
+    local next_poll
+    local polling_app = setmetatable({
+        busy = true,
+        state = {},
+        client = {
+            get_log = function(_, _, timeout)
+                assert(timeout and timeout.total <= 1)
+                return responding, ""
+            end,
+            list_packages = function(_, _, _, _, _, timeout)
+                assert(timeout and timeout.total <= 1)
+                if not responding then return false, "timeout" end
+                return true, {{ id = "zlibrary-2", installed = true, installed_version = "1.0.49" }}
+            end,
+        },
+    }, { __index = App })
+    polling_app.poll_package_action = function(_, op, attempt)
+        next_poll = function() App.poll_package_action(polling_app, op, attempt) end
+    end
+    App.poll_package_action(polling_app, {
+        id = "zlibrary-2", action = "update", target_version = "1.0.49",
+        on_result = function(ok) assert(ok); completed = true end,
+    }, 1)
+    assert(polling_app.busy and next_poll and not completed)
+    responding = true
+    next_poll()
+    assert(completed and not polling_app.busy)
+end
 
 App.poll_package_action({
     busy = true,

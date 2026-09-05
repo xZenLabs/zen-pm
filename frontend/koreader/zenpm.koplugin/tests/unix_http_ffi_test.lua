@@ -2,8 +2,12 @@ local source = debug.getinfo(1, "S").source:gsub("^@", "")
 local root = assert(source:match("^(.*)/tests/[^/]+$"))
 
 local ffi = require("ffi")
+local nonblock = ffi.os == "OSX" and 4 or 2048
+local again = ffi.os == "OSX" and 35 or 11
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ffi/posix_h"] = function()
+    ffi.cdef("static const unsigned O_NONBLOCK = " .. nonblock .. ";")
+    ffi.cdef("static const unsigned EAGAIN = " .. again .. ";")
     ffi.cdef[[
         typedef long ssize_t;
         struct timeval {
@@ -23,6 +27,8 @@ package.preload["ffi/posix_h"] = function()
         static const unsigned POLLERR = 8;
         static const unsigned POLLIN = 1;
         static const unsigned POLLOUT = 4;
+        static const unsigned F_SETFL = 4;
+        int fcntl(int, int, ...);
         int close(int);
         int gettimeofday(struct timeval *, void *);
         int poll(struct pollfd *, unsigned long, int);

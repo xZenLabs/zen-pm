@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -1392,15 +1393,33 @@ func shouldLogClientMessage(message string) bool {
 }
 
 func tailLog(path string, n int) (string, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
 	}
-	return strings.Join(lines, "\n"), nil
+	// Grow the window only when the requested lines do not fit. Status polling
+	// must not read and allocate the entire accumulated log every few seconds.
+	for window := int64(4096); ; window *= 2 {
+		window = min(window, info.Size())
+		start := info.Size() - window
+		data := make([]byte, window)
+		read, err := f.ReadAt(data, start)
+		if err != nil && err != io.EOF {
+			return "", err
+		}
+		lines := strings.Split(strings.TrimRight(string(data[:read]), "\n"), "\n")
+		if len(lines) > n {
+			return strings.Join(lines[len(lines)-n:], "\n"), nil
+		}
+		if start == 0 {
+			return strings.Join(lines, "\n"), nil
+		}
+	}
 }
 
 // handleDialog shows a native Kindle UI alert dialog via LIPC pillowAlert.

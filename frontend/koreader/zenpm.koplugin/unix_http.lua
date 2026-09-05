@@ -88,6 +88,12 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
     end
 
     local function exchange()
+        local deadline = now() + (tonumber(timeout_seconds) or 4)
+        -- A full Unix socket backlog can otherwise block connect before poll
+        -- gets a chance to enforce the request deadline.
+        if C.fcntl(fd, C.F_SETFL, ffi.cast("int", C.O_NONBLOCK)) ~= 0 then
+            error(_("socket: ") .. strerror())
+        end
         local address = ffi.new("struct sockaddr_un")
         local path_capacity = ffi.sizeof(address.sun_path)
         local abstract = socket_path:sub(1, 1) == "@"
@@ -126,19 +132,18 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
         end
         local request = table.concat(lines, "\r\n") .. "\r\n\r\n" .. (body or "")
 
-        local deadline = now() + (tonumber(timeout_seconds) or 4)
         local pollfd = ffi.new("struct pollfd[1]")
         pollfd[0].fd = fd
 
         local function wait_for(event)
             pollfd[0].events = event
             pollfd[0].revents = 0
-            local remaining = math.floor((deadline - now()) * 1000)
-            if remaining <= 0 then
-                error(_("timeout"))
-            end
             local result
             repeat
+                local remaining = math.floor((deadline - now()) * 1000)
+                if remaining <= 0 then
+                    error(_("timeout"))
+                end
                 result = C.poll(pollfd, 1, remaining)
             until result >= 0 or ffi.errno() ~= C.EINTR
             if result == 0 then
@@ -159,7 +164,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             wait_for(C.POLLOUT)
             local count = tonumber(C.send(fd, request_pointer + sent, #request - sent, send_flags))
             if count < 0 then
-                if ffi.errno() ~= C.EINTR then
+                if ffi.errno() ~= C.EINTR and ffi.errno() ~= C.EAGAIN then
                     error(_("send: ") .. strerror())
                 end
             elseif count == 0 then
@@ -177,7 +182,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
             if count == 0 then
                 break
             elseif count < 0 then
-                if ffi.errno() ~= C.EINTR then
+                if ffi.errno() ~= C.EINTR and ffi.errno() ~= C.EAGAIN then
                     error(_("recv: ") .. strerror())
                 end
             else
