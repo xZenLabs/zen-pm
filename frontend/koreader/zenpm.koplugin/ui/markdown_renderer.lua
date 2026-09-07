@@ -238,7 +238,7 @@ end
 local function queue_prepared_image_poll(view, ref)
     local state = view._readme_image_poll
     if not state then
-        state = { refs = {}, attempts = 0, scheduled = false }
+        state = { refs = {}, attempts = 0, scheduled = false, changed = false }
         view._readme_image_poll = state
     end
     state.refs[ref] = true
@@ -252,6 +252,7 @@ local function queue_prepared_image_poll(view, ref)
             if view.app.state.page and view.app.state.page ~= "package_details" then
                 state.refs = {}
                 state.attempts = 0
+                state.changed = false
                 return
             end
             state.attempts = state.attempts + 1
@@ -266,13 +267,16 @@ local function queue_prepared_image_poll(view, ref)
                     changed = true
                 end
             end
-            if changed then
-                view.app:refresh()
-            elseif pending and state.attempts < PREPARED_IMAGE_POLL_LIMIT then
+            state.changed = state.changed or changed
+            if pending and state.attempts < PREPARED_IMAGE_POLL_LIMIT then
                 poll()
             else
                 state.refs = {}
                 state.attempts = 0
+                if state.changed then
+                    state.changed = false
+                    view.app:refresh()
+                end
             end
         end)
     end

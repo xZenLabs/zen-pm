@@ -1918,7 +1918,11 @@ function App:load_next_readme_image()
     end
     self:image_file_for(value)
     self.readme_image_pending[value] = nil
-    self:refresh()
+    if #self.readme_image_queue == 0 then
+        self.readme_image_loading = false
+        self:refresh()
+        return
+    end
     UIManager:scheduleIn(0.05, function()
         self:load_next_readme_image()
     end)

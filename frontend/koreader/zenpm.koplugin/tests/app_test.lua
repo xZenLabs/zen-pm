@@ -301,6 +301,22 @@ end
 dofile = original_dofile
 assert(updater_dofile_loads == 1)
 
+do
+    local loaded, refreshes = {}, 0
+    local image_app = setmetatable({
+        state = { show_readme_images = true },
+        readme_image_queue = { "one", "two" },
+        readme_image_pending = { one = true, two = true },
+        readme_image_loading = true,
+        image_file_for = function(_, value) table.insert(loaded, value) end,
+        refresh = function() refreshes = refreshes + 1 end,
+    }, { __index = App })
+    image_app:load_next_readme_image()
+    assert(table.concat(loaded, ",") == "one,two")
+    assert(refreshes == 1)
+    assert(not image_app.readme_image_loading)
+end
+
 -- Updating from the reader must save the book before touching plugin files,
 -- retain ZenPM above the file browser, and reconnect the stopped backend.
 do

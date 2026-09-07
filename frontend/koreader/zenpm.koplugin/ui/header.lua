@@ -292,7 +292,7 @@ local function draw_title_bar(view, bb, x, y, w)
         P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
     else
         local title_size = P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
-        if page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
+        if page == "category_details" or page == "package_details" or page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
             P.hit(view, title_x, y, title_size.w, h, back_callback, "back-title")
         end
     end

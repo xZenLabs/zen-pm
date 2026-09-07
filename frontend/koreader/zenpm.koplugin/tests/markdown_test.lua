@@ -192,7 +192,34 @@ Renderer.render(managed_view, {}, {
 })
 assert(#scheduled_callbacks == 1)
 
+local pending_ref_2 = os.tmpname()
+assert(os.remove(pending_ref_2))
+local prepared_refreshes = 0
+managed_view.app.refresh = function() prepared_refreshes = prepared_refreshes + 1 end
+Renderer.render(managed_view, {}, {
+    { kind = "image", alt = "Pending", url = "pending.png" },
+    { kind = "image", alt = "Pending 2", url = "pending-2.png" },
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0, {
+    ["https://repo.example/packages/demo/pending.png"] = pending_ref,
+    ["https://repo.example/packages/demo/pending-2.png"] = pending_ref_2,
+})
+assert(#scheduled_callbacks == 1)
+local first_ref = assert(io.open(pending_ref, "w"))
+first_ref:write(prepared_file .. "\t1200\t600\n")
+first_ref:close()
+table.remove(scheduled_callbacks, 1)()
+assert(prepared_refreshes == 0)
+assert(#scheduled_callbacks == 1)
+local second_ref = assert(io.open(pending_ref_2, "w"))
+second_ref:write(prepared_file .. "\t1200\t600\n")
+second_ref:close()
+table.remove(scheduled_callbacks, 1)()
+assert(prepared_refreshes == 1)
+assert(#scheduled_callbacks == 0)
+
 assert(os.remove(prepared_ref))
 assert(os.remove(prepared_file))
+assert(os.remove(pending_ref))
+assert(os.remove(pending_ref_2))
 
 print("markdown tests passed")
