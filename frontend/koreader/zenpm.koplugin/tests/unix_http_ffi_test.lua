@@ -27,7 +27,6 @@ package.preload["ffi/posix_h"] = function()
         static const unsigned POLLERR = 8;
         static const unsigned POLLIN = 1;
         static const unsigned POLLOUT = 4;
-        static const unsigned F_SETFL = 4;
         int fcntl(int, int, ...);
         int close(int);
         int gettimeofday(struct timeval *, void *);

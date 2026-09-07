@@ -1,5 +1,6 @@
 local _ = require("gettext")
 
+local F_SETFL = 4 -- Fixed on every platform supported by KOReader.
 local UnixHTTP = {
     -- AF_UNIX is fixed by the Linux userspace ABI. Older KOReader FFI headers
     -- do not declare the constant even though they expose Unix socket calls.
@@ -91,7 +92,7 @@ local function request_with_ffi(socket_path, method, path, body, timeout_seconds
         local deadline = now() + (tonumber(timeout_seconds) or 4)
         -- A full Unix socket backlog can otherwise block connect before poll
         -- gets a chance to enforce the request deadline.
-        if C.fcntl(fd, C.F_SETFL, ffi.cast("int", C.O_NONBLOCK)) ~= 0 then
+        if C.fcntl(fd, F_SETFL, ffi.cast("int", C.O_NONBLOCK)) ~= 0 then
             error(_("socket: ") .. strerror())
         end
         local address = ffi.new("struct sockaddr_un")
