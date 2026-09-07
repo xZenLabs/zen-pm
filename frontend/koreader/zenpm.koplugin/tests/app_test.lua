@@ -1263,6 +1263,31 @@ assert(scriptlet_asset_requests == 0)
 assert(scriptlet_action.action == "install")
 assert(scriptlet_action.asset == nil)
 
+local selected_update_build
+modal_rows = nil
+App.start_package_action({
+    state = { direct_github = false },
+    client = {
+        get_package_assets = function()
+            return true, {
+                needs_choice = true,
+                candidates = { { asset = "reader-kindle.zip" } },
+            }
+        end,
+    },
+    choose_package_asset = App.choose_package_asset,
+    queue_package_action = function(_, _, action, asset, opts)
+        selected_update_build = { action = action, asset = asset, release = opts.release }
+    end,
+}, { id = "reader" }, "update", nil, { release = "v1.2.3" })
+assert(selected_update_build == nil)
+assert(modal_title == "Choose a build for reader")
+assert(#modal_rows == 1)
+modal_rows[1].callback()
+assert(selected_update_build.action == "update")
+assert(selected_update_build.asset == "reader-kindle.zip")
+assert(selected_update_build.release == "v1.2.3")
+
 local scriptlet_entry = App.queue_entry_for({}, scriptlet, "update", nil, { release = "1.0.1" })
 assert(scriptlet_entry.release == nil)
 

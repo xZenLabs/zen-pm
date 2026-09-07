@@ -3066,10 +3066,6 @@ function App:start_package_action(pkg, action, on_done, opts)
         self:prompt_default_package_version(pkg, on_done, action)
         return
     end
-    if action_installs_package(action) and opts and opts.release then
-        self:queue_package_action(pkg, action, nil, opts)
-        return
-    end
     if action_installs_package(action) then
         -- Fonts use an explicit catalog ZIP, while Kindle-only packages run
         -- repository scripts. Neither needs a cached release asset.
