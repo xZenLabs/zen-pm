@@ -2165,9 +2165,24 @@ func TestSelectAssetUsesAndroidDeviceForAndroidKOReaderCapabilities(t *testing.T
 }
 
 func TestManagerDeviceIncludesRuntime(t *testing.T) {
-	dev := (&Manager{plat: "host,koreader"}).device()
-	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH || !dev.KOReader {
+	dev := (&Manager{plat: "host"}).device()
+	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH {
 		t.Fatalf("device runtime = %q/%q, want %q/%q", dev.OS, dev.Arch, runtime.GOOS, runtime.GOARCH)
+	}
+}
+
+func TestSelectAssetUsesPackageKOReaderCapability(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (&Manager{st: st, plat: platform.Kindle}).selectAssetWithError(&repo.CatalogEntry{
+		Platforms: []string{"kindle", "koreader"},
+		Assets:    `[{"arch":"any","asset":"ZenMTP.zip"},{"arch":"any","asset":"zen_mtp.koplugin.zip"}]`,
+	})
+	if err != nil || result.NeedsChoice || result.Auto != "zen_mtp.koplugin.zip" {
+		t.Fatalf("SelectAsset = %+v, %v; want KOReader plugin asset", result, err)
 	}
 }
 
