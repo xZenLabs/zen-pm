@@ -2165,8 +2165,8 @@ func TestSelectAssetUsesAndroidDeviceForAndroidKOReaderCapabilities(t *testing.T
 }
 
 func TestManagerDeviceIncludesRuntime(t *testing.T) {
-	dev := (&Manager{plat: "host"}).device()
-	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH {
+	dev := (&Manager{plat: "host,koreader"}).device()
+	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH || !dev.KOReader {
 		t.Fatalf("device runtime = %q/%q, want %q/%q", dev.OS, dev.Arch, runtime.GOOS, runtime.GOARCH)
 	}
 }

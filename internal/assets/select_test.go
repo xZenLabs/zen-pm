@@ -113,6 +113,13 @@ func TestSelectSingleAssetNoChoice(t *testing.T) {
 	}
 }
 
+func TestSelectKOReaderGetsKopluginZip(t *testing.T) {
+	r := Select(`[{"asset":"ZenMTP.zip"},{"asset":"zen_mtp.koplugin.zip"}]`, Device{Platform: "kindle", KOReader: true})
+	if r.NeedsChoice || r.Auto != "zen_mtp.koplugin.zip" {
+		t.Fatalf("got %+v, want KOReader plugin asset", r)
+	}
+}
+
 func TestSelectEmptyAssets(t *testing.T) {
 	r := Select("", Device{Platform: "kindle"})
 	if r.Auto != "" || r.NeedsChoice {
