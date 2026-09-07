@@ -24,6 +24,8 @@ const (
 // DefaultZenLabsRepoURL may be overridden at link time by development builds.
 var DefaultZenLabsRepoURL = "https://repo.zen-labs.org"
 
+var chmodGitHubToken = os.Chmod
+
 // State holds all resolved paths for ZenPM's working directories.
 type State struct {
 	Home             string
@@ -120,7 +122,8 @@ func Init(platformName string) (*State, error) {
 	if err := token.Close(); err != nil {
 		return nil, fmt.Errorf("close GitHub token file: %w", err)
 	}
-	if err := os.Chmod(s.GitHubTokenFile, 0600); err != nil {
+	// PocketBook's storage mount does not support changing Unix mode bits.
+	if err := chmodGitHubToken(s.GitHubTokenFile, 0600); err != nil && !os.IsPermission(err) {
 		return nil, fmt.Errorf("restrict GitHub token file: %w", err)
 	}
 	_ = os.Setenv("ZENPM_GITHUB_TOKEN_FILE", s.GitHubTokenFile)

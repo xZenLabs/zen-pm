@@ -69,11 +69,13 @@ return {
         "Improve README url/image handling"
     },
     ["1.6.0"] = {
+        "Save and close open books before updating plugins",
         "Fix absolute vs relative plugin path on some devices",
         "Update settings layout",
         "Add status bar from ZenOS",
         "Merge Changes tab into Discover",
         "Add alpha support",
+        "Fix PocketBook backend startup and GitHub token saving",
         "Bug fixes",
         "Performance improvements"
     },

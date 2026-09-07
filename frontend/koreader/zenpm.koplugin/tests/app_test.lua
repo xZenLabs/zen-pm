@@ -21,6 +21,8 @@ local logged_warnings = {}
 local network_connected = true
 local network_retry_callback
 local browser_url
+package.preload["apps/reader/readerui"] = function() return {} end
+package.preload["apps/filemanager/filemanager"] = function() return {} end
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function()
     return { new = function(_, name) return name end }
@@ -213,6 +215,7 @@ package.loaded["updater"] = {}
 package.preload["zenpm_util"] = function()
     return {
         split_lines = dofile(root .. "/zenpm_util.lua").split_lines,
+        sh_quote = dofile(root .. "/zenpm_util.lua").sh_quote,
         trim = function(value)
             return tostring(value or ""):match("^%s*(.-)%s*$")
         end,
@@ -259,8 +262,142 @@ dofile = function(path)
     return original_dofile(path)
 end
 local App = require("app")
+
+do
+    local home = os.tmpname()
+    os.remove(home)
+    assert(os.execute("mkdir " .. require("zenpm_util").sh_quote(home)) == 0)
+    local pocketbook = true
+    local token_app = { daemon = {
+        state_home = function() return home end,
+        is_pocketbook = function() return pocketbook end,
+    } }
+    local execute = os.execute
+    local chmod_calls, chmod_result = 0, 1
+    os.execute = function(command)
+        assert(command:find("chmod 600 ", 1, true) == 1)
+        chmod_calls = chmod_calls + 1
+        return chmod_result
+    end
+    assert(App.write_github_token(token_app, "test-token"))
+    assert(App.github_token(token_app) == "test-token")
+    assert(chmod_calls == 0)
+    pocketbook = false
+    assert(not App.write_github_token(token_app, "replacement-token"))
+    assert(App.github_token(token_app) == "test-token")
+    assert(chmod_calls == 1)
+    chmod_result = 0
+    assert(App.write_github_token(token_app, "replacement-token"))
+    assert(App.github_token(token_app) == "replacement-token")
+    assert(chmod_calls == 2)
+    pocketbook = true
+    assert(App.write_github_token(token_app, ""))
+    assert(App.github_token(token_app) == "")
+    assert(chmod_calls == 2)
+    os.execute = execute
+    os.remove(home .. "/github_token.txt")
+    os.execute("rmdir " .. require("zenpm_util").sh_quote(home))
+end
 dofile = original_dofile
 assert(updater_dofile_loads == 1)
+
+-- Updating from the reader must save the book before touching plugin files,
+-- retain ZenPM above the file browser, and reconnect the stopped backend.
+do
+    local ReaderUI = require("apps/reader/readerui")
+    local FileManager = require("apps/filemanager/filemanager")
+    local UIManager = require("ui/uimanager")
+    local old_show, old_close = UIManager.show, UIManager.close
+    local events, reconnect_ok, result
+    local reader_menu = { exitOrRestart = function() end }
+    local original_exit = reader_menu.exitOrRestart
+    local browser_plugin = { ui = { menu = { exitOrRestart = function() end } } }
+    local app = setmetatable({
+        view = {},
+        state = { beta_updates = false },
+        daemon = {
+            ensure = function()
+                assert(ReaderUI.instance == nil)
+                table.insert(events, "reconnect")
+                return reconnect_ok, "backend unavailable"
+            end,
+            is_android = function() return false end,
+        },
+        client = {
+            package_action = function()
+                assert(ReaderUI.instance == nil)
+                table.insert(events, "install")
+                return true
+            end,
+        },
+        package_action_failure_stats = function() return 0 end,
+        poll_package_action = function() end,
+        run_update_task = function(_, _, _, callback)
+            table.insert(events, "self-update")
+            callback(false)
+        end,
+    }, { __index = App })
+    UIManager.close = function(_, view)
+        assert(view == app.view)
+        table.insert(events, "hide")
+    end
+    UIManager.show = function(_, view)
+        assert(view == app.view and app.plugin == browser_plugin)
+        table.insert(events, "show")
+    end
+    local function open_book()
+        events, reconnect_ok, result = {}, true, nil
+        app:restore_koreader_exit()
+        app.plugin = { ui = { menu = reader_menu } }
+        app:intercept_koreader_exit()
+        ReaderUI.instance = {
+            document = { file = "/books/test.epub" },
+            onClose = function()
+                assert(reader_menu.exitOrRestart == original_exit)
+                table.insert(events, "save and close")
+                ReaderUI.instance = nil
+            end,
+            showFileManager = function(_, file)
+                assert(file == "/books/test.epub" and ReaderUI.instance == nil)
+                FileManager.instance = { zenpm = browser_plugin }
+            end,
+        }
+    end
+    local pkg = { id = "reader-plugin", installed = true, platforms = { "koreader" } }
+    local opts = { on_result = function(ok, detail) result = { ok, detail } end }
+
+    open_book()
+    app:run_package_action(pkg, "update", nil, nil, opts)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect,install")
+    assert(app.backend_ready and app.exit_menu == browser_plugin.ui.menu)
+    app:run_package_action(pkg, "update", nil, nil, opts)
+    assert(events[6] == "install" and #events == 6) -- Already closed for the queue.
+
+    open_book()
+    app:apply_update(opts.on_result)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect,self-update")
+    assert(result[1] == false and result[2] == "Update was cancelled.")
+
+    open_book()
+    reconnect_ok = false
+    app:run_package_action(pkg, "update", nil, nil, opts)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect")
+    assert(result[1] == false and not app.busy and not app.backend_ready)
+
+    open_book()
+    reconnect_ok = false
+    app:apply_update(opts.on_result)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect")
+    assert(result[1] == false and result[2] == "Update failed: backend unavailable")
+
+    open_book()
+    ReaderUI.instance.onClose = function() error("book save failed") end
+    assert(not pcall(app.run_package_action, app, pkg, "update", nil, nil, opts))
+    assert(table.concat(events, ",") == "hide")
+    app:restore_koreader_exit()
+    ReaderUI.instance, FileManager.instance = nil, nil
+    UIManager.show, UIManager.close = old_show, old_close
+end
 
 local reader_link_url
 local wallabag_url

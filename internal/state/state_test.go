@@ -2,10 +2,53 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
+
+func TestInitTokenPermissionsOnPocketBookStorage(t *testing.T) {
+	originalChmod := chmodGitHubToken
+	t.Cleanup(func() { chmodGitHubToken = originalChmod })
+	t.Setenv("ZENPM_GITHUB_TOKEN_FILE", "")
+	for _, tc := range []struct {
+		name     string
+		token    string
+		chmodErr error
+		wantErr  bool
+	}{
+		{name: "empty placeholder", chmodErr: syscall.EPERM},
+		{name: "stored token", token: "test-token\n", chmodErr: syscall.EPERM},
+		{name: "IO failure", chmodErr: syscall.EIO, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("ZENPM_HOME", home)
+			path := filepath.Join(home, "github_token.txt")
+			if tc.token != "" {
+				if err := os.WriteFile(path, []byte(tc.token), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			chmodGitHubToken = func(string, os.FileMode) error { return tc.chmodErr }
+			// Retry too: a failed beta startup already left an empty placeholder.
+			for range 2 {
+				st, err := Init("ereader")
+				if st != nil {
+					st.Close()
+				}
+				if tc.wantErr && !errors.Is(err, tc.chmodErr) || !tc.wantErr && err != nil {
+					t.Fatalf("Init = %v, want error: %v", err, tc.wantErr)
+				}
+				if data, err := os.ReadFile(path); err != nil || string(data) != tc.token {
+					t.Fatalf("token file changed: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestResolvePersistDirUsesExplicitHome(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")

@@ -1596,6 +1596,29 @@ function App:quit()
     self:close()
 end
 
+function App:close_book_before_update()
+    local reader = require("apps/reader/readerui").instance
+    if not reader then return true end
+
+    -- Use the normal book-close path so annotations, progress and plugin data
+    -- are saved while the old plugin files are still in place.
+    App.restore_koreader_exit(self)
+    if self.view then UIManager:close(self.view) end
+    local file = reader.document.file
+    reader:onClose()
+    reader:showFileManager(file)
+    self.plugin = require("apps/filemanager/filemanager").instance.zenpm
+    if self.view then
+        UIManager:show(self.view)
+        App.intercept_koreader_exit(self)
+    end
+
+    -- Closing ReaderUI also closes its ZenPM instance and stops the backend.
+    local ready, err = self.daemon:ensure(self.client)
+    self.backend_ready = ready
+    return ready, err
+end
+
 function App:restart_koreader(reopen_after_restart)
     App.save_setting("reopen_after_restart", reopen_after_restart == true)
     Modals.status(_("Restarting..."))
@@ -3141,7 +3164,13 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
         .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
     local direct_github = self.state and self.state.direct_github and package_has_github_source(pkg)
-    local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil, direct_github)
+    local ok, err = true, nil
+    if action == "update" or package_is_koreader_plugin(pkg) or is_patch then
+        ok, err = App.close_book_before_update(self)
+    end
+    if ok then
+        ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil, direct_github)
+    end
     if not ok then
         self.busy = false
         local message = _("Failed to start package action: ") .. tostring(err)
@@ -3514,7 +3543,8 @@ function App:write_github_token(value)
     if not file then return false, err end
     local wrote, write_err = file:write(value == "" and "" or value .. "\n")
     local closed, close_err = file:close()
-    if not wrote or not closed or os.execute("chmod 600 " .. Util.sh_quote(stage)) ~= 0 then
+    if not wrote or not closed
+        or (not self.daemon:is_pocketbook() and os.execute("chmod 600 " .. Util.sh_quote(stage)) ~= 0) then
         os.remove(stage)
         return false, write_err or close_err or _("Could not secure the GitHub token file.")
     end
@@ -3807,6 +3837,13 @@ function App:apply_update(release_tag, on_result)
     if type(release_tag) == "function" then
         on_result = release_tag
         release_tag = nil
+    end
+    local ready, prepare_err = App.close_book_before_update(self)
+    if not ready then
+        local message = _("Update failed: ") .. tostring(prepare_err)
+        log_update_failure(self, prepare_err)
+        if on_result then on_result(false, message) else Modals.info(message) end
+        return
     end
     local companion_update_started = false
     if self.daemon:is_android() then

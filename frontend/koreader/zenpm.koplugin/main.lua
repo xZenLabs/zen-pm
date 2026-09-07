@@ -103,6 +103,12 @@ function ZenPM:onOpenZenPM()
 end
 
 function ZenPM:onUpdateAllZenPMPlugins()
+    local app = Launcher.get_app(self)
+    local closed, close_err = app:close_book_before_update()
+    if not closed then
+        app.daemon:log_cli("dispatcher update all failed to close book: " .. tostring(close_err))
+        return false
+    end
     local daemon = Daemon:new()
     local client = Client:new()
     local ready, err = daemon:ensure(client)
