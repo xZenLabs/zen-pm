@@ -981,13 +981,12 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease, allowAlpha bool) {
 	if item == nil {
 		return
 	}
-	latest := item.Version
 	alphaChannel := allowAlpha && item.ID == "zen-ui"
-	if allowPrerelease && !alphaChannel && releases.VersionGreater(item.PrereleaseVersion, latest) {
-		latest = item.PrereleaseVersion
-	}
-	if alphaChannel && releases.VersionGreater(item.AlphaVersion, latest) {
+	latest := item.Version
+	if alphaChannel {
 		latest = item.AlphaVersion
+	} else if allowPrerelease && releases.VersionGreater(item.PrereleaseVersion, latest) {
+		latest = item.PrereleaseVersion
 	}
 	if latest == "" || !hasKnownVersion(item.InstalledVer) {
 		return
@@ -996,7 +995,8 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease, allowAlpha bool) {
 	if sameReleaseWithCommitSuffix(latest, item.InstalledVer) {
 		return
 	}
-	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer)
+	installedAlpha := strings.Contains(strings.ToLower(releases.NormalizeVersion(item.InstalledVer)), "-alpha")
+	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer) || alphaChannel && !installedAlpha
 	if item.UpdateAvail {
 		item.LatestRelease = latest
 	}

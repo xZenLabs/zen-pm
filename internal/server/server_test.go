@@ -816,9 +816,15 @@ func TestApplyUpdateInfoAlphaChannelExcludesBeta(t *testing.T) {
 		t.Fatalf("alpha update info = %#v", item)
 	}
 
+	item = pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", AlphaVersion: "1.3.0-alpha9", InstalledVer: "1.3.0-beta1"}
+	applyUpdateInfo(&item, true, true)
+	if item.LatestVersion != "1.3.0-alpha9" || !item.UpdateAvail || item.LatestRelease != "1.3.0-alpha9" {
+		t.Fatalf("alpha update from beta info = %#v", item)
+	}
+
 	item = pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", InstalledVer: "1.2.0"}
 	applyUpdateInfo(&item, true, true)
-	if item.LatestVersion != "1.2.0" || item.UpdateAvail {
+	if item.LatestVersion != "" || item.UpdateAvail {
 		t.Fatalf("alpha channel without alpha = %#v", item)
 	}
 
