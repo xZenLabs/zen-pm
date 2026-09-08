@@ -1,4 +1,5 @@
 local Dispatcher = require("dispatcher")
+local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
@@ -103,6 +104,9 @@ function ZenPM:onOpenZenPM()
 end
 
 function ZenPM:onUpdateAllZenPMPlugins()
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:onUpdateAllZenPMPlugins()
+    end) then return true end
     local app = Launcher.get_app(self)
     local closed, close_err = app:close_book_before_update()
     if not closed then

@@ -9,6 +9,7 @@ local restart_message
 local restart_callback
 local restart_actions = {}
 local status_message
+local status_close_count = 0
 local queued_ticks
 local modal_title
 local modal_rows
@@ -110,7 +111,7 @@ package.preload["ui/modals"] = function()
             restart_callback = callback
         end,
         status = function(message) status_message = message end,
-        close_status = function() end,
+        close_status = function() status_close_count = status_close_count + 1 end,
         confirm = function() end,
         actions = function(title, rows, options)
             modal_title = title
@@ -211,7 +212,7 @@ local updater_stub = {
     reinstall = function(_, _, tag, allow_prerelease, force_refresh)
         updater_reinstall_requests = updater_reinstall_requests + 1
         assert(tag == "v1.2.3")
-        assert(not allow_prerelease)
+        assert(allow_prerelease)
         assert(force_refresh)
         return true, "1.2.3"
     end,
@@ -1396,15 +1397,17 @@ assert(advanced_queue_refreshed == 1)
 assert(modal_message == "Added to Queue")
 
 local companion_update_requests = 0
+local companion_update_prerelease
 local reinstalled_scan_calls = 0
 local reinstalled_backend_restarts = 0
 local reinstalled_result
 App.apply_update({
-    state = { beta_updates = false },
+    state = { beta_updates = true },
     daemon = {
         is_android = function() return true end,
-        request_android_update = function()
+        request_android_update = function(_, allow_prerelease)
             companion_update_requests = companion_update_requests + 1
+            companion_update_prerelease = allow_prerelease
             return true
         end,
         stop_standalone_backend = function() end,
@@ -1426,6 +1429,7 @@ App.apply_update({
     reinstalled_result = { ... }
 end)
 assert(companion_update_requests == 1)
+assert(companion_update_prerelease == true)
 assert(updater_reinstall_requests == 1)
 assert(reinstalled_scan_calls == 1)
 assert(reinstalled_backend_restarts == 1)
@@ -1712,6 +1716,68 @@ _G.G_reader_settings = {
     saveSetting = function(_, key, value) reader_settings[key] = value end,
     flush = function() end,
 }
+
+local zen_background_saves = 0
+local zen_background_plugin = {
+    path = "/tmp/zenos.koplugin",
+    config = {},
+    saveConfig = function() zen_background_saves = zen_background_saves + 1 end,
+}
+table.insert(pluginloader.loaded_plugins, zen_background_plugin)
+local image_packages = {
+    { id = "zen-ui", installed = true, plugin_module = "zenos" },
+    {
+        id = "mountain-view-grey",
+        name = "Mountain View Grey",
+        category = "wallpapers",
+        installed_asset = "mountain-view-grey.jpg",
+    },
+    {
+        id = "books",
+        name = "Books",
+        category = "screensavers",
+        installed_asset = "books.png",
+    },
+}
+local image_app = setmetatable({
+    state = { packages = image_packages },
+    daemon = { koreader_data_dir = function() return "/koreader" end },
+}, { __index = App })
+local image_prompt_done = 0
+local image_entry = { id = image_packages[2].id, action = "install", pkg = image_packages[2] }
+local image_batch = {
+    operations = { image_entry },
+    index = 1,
+    succeeded = {},
+    failed = {},
+    settings_cleanup = {},
+}
+image_app.run_package_action = function(_, _, _, _, _, options) options.on_result(true) end
+image_app.remove_queue_entry = function() end
+image_app.run_next_queue_operation = function(_, batch)
+    image_prompt_done = batch.index
+end
+local image_status_closes = status_close_count
+App.run_next_queue_operation(image_app, image_batch)
+assert(modal_title == "Set Mountain View Grey as the ZenOS library background?")
+assert(status_close_count == image_status_closes + 1)
+modal_rows[1].callback()
+assert(zen_background_plugin.config.library_background.enabled)
+assert(zen_background_plugin.config.library_background.path
+    == "/koreader/resources/wallpapers/mountain-view-grey.jpg")
+assert(zen_background_saves == 1 and image_prompt_done == 2)
+
+assert(image_app:prompt_installed_image(image_packages[3]))
+assert(modal_title == "Set Books as the KOReader sleep screen?")
+modal_rows[1].callback()
+assert(reader_settings.screensaver_type == "document_cover")
+assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/books.png")
+table.remove(pluginloader.loaded_plugins)
+image_app.state.packages = { image_packages[2] }
+modal_title = nil
+assert(not image_app:prompt_installed_image(image_packages[2]))
+assert(modal_title == nil)
+
 local toggle_done = false
 modal_message = nil
 modal_seconds = nil
@@ -1768,12 +1834,17 @@ local queue_app = {
         },
     },
     queue_count = function(self) return #self.state.queue end,
+    confirm_queue = App.confirm_queue,
     prepare_queue_assets = function(_, operations)
         queued_operations = operations
     end,
     refresh = function() end,
 }
+network_connected = false
 App.confirm_queue(queue_app)
+assert(not queue_app.state.queue_running and type(network_retry_callback) == "function")
+network_connected = true
+network_retry_callback()
 assert(queue_app.state.queue_running)
 assert(queued_operations[1].name == "Uninstall")
 assert(queued_operations[2].name == "Install")

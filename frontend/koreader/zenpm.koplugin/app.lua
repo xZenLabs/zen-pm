@@ -1128,6 +1128,66 @@ function App:zen_ui_installed()
     return false
 end
 
+local function installed_image_path(app, pkg)
+    local kind = Util.trim(tostring(pkg and pkg.category or "")):lower():gsub("[%s_%-]+", "")
+    if kind ~= "wallpapers" and kind ~= "screensavers" then return nil end
+    local asset = Util.trim(tostring(pkg and pkg.installed_asset or ""))
+    if asset == "" or asset:find("/", 1, true) or asset:find("\\", 1, true) then return nil end
+    local root = app.daemon and type(app.daemon.koreader_data_dir) == "function"
+        and app.daemon:koreader_data_dir() or ""
+    if root == "" then return nil end
+    return root .. "/resources/" .. kind .. "/" .. asset, kind
+end
+
+function App:apply_installed_image(pkg)
+    local path, kind = installed_image_path(self, pkg)
+    if not path then return false, _("Installed image path is unavailable.") end
+    if kind == "screensavers" then
+        local settings = rawget(_G, "G_reader_settings")
+        if not (settings and type(settings.saveSetting) == "function") then
+            return false, _("KOReader settings are unavailable.")
+        end
+        settings:saveSetting("screensaver_type", "document_cover")
+        settings:saveSetting("screensaver_document_cover", path)
+        if type(settings.flush) == "function" then settings:flush() end
+        return true
+    end
+
+    local zen_pkg = Models.find_package(self.state.packages, "zen-ui")
+    local zen = koreader_plugin_instance(zen_pkg)
+    if not (zen and type(zen.config) == "table" and type(zen.saveConfig) == "function") then
+        return false, _("ZenOS must be enabled to set its library background.")
+    end
+    local background = type(zen.config.library_background) == "table"
+        and zen.config.library_background or { opacity = 100 }
+    background.enabled = true
+    background.path = path
+    zen.config.library_background = background
+    local ok, err = pcall(zen.saveConfig, zen)
+    if not ok then return false, tostring(err) end
+    return true
+end
+
+function App:prompt_installed_image(pkg, on_done)
+    local path, kind = installed_image_path(self, pkg)
+    if not path or not self:zen_ui_installed() then return false end
+    local name = package_title(pkg, pkg.installed_asset or _("Image"))
+    local target = kind == "wallpapers" and _("Library background")
+        or _("Sleep screen")
+    Modals.close_status()
+    Modals.actions(string.format(_("Set %s as the %s?"), name, target), {
+        {
+            text = _("Set image"),
+            callback = function()
+                local ok, err = self:apply_installed_image(pkg)
+                if not ok then Modals.info(_("Could not apply image: ") .. tostring(err)) end
+                if on_done then on_done() end
+            end,
+        },
+    }, { cancel_callback = on_done })
+    return true
+end
+
 function App:clear_queue()
     if self.state.queue_running then return end
     self.state.queue = {}
@@ -1387,10 +1447,17 @@ function App:run_next_queue_operation(batch)
             else
                 table.insert(batch.failed, { entry = entry, detail = detail })
             end
-            batch.index = batch.index + 1
-            UIManager:nextTick(function()
-                self:run_next_queue_operation(batch)
-            end)
+            local function continue()
+                batch.index = batch.index + 1
+                UIManager:nextTick(function()
+                    self:run_next_queue_operation(batch)
+                end)
+            end
+            if succeeded and entry.action == "install" and Models.is_image_asset_package(entry.pkg)
+                    and self:prompt_installed_image(Models.find_package(self.state.packages, entry.id), continue) then
+                return
+            end
+            continue()
         end,
     })
 end
@@ -1452,6 +1519,12 @@ end
 
 function App:confirm_queue()
     if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
+    for _, entry in ipairs(self.state.queue) do
+        if action_installs_package(entry.action) then
+            if NetworkMgr:willRerunWhenConnected(function() self:confirm_queue() end) then return end
+            break
+        end
+    end
     local operations = {}
     for _, entry in ipairs(self.state.queue) do
         if not entry.self_update and not entry.self_reinstall and entry.action == "uninstall" then table.insert(operations, entry) end
@@ -3518,6 +3591,9 @@ end
 
 function App:apply_kindle_homepage_install()
     if self.busy then return end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:apply_kindle_homepage_install()
+    end) then return end
     self.busy = true
     local status = Modals.status(_("Copying ZenPM to Kindle homepage..."))
     UIManager:forceRePaint()
@@ -3842,6 +3918,9 @@ end
 
 function App:start_update()
     if self.busy then return end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:start_update()
+    end) then return end
     self.busy = true
     local status = Modals.status(_("Checking for update..."))
     UIManager:forceRePaint()
@@ -3883,6 +3962,9 @@ function App:apply_update(release_tag, on_result)
         on_result = release_tag
         release_tag = nil
     end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:apply_update(release_tag, on_result)
+    end) then return end
     local ready, prepare_err = App.close_book_before_update(self)
     if not ready then
         local message = _("Update failed: ") .. tostring(prepare_err)
@@ -3892,7 +3974,7 @@ function App:apply_update(release_tag, on_result)
     end
     local companion_update_started = false
     if self.daemon:is_android() then
-        local started, err = self.daemon:request_android_update()
+        local started, err = self.daemon:request_android_update(self.state.beta_updates)
         if not started then
             local message = _("Companion update failed to start: ") .. tostring(err)
             log_update_failure(self, message)

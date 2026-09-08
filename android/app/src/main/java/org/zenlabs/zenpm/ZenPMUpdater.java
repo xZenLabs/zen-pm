@@ -27,12 +27,12 @@ final class ZenPMUpdater {
 
     private ZenPMUpdater() {}
 
-    static void start(final Context context, final String logHome) {
+    static void start(final Context context, final String logHome, final boolean allowPrerelease) {
         CompanionLog.writeUpdateStatus(context, logHome, "checking", null);
         new Thread(new Runnable() {
             @Override public void run() {
                 try {
-                    Release release = latestRelease();
+                    Release release = latestRelease(allowPrerelease);
                     if (compareVersions(release.version, installedVersion(context)) <= 0) {
                         CompanionLog.write(context, logHome, "ZenPM companion is up to date.");
                         CompanionLog.writeUpdateStatus(context, logHome, "up_to_date", null);
@@ -52,7 +52,7 @@ final class ZenPMUpdater {
         }, "ZenPMUpdater").start();
     }
 
-    private static Release latestRelease() throws Exception {
+    private static Release latestRelease(boolean allowPrerelease) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(RELEASES_URL).openConnection();
         connection.setRequestProperty("User-Agent", "ZenPM-Companion");
         connection.setConnectTimeout(15000);
@@ -63,7 +63,7 @@ final class ZenPMUpdater {
         JSONArray releases = new JSONArray(readAll(connection.getInputStream()));
         for (int i = 0; i < releases.length(); i++) {
             JSONObject release = releases.getJSONObject(i);
-            if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue;
+            if (!releaseAllowed(release.optBoolean("draft"), release.optBoolean("prerelease"), allowPrerelease)) continue;
             String version = release.optString("tag_name").replaceFirst("^v", "");
             String assetName = "ZenPM-android-" + version + ".apk";
             JSONArray assets = release.optJSONArray("assets");
@@ -78,6 +78,10 @@ final class ZenPMUpdater {
             }
         }
         throw new IOException("No compatible companion update was found.");
+    }
+
+    static boolean releaseAllowed(boolean draft, boolean prerelease, boolean allowPrerelease) {
+        return !draft && (allowPrerelease || !prerelease);
     }
 
     private static void download(Release release, File destination) throws Exception {

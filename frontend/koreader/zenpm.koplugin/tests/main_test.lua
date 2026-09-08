@@ -9,6 +9,8 @@ local reopened
 local actions = {}
 local update_events = {}
 local close_ok = true
+local network_connected = true
+local network_retry_callback
 
 package.preload["i18n"] = function()
     return {
@@ -25,6 +27,15 @@ package.preload["dispatcher"] = function()
 end
 package.preload["ui/uimanager"] = function()
     return { nextTick = function(_, callback) scheduled = callback end }
+end
+package.preload["ui/network/manager"] = function()
+    return {
+        willRerunWhenConnected = function(_, callback)
+            if network_connected then return false end
+            network_retry_callback = callback
+            return true
+        end,
+    }
 end
 package.preload["ui/widget/container/widgetcontainer"] = function()
     return { extend = function(_, prototype) return prototype end }
@@ -99,7 +110,11 @@ ZenPM:onCloseWidget()
 assert(stopped == 1)
 assert(uninstalled == 1)
 
+network_connected = false
 assert(ZenPM:onUpdateAllZenPMPlugins())
+assert(#update_events == 0 and type(network_retry_callback) == "function")
+network_connected = true
+network_retry_callback()
 assert(table.concat(update_events, ",") == "close,ensure,update")
 update_events = {}
 close_ok = false

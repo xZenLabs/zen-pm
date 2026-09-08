@@ -922,7 +922,7 @@ function Daemon:start(prepared)
     return true
 end
 
-function Daemon:request_android_update()
+function Daemon:request_android_update(allow_prerelease)
     if not self:is_android() or type(android.openLink) ~= "function" then
         return false, _("ZenPM Android companion is not available.")
     end
@@ -930,7 +930,9 @@ function Daemon:request_android_update()
     os.remove(status_path)
     local companion_log = self:state_home() .. "/android-companion.log"
     append_text(companion_log, log_timestamp() .. "  KOReader requesting ZenPM companion update.\n")
-    local called, opened = pcall(android.openLink, "zenpm://update?home=" .. uri_escape(self:state_home()))
+    local uri = "zenpm://update?home=" .. uri_escape(self:state_home())
+    if allow_prerelease then uri = uri .. "&beta=1" end
+    local called, opened = pcall(android.openLink, uri)
     append_text(companion_log, log_timestamp() .. "  ZenPM companion update link result: called="
         .. tostring(called) .. " opened=" .. tostring(opened) .. "\n")
     if called and opened then
