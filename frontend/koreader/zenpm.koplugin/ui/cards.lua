@@ -141,7 +141,9 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local h = opts.height or m.card_h
     P.box(bb, x, y, w, h, { border = opts.border })
     local pad = opts.pad or Theme.scale(10)
-    local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(64), h - pad * 2)
+    local is_image_asset = Models.is_image_asset_package(pkg)
+    local icon_w = opts.compact and 0 or math.min(opts.icon_w
+        or (is_image_asset and h - pad * 2 or Theme.scale(64)), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
@@ -183,10 +185,10 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     if icon_w > 0 then
         local ix = x + pad
         local iy = y + math.floor((h - icon_w) / 2)
-        local icon_file, _icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
-        local zoom = package_icon_zoom(icon_value, icon_source)
-        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = true })
-            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = true })
+        local icon_file, icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
+        local zoom = is_image_asset and icon_source == "package" and 1.1 or package_icon_zoom(icon_value, icon_source)
+        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = icon_is_icon })
+            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = icon_is_icon })
         if not painted then
             P.center_text_box(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy, icon_w, icon_w, "small", { bold = true, color = ink })
         end
@@ -429,7 +431,12 @@ function Cards.compact(view, bb, x, y, w, opts)
     opts = opts or {}
     local m = Theme.metrics()
     local h = opts.height or m.category_h
-    P.box(bb, x, y, w, h)
+    P.box(bb, x, y, w, h, { border = opts.border, radius = opts.radius })
+    if opts.divider or opts.top_divider then
+        local divider_h = math.max(1, Theme.scale(1))
+        if opts.top_divider then P.rect(bb, x, y, w, divider_h, Theme.soft) end
+        if opts.divider then P.rect(bb, x, y + h - divider_h, w, divider_h, Theme.soft) end
+    end
     local pad = Theme.scale(10)
     local icon = math.min(Theme.scale(52), math.max(Theme.scale(32), h - Theme.scale(16)))
     local ix = x + pad
@@ -472,6 +479,11 @@ function Cards.category(view, bb, category, x, y, w, opts)
         icon_fallback = tostring(category.label or "?"):sub(1, 1),
         title = I18n.dynamic_or(category.label, _("Category")),
         subtitle = tostring(category.count or 0) .. " " .. _("packages"),
+        subtitle_gap = 0,
+        border = false,
+        radius = false,
+        divider = true,
+        top_divider = opts.top_divider,
         callback = function() view.app:show_category_details(category.id) end,
         hit_id = "category:" .. tostring(category.id),
         focus = opts.focus,

@@ -473,6 +473,21 @@ func TestParseZenPMCatalogDerivesPluginModuleFromSource(t *testing.T) {
 	}
 }
 
+func TestCatalogEntryDerivesPluginModuleFromVersionedAsset(t *testing.T) {
+	for _, test := range []struct {
+		asset, version, module string
+	}{
+		{"foot-cream-v1.8.3.koplugin.zip", "1.8.3", "foot-cream"},
+		{"remote_turner-1.6.8.koplugin.zip", "1.6.8", "remote_turner"},
+	} {
+		entry := CatalogEntry{SourceAsset: test.asset, Version: test.version}
+		entry.ensurePluginModule()
+		if entry.PluginModule != test.module {
+			t.Fatalf("module for %q = %q, want %q", test.asset, entry.PluginModule, test.module)
+		}
+	}
+}
+
 func TestParseZenPMCatalogPreservesPluginIdentityAliases(t *testing.T) {
 	manifest := manifestJSON{}
 	if err := json.Unmarshal([]byte(`{

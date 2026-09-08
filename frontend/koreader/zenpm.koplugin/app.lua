@@ -149,6 +149,9 @@ function App:new(plugin)
         readme_image_queue = {},
         readme_image_pending = {},
         readme_image_loading = false,
+        package_image_queue = {},
+        package_image_pending = {},
+        package_image_loading = false,
         state = {
             page = "home",
             active_tab = "home",
@@ -346,6 +349,9 @@ end
 
 local function package_is_koreader_plugin(pkg)
     if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
+        return false
+    end
+    if Models.is_patch_package(pkg) or Models.is_direct_asset_package(pkg) then
         return false
     end
     for _, platform in ipairs(pkg.platforms) do
@@ -886,7 +892,7 @@ function App:queue_all_updates()
                     add_next(index + 1)
                     return
                 end
-                if Models.is_font_package(pkg) then
+                if Models.is_direct_asset_package(pkg) then
                     if self:queue_package_action(pkg, "update", nil, { silent = true }) then
                         added = added + 1
                         kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
@@ -899,7 +905,7 @@ function App:queue_all_updates()
                 local ok, info = self.client:get_package_assets(pkg.id or pkg.name)
                 local candidates = ok and type(info) == "table" and info.needs_choice
                     and type(info.candidates) == "table" and info.candidates or nil
-                if candidates and #candidates > 0 and not Models.is_font_package(pkg) then
+                if candidates and #candidates > 0 and not Models.is_direct_asset_package(pkg) then
                     self:choose_package_asset(pkg, "update", candidates, nil, {
                         silent = true,
                         on_queued = function(was_added)
@@ -937,7 +943,7 @@ function App:queue_entry_for(pkg, action, asset, opts)
     if not id then return nil end
     opts = opts or {}
     local is_patch = Models.is_patch_package(pkg)
-    local is_font = Models.is_font_package(pkg)
+    local is_direct_asset = Models.is_direct_asset_package(pkg)
     local display_name = is_patch and asset and asset ~= ""
         and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
@@ -954,7 +960,7 @@ function App:queue_entry_for(pkg, action, asset, opts)
         is_patch = is_patch,
         prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
-        settings_deleter = action == "uninstall" and not is_patch and not is_font
+        settings_deleter = action == "uninstall" and not is_patch and not is_direct_asset
             and resolve_plugin_settings_deleter(pkg) or nil,
     }
 end
@@ -1947,6 +1953,37 @@ function App:queue_readme_image(value)
     end)
 end
 
+function App:load_next_package_image()
+    local value = table.remove(self.package_image_queue, 1)
+    if not value then
+        self.package_image_loading = false
+        return
+    end
+    self:image_file_for(value)
+    self.package_image_pending[value] = nil
+    if #self.package_image_queue == 0 then
+        self.package_image_loading = false
+        self:refresh()
+        return
+    end
+    UIManager:scheduleIn(0.05, function()
+        self:load_next_package_image()
+    end)
+end
+
+function App:queue_package_image(value)
+    value = tostring(value or "")
+    if value == "" or self.package_image_pending[value] or Images.is_failed(value) then return end
+    if self:cached_image_file(value) then return end
+    self.package_image_pending[value] = true
+    table.insert(self.package_image_queue, value)
+    if self.package_image_loading then return end
+    self.package_image_loading = true
+    UIManager:nextTick(function()
+        self:load_next_package_image()
+    end)
+end
+
 function App:package_icon_file(pkg)
     if is_zenpm_package(pkg) then
         local icon = Images.asset("zenpm.svg")
@@ -1955,6 +1992,13 @@ function App:package_icon_file(pkg)
     local icon_value = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
     local source = icon_value == fallback_value and "repo-fallback" or "package"
+    if Models.is_image_asset_package(pkg) then
+        local file = self:cached_image_file(icon_value)
+        if file then return file, false, icon_value, source end
+        self:queue_package_image(icon_value)
+        fallback_value = Images.category_icon(pkg.category) or Images.asset("packages.svg")
+        return fallback_value, true, fallback_value, "fallback"
+    end
     local file = self:image_file_for(icon_value)
     if file then
         return file, icon_value == fallback_value, icon_value, source
@@ -2771,8 +2815,9 @@ function App:perform_package_action(pkg, on_done)
     end
     if pkg.installed then
         local is_koplugin = package_is_koreader_plugin(pkg)
-        local has_versions = Models.has_version_history(pkg)
-            or (self.state.direct_github and package_has_github_source(pkg))
+        local has_versions = not Models.is_direct_asset_package(pkg)
+            and (Models.has_version_history(pkg)
+                or (self.state.direct_github and package_has_github_source(pkg)))
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             info = self.state.page ~= "package_details" and function()
@@ -2789,15 +2834,14 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = has_versions and not Models.is_font_package(pkg)
-                and not package_is_kindle_only(pkg) and function()
+            downgrade = has_versions and not package_is_kindle_only(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+    elseif Models.has_version_history(pkg) and not Models.is_direct_asset_package(pkg)
         and not package_is_kindle_only(pkg) then
         self:prompt_default_package_version(pkg, on_done, "install")
     else
@@ -3045,7 +3089,7 @@ function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
 end
 
 function App:confirm_package_action(pkg, action, on_done)
-    local opts = action == "update" and pkg.latest_release and not Models.is_font_package(pkg)
+    local opts = action == "update" and pkg.latest_release and not Models.is_direct_asset_package(pkg)
         and not package_uses_source(pkg)
         and { release = pkg.latest_release } or nil
     self:start_package_action(pkg, action, on_done, opts)
@@ -3062,14 +3106,14 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action_installs_package(action) and self.state and self.state.direct_github
-        and package_has_github_source(pkg) and not package_is_kindle_only(pkg) then
+        and package_has_github_source(pkg) and not Models.is_direct_asset_package(pkg)
+        and not package_is_kindle_only(pkg) then
         self:prompt_default_package_version(pkg, on_done, action)
         return
     end
     if action_installs_package(action) then
-        -- Fonts use an explicit catalog ZIP, while Kindle-only packages run
-        -- repository scripts. Neither needs a cached release asset.
-        if Models.is_font_package(pkg) or package_is_kindle_only(pkg) then
+        -- Direct catalog assets and Kindle-only packages do not need a cached release asset.
+        if Models.is_direct_asset_package(pkg) or package_is_kindle_only(pkg) then
             self:queue_package_action(pkg, action, nil, opts)
             return
         end
@@ -3163,7 +3207,8 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     self.busy = true
     Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
         .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
-    local direct_github = self.state and self.state.direct_github and package_has_github_source(pkg)
+    local direct_github = self.state and self.state.direct_github
+        and not Models.is_direct_asset_package(pkg) and package_has_github_source(pkg)
     local ok, err = true, nil
     if action == "update" or package_is_koreader_plugin(pkg) or is_patch then
         ok, err = App.close_book_before_update(self)

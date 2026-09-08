@@ -282,7 +282,13 @@ func (e *CatalogEntry) ensurePluginModule() {
 		asset = filepath.Base(asset)
 		asset = strings.TrimSuffix(asset, ".zip")
 		if strings.HasSuffix(asset, ".koplugin") {
-			e.PluginModule = strings.TrimSuffix(asset, ".koplugin")
+			module := strings.TrimSuffix(asset, ".koplugin")
+			version := strings.TrimPrefix(strings.TrimSpace(e.Version), "v")
+			if version != "" {
+				module = strings.TrimSuffix(module, "-v"+version)
+				module = strings.TrimSuffix(module, "-"+version)
+			}
+			e.PluginModule = module
 			return
 		}
 	}

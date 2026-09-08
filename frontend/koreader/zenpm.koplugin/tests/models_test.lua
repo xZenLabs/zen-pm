@@ -128,6 +128,13 @@ local searchable = {
 assert(#Models.filter_packages(searchable, "title match") == 1)
 assert(#Models.filter_packages(searchable, "author match") == 1)
 assert(#Models.filter_packages(searchable, "description match") == 0)
+assert(Models.is_direct_asset_package({ category = "fonts" }))
+assert(Models.is_direct_asset_package({ category = "wallpapers" }))
+assert(Models.is_direct_asset_package({ category = "screen-savers" }))
+assert(not Models.is_direct_asset_package({ category = "utility" }))
+assert(Models.is_image_asset_package({ category = "wallpapers" }))
+assert(Models.is_image_asset_package({ category = "screen-savers" }))
+assert(not Models.is_image_asset_package({ category = "fonts" }))
 
 local categorized = {
     { id = "font", category = "fonts" },

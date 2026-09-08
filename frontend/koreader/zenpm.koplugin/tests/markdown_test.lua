@@ -5,13 +5,15 @@ package.path = root .. "/?.lua;" .. package.path
 local Markdown = require("ui/markdown")
 
 local measured_image
+local measured_image_max_height
 local scheduled_callbacks = {}
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ui/widget/imageviewer"] = function() return { new = function() return {} end } end
 package.preload["ui/primitives"] = function()
     return {
-        image_dimensions = function(file)
+        image_dimensions = function(file, _, max_height)
             measured_image = file
+            measured_image_max_height = max_height
             return 80, 40
         end,
         paragraph = function() end,
@@ -156,6 +158,17 @@ Renderer.render(image_view, {}, {
 }, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, 0)
 assert(#queued_images == 1)
 assert(queued_images[1] == "https://repo.example/packages/demo/first.png")
+
+Renderer.render({
+    app = {
+        state = { show_readme_images = true },
+        cached_image_file = function() return "wallpaper.jpg", false end,
+    },
+}, {}, {
+    { kind = "image", alt = "Wallpaper", url = "wallpaper.jpg", max_height = 480 },
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0)
+assert(measured_image == "wallpaper.jpg" and measured_image_max_height == 480)
+measured_image = nil
 
 local prepared_file = os.tmpname()
 local prepared_handle = assert(io.open(prepared_file, "w"))

@@ -90,6 +90,10 @@ package.preload["i18n"] = function() return {} end
 package.preload["ui/images"] = function()
     return {
         asset = function(name) return "assets/" .. name end,
+        category_icon = function(category) return "assets/" .. tostring(category) .. ".svg" end,
+        package_icon = function(pkg) return pkg.icon_url end,
+        package_fallback = function() return "assets/packages.svg" end,
+        is_failed = function() return false end,
         invalidate_cache = function() end,
     }
 end
@@ -149,6 +153,8 @@ package.preload["models"] = function()
         is_installed_patch_item = function() return false end,
         is_unmanaged_patch = function() return false end,
         is_font_package = function(pkg) return pkg and pkg.category == "fonts" end,
+        is_image_asset_package = models.is_image_asset_package,
+        is_direct_asset_package = models.is_direct_asset_package,
         has_version_history = function(pkg) return pkg and pkg.versions_url ~= nil end,
         find_package = function(packages, id)
             for _, pkg in ipairs(packages or {}) do
@@ -315,6 +321,30 @@ do
     assert(table.concat(loaded, ",") == "one,two")
     assert(refreshes == 1)
     assert(not image_app.readme_image_loading)
+end
+
+do
+    local loaded, refreshes = {}, 0
+    local image_app = setmetatable({
+        state = {},
+        package_image_queue = {},
+        package_image_pending = {},
+        package_image_loading = false,
+        cached_image_file = function() return nil, false end,
+        image_file_for = function(_, value) table.insert(loaded, value) end,
+        refresh = function() refreshes = refreshes + 1 end,
+    }, { __index = App })
+    queued_ticks = {}
+    local file, is_icon = image_app:package_icon_file({
+        category = "wallpapers",
+        icon_url = "https://example.test/wallpaper.jpg",
+    })
+    assert(file == "assets/wallpapers.svg" and is_icon == true)
+    assert(#loaded == 0 and #queued_ticks == 1)
+    queued_ticks[1]()
+    queued_ticks = nil
+    assert(loaded[1] == "https://example.test/wallpaper.jpg")
+    assert(refreshes == 1 and not image_app.package_image_loading)
 end
 
 -- Updating from the reader must save the book before touching plugin files,
@@ -1470,6 +1500,38 @@ App.perform_package_action({
 }, scriptlet)
 assert(scriptlet_install_action == "install")
 
+local wallpaper_install_action
+App.perform_package_action({
+    state = { direct_github = true },
+    confirm_package_action = function(_, _, action) wallpaper_install_action = action end,
+    prompt_default_package_version = function() error("wallpapers must not open the version picker") end,
+}, {
+    id = "wallpaper-clouds",
+    category = "wallpapers",
+    platforms = { "koreader" },
+    versions_url = "https://example.test/versions.json",
+    source = "https://github.com/example/wallpapers",
+})
+assert(wallpaper_install_action == "install")
+
+local wallpaper_direct_github
+App.run_package_action({
+    state = { direct_github = true },
+    client = {
+        package_action = function(_, _, _, _, _, direct_github)
+            wallpaper_direct_github = direct_github
+            return true
+        end,
+    },
+    package_action_failure_stats = function() return 0 end,
+    poll_package_action = function() end,
+}, {
+    id = "wallpaper-clouds",
+    category = "wallpapers",
+    source = "https://github.com/example/wallpapers",
+}, "install")
+assert(wallpaper_direct_github == false, tostring(wallpaper_direct_github))
+
 local regular_zenpm_action
 local ignored_updates_toggled = 0
 App.perform_package_action({
@@ -1597,6 +1659,7 @@ assert(prompt_callbacks == 2)
 
 local bulk_queued = {}
 local bulk_queue_opened = 0
+local bulk_asset_requests = 0
 local bulk_app = {
     state = {
         queue_running = false,
@@ -1604,10 +1667,14 @@ local bulk_app = {
         packages = {
             { id = "ignored", installed = true, update_available = true, update_ignored = true },
             { id = "active", installed = true, update_available = true },
+            { id = "wallpaper", category = "wallpapers", installed = true, update_available = true },
         },
     },
     client = {
-        get_package_assets = function() return true, {} end,
+        get_package_assets = function()
+            bulk_asset_requests = bulk_asset_requests + 1
+            return true, {}
+        end,
     },
     queue_package_action = function(_, pkg, action)
         table.insert(bulk_queued, pkg.id .. ":" .. action)
@@ -1616,11 +1683,13 @@ local bulk_app = {
     show_queue = function() bulk_queue_opened = bulk_queue_opened + 1 end,
     refresh = function() end,
 }
-assert(App.installed_update_count(bulk_app) == 1)
+assert(App.installed_update_count(bulk_app) == 2)
 modal_message = nil
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 1)
+assert(#bulk_queued == 2)
 assert(bulk_queued[1] == "active:update")
+assert(bulk_queued[2] == "wallpaper:update")
+assert(bulk_asset_requests == 1)
 assert(bulk_queue_opened == 1)
 assert(modal_message == nil)
 
@@ -1628,7 +1697,8 @@ bulk_app.state.advanced = true
 bulk_queue_opened = 0
 bulk_queued = {}
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 1)
+assert(#bulk_queued == 2)
+assert(bulk_asset_requests == 2)
 assert(bulk_queue_opened == 0)
 assert(modal_message == "Added to Queue")
 

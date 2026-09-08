@@ -17,9 +17,11 @@ import (
 )
 
 const (
-	genericPluginInstaller = "plugin"
-	genericPatchInstaller  = "patch"
-	genericFontInstaller   = "font"
+	genericPluginInstaller      = "plugin"
+	genericPatchInstaller       = "patch"
+	genericFontInstaller        = "font"
+	genericWallpaperInstaller   = "wallpapers"
+	genericScreensaverInstaller = "screensavers"
 )
 
 func validKOReaderPluginName(name string) bool {
@@ -40,10 +42,13 @@ func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
 	if isFontPackage(entry) {
 		return genericFontInstaller
 	}
+	if kind := imagePackageKind(entry); kind != "" {
+		return kind
+	}
 	return genericPluginInstaller
 }
 
-// nativeKOReaderInstaller handles KOReader plugins and patches in-process.
+// nativeKOReaderInstaller handles KOReader packages in-process.
 func (m *Manager) nativeKOReaderInstaller(entry *repo.CatalogEntry, override string) string {
 	return genericKOReaderInstaller(entry)
 }
@@ -70,6 +75,9 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 	case genericFontInstaller:
 		path, err := m.installKOReaderFont(entry, root, assetName, data)
 		return "", path, err
+	case genericWallpaperInstaller, genericScreensaverInstaller:
+		path, err := installKOReaderImage(root, assetName, data, kind)
+		return "", path, err
 	default:
 		return "", "", fmt.Errorf("unknown generic KOReader installer %q", kind)
 	}
@@ -88,7 +96,7 @@ func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, r
 	if assetName == "" && genericKOReaderInstaller(entry) == genericPluginInstaller {
 		assetName = ".koplugin.zip"
 	}
-	if directGitHub {
+	if directGitHub && !isDirectKOReaderAssetPackage(entry) {
 		_, asset, err := releases.ResolveGitHubReleaseAsset(entry.Source, releaseTag, assetName)
 		if err != nil {
 			return "", "", nil, err
@@ -99,12 +107,12 @@ func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, r
 		}
 		return asset.Name, asset.URL, data, nil
 	}
-	if isFontPackage(entry) {
+	if isDirectKOReaderAssetPackage(entry) {
 		selected, selectedOK := selectedAsset(entry.Assets, assetName)
 		if selectedOK && strings.TrimSpace(selected.URL) != "" {
 			assetURL = strings.TrimSpace(selected.URL)
 		} else {
-			return "", "", nil, fmt.Errorf("font package %q requires an explicit ZIP asset URL", entry.ID)
+			return "", "", nil, fmt.Errorf("package %q requires an explicit asset URL", entry.ID)
 		}
 	} else if releaseTag == "" {
 		selected, selectedOK := selectedAsset(entry.Assets, assetName)
@@ -352,6 +360,41 @@ func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName 
 	return destination, nil
 }
 
+func installKOReaderImage(root, assetName string, data []byte, kind string) (string, error) {
+	extension := strings.ToLower(filepath.Ext(assetName))
+	validFormat := extension == ".jpg"
+	formats := "JPG"
+	if kind == genericScreensaverInstaller {
+		validFormat = validFormat || extension == ".png"
+		formats = "JPG or PNG"
+	}
+	if filepath.Base(assetName) != assetName || !validFormat {
+		return "", fmt.Errorf("%s asset %q must be a %s image", strings.TrimSuffix(kind, "s"), assetName, formats)
+	}
+	directory := filepath.Join(root, "resources", kind)
+	if err := os.MkdirAll(directory, 0755); err != nil {
+		return "", fmt.Errorf("create KOReader %s directory: %w", kind, err)
+	}
+	destination := filepath.Join(directory, assetName)
+	temporary, err := os.CreateTemp(directory, ".zenpm-image-*")
+	if err != nil {
+		return "", fmt.Errorf("write KOReader %s: %w", strings.TrimSuffix(kind, "s"), err)
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	_, err = temporary.Write(data)
+	if closeErr := temporary.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(temporaryPath, destination)
+	}
+	if err != nil {
+		return "", fmt.Errorf("write KOReader %s: %w", strings.TrimSuffix(kind, "s"), err)
+	}
+	return destination, nil
+}
+
 func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind string) error {
 	root, err := m.koreaderRoot()
 	if err != nil {
@@ -375,9 +418,27 @@ func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind
 			return err
 		}
 		return removeKOReaderFont(root, entry.ID, path)
+	case genericWallpaperInstaller, genericScreensaverInstaller:
+		path, err := m.installedPackagePath(entry.ID)
+		if err != nil {
+			return err
+		}
+		return removeKOReaderImage(root, path, kind)
 	default:
 		return fmt.Errorf("unknown generic KOReader installer %q", kind)
 	}
+}
+
+func removeKOReaderImage(root, path, kind string) error {
+	directory := filepath.Join(root, "resources", kind)
+	path = filepath.Clean(path)
+	if filepath.Dir(path) != directory || !pathWithinRoot(directory, path) {
+		return fmt.Errorf("invalid tracked KOReader %s path %q", strings.TrimSuffix(kind, "s"), path)
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove KOReader %s %s: %w", strings.TrimSuffix(kind, "s"), path, err)
+	}
+	return nil
 }
 
 func (m *Manager) installedPackagePath(id string) (string, error) {

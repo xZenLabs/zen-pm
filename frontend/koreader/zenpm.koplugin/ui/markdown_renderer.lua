@@ -356,10 +356,11 @@ local function image_entry(view, block, image_base_url, width, image_refs)
             backend_managed = backend_pending,
         }
     end
+    local max_height = block.max_height or Theme.scale(240)
     local image_w, image_h = prepared_image_dimensions(
-        prepared_width, prepared_height, width, Theme.scale(240))
+        prepared_width, prepared_height, width, max_height)
     if not image_w then
-        image_w, image_h = P.image_dimensions(file, width, Theme.scale(240))
+        image_w, image_h = P.image_dimensions(file, width, max_height)
     end
     if not image_w then
         log_image(view, url, "unreadable", "file=" .. file)

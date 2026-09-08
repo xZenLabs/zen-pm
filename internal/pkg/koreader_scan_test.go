@@ -55,6 +55,18 @@ func TestScanKOReaderPluginsRecordsMatchedExternalPlugins(t *testing.T) {
 	}
 }
 
+func TestKOReaderPluginCatalogExcludesResourcePackages(t *testing.T) {
+	_, byID := koreaderPluginCatalog([]*repo.CatalogEntry{
+		{ID: "plugin", Platforms: []string{"koreader"}},
+		{ID: "font", Category: "fonts", Platforms: []string{"koreader"}},
+		{ID: "wallpaper", Category: "wallpapers", Platforms: []string{"koreader"}},
+		{ID: "screensaver", Category: "screensavers", Platforms: []string{"koreader"}},
+	})
+	if len(byID) != 1 || byID["plugin"] == nil {
+		t.Fatalf("KOReader plugin catalog = %#v, want only plugin", byID)
+	}
+}
+
 func TestScanKOReaderPluginsMatchesSharedModuleByVersion(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{
 		{ID: "zlibrary", Name: "OctoNezd Zlibrary", Version: "1.1.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "zlibrary"},

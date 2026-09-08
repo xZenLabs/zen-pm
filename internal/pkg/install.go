@@ -120,7 +120,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 			override = assetOverride
 		}
 		installEntry := entry
-		if pkgID == id && releaseTag != "" && !isFontPackage(entry) {
+		if pkgID == id && releaseTag != "" && !isDirectKOReaderAssetPackage(entry) {
 			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
 			if err != nil {
 				return err
@@ -756,24 +756,40 @@ func isPatchPackage(entry *repo.CatalogEntry) bool {
 }
 
 func isFontPackage(entry *repo.CatalogEntry) bool {
-	if entry == nil {
-		return false
-	}
-	category := strings.ToLower(strings.TrimSpace(entry.Category))
-	category = strings.ReplaceAll(category, "-", "")
-	category = strings.ReplaceAll(category, "_", "")
-	category = strings.ReplaceAll(category, " ", "")
+	category := normalizedPackageCategory(entry)
 	return category == "font" || category == "fonts"
 }
 
-func patchPackageReason(entry *repo.CatalogEntry) string {
+func imagePackageKind(entry *repo.CatalogEntry) string {
+	switch normalizedPackageCategory(entry) {
+	case genericWallpaperInstaller:
+		return genericWallpaperInstaller
+	case genericScreensaverInstaller:
+		return genericScreensaverInstaller
+	default:
+		return ""
+	}
+}
+
+func isDirectKOReaderAssetPackage(entry *repo.CatalogEntry) bool {
+	return isFontPackage(entry) || imagePackageKind(entry) != ""
+}
+
+func normalizedPackageCategory(entry *repo.CatalogEntry) string {
 	if entry == nil {
 		return ""
 	}
 	category := strings.ToLower(strings.TrimSpace(entry.Category))
 	category = strings.ReplaceAll(category, "-", "")
 	category = strings.ReplaceAll(category, "_", "")
-	category = strings.ReplaceAll(category, " ", "")
+	return strings.ReplaceAll(category, " ", "")
+}
+
+func patchPackageReason(entry *repo.CatalogEntry) string {
+	if entry == nil {
+		return ""
+	}
+	category := normalizedPackageCategory(entry)
 	if category == "patch" || category == "patches" ||
 		category == "koreaderpatch" || category == "koreaderpatches" {
 		return "category"

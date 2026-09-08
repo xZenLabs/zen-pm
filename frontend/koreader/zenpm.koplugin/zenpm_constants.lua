@@ -43,8 +43,10 @@ return {
         { id = "media", label = N_("Media"), icon = "media.svg" },
         { id = "koreader-patches", label = N_("Patches"), icon = "patch.svg" },
         { id = "productivity", label = N_("Productivity"), icon = "productivity.svg" },
+        { id = "screensavers", label = N_("Screensavers"), icon = "screensaver.svg" },
         { id = "theme", label = N_("Theme"), icon = "theme.svg" },
         { id = "utility", label = N_("Utility"), icon = "utility.svg" },
+        { id = "wallpapers", label = N_("Wallpapers"), icon = "wallpaper.svg" },
     },
     KINDLE_SCRIPTLETS_CATEGORY = {
         id = "kindle-scriptlets",

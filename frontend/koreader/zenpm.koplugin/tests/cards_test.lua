@@ -3,6 +3,10 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. root .. "/ui/?.lua;" .. package.path
 
 local painted_text = {}
+local painted_text_y = {}
+local painted_images = {}
+local painted_boxes = {}
+local painted_rects = {}
 local hit_callbacks = {}
 
 package.preload["zenpm_constants"] = function() return { PLUGIN_DIR = root } end
@@ -15,17 +19,34 @@ package.preload["models"] = function()
         package_action_label = function() return "Update" end,
         package_display_name = function(pkg, fallback) return pkg.name or fallback end,
         package_verified = function() return true end,
+        is_image_asset_package = function(pkg)
+            return pkg.category == "wallpapers" or pkg.category == "screensavers"
+        end,
         repo_display_name = function(value) return value end,
     }
 end
 package.preload["ui/images"] = function() return { asset = function(name) return name end } end
 package.preload["ui/primitives"] = function()
     return {
-        box = function() end,
-        text = function(_, text) table.insert(painted_text, text) end,
+        box = function(_, x, y, w, h, opts)
+            table.insert(painted_boxes, { x = x, y = y, w = w, h = h, opts = opts })
+        end,
+        rect = function(_, x, y, w, h)
+            table.insert(painted_rects, { x = x, y = y, w = w, h = h })
+        end,
+        text = function(_, text, _, y)
+            table.insert(painted_text, text)
+            painted_text_y[text] = y
+        end,
         text_size = function(text) return { w = #text, h = 1 } end,
-        image = function() return true end,
-        image_zoomed = function() return true end,
+        image = function(_, file, _, _, w, h, opts)
+            painted_images[file] = { w = w, h = h, is_icon = opts and opts.is_icon }
+            return true
+        end,
+        image_zoomed = function(_, file, _, _, w, h, zoom, opts)
+            painted_images[file] = { w = w, h = h, zoom = zoom, is_icon = opts and opts.is_icon }
+            return true
+        end,
         center_text_box = function() end,
         dim = function() end,
         hit = function(_, _, _, _, _, callback, id) hit_callbacks[id] = callback end,
@@ -42,7 +63,8 @@ package.preload["ui/theme"] = function()
         button_text = 0,
         ink = 0,
         muted = 0,
-        metrics = function() return { card_h = 80, action_w = 40, action_h = 20 } end,
+        soft = 0,
+        metrics = function() return { card_h = 80, category_h = 84, action_w = 40, action_h = 20 } end,
         scale = function(value) return value end,
         font_scale = function(value) return value end,
     }
@@ -86,22 +108,41 @@ Cards.package({
     app = {
         state = { active_tab = "installed", queue = {} },
         package_disabled = function() return false end,
-        package_icon_file = function() return "zenpm.svg" end,
+        package_icon_file = function() return "wallpaper.jpg", false, "wallpaper.jpg", "package" end,
         perform_package_action = function() end,
         show_package_details = function() end,
     },
 }, {}, {
-    id = "zenpm-koreader",
-    name = "ZenPM",
+    id = "wallpaper",
+    name = "Wallpaper",
+    category = "wallpapers",
     author = "Zen Labs",
     version = "1.0.0",
     repo = "ZenLabs",
 }, 0, 0, 300, { height = 92, show_title = false, second_line = "By Zen Labs" })
 
 for _, text in ipairs(painted_text) do
-    assert(text ~= "ZenPM")
+    assert(text ~= "Wallpaper")
 end
 assert(painted_text[1] == "By Zen Labs")
+assert(painted_images["wallpaper.jpg"].w == 72 and painted_images["wallpaper.jpg"].h == 72)
+assert(painted_images["wallpaper.jpg"].zoom == 1.1)
+assert(painted_images["wallpaper.jpg"].is_icon == false)
+
+painted_boxes = {}
+painted_rects = {}
+painted_text_y = {}
+Cards.category({
+    app = { show_category_details = function() end },
+}, {}, {
+    id = "wallpapers",
+    label = "Wallpapers",
+    icon = "wallpaper.svg",
+    count = 2,
+}, 0, 0, 300, { height = 60, top_divider = true })
+assert(painted_boxes[1].opts.border == false and painted_boxes[1].opts.radius == false)
+assert(#painted_rects == 2 and painted_rects[1].y == 0 and painted_rects[2].y == 59)
+assert(painted_text_y["2 packages"] == painted_text_y.Wallpapers + 1)
 
 painted_text = {}
 local opened_update_details

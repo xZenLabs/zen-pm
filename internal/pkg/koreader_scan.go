@@ -383,7 +383,7 @@ func koreaderPluginCatalog(catalog []*repo.CatalogEntry) (map[string][]*repo.Cat
 	byModule := make(map[string][]*repo.CatalogEntry)
 	byID := make(map[string]*repo.CatalogEntry)
 	for _, entry := range catalog {
-		if !packageHasPlatform(entry, "koreader") || isPatchPackage(entry) {
+		if !isGenericKOReaderPlugin(entry) {
 			continue
 		}
 		for _, module := range koreaderPluginModules(entry) {

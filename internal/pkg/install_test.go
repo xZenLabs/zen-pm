@@ -564,6 +564,72 @@ func TestInstallGenericFontNatively(t *testing.T) {
 	}
 }
 
+func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
+	for _, test := range []struct {
+		category string
+		asset    string
+	}{
+		{category: "wallpapers", asset: "clouds.jpg"},
+		{category: "screensavers", asset: "books.png"},
+		{category: "screensavers", asset: "library.jpg"},
+	} {
+		t.Run(test.asset, func(t *testing.T) {
+			home := filepath.Join(t.TempDir(), "ZenPM")
+			t.Setenv("ZENPM_HOME", home)
+			koHome := t.TempDir()
+			t.Setenv("HOME", koHome)
+			koRoot := filepath.Join(koHome, ".config", "koreader")
+			if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			st, err := state.Init("host")
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(test.category))
+			}))
+			defer srv.Close()
+
+			id := strings.TrimSuffix(test.asset, filepath.Ext(test.asset))
+			if err := st.WriteCatalog([]state.CatalogEntry{{
+				ID: id, Name: id, Version: "1.0.0", Repo: "ZenLabs",
+				Category: test.category, Platforms: []string{"koreader"},
+				Assets: `[{"arch":"any","asset":"` + test.asset + `","url":"` + srv.URL + `/` + test.asset + `"}]`,
+			}}); err != nil {
+				t.Fatal(err)
+			}
+
+			manager := New(st, repo.New(st), "host")
+			if err := manager.Install(id); err != nil {
+				t.Fatal(err)
+			}
+			destination := filepath.Join(koRoot, "resources", test.category, test.asset)
+			if data, err := os.ReadFile(destination); err != nil || string(data) != test.category {
+				t.Fatalf("installed image = %q, %v", data, err)
+			}
+			installed, err := st.ReadInstalled()
+			if err != nil || len(installed) != 1 || installed[0].InstallPath != destination {
+				t.Fatalf("installed images = %#v, %v", installed, err)
+			}
+			if err := manager.Uninstall(id, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(destination); !os.IsNotExist(err) {
+				t.Fatalf("image remains after uninstall: %v", err)
+			}
+		})
+	}
+}
+
+func TestInstallKOReaderImageRejectsUnsafeOrWrongFormat(t *testing.T) {
+	for _, asset := range []string{"../outside.jpg", "wallpaper.png"} {
+		if _, err := installKOReaderImage(t.TempDir(), asset, nil, genericWallpaperInstaller); err == nil {
+			t.Fatalf("install image %q succeeded, want error", asset)
+		}
+	}
+}
+
 func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID:     "plugin",
@@ -587,6 +653,22 @@ func TestDownloadInstallAssetDirectRequiresGitHubSource(t *testing.T) {
 	}
 	if _, _, _, err := (&Manager{}).downloadInstallAssetMode(entry, "", "v2.0.0", true); err == nil || !strings.Contains(err.Error(), "GitHub repository") {
 		t.Fatalf("direct GitHub error = %v", err)
+	}
+}
+
+func TestDownloadInstallAssetDirectUsesCatalogForImages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "wallpaper")
+	}))
+	defer srv.Close()
+	entry := &repo.CatalogEntry{
+		ID: "clouds", Category: "wallpapers", Platforms: []string{"koreader"},
+		Source: "https://github.com/example/wallpapers",
+		Assets: `[{"arch":"any","asset":"clouds.jpg","url":"` + srv.URL + `/clouds.jpg"}]`,
+	}
+	name, assetURL, data, err := (&Manager{}).downloadInstallAssetMode(entry, "clouds.jpg", "v2.0.0", true)
+	if err != nil || name != "clouds.jpg" || assetURL != srv.URL+"/clouds.jpg" || string(data) != "wallpaper" {
+		t.Fatalf("download image = %q, %q, %q, %v", name, assetURL, data, err)
 	}
 }
 
@@ -685,8 +767,8 @@ func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
 	}
 
 	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "font-cartisse.zip", "v4.1")
-	if err == nil || !strings.Contains(err.Error(), "requires an explicit ZIP asset URL") {
-		t.Fatalf("download error = %v, want explicit font ZIP URL error", err)
+	if err == nil || !strings.Contains(err.Error(), "requires an explicit asset URL") {
+		t.Fatalf("download error = %v, want explicit asset URL error", err)
 	}
 }
 
@@ -759,6 +841,16 @@ func TestNativeKOReaderInstallerClassifiesPackagesWithoutScripts(t *testing.T) {
 	}
 	if got := manager.nativeKOReaderInstaller(plugin, ""); got != genericPluginInstaller {
 		t.Fatalf("native plugin installer = %q, want %q", got, genericPluginInstaller)
+	}
+
+	for category, want := range map[string]string{
+		"wallpapers":   genericWallpaperInstaller,
+		"screensavers": genericScreensaverInstaller,
+	} {
+		entry := &repo.CatalogEntry{Category: category, Platforms: []string{"koreader"}}
+		if got := manager.nativeKOReaderInstaller(entry, ""); got != want {
+			t.Fatalf("native %s installer = %q, want %q", category, got, want)
+		}
 	}
 
 	kindle := &repo.CatalogEntry{

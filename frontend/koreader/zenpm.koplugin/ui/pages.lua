@@ -255,6 +255,7 @@ end
 function Pages.categories(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
+    local gap = 0
     local categories = view.app.state.visible_categories or {}
     local query = view.app.state.filters.categories
     local cy = y + Theme.scale(8)
@@ -269,11 +270,12 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
     -- The list renderer omits partially clipped rows, so fit the complete
     -- category set whenever the device has enough room above touch_min.
     local row_h = compact_row_height(
-        list_h, m.card_gap, math.max(COMPACT_ROWS_PER_SCREEN, #categories))
-    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable, index, count)
+        list_h, gap, math.max(COMPACT_ROWS_PER_SCREEN, #categories))
+    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, gap, function(category, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, {
+        Cards.category(view, bb, category, x, row_y, w - gutter, {
             height = row_h,
+            top_divider = index == 1,
             focus = {
                 id = "category:" .. tostring(category.id),
                 focus_type = "category",
@@ -560,8 +562,10 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local inner_x = x + pad + Theme.scale(12)
     local inner_w = w - pad * 2 - Theme.scale(24)
     local iy = cy + Theme.scale(12)
+    local is_image_asset = Models.is_image_asset_package(pkg)
     local show_featured_at_top = pkg.featured_image
         and not Models.is_font_package(pkg)
+        and not is_image_asset
         and not view.app.state.details_featured_expanded
         and (tonumber(scroll) or 0) <= 0
     view.package_details_featured_visible = show_featured_at_top
@@ -602,7 +606,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         { kind = "heading", level = 2, text = description_heading, plain = true },
         { kind = "paragraph", text = description, plain = true },
     }
-    if not is_font then
+    if not is_font and not is_image_asset then
         local readme = tostring(pkg.readme or "")
         if readme == "" then
             readme = _("No README available.")
@@ -620,6 +624,13 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
             kind = "image",
             alt = I18n.dynamic_or(pkg.name, _("Font preview")),
             url = pkg.featured_image,
+        })
+    elseif is_image_asset and pkg.icon_url and pkg.icon_url ~= "" then
+        table.insert(readme_blocks, {
+            kind = "image",
+            alt = I18n.dynamic_or(pkg.name, ""),
+            url = pkg.icon_url,
+            max_height = Theme.scale(480),
         })
     end
     local assets = Models.package_assets(pkg)
