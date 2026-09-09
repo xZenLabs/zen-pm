@@ -6,9 +6,18 @@ local Markdown = require("ui/markdown")
 
 local measured_image
 local measured_image_max_height
+local image_tap_callback
+local shown_image_viewer
 local scheduled_callbacks = {}
 package.preload["gettext"] = function() return function(value) return value end end
-package.preload["ui/widget/imageviewer"] = function() return { new = function() return {} end } end
+package.preload["ui/widget/imageviewer"] = function()
+    return {
+        new = function(_, options)
+            options.onClose = function(self) self.closed = true end
+            return options
+        end,
+    }
+end
 package.preload["ui/primitives"] = function()
     return {
         image_dimensions = function(file, _, max_height)
@@ -16,6 +25,8 @@ package.preload["ui/primitives"] = function()
             measured_image_max_height = max_height
             return 80, 40
         end,
+        image_cropped = function() return true end,
+        hit = function(_, _, _, _, _, callback) image_tap_callback = callback end,
         paragraph = function() end,
     }
 end
@@ -27,6 +38,7 @@ end
 package.preload["ui/uimanager"] = function()
     return {
         scheduleIn = function(_, _, callback) table.insert(scheduled_callbacks, callback) end,
+        show = function(_, widget) shown_image_viewer = widget end,
     }
 end
 local Renderer = require("ui/markdown_renderer")
@@ -168,6 +180,21 @@ Renderer.render({
     { kind = "image", alt = "Wallpaper", url = "wallpaper.jpg", max_height = 480 },
 }, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0)
 assert(measured_image == "wallpaper.jpg" and measured_image_max_height == 480)
+measured_image = nil
+
+Renderer.render({
+    app = {
+        state = { show_readme_images = true },
+        cached_image_file = function() return "wallpaper.jpg", false end,
+    },
+}, {}, {
+    { kind = "image", alt = "Wallpaper", url = "wallpaper.jpg" },
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, 0)
+assert(image_tap_callback)
+image_tap_callback()
+assert(shown_image_viewer.file == "wallpaper.jpg")
+assert(shown_image_viewer.fullscreen == true and shown_image_viewer.with_title_bar == false)
+assert(shown_image_viewer:onTap() == true and shown_image_viewer.closed == true)
 measured_image = nil
 
 local prepared_file = os.tmpname()

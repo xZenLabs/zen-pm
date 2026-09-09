@@ -415,7 +415,16 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
                 if P.image_cropped(bb, entry.file, x, visible_y, entry.w, visible_h, entry.h, source_y, { is_icon = false }) then
                     log_image(view, entry.file, "painted")
                     P.hit(view, x, visible_y, entry.w, visible_h, function()
-                        UIManager:show(ImageViewer:new{ file = entry.file, fullscreen = true })
+                        local viewer = ImageViewer:new{
+                            file = entry.file,
+                            fullscreen = true,
+                            with_title_bar = false,
+                        }
+                        viewer.onTap = function(viewer_self)
+                            viewer_self:onClose()
+                            return true
+                        end
+                        UIManager:show(viewer)
                     end, "readme-image:" .. entry.file)
                 elseif entry.alt and entry.alt ~= "" then
                     log_image(view, entry.file, "paint-failed")
