@@ -175,12 +175,14 @@ function Models.category_cards(packages, show_kindle_scriptlets)
                 count = count + 1
             end
         end
-        table.insert(cards, {
-            id = category.id,
-            label = category.label,
-            icon = category.icon,
-            count = count,
-        })
+        if count > 0 then
+            table.insert(cards, {
+                id = category.id,
+                label = category.label,
+                icon = category.icon,
+                count = count,
+            })
+        end
     end
     return cards
 end

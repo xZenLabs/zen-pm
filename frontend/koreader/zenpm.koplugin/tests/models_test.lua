@@ -158,6 +158,7 @@ assert(#scriptlets == 3 and scriptlets[1].id == "scriptlet"
     and scriptlets[3].id == "zenlabs-koreader-kindle")
 assert(#Models.filter_kindle_scriptlets(categorized, false) == 3)
 assert(Models.filter_kindle_scriptlets(categorized, true) == categorized)
+assert(#Models.category_cards({}, true) == 0)
 assert(#Models.category_cards(categorized, false) == 3)
 local category_cards = Models.category_cards(categorized, true)
 assert(#category_cards == 4)
