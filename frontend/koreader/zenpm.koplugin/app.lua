@@ -1139,6 +1139,27 @@ local function installed_image_path(app, pkg)
     return root .. "/resources/" .. kind .. "/" .. asset, kind
 end
 
+local function installed_image_target(kind)
+    return kind == "wallpapers" and _("ZenOS library background")
+        or _("KOReader sleep screen")
+end
+
+local function installed_image_prompt_kind(app, pkg)
+    if not (pkg and pkg.installed) then return nil end
+    local path, kind = installed_image_path(app, pkg)
+    if not path then return nil end
+    if kind == "screensavers" then
+        local settings = rawget(_G, "G_reader_settings")
+        return settings and type(settings.saveSetting) == "function" and kind or nil
+    end
+
+    local zen_pkg = Models.find_package(app.state.packages, "zen-ui")
+    local zen = zen_pkg and not app:package_disabled(zen_pkg)
+        and koreader_plugin_instance(zen_pkg) or nil
+    return zen and type(zen.config) == "table" and type(zen.saveConfig) == "function"
+        and kind or nil
+end
+
 function App:apply_installed_image(pkg)
     local path, kind = installed_image_path(self, pkg)
     if not path then return false, _("Installed image path is unavailable.") end
@@ -1165,27 +1186,82 @@ function App:apply_installed_image(pkg)
     zen.config.library_background = background
     local ok, err = pcall(zen.saveConfig, zen)
     if not ok then return false, tostring(err) end
+    local home = type(zen._zen_shared) == "table" and zen._zen_shared.home or nil
+    if home and type(home.rebuildActive) == "function" then home.rebuildActive() end
     return true
 end
 
+local function apply_installed_image_choice(app, pkg, on_done)
+    local ok, err = app:apply_installed_image(pkg)
+    if ok then
+        on_done()
+        return
+    end
+    Modals.actions(_("Could not apply image: ") .. tostring(err), {
+        { text = _("Continue"), callback = on_done },
+    }, { show_cancel = false })
+end
+
 function App:prompt_installed_image(pkg, on_done)
-    local path, kind = installed_image_path(self, pkg)
-    if not path or not self:zen_ui_installed() then return false end
+    local kind = installed_image_prompt_kind(self, pkg)
+    if not kind then return false end
+    on_done = on_done or function() end
     local name = package_title(pkg, pkg.installed_asset or _("Image"))
-    local target = kind == "wallpapers" and _("Library background")
-        or _("Sleep screen")
     Modals.close_status()
-    Modals.actions(string.format(_("Set %s as the %s?"), name, target), {
+    Modals.actions(string.format(_("Set %s as the %s?"), name, installed_image_target(kind)), {
         {
             text = _("Set image"),
             callback = function()
-                local ok, err = self:apply_installed_image(pkg)
-                if not ok then Modals.info(_("Could not apply image: ") .. tostring(err)) end
-                if on_done then on_done() end
+                apply_installed_image_choice(self, pkg, on_done)
             end,
         },
     }, { cancel_callback = on_done })
     return true
+end
+
+function App:prompt_installed_images(ids, on_done)
+    on_done = on_done or function() end
+    local groups = { wallpapers = {}, screensavers = {} }
+    for _, id in ipairs(ids or {}) do
+        local pkg = Models.find_package(self.state.packages, id)
+        local kind = installed_image_prompt_kind(self, pkg)
+        if kind then table.insert(groups[kind], pkg) end
+    end
+
+    local kinds = { "wallpapers", "screensavers" }
+    local function prompt(index)
+        local kind = kinds[index]
+        if not kind then
+            on_done()
+            return
+        end
+        local candidates = groups[kind]
+        if #candidates == 0 then
+            prompt(index + 1)
+            return
+        end
+        local continue = function() prompt(index + 1) end
+        if #candidates == 1 then
+            if not self:prompt_installed_image(candidates[1], continue) then continue() end
+            return
+        end
+
+        local rows = {}
+        for _, pkg in ipairs(candidates) do
+            local candidate = pkg
+            table.insert(rows, {
+                text = package_title(candidate, candidate.installed_asset or _("Image")),
+                callback = function()
+                    apply_installed_image_choice(self, candidate, continue)
+                end,
+            })
+        end
+        Modals.close_status()
+        Modals.actions(string.format(_("Choose a %s"), installed_image_target(kind)), rows, {
+            cancel_callback = continue,
+        })
+    end
+    prompt(1)
 end
 
 function App:clear_queue()
@@ -1357,16 +1433,7 @@ end
 function App:finish_queue_batch(batch)
     self:refresh_queue_package_state()
 
-    local function finish_prompts(index)
-        local cleanup = batch.settings_cleanup[index]
-        if cleanup then
-            Modals.plugin_settings_cleanup(cleanup.name .. " " .. _("uninstalled successfully.\n\nRemove plugin settings?"), function(remove_settings)
-                if remove_settings then cleanup.callback() end
-                finish_prompts(index + 1)
-            end)
-            return
-        end
-
+    local function finish()
         local result = self:queue_result_text(batch)
         if batch.warning then result = result .. "\n\n" .. batch.warning end
         local queue_completed = #batch.failed == 0
@@ -1387,6 +1454,18 @@ function App:finish_queue_batch(batch)
                 Modals.confirm(result, nil, function() end)
             end
         end
+    end
+
+    local function finish_prompts(index)
+        local cleanup = batch.settings_cleanup[index]
+        if cleanup then
+            Modals.plugin_settings_cleanup(cleanup.name .. " " .. _("uninstalled successfully.\n\nRemove plugin settings?"), function(remove_settings)
+                if remove_settings then cleanup.callback() end
+                finish_prompts(index + 1)
+            end)
+            return
+        end
+        self:prompt_installed_images(batch.image_installs, finish)
     end
     finish_prompts(1)
 end
@@ -1444,20 +1523,17 @@ function App:run_next_queue_operation(batch)
                 end
                 if entry.prompt_restart then batch.prompt_restart = true end
                 if detail and detail ~= "" then batch.warning = detail end
+                if entry.action == "install" and Models.is_image_asset_package(entry.pkg) then
+                    batch.image_installs = batch.image_installs or {}
+                    table.insert(batch.image_installs, entry.id)
+                end
             else
                 table.insert(batch.failed, { entry = entry, detail = detail })
             end
-            local function continue()
-                batch.index = batch.index + 1
-                UIManager:nextTick(function()
-                    self:run_next_queue_operation(batch)
-                end)
-            end
-            if succeeded and entry.action == "install" and Models.is_image_asset_package(entry.pkg)
-                    and self:prompt_installed_image(Models.find_package(self.state.packages, entry.id), continue) then
-                return
-            end
-            continue()
+            batch.index = batch.index + 1
+            UIManager:nextTick(function()
+                self:run_next_queue_operation(batch)
+            end)
         end,
     })
 end
@@ -1542,6 +1618,7 @@ function App:confirm_queue()
         succeeded = {},
         failed = {},
         settings_cleanup = {},
+        image_installs = {},
         prompt_restart = false,
     }
     self:prepare_queue_assets(operations, 1, function()

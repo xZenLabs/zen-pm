@@ -1722,66 +1722,200 @@ _G.G_reader_settings = {
     flush = function() end,
 }
 
+do
 local zen_background_saves = 0
+local zen_home_rebuilds = 0
 local zen_background_plugin = {
     path = "/tmp/zenos.koplugin",
     config = {},
     saveConfig = function() zen_background_saves = zen_background_saves + 1 end,
+    _zen_shared = {
+        home = { rebuildActive = function() zen_home_rebuilds = zen_home_rebuilds + 1 end },
+    },
 }
 table.insert(pluginloader.loaded_plugins, zen_background_plugin)
 local image_packages = {
-    { id = "zen-ui", installed = true, plugin_module = "zenos" },
+    {
+        id = "zen-ui",
+        installed = true,
+        platforms = { "koreader" },
+        plugin_module = "zenos",
+        plugin_module_aliases = { "zen_ui" },
+    },
     {
         id = "mountain-view-grey",
         name = "Mountain View Grey",
         category = "wallpapers",
+        installed = true,
         installed_asset = "mountain-view-grey.jpg",
     },
     {
         id = "books",
         name = "Books",
         category = "screensavers",
+        installed = true,
         installed_asset = "books.png",
+    },
+    {
+        id = "moonlight",
+        name = "Moonlight",
+        category = "screensavers",
+        installed = true,
+        installed_asset = "moonlight.jpg",
     },
 }
 local image_app = setmetatable({
     state = { packages = image_packages },
     daemon = { koreader_data_dir = function() return "/koreader" end },
 }, { __index = App })
-local image_prompt_done = 0
-local image_entry = { id = image_packages[2].id, action = "install", pkg = image_packages[2] }
-local image_batch = {
-    operations = { image_entry },
-    index = 1,
-    succeeded = {},
-    failed = {},
-    settings_cleanup = {},
-}
-image_app.run_package_action = function(_, _, _, _, _, options) options.on_result(true) end
-image_app.remove_queue_entry = function() end
-image_app.run_next_queue_operation = function(_, batch)
-    image_prompt_done = batch.index
-end
+
+local image_prompt_done = false
 local image_status_closes = status_close_count
-App.run_next_queue_operation(image_app, image_batch)
+assert(image_app:prompt_installed_image(image_packages[2], function() image_prompt_done = true end))
 assert(modal_title == "Set Mountain View Grey as the ZenOS library background?")
 assert(status_close_count == image_status_closes + 1)
 modal_rows[1].callback()
 assert(zen_background_plugin.config.library_background.enabled)
 assert(zen_background_plugin.config.library_background.path
     == "/koreader/resources/wallpapers/mountain-view-grey.jpg")
-assert(zen_background_saves == 1 and image_prompt_done == 2)
+assert(zen_background_saves == 1 and zen_home_rebuilds == 1 and image_prompt_done)
 
-assert(image_app:prompt_installed_image(image_packages[3]))
+local reader_plugin = { id = "reader-plugin", installed = true, platforms = { "koreader" } }
+local failed_image = {
+    id = "failed-image",
+    name = "Failed image",
+    category = "screensavers",
+    installed = false,
+    installed_asset = "failed.jpg",
+}
+local image_update = {
+    id = "image-update",
+    name = "Image update",
+    category = "screensavers",
+    installed = true,
+    installed_asset = "update.jpg",
+}
+local image_reinstall = {
+    id = "image-reinstall",
+    name = "Image reinstall",
+    category = "screensavers",
+    installed = true,
+    installed_asset = "reinstall.jpg",
+}
+local image_entries = {
+    { id = image_packages[2].id, action = "install", pkg = image_packages[2] },
+    { id = image_packages[3].id, action = "install", pkg = image_packages[3] },
+    { id = reader_plugin.id, action = "install", pkg = reader_plugin, prompt_restart = true },
+    { id = image_packages[4].id, action = "install", pkg = image_packages[4] },
+    { id = failed_image.id, action = "install", pkg = failed_image },
+    { id = image_update.id, action = "update", pkg = image_update },
+    { id = image_reinstall.id, action = "reinstall", pkg = image_reinstall },
+}
+local image_batch = {
+    operations = image_entries,
+    index = 1,
+    succeeded = {},
+    failed = {},
+    settings_cleanup = {},
+    image_installs = {},
+    prompt_restart = false,
+}
+local image_operations = {}
+local image_batch_finished = false
+image_app.run_package_action = function(_, pkg, action, _, _, options)
+    table.insert(image_operations, pkg.id .. ":" .. action)
+    options.on_result(pkg ~= failed_image, pkg == failed_image and "download failed" or nil)
+end
+image_app.remove_queue_entry = function() end
+image_app.finish_queue_batch = function() image_batch_finished = true end
+modal_title = nil
+App.run_next_queue_operation(image_app, image_batch)
+assert(image_batch_finished and #image_operations == #image_entries and modal_title == nil)
+assert(#image_batch.image_installs == 3)
+assert(image_batch.image_installs[1] == "mountain-view-grey")
+assert(image_batch.image_installs[2] == "books")
+assert(image_batch.image_installs[3] == "moonlight")
+assert(#image_batch.failed == 1 and image_batch.failed[1].entry.pkg == failed_image)
+assert(image_batch.prompt_restart)
+
+image_app.run_package_action = nil
+image_app.remove_queue_entry = nil
+image_app.finish_queue_batch = nil
+image_app.refresh_queue_package_state = function() end
+image_app.refresh = function() end
+image_app.close_queue = function() end
+image_app.reload_current_page = function() end
+image_app.state.packages = {
+    image_packages[1], image_packages[2], image_packages[3], image_packages[4],
+    reader_plugin, image_update, image_reinstall,
+}
+image_app.state.queue_running = true
+restart_message = nil
+modal_title = nil
+App.finish_queue_batch(image_app, image_batch)
+assert(modal_title == "Set Mountain View Grey as the ZenOS library background?")
+modal_options.cancel_callback()
+assert(modal_title == "Choose a KOReader sleep screen")
+assert(#modal_rows == 2 and modal_rows[1].text == "Books" and modal_rows[2].text == "Moonlight")
+modal_rows[2].callback()
+assert(reader_settings.screensaver_type == "document_cover")
+assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/moonlight.jpg")
+assert(restart_message:find("Queue completed: 6 succeeded, 1 failed.", 1, true))
+assert(not image_app.state.queue_running)
+
+local screensaver_cancelled = false
+image_app:prompt_installed_images({ "books", "moonlight" }, function()
+    screensaver_cancelled = true
+end)
+assert(modal_title == "Choose a KOReader sleep screen")
+modal_options.cancel_callback()
+assert(screensaver_cancelled)
+
+table.remove(pluginloader.loaded_plugins)
+image_app.state.packages = { image_packages[3] }
+local screensaver_without_zen = false
+image_app:prompt_installed_images({ "books" }, function()
+    screensaver_without_zen = true
+end)
 assert(modal_title == "Set Books as the KOReader sleep screen?")
 modal_rows[1].callback()
-assert(reader_settings.screensaver_type == "document_cover")
+assert(screensaver_without_zen)
 assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/books.png")
+
+local apply_error_acknowledged = false
+image_app.apply_installed_image = function() return false, "save failed" end
+image_app:prompt_installed_image(image_packages[3], function()
+    apply_error_acknowledged = true
+end)
+modal_rows[1].callback()
+assert(modal_title == "Could not apply image: save failed")
+assert(#modal_rows == 1 and modal_rows[1].text == "Continue" and modal_options.show_cancel == false)
+modal_rows[1].callback()
+assert(apply_error_acknowledged)
+image_app.apply_installed_image = nil
+
+local skipped_wallpaper = 0
+local function expect_wallpaper_skipped(packages)
+    image_app.state.packages = packages
+    modal_title = nil
+    image_app:prompt_installed_images({ "mountain-view-grey" }, function()
+        skipped_wallpaper = skipped_wallpaper + 1
+    end)
+    assert(modal_title == nil)
+end
+expect_wallpaper_skipped({ image_packages[2] }) -- ZenOS is absent.
+expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- ZenOS is not loaded yet.
+table.insert(pluginloader.loaded_plugins, zen_background_plugin)
+reader_settings.plugins_disabled = { zen_ui = true }
+expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- ZenOS is disabled.
+reader_settings.plugins_disabled = nil
+expect_wallpaper_skipped({ image_packages[2] }) -- ZenOS is being uninstalled.
+image_packages[2].installed = false
+expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- Wallpaper is no longer installed.
+image_packages[2].installed = true
+assert(skipped_wallpaper == 5)
 table.remove(pluginloader.loaded_plugins)
-image_app.state.packages = { image_packages[2] }
-modal_title = nil
-assert(not image_app:prompt_installed_image(image_packages[2]))
-assert(modal_title == nil)
+end
 
 local toggle_done = false
 modal_message = nil
