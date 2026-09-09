@@ -129,6 +129,20 @@ assert(painted_images["wallpaper.jpg"].w == 72 and painted_images["wallpaper.jpg
 assert(painted_images["wallpaper.jpg"].zoom == 1.1)
 assert(painted_images["wallpaper.jpg"].is_icon == false)
 
+Cards.package({
+    app = {
+        state = { active_tab = "installed", queue = {} },
+        package_disabled = function() return false end,
+        package_icon_file = function() return "wallpaper.svg", true, "wallpaper.svg", "fallback" end,
+        show_package_details = function() end,
+    },
+}, {}, {
+    id = "wallpaper-placeholder",
+    name = "Wallpaper placeholder",
+    category = "wallpapers",
+}, 0, 0, 300, { height = 92 })
+assert(painted_images["wallpaper.svg"].w == 64 and painted_images["wallpaper.svg"].h == 64)
+
 painted_boxes = {}
 painted_rects = {}
 painted_text_y = {}

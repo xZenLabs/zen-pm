@@ -142,8 +142,12 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     P.box(bb, x, y, w, h, { border = opts.border })
     local pad = opts.pad or Theme.scale(10)
     local is_image_asset = Models.is_image_asset_package(pkg)
+    local icon_file, icon_is_icon, icon_value, icon_source
+    if not opts.compact then
+        icon_file, icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
+    end
     local icon_w = opts.compact and 0 or math.min(opts.icon_w
-        or (is_image_asset and h - pad * 2 or Theme.scale(64)), h - pad * 2)
+        or (is_image_asset and icon_source == "package" and h - pad * 2 or Theme.scale(64)), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
@@ -185,7 +189,6 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     if icon_w > 0 then
         local ix = x + pad
         local iy = y + math.floor((h - icon_w) / 2)
-        local icon_file, icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
         local zoom = is_image_asset and icon_source == "package" and 1.1 or package_icon_zoom(icon_value, icon_source)
         local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = icon_is_icon })
             or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = icon_is_icon })

@@ -612,6 +612,10 @@ function AppView:refresh(full)
     UIManager:setDirty(self, full and "full" or "ui", self.dimen)
 end
 
+function AppView:onResume()
+    self:refresh(true)
+end
+
 function AppView:_zen_status_refresh()
     if self._zen_status_dimen then
         UIManager:setDirty(self, "ui", self._zen_status_dimen)

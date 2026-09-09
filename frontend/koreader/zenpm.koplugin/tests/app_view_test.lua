@@ -111,6 +111,9 @@ assert(paint_view.koreader_menu_zone == paint_view._zen_status_dimen)
 AppView._zen_status_refresh(paint_view)
 assert(dirty.widget == paint_view and dirty.mode == "ui")
 assert(dirty.region == paint_view._zen_status_dimen)
+AppView.onResume(paint_view)
+assert(dirty.widget == paint_view and dirty.mode == "full")
+assert(dirty.region == paint_view.dimen)
 _G.__ZENOS_BUILD_STATUS_ROW = nil
 
 AppView.draw_content({

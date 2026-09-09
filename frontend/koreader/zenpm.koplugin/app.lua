@@ -2074,7 +2074,7 @@ function App:package_icon_file(pkg)
     end
     local file = self:image_file_for(icon_value)
     if file then
-        return file, icon_value == fallback_value, icon_value, source
+        return file, icon_value == fallback_value or tostring(file):lower():match("%.svg$") ~= nil, icon_value, source
     end
     return self:image_file_for(fallback_value), true, fallback_value, "fallback"
 end

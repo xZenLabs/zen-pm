@@ -676,6 +676,11 @@ assert(modal_message == "Could not install the ZenPM command-line wrapper.")
 local zenpm_package = { id = "zenpm-koreader" }
 assert(App.package_icon_file({}, zenpm_package) == "assets/zenpm.svg")
 
+local svg_file, svg_is_icon = App.package_icon_file({
+    image_file_for = function() return "/tmp/package-icon.svg" end,
+}, { icon_url = "https://example.test/package-icon.svg" })
+assert(svg_file == "/tmp/package-icon.svg" and svg_is_icon)
+
 local release_requests = 0
 local zenpm_versions = App.load_package_releases({
     state = { beta_updates = false },
