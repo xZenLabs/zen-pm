@@ -871,22 +871,45 @@ func copyTree(source, destination string) error {
 		if err != nil {
 			return err
 		}
+
 		rel, err := filepath.Rel(source, path)
 		if err != nil {
 			return err
 		}
+
 		target := filepath.Join(destination, rel)
+
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0755)
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
+
 		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+
+		input, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer input.Close()
+
+		output, err := os.OpenFile(
+			target,
+			os.O_CREATE|os.O_TRUNC|os.O_WRONLY,
+			info.Mode().Perm(),
+		)
+		if err != nil {
+			return err
+		}
+
+		_, copyErr := io.Copy(output, input)
+		closeErr := output.Close()
+
+		if copyErr != nil {
+			return copyErr
+		}
+
+		return closeErr
 	})
 }
