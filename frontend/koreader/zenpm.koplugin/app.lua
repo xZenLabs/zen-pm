@@ -177,6 +177,7 @@ function App:new(plugin)
             },
             scroll = {},
             packages = {},
+            discover_packages = {},
             visible_packages = {},
             featured_packages = {},
             installed_packages = {},
@@ -2456,6 +2457,7 @@ function App:load_readerbackdrop_page(page, query)
     state.loading = true
     Modals.status(page == 1 and (query ~= "" and _("Searching ReaderBackdrop...") or _("Loading screensavers..."))
         or _("Loading more screensavers..."))
+    UIManager:forceRePaint()
     local ok, data = self.client:load_readerbackdrop(page, query, tag)
     Modals.close_status()
     state.loading = false
@@ -2558,7 +2560,14 @@ function App:show_search()
         return
     end
     self.state.packages = packages
-    self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(packages, self.state.filters.search))
+    local discover_packages = {}
+    for _, pkg in ipairs(packages) do
+        if not Models.is_image_asset_package(pkg) then
+            table.insert(discover_packages, pkg)
+        end
+    end
+    self.state.discover_packages = discover_packages
+    self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(discover_packages, self.state.filters.search))
     self:clear_status()
     self:refresh()
 end

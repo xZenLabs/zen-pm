@@ -40,7 +40,7 @@ function Header.page_title(view)
     if page == "home" then
         return _("Featured") .. " (" .. tostring(#(state.featured_packages or {})) .. ")"
     elseif page == "search" then
-        return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
+        return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.discover_packages, state.filters.search) .. ")"
     elseif page == "categories" then
         return _("Categories") .. " (" .. filtered_count(state.visible_categories, state.categories, state.filters.categories) .. ")"
     elseif page == "category_details" then

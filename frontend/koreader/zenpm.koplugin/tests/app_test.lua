@@ -1019,6 +1019,8 @@ do
         { id = "zulu", name = "Zulu", installed = true, update_available = true, stars = 2 },
         { id = "beta", name = "Beta", installed = true, category = "fonts", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 1 },
         { id = "gamma", name = "Gamma", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 24 * 60 * 60), stars = 200 },
+        { id = "wallpaper", name = "Wallpaper", category = "wallpapers" },
+        { id = "screensaver", name = "Screensaver", category = "screensavers" },
     }
     local refreshes = 0
     list_app.ensure_backend = function() return true end
@@ -1028,6 +1030,7 @@ do
     list_app.refresh = function() refreshes = refreshes + 1 end
     list_app:navigate("search")
     assert(list_app.state.page == "search" and list_app.state.active_tab == "search")
+    assert(#list_app.state.packages == 6 and #list_app.state.discover_packages == 4)
     assert(#list_app.state.visible_packages == 4 and refreshes == 1)
     assert(list_app.state.visible_packages[1].id == "beta")
     assert(list_app.state.visible_packages[2].id == "alpha")
@@ -2403,6 +2406,7 @@ assert(not closing_app.backend_ready)
 
 local readerbackdrop_requests = {}
 local readerbackdrop_reloads = 0
+local readerbackdrop_repaints = #restart_actions
 local readerbackdrop_app = {
     state = {
         page = "category_details",
@@ -2413,6 +2417,8 @@ local readerbackdrop_app = {
     },
     client = {
         load_readerbackdrop = function(_, page, query, tag)
+            assert(#restart_actions == readerbackdrop_repaints + 1
+                and restart_actions[#restart_actions] == "paint")
             table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag })
             return true, { page = page, total = 2083, total_pages = 3 }
         end,
