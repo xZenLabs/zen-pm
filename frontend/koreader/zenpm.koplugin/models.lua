@@ -136,6 +136,9 @@ function Models.package_in_category(pkg, category)
     if not pkg or not category then
         return false
     end
+    if normalize_category(pkg.category) == "screensavers" then
+        return normalize_category(category.id) == "screensavers"
+    end
     if Models.is_kindle_scriptlet(pkg) then
         return is_kindle_scriptlets_category(category)
     end

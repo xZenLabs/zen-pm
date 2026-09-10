@@ -55,6 +55,7 @@ type Server struct {
 	StartedAt      time.Time
 	readmeImages   readmeImagePreparer
 	catalogRefresh *catalogRefresh
+	previewJobs    map[string]*previewJob
 }
 
 type catalogRefresh struct {
@@ -62,10 +63,17 @@ type catalogRefresh struct {
 	err  error // read only after done is closed
 }
 
+type previewJob struct {
+	done        chan struct{}
+	file        string
+	transparent bool
+	err         error
+}
+
 type readmeImagePreparer interface {
 	References(markdown, baseURL string) map[string]string
 	Prepare(refs map[string]string) error
-	PrepareURL(rawURL string) (string, error)
+	PrepareURL(rawURL string) (string, bool, error)
 }
 
 type pkgJSON struct {
@@ -1182,13 +1190,44 @@ func (s *Server) handlePackagePreview(w http.ResponseWriter, r *http.Request, id
 			http.Error(w, "image cache unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		file, err := s.readmeImages.PrepareURL(entry.IconURL)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+		s.mu.Lock()
+		if s.previewJobs == nil {
+			s.previewJobs = make(map[string]*previewJob)
+		}
+		job := s.previewJobs[entry.IconURL]
+		if job == nil {
+			job = &previewJob{done: make(chan struct{})}
+			s.previewJobs[entry.IconURL] = job
+			s.runBackground(func() {
+				job.file, job.transparent, job.err = s.readmeImages.PrepareURL(entry.IconURL)
+				close(job.done)
+			})
+		}
+		s.mu.Unlock()
+		if r.URL.Query().Get("async") == "1" {
+			select {
+			case <-job.done:
+			default:
+				w.WriteHeader(http.StatusAccepted)
+				return
+			}
+		} else {
+			<-job.done
+		}
+		s.mu.Lock()
+		if s.previewJobs[entry.IconURL] == job {
+			delete(s.previewJobs, entry.IconURL)
+		}
+		s.mu.Unlock()
+		if job.err != nil {
+			http.Error(w, job.err.Error(), http.StatusBadGateway)
 			return
 		}
+		if job.transparent {
+			w.Header().Set("X-ZenPM-Transparent", "true")
+		}
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		http.ServeFile(w, r, file)
+		http.ServeFile(w, r, job.file)
 		return
 	}
 	http.Error(w, "package preview not found", http.StatusNotFound)

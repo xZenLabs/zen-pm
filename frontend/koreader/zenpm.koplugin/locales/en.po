@@ -42,6 +42,9 @@ msgstr "%d packages queued"
 msgid "%s conflicts with %s. They should not be used together. Install anyway?"
 msgstr "%s conflicts with %s. They should not be used together. Install anyway?"
 
+msgid "%s screensaver"
+msgstr "%s screensaver"
+
 msgid "(installed)"
 msgstr "(installed)"
 

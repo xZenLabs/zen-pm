@@ -154,6 +154,9 @@ local categorized = {
     { id = "zenlabs-scriptlet", category = "utility", repo = "ZenLabs", platforms = { "kindle" } },
     { id = "zenlabs-koreader-kindle", category = "utility", repo = "ZenLabs", platforms = { "kindle", "koreader" } },
 }
+local screensaver = { id = "screensaver", category = "screensavers", tags = { "Games" } }
+assert(Models.package_in_category(screensaver, { id = "screensavers" }))
+assert(not Models.package_in_category(screensaver, { id = "games" }))
 assert(Models.filter_packages_by_category(categorized, "") == categorized)
 local games = Models.filter_packages_by_category(categorized, "games")
 assert(#games == 1 and games[1].id == "game")

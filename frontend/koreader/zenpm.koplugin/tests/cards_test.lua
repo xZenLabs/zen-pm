@@ -30,7 +30,16 @@ package.preload["models"] = function()
         repo_display_name = function(value) return value end,
     }
 end
-package.preload["ui/images"] = function() return { asset = function(name) return name end } end
+package.preload["ui/images"] = function()
+    return {
+        asset = function(name) return name end,
+        package_icon = function(pkg) return pkg.icon_url end,
+        is_transparent = function(value)
+            if value == "/packages/readerbackdrop-moonlight/preview" then return true end
+            if value == "/packages/readerbackdrop-opaque/preview" then return false end
+        end,
+    }
+end
 package.preload["ui/primitives"] = function()
     return {
         box = function(_, x, y, w, h, opts)
@@ -230,25 +239,49 @@ end
 
 painted_text = {}
 painted_images = {}
-Cards.package({
+local readerbackdrop_view = {
     app = {
         state = { active_tab = "search", queue = {} },
         package_disabled = function() return false end,
         perform_package_action = function() end,
         show_package_details = function() end,
     },
-}, {}, {
+}
+local readerbackdrop_package = {
     id = "readerbackdrop-moonlight",
     name = "Moonlight",
     version = "9.9.9",
     repo = "ReaderBackdrop",
     category = "screensavers",
     platforms = { "koreader" },
+    tags = { "illustration" },
+    icon_url = "/packages/readerbackdrop-moonlight/preview",
     stars = "42",
-}, 0, 0, 300, { compact = true })
-assert(table.concat(painted_text, "\n"):find("ReaderBackdrop", 1, true))
+}
+Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
+assert(table.concat(painted_text, "\n"):find("ReaderBackdrop • Transparent", 1, true))
 assert(not table.concat(painted_text, "\n"):find("v9.9.9", 1, true))
 assert(painted_images["downloads.svg"] and not painted_images["star.filled.svg"])
+assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
+painted_text = {}
+readerbackdrop_package.icon_url = "/packages/readerbackdrop-opaque/preview"
+Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
+assert(table.concat(painted_text, "\n"):find("ReaderBackdrop • Opaque", 1, true))
+painted_text = {}
+readerbackdrop_package.icon_url = "/packages/readerbackdrop-unknown/preview"
+Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
+assert(table.concat(painted_text, "\n"):find("ReaderBackdrop", 1, true))
+assert(not table.concat(painted_text, "\n"):find("Transparent", 1, true))
+assert(not table.concat(painted_text, "\n"):find("Opaque", 1, true))
+
+painted_images = {}
+Cards.source({
+    app = {
+        repo_icon_file = function() return "readerbackdrop.svg" end,
+        show_source_details = function() end,
+    },
+}, {}, { name = "ReaderBackdrop", url = "https://www.readerbackdrop.com", default = true }, 0, 0, 300, { height = 100 })
+assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
 
 package.preload["ui/font"] = function() return {} end
 package.preload["ui/inline_icon_map"] = function() return {} end
@@ -309,7 +342,7 @@ assert(rendered_screensavers == 24)
 hit_callbacks["readerbackdrop-load-more"]()
 assert(load_more_calls == 1)
 
-Pages.package_details({
+local screensaver_details_view = {
     app = {
         state = {
             current_package = {
@@ -326,8 +359,16 @@ Pages.package_details({
         package_icon_file = function() return "screensavers.svg", true end,
         show_package_details = function() end,
     },
-}, {}, 0, 0, 300, 600, 0)
+}
+Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
 assert(#rendered_detail_blocks == 1 and rendered_detail_blocks[1].kind == "image")
+
+screensaver_details_view.app.state.show_readme_images = false
+Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
+assert(#rendered_detail_blocks == 0)
+screensaver_details_view.app.state.current_package.category = "wallpapers"
+Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
+assert(#rendered_detail_blocks == 2)
 
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local Header = require("ui/header")
@@ -347,6 +388,7 @@ Pages.queue({
     app = {
         state = { queue = {
             { key = "screensaver", name = "Moonlight", action = "install", pkg = { repo = "ReaderBackdrop" } },
+            { key = "old-screensaver", name = "Sunlight", action = "uninstall", pkg = { repo = "ReaderBackdrop" } },
             { key = "plugin", name = "Reader", action = "install", pkg = { version = "1.2.3" } },
         } },
         package_icon_file = function() return "package.svg" end,
@@ -354,5 +396,6 @@ Pages.queue({
     },
 }, {}, 0, 0, 300, 300, 0)
 assert(painted_text[2] == "Install screensaver")
-assert(painted_text[4] == "Install v1.2.3")
+assert(painted_text[4] == "Uninstall screensaver")
+assert(painted_text[6] == "Install v1.2.3")
 print("cards tests passed")

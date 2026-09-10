@@ -232,8 +232,8 @@ end
 
 local function queue_version_line(entry)
     local pkg = entry.pkg or {}
-    if entry.action == "install" and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
-        return _("Install screensaver")
+    if pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        return string.format(_("%s screensaver"), queue_action_text(entry.action))
     end
     local current = pkg.installed and (pkg.installed_version or pkg.version) or nil
     if entry.is_patch then
@@ -691,7 +691,8 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
             alt = I18n.dynamic_or(pkg.name, _("Font preview")),
             url = pkg.featured_image,
         })
-    elseif is_image_asset and pkg.icon_url and pkg.icon_url ~= "" then
+    elseif is_image_asset and view.app.state.show_readme_images ~= false
+            and pkg.icon_url and pkg.icon_url ~= "" then
         table.insert(readme_blocks, {
             kind = "image",
             alt = I18n.dynamic_or(pkg.name, ""),

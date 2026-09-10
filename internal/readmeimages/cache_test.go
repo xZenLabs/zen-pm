@@ -55,9 +55,12 @@ func TestPrepareDownloadsResizesAndCachesRasterImage(t *testing.T) {
 	}
 
 	ref := refs[server.URL+"/large.png"]
-	file, width, height, failed := readRef(ref)
+	file, width, height, transparent, failed := readRef(ref)
 	if failed || file == "" {
 		t.Fatalf("prepared ref = %q, failed=%v", file, failed)
+	}
+	if !transparent {
+		t.Fatal("transparent source was not detected")
 	}
 	if width != 1200 || height != 600 {
 		t.Fatalf("prepared ref dimensions = %dx%d", width, height)
@@ -74,8 +77,8 @@ func TestPrepareDownloadsResizesAndCachesRasterImage(t *testing.T) {
 	if format != "png" || config.Width != 1200 || config.Height != 600 {
 		t.Fatalf("prepared image = %s %dx%d", format, config.Width, config.Height)
 	}
-	if fileFromURL, err := cache.PrepareURL(server.URL + "/large.png"); err != nil || fileFromURL != file {
-		t.Fatalf("PrepareURL() = %q, %v; want %q", fileFromURL, err, file)
+	if fileFromURL, transparent, err := cache.PrepareURL(server.URL + "/large.png"); err != nil || fileFromURL != file || !transparent {
+		t.Fatalf("PrepareURL() = %q, transparent=%t, %v; want %q, true", fileFromURL, transparent, err, file)
 	}
 
 	handle, err = os.Open(file)

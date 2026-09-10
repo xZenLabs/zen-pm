@@ -70,7 +70,8 @@ assert(log_messages[4] == "ZenPM UDS GET /packages/example/icon via /tmp/zenpm.s
 
 ok, response = client:download("/packages/readerbackdrop-test/preview")
 assert(ok and response == '{"ok":true}')
-assert(unix_request.timeout == 20)
+assert(unix_request.path == "/packages/readerbackdrop-test/preview?async=1")
+assert(unix_request.timeout == 4)
 
 ok, response = client:scan_installed_plugins()
 assert(ok and response.ok)

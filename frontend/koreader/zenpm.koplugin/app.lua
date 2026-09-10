@@ -2126,8 +2126,12 @@ function App:load_next_package_image()
         self.package_image_loading = false
         return
     end
-    self:image_file_for(value)
-    self.package_image_pending[value] = nil
+    local file = self:image_file_for(value)
+    if not file and not Images.is_failed(value) and self.package_image_pending[value] then
+        table.insert(self.package_image_queue, value)
+    else
+        self.package_image_pending[value] = nil
+    end
     if #self.package_image_queue == 0 then
         self.package_image_loading = false
         self:refresh()
@@ -2165,6 +2169,10 @@ function App:package_icon_file(pkg)
     local fallback_value = Images.package_fallback(pkg)
     local source = icon_value == fallback_value and "repo-fallback" or "package"
     if Models.is_image_asset_package(pkg) then
+        if self.state.show_readme_images == false then
+            fallback_value = Images.category_icon(pkg.category) or Images.asset("packages.svg")
+            return fallback_value, true, fallback_value, "fallback"
+        end
         local file = self:cached_image_file(icon_value)
         if file then return file, false, icon_value, source end
         self:queue_package_image(icon_value)
@@ -2179,6 +2187,9 @@ function App:package_icon_file(pkg)
 end
 
 function App:package_featured_file(pkg)
+    if Models.is_image_asset_package(pkg) and self.state.show_readme_images == false then
+        return self:package_icon_file(pkg)
+    end
     return self:image_file_for(Images.featured_image(pkg)) or self:package_icon_file(pkg)
 end
 
@@ -2441,7 +2452,7 @@ function App:prompt_readerbackdrop_categories()
             })
         end
     end
-    Modals.actions(_("Categories"), rows, { show_cancel = false, align = "left" })
+    Modals.actions(_("Tags"), rows, { show_cancel = false, align = "left" })
 end
 
 function App:load_readerbackdrop_page(page, query)
@@ -3058,7 +3069,7 @@ function App:prompt_filter(kind)
         title = _("Search categories")
         hint = _("Search categories...")
     elseif kind == "category" then
-        title = _("Search category")
+        title = _("Search") .. " " .. Models.category_label(self.state.current_category)
         hint = _("Search category...")
     elseif kind == "source" then
         title = _("Search source")

@@ -85,10 +85,24 @@ local requested_preview
 local preview_file = assert(Images.file_for({
     download = function(_, value)
         requested_preview = value
-        return true, "preview image", 200, { ["content-type"] = "image/png" }
+        return true, "preview image", 200, {
+            ["content-type"] = "image/png",
+            ["X-ZenPM-Transparent"] = "true",
+        }
     end,
 }, "android", preview_path))
 assert(requested_preview == preview_path and preview_file ~= preview_path and path_exists(preview_file))
+assert(Images.is_transparent(preview_path))
+Images = load_images()
+assert(Images.cached_file("android", preview_path) == preview_file)
+assert(Images.is_transparent(preview_path))
+
+local pending_path = "/packages/readerbackdrop-pending/preview"
+assert(Images.file_for({
+    download = function() return true, nil, 202 end,
+}, "android", pending_path) == nil)
+assert(not Images.is_failed(pending_path))
+assert(Images.is_transparent(pending_path) == nil)
 
 Images.invalidate_cache()
 assert(Images.cached_file("android", url) == nil)

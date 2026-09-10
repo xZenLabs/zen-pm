@@ -127,7 +127,7 @@ func (c *Cache) reference(baseURL, target string) (string, string, bool) {
 	}
 	resolved := targetURL.String()
 	ref := filepath.Join(c.dir, "url-"+hashString(resolved)+".ref")
-	if value, _, _, failed := readRef(ref); failed {
+	if value, _, _, _, failed := readRef(ref); failed {
 		_ = os.Remove(ref)
 	} else if value != "" && !pathWithin(c.dir, value) {
 		_ = os.Remove(ref)
@@ -135,20 +135,20 @@ func (c *Cache) reference(baseURL, target string) (string, string, bool) {
 	return resolved, ref, true
 }
 
-// PrepareURL returns a local, resized copy of one safe remote image.
-func (c *Cache) PrepareURL(rawURL string) (string, error) {
+// PrepareURL returns a local, resized copy and whether its source has transparent pixels.
+func (c *Cache) PrepareURL(rawURL string) (string, bool, error) {
 	resolved, ref, ok := c.reference("", rawURL)
 	if !ok {
-		return "", fmt.Errorf("unsafe image URL")
+		return "", false, fmt.Errorf("unsafe image URL")
 	}
 	if err := c.Prepare(map[string]string{resolved: ref}); err != nil {
-		return "", err
+		return "", false, err
 	}
-	file, _, _, failed := readRef(ref)
+	file, _, _, transparent, failed := readRef(ref)
 	if failed || file == "" || !pathWithin(c.dir, file) {
-		return "", fmt.Errorf("prepared image is unavailable")
+		return "", false, fmt.Errorf("prepared image is unavailable")
 	}
-	return file, nil
+	return file, transparent, nil
 }
 
 func (c *Cache) urlAllowed(value *url.URL) bool {
@@ -219,7 +219,7 @@ func (c *Cache) release(rawURL string) {
 }
 
 func (c *Cache) cached(ref string) bool {
-	file, _, _, failed := readRef(ref)
+	file, _, _, _, failed := readRef(ref)
 	if failed || file == "" || !pathWithin(c.dir, file) {
 		return false
 	}
@@ -239,10 +239,11 @@ func (c *Cache) prepareOne(rawURL, ref string) error {
 	extension := ".png"
 	output := data
 	width, height := 0, 0
+	transparent := false
 	if isSVG(data, contentType) {
 		extension = ".svg"
 	} else {
-		output, width, height, err = resizeRaster(data)
+		output, width, height, transparent, err = resizeRaster(data)
 		if err != nil {
 			return err
 		}
@@ -257,8 +258,8 @@ func (c *Cache) prepareOne(rawURL, ref string) error {
 	} else if err != nil {
 		return fmt.Errorf("inspect image: %w", err)
 	}
-	old, _, _, _ := readRef(ref)
-	refValue := fmt.Sprintf("%s\t%d\t%d\n", file, width, height)
+	old, _, _, _, _ := readRef(ref)
+	refValue := fmt.Sprintf("%s\t%d\t%d\t%t\n", file, width, height, transparent)
 	if err := writeAtomic(ref, []byte(refValue)); err != nil {
 		return fmt.Errorf("write image ref: %w", err)
 	}
@@ -313,17 +314,21 @@ func isSVG(data []byte, contentType string) bool {
 	return strings.Contains(strings.ToLower(string(prefix)), "<svg")
 }
 
-func resizeRaster(data []byte) ([]byte, int, int, error) {
+func resizeRaster(data []byte) ([]byte, int, int, bool, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("decode image metadata: %w", err)
+		return nil, 0, 0, false, fmt.Errorf("decode image metadata: %w", err)
 	}
 	if config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > maxSourcePixels {
-		return nil, 0, 0, fmt.Errorf("unsafe image dimensions %dx%d", config.Width, config.Height)
+		return nil, 0, 0, false, fmt.Errorf("unsafe image dimensions %dx%d", config.Width, config.Height)
 	}
 	source, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("decode image: %w", err)
+		return nil, 0, 0, false, fmt.Errorf("decode image: %w", err)
+	}
+	transparent := false
+	if opaque, ok := source.(interface{ Opaque() bool }); ok {
+		transparent = !opaque.Opaque()
 	}
 	width, height := boundedSize(config.Width, config.Height)
 	prepared := source
@@ -336,9 +341,9 @@ func resizeRaster(data []byte) ([]byte, int, int, error) {
 	var output bytes.Buffer
 	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
 	if err := encoder.Encode(&output, opaque); err != nil {
-		return nil, 0, 0, fmt.Errorf("encode image: %w", err)
+		return nil, 0, 0, false, fmt.Errorf("encode image: %w", err)
 	}
-	return output.Bytes(), width, height, nil
+	return output.Bytes(), width, height, transparent, nil
 }
 
 func boundedSize(width, height int) (int, int) {
@@ -412,24 +417,28 @@ func hashBytes(value []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(value))
 }
 
-func readRef(path string) (string, int, int, bool) {
+func readRef(path string) (string, int, int, bool, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", 0, 0, false
+		return "", 0, 0, false, false
 	}
 	value := strings.TrimSpace(string(data))
 	if value == "failed" {
-		return "", 0, 0, true
+		return "", 0, 0, false, true
 	}
 	parts := strings.Split(value, "\t")
-	if len(parts) == 3 {
+	if len(parts) == 4 {
 		width, widthErr := strconv.Atoi(parts[1])
 		height, heightErr := strconv.Atoi(parts[2])
+		transparent, transparentErr := strconv.ParseBool(parts[3])
+		if transparentErr != nil {
+			return value, 0, 0, false, false
+		}
 		if parts[0] != "" && widthErr == nil && heightErr == nil {
-			return parts[0], width, height, false
+			return parts[0], width, height, transparent, false
 		}
 	}
-	return value, 0, 0, false
+	return value, 0, 0, false, false
 }
 
 func writeAtomic(path string, data []byte) error {

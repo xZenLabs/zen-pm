@@ -183,14 +183,18 @@ func TestTailLog(t *testing.T) {
 }
 
 type fakeReadmeImagePreparer struct {
-	refs     map[string]string
-	markdown string
-	baseURL  string
-	file     string
-	rawURL   string
-	started  chan struct{}
-	release  chan struct{}
-	finished chan struct{}
+	refs           map[string]string
+	markdown       string
+	baseURL        string
+	file           string
+	rawURL         string
+	started        chan struct{}
+	release        chan struct{}
+	finished       chan struct{}
+	previewStarted chan struct{}
+	previewRelease chan struct{}
+	previewCalls   atomic.Int32
+	transparent    bool
 }
 
 func (f *fakeReadmeImagePreparer) References(markdown, baseURL string) map[string]string {
@@ -206,9 +210,14 @@ func (f *fakeReadmeImagePreparer) Prepare(refs map[string]string) error {
 	return nil
 }
 
-func (f *fakeReadmeImagePreparer) PrepareURL(rawURL string) (string, error) {
+func (f *fakeReadmeImagePreparer) PrepareURL(rawURL string) (string, bool, error) {
+	f.previewCalls.Add(1)
 	f.rawURL = rawURL
-	return f.file, nil
+	if f.previewStarted != nil {
+		close(f.previewStarted)
+		<-f.previewRelease
+	}
+	return f.file, f.transparent, nil
 }
 
 func TestListenUnixBindsSocket(t *testing.T) {
@@ -644,12 +653,42 @@ func TestReaderBackdropUsesPreparedPreview(t *testing.T) {
 	if err := os.WriteFile(preview, []byte("prepared preview"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	preparer := &fakeReadmeImagePreparer{file: preview}
+	preparer := &fakeReadmeImagePreparer{file: preview, transparent: true}
 	srv.readmeImages = preparer
 	rec = httptest.NewRecorder()
 	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview", nil))
-	if rec.Code != http.StatusOK || rec.Body.String() != "prepared preview" || preparer.rawURL != original {
+	if rec.Code != http.StatusOK || rec.Body.String() != "prepared preview" || preparer.rawURL != original || rec.Header().Get("X-ZenPM-Transparent") != "true" {
 		t.Fatalf("preview response = %d %q, source=%q", rec.Code, rec.Body.String(), preparer.rawURL)
+	}
+
+	preparer = &fakeReadmeImagePreparer{
+		file: preview, previewStarted: make(chan struct{}), previewRelease: make(chan struct{}),
+	}
+	srv.readmeImages = preparer
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview?async=1", nil))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("async preview start = %d %q", rec.Code, rec.Body.String())
+	}
+	select {
+	case <-preparer.previewStarted:
+	case <-time.After(time.Second):
+		t.Fatal("async preview preparation did not start")
+	}
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview?async=1", nil))
+	if rec.Code != http.StatusAccepted || preparer.previewCalls.Load() != 1 {
+		t.Fatalf("shared async preview = %d calls=%d", rec.Code, preparer.previewCalls.Load())
+	}
+	close(preparer.previewRelease)
+	srv.mu.Lock()
+	job := srv.previewJobs[original]
+	srv.mu.Unlock()
+	<-job.done
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview?async=1", nil))
+	if rec.Body.String() != "prepared preview" || preparer.previewCalls.Load() != 1 {
+		t.Fatalf("async preview body = %q calls=%d", rec.Body.String(), preparer.previewCalls.Load())
 	}
 }
 

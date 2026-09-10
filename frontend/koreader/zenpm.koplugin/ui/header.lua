@@ -369,7 +369,7 @@ function Header.draw(view, bb, x, y, w)
     end
     if page == "category_details" and view.app.state.current_category
             and view.app.state.current_category.id == "screensavers" then
-        local label = _("Categories")
+        local label = _("Tags")
         local button_w = title_button_width(label)
         right_x = right_x - button_w - gap
         draw_title_button(view, bb, right_x, button_y, label, function()

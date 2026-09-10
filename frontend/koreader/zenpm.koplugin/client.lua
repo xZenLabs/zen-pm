@@ -198,11 +198,10 @@ end
 function Client:download(path)
     local backend_path = not tostring(path or ""):match("^https?://")
     local prepared_preview = tostring(path or ""):match("^/packages/[^/]+/preview$") ~= nil
-    local block_timeout = prepared_preview and PACKAGE_README_TIMEOUT.block or UI_BLOCK_TIMEOUT_SECONDS
-    local total_timeout = prepared_preview and PACKAGE_README_TIMEOUT.total or UI_TOTAL_TIMEOUT_SECONDS
-    local url = self:build_url(path)
+    local request_path = prepared_preview and (path .. "?async=1") or path
+    local url = self:build_url(request_path)
     local started_at = socket.gettime()
-    local log_prefix = request_log_prefix("GET", path, url, self.unix_socket, backend_path)
+    local log_prefix = request_log_prefix("GET", request_path, url, self.unix_socket, backend_path)
     if ok_logger and logger and logger.info then
         logger.info(log_prefix .. " started")
     end
@@ -219,9 +218,9 @@ function Client:download(path)
         code, resp_headers, response_body, status = self.unix_http.request(
             self.unix_socket,
             "GET",
-            path,
+            request_path,
             nil,
-            total_timeout,
+            UI_TOTAL_TIMEOUT_SECONDS,
             accept)
     else
         local request = {
@@ -244,7 +243,7 @@ function Client:download(path)
         end
 
         if ok_socketutil then
-            socketutil:set_timeout(block_timeout, total_timeout)
+            socketutil:set_timeout(UI_BLOCK_TIMEOUT_SECONDS, UI_TOTAL_TIMEOUT_SECONDS)
         end
 
         code, resp_headers, status = socket.skip(1, requester.request(request))

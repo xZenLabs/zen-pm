@@ -114,6 +114,7 @@ package.preload["ui/modals"] = function()
         end,
         status = function(message) status_message = message end,
         close_status = function() status_close_count = status_close_count + 1 end,
+        search = function(title) modal_title = title end,
         confirm = function() end,
         actions = function(title, rows, options)
             modal_title = title
@@ -336,7 +337,10 @@ do
         package_image_pending = {},
         package_image_loading = false,
         cached_image_file = function() return nil, false end,
-        image_file_for = function(_, value) table.insert(loaded, value) end,
+        image_file_for = function(_, value)
+            table.insert(loaded, value)
+            if #loaded > 1 then return "wallpaper.jpg" end
+        end,
         refresh = function() refreshes = refreshes + 1 end,
     }, { __index = App })
     queued_ticks = {}
@@ -356,8 +360,16 @@ do
     })
     queued_ticks[1]()
     queued_ticks = nil
-    assert(loaded[1] == "https://example.test/wallpaper.jpg")
+    assert(table.concat(loaded, ",") == "https://example.test/wallpaper.jpg,https://example.test/wallpaper.jpg")
     assert(refreshes == 1 and not image_app.package_image_loading)
+
+    image_app.state.show_readme_images = false
+    for _, category in ipairs({ "screensavers", "wallpapers" }) do
+        local image_asset = { category = category, icon_url = "https://example.test/preview.jpg" }
+        local preview, preview_is_icon = image_app:package_icon_file(image_asset)
+        assert(preview == "assets/" .. category .. ".svg" and preview_is_icon and #loaded == 2)
+        assert(image_app:package_featured_file(image_asset) == preview and #loaded == 2)
+    end
 end
 
 -- Updating from the reader must save the book before touching plugin files,
@@ -2462,7 +2474,7 @@ local readerbackdrop_category_app = {
     set_readerbackdrop_category = App.set_readerbackdrop_category,
 }
 App.prompt_readerbackdrop_categories(readerbackdrop_category_app)
-assert(modal_title == "Categories" and #modal_rows == 3)
+assert(modal_title == "Tags" and #modal_rows == 3)
 assert(modal_rows[1].checked_func() and modal_rows[2].text == "quote (12)")
 modal_rows[3].callback()
 assert(readerbackdrop_category_app.state.readerbackdrop.tag == "black and white")
@@ -2472,7 +2484,7 @@ local searched_page, searched_query
 local readerbackdrop_search_app = {
     state = {
         filters = { category = "" },
-        current_category = { id = "screensavers" },
+        current_category = { id = "screensavers", label = "Screensavers" },
     },
     reset_scroll = function() end,
     load_readerbackdrop_page = function(_, page, query)
@@ -2480,6 +2492,8 @@ local readerbackdrop_search_app = {
     end,
     show_category_details = function() end,
 }
+App.prompt_filter(readerbackdrop_search_app, "category")
+assert(modal_title == "Search Screensavers")
 App.set_filter(readerbackdrop_search_app, "category", "moon")
 assert(searched_page == 1 and searched_query == "moon")
 

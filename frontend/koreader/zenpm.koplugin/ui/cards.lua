@@ -100,6 +100,12 @@ local function package_version_repo_text(pkg, meta_suffix)
     end
     table.insert(parts, meta_suffix and meta_suffix ~= "" and meta_suffix
         or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
+    if pkg and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        local transparent = Images.is_transparent(Images.package_icon(pkg))
+        if transparent ~= nil then
+            table.insert(parts, transparent and _("Transparent") or _("Opaque"))
+        end
+    end
     return table.concat(parts, " • ")
 end
 
@@ -213,10 +219,11 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local vpad = opts.vpad or Theme.scale(5)
     local title_y = y + vpad
     local max_bottom = y + h - vpad
-    -- Meta row reserves room for the verification icon, so wrap it tighter.
+    -- Reserve meta-row room only when it includes the verification badge.
     local verify_size = Theme.font_scale(20)
     local verify_gap = Theme.font_scale(5)
-    local meta_w = text_w - verify_size - verify_gap
+    local show_verification = Util.trim(tostring(pkg.category or "")):lower():gsub("[%s_%-]+", "") ~= "screensavers"
+    local meta_w = show_verification and text_w - verify_size - verify_gap or text_w
 
     local rows = {}
     if opts.show_title ~= false then
@@ -272,11 +279,13 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         P.text(bb, row.text, text_x, row.y, row.w, row.role, { bold = row.bold, color = ink })
     end
     local meta_row = rows[#rows]
-    local verify_x = text_x + math.min(meta_row.size.w + verify_gap, text_w - verify_size)
-    local verify_y = meta_row.y + math.floor((meta_row.size.h - verify_size) / 2)
-    draw_verification_icon(bb, Models.package_verified(pkg), verify_x, verify_y, verify_size)
-    if disabled then
-        P.dim(bb, verify_x, verify_y, verify_size, verify_size)
+    if show_verification then
+        local verify_x = text_x + math.min(meta_row.size.w + verify_gap, text_w - verify_size)
+        local verify_y = meta_row.y + math.floor((meta_row.size.h - verify_size) / 2)
+        draw_verification_icon(bb, Models.package_verified(pkg), verify_x, verify_y, verify_size)
+        if disabled then
+            P.dim(bb, verify_x, verify_y, verify_size, verify_size)
+        end
     end
 
     if pkg.installed then
@@ -397,8 +406,12 @@ function Cards.source(view, bb, repo, x, y, w, opts)
     local url_y = y + Theme.scale(66)
     local verify_size = Theme.font_scale(18)
     local verify_gap = Theme.font_scale(5)
-    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, text_w - verify_size - verify_gap, "heading", { bold = true })
-    draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + verify_gap, text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
+    local show_verification = repo.name ~= Constants.REPO_READERBACKDROP_NAME
+    local title_w = show_verification and text_w - verify_size - verify_gap or text_w
+    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, title_w, "heading", { bold = true })
+    if show_verification then
+        draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + verify_gap, text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
+    end
     P.text(bb, ellipsize(repo.url or "", 54), text_x, url_y, text_w, "small")
 
     local id = tostring(repo.name or "")
