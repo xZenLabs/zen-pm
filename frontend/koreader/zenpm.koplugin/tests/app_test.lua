@@ -80,6 +80,8 @@ package.preload["zenpm_constants"] = function()
         ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
         REPO_KINDLEFORGE_NAME = "KindleForge",
         REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
+        REPO_READERBACKDROP_NAME = "ReaderBackdrop",
+        REPO_READERBACKDROP_URL = "https://www.readerbackdrop.com",
         KINDLE_SCRIPTLETS_CATEGORY = { id = "kindle-scriptlets" },
         CATEGORIES = { { id = "fonts", label = "Fonts" } },
     }
@@ -139,6 +141,7 @@ package.preload["models"] = function()
     return {
         sort_packages = models.sort_packages,
         filter_packages = models.filter_packages,
+        filter_categories = models.filter_categories,
         installed_packages = models.installed_packages,
         filter_packages_by_category = models.filter_packages_by_category,
         has_release_notes = function(pkg, allow_prerelease)
@@ -174,6 +177,7 @@ package.preload["models"] = function()
             return {
                 { id = "fonts", label = "Fonts", count = 2 },
                 { id = "games", label = "Games", count = 0 },
+                { id = "screensavers", label = "Screensavers", count = 0 },
             }
         end,
         category_label = function(category) return category.label end,
@@ -342,6 +346,14 @@ do
     })
     assert(file == "assets/wallpapers.svg" and is_icon == true)
     assert(#loaded == 0 and #queued_ticks == 1)
+    image_app:begin_package_image_render()
+    queued_ticks[1]()
+    assert(#loaded == 0 and not image_app.package_image_loading)
+    queued_ticks = {}
+    image_app:package_icon_file({
+        category = "wallpapers",
+        icon_url = "https://example.test/wallpaper.jpg",
+    })
     queued_ticks[1]()
     queued_ticks = nil
     assert(loaded[1] == "https://example.test/wallpaper.jpg")
@@ -1036,6 +1048,9 @@ do
     assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "zulu")
     list_app:prompt_sort("installed")
     assert(#modal_rows == 4 and modal_rows[1].checked_func())
+    list_app.state.current_category = { id = "screensavers" }
+    list_app:prompt_sort("category")
+    assert(modal_rows[1].text == "Downloads")
     list_app:set_installed_category_filter("fonts")
     assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "beta")
     list_app:set_installed_category_filter("")
@@ -1044,6 +1059,9 @@ do
     packages[2].update_available = false
     list_app:refresh_queue_package_state()
     assert(list_app.state.visible_packages[1].id == "beta")
+    list_app.state.readerbackdrop.enabled = true
+    list_app:navigate("categories")
+    assert(list_app.state.categories[3].count_label == "2085")
     settings.sorts = nil
 end
 
@@ -1857,9 +1875,11 @@ assert(modal_title == "Set Mountain View Grey as the ZenOS library background?")
 modal_options.cancel_callback()
 assert(modal_title == "Choose a KOReader sleep screen")
 assert(#modal_rows == 2 and modal_rows[1].text == "Books" and modal_rows[2].text == "Moonlight")
+reader_settings.screensaver_img_background = "black"
 modal_rows[2].callback()
 assert(reader_settings.screensaver_type == "document_cover")
 assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/moonlight.jpg")
+assert(reader_settings.screensaver_img_background == "black")
 assert(restart_message:find("Queue completed: 6 succeeded, 1 failed.", 1, true))
 assert(not image_app.state.queue_running)
 
@@ -1877,10 +1897,23 @@ local screensaver_without_zen = false
 image_app:prompt_installed_images({ "books" }, function()
     screensaver_without_zen = true
 end)
-assert(modal_title == "Set Books as the KOReader sleep screen?")
+assert(modal_title == "Do you want to set Books as the screensaver?")
+local original_io_open = io.open
+io.open = function(path, mode)
+    assert(path == "/koreader/resources/screensavers/books.png" and mode == "rb")
+    return {
+        read = function(_, count)
+            assert(count == 26)
+            return "\137PNG\r\n\26\n\0\0\0\13IHDR\0\0\0\1\0\0\0\1\8\6"
+        end,
+        close = function() end,
+    }
+end
 modal_rows[1].callback()
+io.open = original_io_open
 assert(screensaver_without_zen)
 assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/books.png")
+assert(reader_settings.screensaver_img_background == "none")
 
 local apply_error_acknowledged = false
 image_app.apply_installed_image = function() return false, "save failed" end
@@ -2367,5 +2400,89 @@ local closing_app = {
 App.close(closing_app)
 assert(android_stops == 1)
 assert(not closing_app.backend_ready)
+
+local readerbackdrop_requests = {}
+local readerbackdrop_reloads = 0
+local readerbackdrop_app = {
+    state = {
+        page = "category_details",
+        current_category = { id = "screensavers" },
+        filters = { category = "forest" },
+        readerbackdrop = { enabled = true, page = 1, query = "forest", tag = "minimalist", loaded_tag = "minimalist", loading = false },
+        packages = {},
+    },
+    client = {
+        load_readerbackdrop = function(_, page, query, tag)
+            table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag })
+            return true, { page = page, total = 2083, total_pages = 3 }
+        end,
+    },
+    has_readerbackdrop = App.has_readerbackdrop,
+    readerbackdrop_query = App.readerbackdrop_query,
+    load_readerbackdrop_page = App.load_readerbackdrop_page,
+    load_packages = function()
+        return true, { { id = "forest", repo = "ReaderBackdrop" } }
+    end,
+    reload_current_page = function() readerbackdrop_reloads = readerbackdrop_reloads + 1 end,
+}
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[1].page == 2 and readerbackdrop_requests[1].query == "forest")
+assert(readerbackdrop_requests[1].tag == "minimalist")
+assert(readerbackdrop_app.state.readerbackdrop.page == 2 and readerbackdrop_reloads == 1)
+assert(readerbackdrop_app.state.readerbackdrop.total == 2083)
+
+local selected_readerbackdrop
+local readerbackdrop_category_app = {
+    state = {
+        page = "category_details",
+        current_category = { id = "screensavers" },
+        filters = { category = "" },
+        readerbackdrop = { tag = "" },
+    },
+    client = {
+        readerbackdrop_categories = function()
+            return true, {
+                tags = { { name = "quote", count = 12 }, { name = "black and white", count = 8 } },
+            }
+        end,
+    },
+    reset_scroll = function() end,
+    readerbackdrop_query = App.readerbackdrop_query,
+    load_readerbackdrop_page = function(_, page, query)
+        selected_readerbackdrop = { page = page, query = query }
+        return true
+    end,
+    show_category_details = function() end,
+    set_readerbackdrop_category = App.set_readerbackdrop_category,
+}
+App.prompt_readerbackdrop_categories(readerbackdrop_category_app)
+assert(modal_title == "Categories" and #modal_rows == 3)
+assert(modal_rows[1].checked_func() and modal_rows[2].text == "quote (12)")
+modal_rows[3].callback()
+assert(readerbackdrop_category_app.state.readerbackdrop.tag == "black and white")
+assert(selected_readerbackdrop.page == 1 and selected_readerbackdrop.query == "")
+
+local searched_page, searched_query
+local readerbackdrop_search_app = {
+    state = {
+        filters = { category = "" },
+        current_category = { id = "screensavers" },
+    },
+    reset_scroll = function() end,
+    load_readerbackdrop_page = function(_, page, query)
+        searched_page, searched_query = page, query
+    end,
+    show_category_details = function() end,
+}
+App.set_filter(readerbackdrop_search_app, "category", "moon")
+assert(searched_page == 1 and searched_query == "moon")
+
+local detection_requests = 0
+local detection_app = {
+    client = { request = function() detection_requests = detection_requests + 1 end },
+}
+assert(App.detect_repo_name(detection_app, "https://www.readerbackdrop.com/") == "ReaderBackdrop")
+assert(App.detect_repo_name(detection_app, "https://readerbackdrop.com") == "ReaderBackdrop")
+assert(detection_requests == 0)
 
 print("app tests passed")

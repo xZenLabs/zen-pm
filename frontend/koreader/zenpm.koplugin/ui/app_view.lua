@@ -684,6 +684,9 @@ end
 -- Routes to the active page's content renderer, then draws the scrollbar and
 -- clamps the stored scroll offset.
 function AppView:draw_content(bb, x, y, w, h)
+    if type(self.app.begin_package_image_render) == "function" then
+        self.app:begin_package_image_render()
+    end
     local state = self.app.state
     local page = state.page
     local scroll_key = self.app:scroll_key()

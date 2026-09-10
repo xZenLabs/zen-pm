@@ -74,6 +74,23 @@ func TestPrepareDownloadsResizesAndCachesRasterImage(t *testing.T) {
 	if format != "png" || config.Width != 1200 || config.Height != 600 {
 		t.Fatalf("prepared image = %s %dx%d", format, config.Width, config.Height)
 	}
+	if fileFromURL, err := cache.PrepareURL(server.URL + "/large.png"); err != nil || fileFromURL != file {
+		t.Fatalf("PrepareURL() = %q, %v; want %q", fileFromURL, err, file)
+	}
+
+	handle, err = os.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, _, err := image.Decode(handle)
+	handle.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, g, b, a := prepared.At(1199, 599).RGBA()
+	if r != 0xffff || g != 0xffff || b != 0xffff || a != 0xffff {
+		t.Fatalf("transparent preview background = %#x %#x %#x %#x, want opaque white", r, g, b, a)
+	}
 
 	if err := cache.Prepare(refs); err != nil {
 		t.Fatal(err)

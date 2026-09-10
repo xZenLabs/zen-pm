@@ -171,6 +171,11 @@ Renderer.render(image_view, {}, {
 assert(#queued_images == 1)
 assert(queued_images[1] == "https://repo.example/packages/demo/first.png")
 
+Renderer.render(image_view, {}, {
+    { kind = "image", alt = "Preview", url = "/packages/readerbackdrop-test/preview" },
+}, "", "https://www.readerbackdrop.com/", 0, 0, 100, 100, 0)
+assert(queued_images[2] == "/packages/readerbackdrop-test/preview")
+
 Renderer.render({
     app = {
         state = { show_readme_images = true },

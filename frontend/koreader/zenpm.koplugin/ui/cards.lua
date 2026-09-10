@@ -89,7 +89,9 @@ end
 local function package_version_repo_text(pkg, meta_suffix)
     local parts = {}
     local version = pkg and pkg.version
-    if pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
+    if pkg and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        version = nil
+    elseif pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
         version = pkg.installed_version
     end
     if version and version ~= "" and version ~= "0.0.0" then
@@ -304,8 +306,9 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         local gap = Theme.font_scale(4)
         local number_size = P.text_size(stars, Theme.scale(72), "small", { bold = true })
         P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true })
-        if not P.image(bb, Images.asset("star.filled.svg"), sx, sy, star, star, { is_icon = true }) then
-            P.center_text(bb, "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
+        local readerbackdrop = pkg.repo == Constants.REPO_READERBACKDROP_NAME
+        if not P.image(bb, Images.asset(readerbackdrop and "downloads.svg" or "star.filled.svg"), sx, sy, star, star, { is_icon = true }) then
+            P.center_text(bb, readerbackdrop and "↓" or "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
         end
     end
 
@@ -481,7 +484,7 @@ function Cards.category(view, bb, category, x, y, w, opts)
         icon = Images.asset(category.icon or "packages.svg"),
         icon_fallback = tostring(category.label or "?"):sub(1, 1),
         title = I18n.dynamic_or(category.label, _("Category")),
-        subtitle = tostring(category.count or 0) .. " " .. _("packages"),
+        subtitle = tostring(category.count_label or category.count or 0) .. " " .. _("packages"),
         subtitle_gap = 0,
         border = false,
         radius = false,

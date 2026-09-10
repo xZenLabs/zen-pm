@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
@@ -103,19 +104,26 @@ func imageTarget(value string) string {
 }
 
 func (c *Cache) addReference(refs map[string]string, baseURL, target string) {
+	resolved, ref, ok := c.reference(baseURL, target)
+	if ok {
+		refs[resolved] = ref
+	}
+}
+
+func (c *Cache) reference(baseURL, target string) (string, string, bool) {
 	targetURL, err := url.Parse(strings.TrimSpace(target))
 	if err != nil || targetURL.String() == "" {
-		return
+		return "", "", false
 	}
 	if !targetURL.IsAbs() {
 		base, baseErr := url.Parse(strings.TrimSpace(baseURL))
 		if baseErr != nil || base.Scheme == "" || base.Host == "" {
-			return
+			return "", "", false
 		}
 		targetURL = base.ResolveReference(targetURL)
 	}
 	if !c.urlAllowed(targetURL) {
-		return
+		return "", "", false
 	}
 	resolved := targetURL.String()
 	ref := filepath.Join(c.dir, "url-"+hashString(resolved)+".ref")
@@ -124,7 +132,23 @@ func (c *Cache) addReference(refs map[string]string, baseURL, target string) {
 	} else if value != "" && !pathWithin(c.dir, value) {
 		_ = os.Remove(ref)
 	}
-	refs[resolved] = ref
+	return resolved, ref, true
+}
+
+// PrepareURL returns a local, resized copy of one safe remote image.
+func (c *Cache) PrepareURL(rawURL string) (string, error) {
+	resolved, ref, ok := c.reference("", rawURL)
+	if !ok {
+		return "", fmt.Errorf("unsafe image URL")
+	}
+	if err := c.Prepare(map[string]string{resolved: ref}); err != nil {
+		return "", err
+	}
+	file, _, _, failed := readRef(ref)
+	if failed || file == "" || !pathWithin(c.dir, file) {
+		return "", fmt.Errorf("prepared image is unavailable")
+	}
+	return file, nil
 }
 
 func (c *Cache) urlAllowed(value *url.URL) bool {
@@ -306,9 +330,12 @@ func resizeRaster(data []byte) ([]byte, int, int, error) {
 	if width != config.Width || height != config.Height {
 		prepared = resizeBilinear(source, width, height)
 	}
+	opaque := image.NewNRGBA(image.Rect(0, 0, width, height))
+	draw.Draw(opaque, opaque.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	draw.Draw(opaque, opaque.Bounds(), prepared, prepared.Bounds().Min, draw.Over)
 	var output bytes.Buffer
 	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err := encoder.Encode(&output, prepared); err != nil {
+	if err := encoder.Encode(&output, opaque); err != nil {
 		return nil, 0, 0, fmt.Errorf("encode image: %w", err)
 	}
 	return output.Bytes(), width, height, nil

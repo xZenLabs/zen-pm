@@ -68,6 +68,10 @@ assert(unix_request.path == "/packages/example/icon")
 assert(log_messages[3] == "ZenPM UDS GET /packages/example/icon via /tmp/zenpm.sock started")
 assert(log_messages[4] == "ZenPM UDS GET /packages/example/icon via /tmp/zenpm.sock HTTP 200 after 0ms")
 
+ok, response = client:download("/packages/readerbackdrop-test/preview")
+assert(ok and response == '{"ok":true}')
+assert(unix_request.timeout == 20)
+
 ok, response = client:scan_installed_plugins()
 assert(ok and response.ok)
 assert(unix_request.method == "POST")
@@ -192,6 +196,23 @@ client.request = function(_, method, path, body)
     return true, {}
 end
 assert(client:package_action("example", "install", nil, "v2.0.0", true))
+
+client.request = function(_, method, path, body, timeout)
+    assert(method == "POST")
+    assert(path == "/repo/refresh?readerbackdrop=1")
+    assert(body.page == 2 and body.search == "moon light")
+    assert(body.tag == "minimalist")
+    assert(timeout.total == 60)
+    return true, {}
+end
+assert(client:load_readerbackdrop(2, "moon light", "minimalist"))
+
+client.request = function(_, method, path, body, timeout)
+    assert(method == "POST" and path == "/repo/refresh?readerbackdrop=categories")
+    assert(body == nil and timeout.total == 60)
+    return true, {}
+end
+assert(client:readerbackdrop_categories())
 
 local refresh_requests = {}
 client.request = function(_, method, path, _, timeout)

@@ -15,6 +15,8 @@ return {
     REPO_ZENLABS_URL = "https://repo.zen-labs.org",
     REPO_KINDLEFORGE_NAME = "KindleForge",
     REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
+    REPO_READERBACKDROP_NAME = "ReaderBackdrop",
+    REPO_READERBACKDROP_URL = "https://www.readerbackdrop.com",
 
     FEATURED_IDS = { "zen-reader", "kindle-browser", "zen-mtp" },
     PACKAGE_NOTICE_SECONDS = 3,

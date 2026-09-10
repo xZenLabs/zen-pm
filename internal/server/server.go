@@ -65,6 +65,7 @@ type catalogRefresh struct {
 type readmeImagePreparer interface {
 	References(markdown, baseURL string) map[string]string
 	Prepare(refs map[string]string) error
+	PrepareURL(rawURL string) (string, error)
 }
 
 type pkgJSON struct {
@@ -777,6 +778,39 @@ func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
+	if r.URL.Query().Get("readerbackdrop") == "categories" {
+		tags, err := s.repos.ReaderBackdropTags()
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"tags": tags})
+		return
+	}
+	if r.URL.Query().Get("readerbackdrop") == "1" {
+		var request struct {
+			Page   int    `json:"page"`
+			Search string `json:"search"`
+			Tag    string `json:"tag"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048)).Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if request.Page < 1 || request.Page > 10000 || len(request.Search) > 200 || len(request.Tag) > 100 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ReaderBackdrop filters"})
+			return
+		}
+		totalPages, total, err := s.repos.LoadReaderBackdropPage(request.Page, request.Search, request.Tag)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok": true, "page": request.Page, "total": total, "total_pages": totalPages,
+		})
+		return
+	}
 	job := s.startCatalogRefresh()
 	if r.URL.Query().Get("async") == "1" {
 		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
@@ -880,6 +914,10 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
 		seen[e.ID] = true
+		iconURL := e.IconURL
+		if repo.IsReaderBackdropRepo(e.Repo, "") && strings.TrimSpace(iconURL) != "" {
+			iconURL = "/packages/" + e.ID + "/preview"
+		}
 		item := pkgJSON{
 			ID: e.ID, Name: e.Name, Version: e.Version,
 			Description: e.Description, Author: e.Author,
@@ -888,7 +926,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID] || len(installedAssets[e.ID]) > 0,
 			IncompatiblePlatforms: e.IncompatiblePlatforms,
 			Conflicts:             e.Conflicts,
-			IconURL:               e.IconURL,
+			IconURL:               iconURL,
 			RepoIconURL:           e.RepoIconURL,
 			ImageURL:              firstString(e.Images),
 			Images:                e.Images,
@@ -1042,7 +1080,7 @@ func rawJSON(value string) json.RawMessage {
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
-	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,readme,release-notes,releases}
+	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,preview,readme,release-notes,releases}
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 2 || parts[0] == "" {
@@ -1050,6 +1088,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, action := parts[0], parts[1]
+	if action == "preview" {
+		s.handlePackagePreview(w, r, id)
+		return
+	}
 	if action == "assets" {
 		s.handlePackageAssets(w, r, id)
 		return
@@ -1120,6 +1162,36 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+}
+
+func (s *Server) handlePackagePreview(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	for _, entry := range catalog {
+		if entry.ID != id || !repo.IsReaderBackdropRepo(entry.Repo, "") || strings.TrimSpace(entry.IconURL) == "" {
+			continue
+		}
+		if s.readmeImages == nil {
+			http.Error(w, "image cache unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		file, err := s.readmeImages.PrepareURL(entry.IconURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.ServeFile(w, r, file)
+		return
+	}
+	http.Error(w, "package preview not found", http.StatusNotFound)
 }
 
 func (s *Server) handlePackageUpdateIgnored(w http.ResponseWriter, r *http.Request, id string) {

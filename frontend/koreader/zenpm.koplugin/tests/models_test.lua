@@ -39,6 +39,16 @@ local Models = require("models")
 assert(Models.package_action_label({ installed = true, update_available = true }) == "Update")
 assert(Models.package_action_label({ installed = true }) == "Modify")
 assert(Models.package_action_label({}) == "Get")
+local filtered = Models.filter_packages({
+    { id = "description", name = "One", description = "Moonlit library" },
+    { id = "tag", name = "Two", tags = { "forest", "mountains" } },
+}, "forest")
+assert(#filtered == 1 and filtered[1].id == "tag")
+local tagged = Models.filter_packages_by_tag({
+    { id = "quote", tags = { "Quote", "text" } },
+    { id = "minimal", tags = { "minimalist" } },
+}, " quote ")
+assert(#tagged == 1 and tagged[1].id == "quote")
 local repos = {
     { name = "ZenLabs", url = "https://zenlabs.example" },
     { name = "Alpha", url = "https://alpha.example" },
@@ -127,7 +137,7 @@ local searchable = {
 }
 assert(#Models.filter_packages(searchable, "title match") == 1)
 assert(#Models.filter_packages(searchable, "author match") == 1)
-assert(#Models.filter_packages(searchable, "description match") == 0)
+assert(#Models.filter_packages(searchable, "description match") == 1)
 assert(Models.is_direct_asset_package({ category = "fonts" }))
 assert(Models.is_direct_asset_package({ category = "wallpapers" }))
 assert(Models.is_direct_asset_package({ category = "screen-savers" }))

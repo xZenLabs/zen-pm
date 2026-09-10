@@ -35,6 +35,56 @@ local function package_card_height(list_h, gap)
     return math.max(1, math.floor((list_h - gap * (PACKAGE_ROWS_PER_SCREEN - 1)) / PACKAGE_ROWS_PER_SCREEN))
 end
 
+local function readerbackdrop_rows(view, visible)
+    local state = view.app.state
+    local readerbackdrop = state.readerbackdrop or {}
+    local category = state.current_category or {}
+    local source = state.current_repo or {}
+    local active = state.page == "category_details" and category.id == "screensavers"
+        or state.page == "source_details" and source.name == Constants.REPO_READERBACKDROP_NAME
+    local page = tonumber(readerbackdrop.page) or 1
+    local total_pages = tonumber(readerbackdrop.total_pages)
+    if not active then return visible end
+    local rows = {}
+    local loaded = 0
+    for _, pkg in ipairs(visible or {}) do
+        if pkg.repo ~= Constants.REPO_READERBACKDROP_NAME or loaded < page * 24 then
+            table.insert(rows, pkg)
+            if pkg.repo == Constants.REPO_READERBACKDROP_NAME then loaded = loaded + 1 end
+        end
+    end
+    if not total_pages or page < total_pages then
+        table.insert(rows, {
+            readerbackdrop_load_more = true,
+            subtitle = string.format(_("%d of %s loaded"), loaded, tostring(readerbackdrop.total or 2085)),
+        })
+    end
+    return rows
+end
+
+local function draw_readerbackdrop_load_more(view, bb, item, x, y, w, h, group, index, count)
+    local callback = function() view.app:load_more_readerbackdrop() end
+    Cards.compact(view, bb, x, y, w, {
+        height = h,
+        icon = Images.asset("downloads.svg"),
+        icon_fallback = "+",
+        title = _("Load more screensavers"),
+        subtitle = item.subtitle,
+        callback = callback,
+        hit_id = "readerbackdrop-load-more",
+        focus = {
+            id = "readerbackdrop-load-more",
+            focus_type = "package",
+            focus_column = "main",
+            focus_content = true,
+            focus_primary = true,
+            list_group = group,
+            list_index = index,
+            list_count = count,
+        },
+    })
+end
+
 local function patch_row_height(list_h, gap)
     return math.max(Theme.metrics().touch_min, math.floor((list_h - gap * (PATCH_ROWS_PER_SCREEN - 1)) / PATCH_ROWS_PER_SCREEN))
 end
@@ -139,8 +189,13 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
+    local rows = readerbackdrop_rows(view, visible)
+    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.readerbackdrop_load_more then
+            draw_readerbackdrop_load_more(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, card_h, kind, index, count)
+            return
+        end
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
             meta_suffix = (kind == "search" or (kind == "installed" and pkg.update_available and not pkg.update_ignored))
@@ -177,6 +232,9 @@ end
 
 local function queue_version_line(entry)
     local pkg = entry.pkg or {}
+    if entry.action == "install" and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        return _("Install screensaver")
+    end
     local current = pkg.installed and (pkg.installed_version or pkg.version) or nil
     if entry.is_patch then
         current = pkg.installed_version or pkg.version
@@ -539,8 +597,13 @@ function Pages.source_details(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
+    local rows = readerbackdrop_rows(view, visible)
+    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.readerbackdrop_load_more then
+            draw_readerbackdrop_load_more(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, card_h, "source", index, count)
+            return
+        end
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
             focus_group = "source",
@@ -599,13 +662,16 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
-    local description = I18n.dynamic_or(pkg.description, _("No description available."))
     local is_font = Models.is_font_package(pkg)
-    local description_heading = _("Description")
-    local readme_blocks = {
-        { kind = "heading", level = 2, text = description_heading, plain = true },
-        { kind = "paragraph", text = description, plain = true },
-    }
+    local readme_blocks = {}
+    if pkg.category ~= "screensavers" or Util.trim(tostring(pkg.description or "")) ~= "" then
+        table.insert(readme_blocks, { kind = "heading", level = 2, text = _("Description"), plain = true })
+        table.insert(readme_blocks, {
+            kind = "paragraph",
+            text = I18n.dynamic_or(pkg.description, _("No description available.")),
+            plain = true,
+        })
+    end
     if not is_font and not is_image_asset then
         local readme = tostring(pkg.readme or "")
         if readme == "" then

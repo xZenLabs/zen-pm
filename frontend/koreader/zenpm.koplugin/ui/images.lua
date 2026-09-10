@@ -29,7 +29,9 @@ local function platform_cache_dir(platform)
 end
 
 local function is_remote(value)
-    return tostring(value or ""):match("^https?://") ~= nil
+    value = tostring(value or "")
+    return value:match("^https?://") ~= nil
+        or value:match("^/packages/[^/]+/preview$") ~= nil
 end
 
 local function cache_key(value)

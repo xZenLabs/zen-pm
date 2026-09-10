@@ -80,6 +80,16 @@ Images = load_images()
 assert(Images.file_for(client, "android", url) == first)
 assert(downloads == 1)
 
+local preview_path = "/packages/readerbackdrop-test/preview"
+local requested_preview
+local preview_file = assert(Images.file_for({
+    download = function(_, value)
+        requested_preview = value
+        return true, "preview image", 200, { ["content-type"] = "image/png" }
+    end,
+}, "android", preview_path))
+assert(requested_preview == preview_path and preview_file ~= preview_path and path_exists(preview_file))
+
 Images.invalidate_cache()
 assert(Images.cached_file("android", url) == nil)
 payload = "updated image"

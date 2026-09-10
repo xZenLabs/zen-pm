@@ -572,6 +572,7 @@ func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
 		{category: "wallpapers", asset: "clouds.jpg"},
 		{category: "screensavers", asset: "books.png"},
 		{category: "screensavers", asset: "library.jpg"},
+		{category: "screensavers", asset: "readerbackdrop-image"},
 	} {
 		t.Run(test.asset, func(t *testing.T) {
 			home := filepath.Join(t.TempDir(), "ZenPM")
@@ -586,8 +587,14 @@ func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			payload := []byte(test.category)
+			installedAsset := test.asset
+			if filepath.Ext(test.asset) == "" {
+				payload = []byte("\x89PNG\r\n\x1a\n")
+				installedAsset += ".png"
+			}
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, _ = w.Write([]byte(test.category))
+				_, _ = w.Write(payload)
 			}))
 			defer srv.Close()
 
@@ -604,12 +611,12 @@ func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
 			if err := manager.Install(id); err != nil {
 				t.Fatal(err)
 			}
-			destination := filepath.Join(koRoot, "resources", test.category, test.asset)
-			if data, err := os.ReadFile(destination); err != nil || string(data) != test.category {
+			destination := filepath.Join(koRoot, "resources", test.category, installedAsset)
+			if data, err := os.ReadFile(destination); err != nil || string(data) != string(payload) {
 				t.Fatalf("installed image = %q, %v", data, err)
 			}
 			installed, err := st.ReadInstalled()
-			if err != nil || len(installed) != 1 || installed[0].InstallPath != destination {
+			if err != nil || len(installed) != 1 || installed[0].InstallPath != destination || installed[0].Asset != installedAsset {
 				t.Fatalf("installed images = %#v, %v", installed, err)
 			}
 			if err := manager.Uninstall(id, ""); err != nil {

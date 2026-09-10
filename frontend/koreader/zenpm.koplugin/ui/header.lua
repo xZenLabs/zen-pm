@@ -45,6 +45,11 @@ function Header.page_title(view)
         return _("Categories") .. " (" .. filtered_count(state.visible_categories, state.categories, state.filters.categories) .. ")"
     elseif page == "category_details" then
         local category = state.current_category or {}
+        local readerbackdrop = state.readerbackdrop or {}
+        if category.id == "screensavers" and readerbackdrop.enabled then
+            return I18n.dynamic_or(category.label, _("Category")) .. " ("
+                .. tostring(readerbackdrop.total or 2085) .. ")"
+        end
         return I18n.dynamic_or(category.label, _("Category")) .. " ("
             .. filtered_count(state.visible_packages, state.category_packages, state.filters.category) .. ")"
     elseif page == "installed" then
@@ -54,6 +59,10 @@ function Header.page_title(view)
         return _("Sources") .. " (" .. tostring(#(state.repos or {})) .. ")"
     elseif page == "source_details" then
         local repo = state.current_repo or {}
+        if repo.name == Constants.REPO_READERBACKDROP_NAME then
+            return Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))) .. " ("
+                .. tostring((state.readerbackdrop or {}).total or 2085) .. ")"
+        end
         return Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))) .. " ("
             .. tostring(#(state.visible_packages or {})) .. ")"
     elseif page == "package_details" then
@@ -357,6 +366,15 @@ function Header.draw(view, bb, x, y, w)
         local search_w = icon_button_width(_("Search"), Theme.scale(24))
         right_x = right_x - search_w
         Header.draw_search_button(view, bb, right_x, button_y, filter_kind)
+    end
+    if page == "category_details" and view.app.state.current_category
+            and view.app.state.current_category.id == "screensavers" then
+        local label = _("Categories")
+        local button_w = title_button_width(label)
+        right_x = right_x - button_w - gap
+        draw_title_button(view, bb, right_x, button_y, label, function()
+            view.app:prompt_readerbackdrop_categories()
+        end, "readerbackdrop-categories", true)
     end
     if page == "queue" then
         local button_h = Theme.scale(42)

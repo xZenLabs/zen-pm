@@ -118,6 +118,21 @@ func (m *Manager) Refresh() error {
 			all = append(all, entry)
 		}
 	}
+	present := make(map[string]bool, len(all))
+	for _, entry := range all {
+		present[entry.ID] = true
+	}
+	if installed, err := m.st.ReadInstalled(); err == nil {
+		installedSet := make(map[string]bool, len(installed))
+		for _, entry := range installed {
+			installedSet[entry.ID] = true
+		}
+		for _, entry := range previous {
+			if entry != nil && installedSet[entry.ID] && !present[entry.ID] {
+				all = append(all, entry)
+			}
+		}
+	}
 	merged := MergeCatalogs(all)
 	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
 		return fmt.Errorf("write merged catalog: %w", err)
@@ -132,6 +147,60 @@ func (m *Manager) Refresh() error {
 	}
 	m.touchRefreshMarker()
 	return nil
+}
+
+func (m *Manager) readerBackdropSource() (state.RepoEntry, error) {
+	repositories, err := m.st.ReadRepos()
+	if err != nil {
+		return state.RepoEntry{}, err
+	}
+	for _, source := range repositories {
+		if IsReaderBackdropRepo(source.Name, source.URL) {
+			return source, nil
+		}
+	}
+	return state.RepoEntry{}, errors.New("ReaderBackdrop source is not configured")
+}
+
+// LoadReaderBackdropPage adds one public API page to the local catalog.
+func (m *Manager) LoadReaderBackdropPage(page int, search, tag string) (int, int, error) {
+	source, err := m.readerBackdropSource()
+	if err != nil {
+		return 0, 0, err
+	}
+	entries, totalPages, total, err := fetchReaderBackdropPage(
+		source.Name, source.URL, source.Priority, m.st.CacheDir, page, search, tag)
+	if err != nil {
+		return 0, 0, err
+	}
+	catalog, err := m.ReadCatalog()
+	if err != nil && !os.IsNotExist(err) {
+		return 0, 0, err
+	}
+	fetched := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		fetched[entry.ID] = true
+	}
+	all := make([]*CatalogEntry, 0, len(catalog)+len(entries))
+	for _, entry := range catalog {
+		if entry != nil && !fetched[entry.ID] {
+			all = append(all, entry)
+		}
+	}
+	all = append(all, entries...)
+	if err := m.st.WriteCatalog(toStateCatalog(MergeCatalogs(all))); err != nil {
+		return 0, 0, fmt.Errorf("write ReaderBackdrop catalog page: %w", err)
+	}
+	// ponytail: requested pages stay cached until the next source refresh; add eviction only if catalog growth becomes measurable.
+	return totalPages, total, nil
+}
+
+func (m *Manager) ReaderBackdropTags() ([]ReaderBackdropTag, error) {
+	source, err := m.readerBackdropSource()
+	if err != nil {
+		return nil, err
+	}
+	return fetchReaderBackdropTags(source.URL)
 }
 
 // refreshMarkerPath is a tiny file whose mtime records the last successful

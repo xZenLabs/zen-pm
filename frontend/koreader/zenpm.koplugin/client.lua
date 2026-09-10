@@ -197,6 +197,9 @@ end
 
 function Client:download(path)
     local backend_path = not tostring(path or ""):match("^https?://")
+    local prepared_preview = tostring(path or ""):match("^/packages/[^/]+/preview$") ~= nil
+    local block_timeout = prepared_preview and PACKAGE_README_TIMEOUT.block or UI_BLOCK_TIMEOUT_SECONDS
+    local total_timeout = prepared_preview and PACKAGE_README_TIMEOUT.total or UI_TOTAL_TIMEOUT_SECONDS
     local url = self:build_url(path)
     local started_at = socket.gettime()
     local log_prefix = request_log_prefix("GET", path, url, self.unix_socket, backend_path)
@@ -218,7 +221,7 @@ function Client:download(path)
             "GET",
             path,
             nil,
-            UI_TOTAL_TIMEOUT_SECONDS,
+            total_timeout,
             accept)
     else
         local request = {
@@ -241,7 +244,7 @@ function Client:download(path)
         end
 
         if ok_socketutil then
-            socketutil:set_timeout(UI_BLOCK_TIMEOUT_SECONDS, UI_TOTAL_TIMEOUT_SECONDS)
+            socketutil:set_timeout(block_timeout, total_timeout)
         end
 
         code, resp_headers, status = socket.skip(1, requester.request(request))
@@ -294,6 +297,18 @@ end
 
 function Client:repo_refresh_status()
     return self:request("GET", "/repo/refresh", nil, { block = 1, total = 1 })
+end
+
+function Client:load_readerbackdrop(page, search, tag)
+    return self:request("POST", "/repo/refresh?readerbackdrop=1", {
+        page = page,
+        search = search or "",
+        tag = tag or "",
+    }, REPO_REFRESH_TIMEOUT)
+end
+
+function Client:readerbackdrop_categories()
+    return self:request("POST", "/repo/refresh?readerbackdrop=categories", nil, REPO_REFRESH_TIMEOUT)
 end
 
 function Client:scan_installed_plugins()

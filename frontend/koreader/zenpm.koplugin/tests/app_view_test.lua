@@ -213,6 +213,22 @@ assert(refreshes == 1)
 assert(AppView._scroll_list(details_view, 1) == true)
 assert(details_view.app.state.scroll["package:demo:readme"] == 40)
 
+local load_more_calls = 0
+local bottom_view = {
+    app = {
+        state = { scroll = { packages = 10 } },
+        scroll_key = function() return "packages" end,
+        load_more_readerbackdrop = function()
+            load_more_calls = load_more_calls + 1
+            return true
+        end,
+    },
+    scroll_step = 10,
+    max_scroll = 10,
+}
+assert(AppView._scroll_list(bottom_view, 1) == false)
+assert(load_more_calls == 0)
+
 local focus_refreshes = 0
 local focused = {}
 local focus_view = {

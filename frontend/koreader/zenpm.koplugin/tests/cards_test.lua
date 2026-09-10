@@ -9,7 +9,9 @@ local painted_boxes = {}
 local painted_rects = {}
 local hit_callbacks = {}
 
-package.preload["zenpm_constants"] = function() return { PLUGIN_DIR = root } end
+package.preload["zenpm_constants"] = function()
+    return { PLUGIN_DIR = root, REPO_READERBACKDROP_NAME = "ReaderBackdrop" }
+end
 package.preload["i18n"] = function()
     return { dynamic_or = function(value, fallback) return value or fallback end }
 end
@@ -19,6 +21,9 @@ package.preload["models"] = function()
         package_action_label = function() return "Update" end,
         package_display_name = function(pkg, fallback) return pkg.name or fallback end,
         package_verified = function() return true end,
+        package_assets = function() return {} end,
+        has_release_notes = function() return false end,
+        is_font_package = function() return false end,
         is_image_asset_package = function(pkg)
             return pkg.category == "wallpapers" or pkg.category == "screensavers"
         end,
@@ -64,7 +69,9 @@ package.preload["ui/theme"] = function()
         ink = 0,
         muted = 0,
         soft = 0,
-        metrics = function() return { card_h = 80, category_h = 84, action_w = 40, action_h = 20 } end,
+        metrics = function()
+            return { card_h = 80, category_h = 84, action_w = 40, action_h = 20, pad = 8, card_gap = 4, touch_min = 20 }
+        end,
         scale = function(value) return value end,
         font_scale = function(value) return value end,
     }
@@ -153,10 +160,11 @@ Cards.category({
     label = "Wallpapers",
     icon = "wallpaper.svg",
     count = 2,
+    count_label = "2085",
 }, 0, 0, 300, { height = 60, top_divider = true })
 assert(painted_boxes[1].opts.border == false and painted_boxes[1].opts.radius == false)
 assert(#painted_rects == 2 and painted_rects[1].y == 0 and painted_rects[2].y == 59)
-assert(painted_text_y["2 packages"] == painted_text_y.Wallpapers + 1)
+assert(painted_text_y["2085 packages"] == painted_text_y.Wallpapers + 1)
 
 painted_text = {}
 local opened_update_details
@@ -219,4 +227,132 @@ for _, page in ipairs({ "search", "installed", "category_details" }) do
         assert(table.concat(painted_text, "\n"):find("v1.0.0 • ZenLabs", 1, true))
     end
 end
+
+painted_text = {}
+painted_images = {}
+Cards.package({
+    app = {
+        state = { active_tab = "search", queue = {} },
+        package_disabled = function() return false end,
+        perform_package_action = function() end,
+        show_package_details = function() end,
+    },
+}, {}, {
+    id = "readerbackdrop-moonlight",
+    name = "Moonlight",
+    version = "9.9.9",
+    repo = "ReaderBackdrop",
+    category = "screensavers",
+    platforms = { "koreader" },
+    stars = "42",
+}, 0, 0, 300, { compact = true })
+assert(table.concat(painted_text, "\n"):find("ReaderBackdrop", 1, true))
+assert(not table.concat(painted_text, "\n"):find("v9.9.9", 1, true))
+assert(painted_images["downloads.svg"] and not painted_images["star.filled.svg"])
+
+package.preload["ui/font"] = function() return {} end
+package.preload["ui/inline_icon_map"] = function() return {} end
+package.preload["ui/markdown"] = function()
+    return {
+        base_url = function() return "" end,
+        source_base_url = function() return "" end,
+        public_image_base_url = function() return "" end,
+    }
+end
+local rendered_detail_blocks
+package.preload["ui/markdown_renderer"] = function()
+    return { render = function(_, _, blocks) rendered_detail_blocks = blocks return 0 end }
+end
+package.preload["ui/scroll"] = function()
+    return {
+        set_list_bounds = function() end,
+        scrolled_list = function(_, _, entries, _, y, _, _, _, row_h, gap, draw)
+            for index, entry in ipairs(entries) do
+                draw(entry, y + (index - 1) * (row_h + gap), false, index, #entries)
+            end
+            return 0
+        end,
+    }
+end
+local Pages = require("ui/pages")
+painted_text = {}
+local load_more_calls = 0
+local rendered_screensavers = 0
+local screensavers = {}
+for index = 1, 50 do
+    table.insert(screensavers, {
+        id = "readerbackdrop-" .. tostring(index),
+        name = "Screensaver " .. tostring(index),
+        repo = "ReaderBackdrop",
+        category = "screensavers",
+    })
+end
+Pages.packages_page({
+    app = {
+        state = {
+            page = "category_details",
+            current_category = { id = "screensavers" },
+            readerbackdrop = { page = 1, total = 2083, total_pages = 44, tag = "quotes" },
+        },
+        package_disabled = function() return false end,
+        package_icon_file = function()
+            rendered_screensavers = rendered_screensavers + 1
+            return "screensavers.svg", true
+        end,
+        show_package_details = function() end,
+        load_more_readerbackdrop = function() load_more_calls = load_more_calls + 1 end,
+    },
+}, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
+assert(table.concat(painted_text, "\n"):find("Load more screensavers", 1, true))
+assert(table.concat(painted_text, "\n"):find("24 of 2083 loaded", 1, true))
+assert(rendered_screensavers == 24)
+hit_callbacks["readerbackdrop-load-more"]()
+assert(load_more_calls == 1)
+
+Pages.package_details({
+    app = {
+        state = {
+            current_package = {
+                id = "readerbackdrop-empty",
+                name = "Empty description",
+                category = "screensavers",
+                description = "",
+                icon_url = "/packages/readerbackdrop-empty/preview",
+            },
+            queue = {},
+            details_tab = "readme",
+        },
+        package_disabled = function() return false end,
+        package_icon_file = function() return "screensavers.svg", true end,
+        show_package_details = function() end,
+    },
+}, {}, 0, 0, 300, 600, 0)
+assert(#rendered_detail_blocks == 1 and rendered_detail_blocks[1].kind == "image")
+
+package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
+local Header = require("ui/header")
+assert(Header.page_title({ app = { state = {
+    page = "category_details",
+    current_category = { id = "screensavers", label = "Screensavers" },
+    readerbackdrop = { enabled = true, total = 2083 },
+} } }) == "Screensavers (2083)")
+assert(Header.page_title({ app = { state = {
+    page = "source_details",
+    current_repo = { name = "ReaderBackdrop" },
+    readerbackdrop = {},
+} } }) == "ReaderBackdrop (2085)")
+
+painted_text = {}
+Pages.queue({
+    app = {
+        state = { queue = {
+            { key = "screensaver", name = "Moonlight", action = "install", pkg = { repo = "ReaderBackdrop" } },
+            { key = "plugin", name = "Reader", action = "install", pkg = { version = "1.2.3" } },
+        } },
+        package_icon_file = function() return "package.svg" end,
+        show_queue_entry_modify = function() end,
+    },
+}, {}, 0, 0, 300, 300, 0)
+assert(painted_text[2] == "Install screensaver")
+assert(painted_text[4] == "Install v1.2.3")
 print("cards tests passed")

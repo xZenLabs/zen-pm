@@ -101,8 +101,8 @@ func TestInitUsesConfiguredZenLabsRepoURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || repos[0].Name != DefaultZenLabsRepoName || repos[0].URL != "http://localhost:8000" {
-		t.Fatalf("repos = %#v, want local ZenLabs repo", repos)
+	if len(repos) != 2 || repos[0].Name != DefaultZenLabsRepoName || repos[0].URL != "http://localhost:8000" || !hasRepo(repos, DefaultReaderBackdropRepoName) {
+		t.Fatalf("repos = %#v, want local ZenLabs and ReaderBackdrop repos", repos)
 	}
 }
 
@@ -131,7 +131,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || !hasRepo(repos, DefaultZenLabsRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
+	if len(repos) != 2 || !hasRepo(repos, DefaultZenLabsRepoName) || !hasRepo(repos, DefaultReaderBackdropRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("repos = %#v", repos)
 	}
 	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo", LauncherAddPending: true, UpdateIgnored: true}); err != nil {
@@ -211,11 +211,14 @@ func TestReconcileDefaultReposDoesNotAddKindleForge(t *testing.T) {
 		t.Fatal(err)
 	}
 	st.kindleWAFAllowed = true
+	if err := st.WriteRepos([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := reconcileDefaultRepos(st); err != nil {
 		t.Fatal(err)
 	}
 	repos, err := st.ReadRepos()
-	if err != nil || hasRepo(repos, DefaultKindleForgeRepoName) {
+	if err != nil || !hasRepo(repos, DefaultReaderBackdropRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("supported repos = %#v, %v", repos, err)
 	}
 

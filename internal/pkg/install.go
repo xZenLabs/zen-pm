@@ -195,6 +195,9 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		}
 
 		selectedName, selectedArch := m.installedAsset(installEntry, override)
+		if (genericInstaller == genericWallpaperInstaller || genericInstaller == genericScreensaverInstaller) && installedPath != "" {
+			selectedName = filepath.Base(installedPath)
+		}
 		if genericInstaller == genericPluginInstaller {
 			if err := m.removeConflictingKOReaderPluginRecords(pkgID, installedPath, catalog); err != nil {
 				return err

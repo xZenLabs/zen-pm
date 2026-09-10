@@ -94,6 +94,48 @@ func TestCatalogRefreshRunsInBackgroundAndSharesRequests(t *testing.T) {
 	}
 }
 
+func TestReaderBackdropPageRefresh(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags/popular" {
+			_, _ = io.WriteString(w, `[{"name":"quote","count":12}]`)
+			return
+		}
+		if r.URL.Query().Get("search") != "forest" || r.URL.Query().Get("tag") != "quote" {
+			http.Error(w, "unexpected filters", http.StatusBadRequest)
+			return
+		}
+		if r.URL.Query().Get("page") != "2" {
+			http.Error(w, "unexpected page", http.StatusBadRequest)
+			return
+		}
+		_, _ = io.WriteString(w, `{"images":[],"total":192,"totalPages":4,"currentPage":2}`)
+	}))
+	defer upstream.Close()
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ReaderBackdrop", URL: upstream.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	repositories := repo.New(st)
+	srv := New(st, repositories, pkg.New(st, repositories, "host"), 0)
+	req := httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"search":"forest","tag":"quote"}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleRepoRefresh(rec, req)
+
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"page":2`) || !strings.Contains(rec.Body.String(), `"total":192`) || !strings.Contains(rec.Body.String(), `"total_pages":4`) {
+		t.Fatalf("response = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=categories", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"quote"`) {
+		t.Fatalf("categories response = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestTailLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "zenpm.log")
 	for _, content := range []string{"", "\n\n", "one", "one\n\n", "one\ntwo\nthree\n", strings.Repeat("long line", 2000) + "\nlast\n"} {
@@ -144,6 +186,8 @@ type fakeReadmeImagePreparer struct {
 	refs     map[string]string
 	markdown string
 	baseURL  string
+	file     string
+	rawURL   string
 	started  chan struct{}
 	release  chan struct{}
 	finished chan struct{}
@@ -160,6 +204,11 @@ func (f *fakeReadmeImagePreparer) Prepare(refs map[string]string) error {
 	<-f.release
 	close(f.finished)
 	return nil
+}
+
+func (f *fakeReadmeImagePreparer) PrepareURL(rawURL string) (string, error) {
+	f.rawURL = rawURL
+	return f.file, nil
 }
 
 func TestListenUnixBindsSocket(t *testing.T) {
@@ -563,6 +612,44 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 	if packages[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", packages[0].PublishedAt)
+	}
+}
+
+func TestReaderBackdropUsesPreparedPreview(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := "https://cdn.example/wallpaper.png"
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "readerbackdrop-missing", Repo: "ReaderBackdrop", Platforms: []string{"koreader"}, IconURL: original},
+		{ID: "readerbackdrop-thumb", Repo: "ReaderBackdrop", Platforms: []string{"koreader"}, IconURL: "https://cdn.example/thumb.png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repositories := repo.New(st)
+	srv := New(st, repositories, pkg.New(st, repositories, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil))
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 2 || packages[0].IconURL != "/packages/readerbackdrop-missing/preview" || packages[1].IconURL != "/packages/readerbackdrop-thumb/preview" {
+		t.Fatalf("preview URLs = %#v", packages)
+	}
+
+	preview := filepath.Join(t.TempDir(), "preview.png")
+	if err := os.WriteFile(preview, []byte("prepared preview"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	preparer := &fakeReadmeImagePreparer{file: preview}
+	srv.readmeImages = preparer
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "prepared preview" || preparer.rawURL != original {
+		t.Fatalf("preview response = %d %q, source=%q", rec.Code, rec.Body.String(), preparer.rawURL)
 	}
 }
 

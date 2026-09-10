@@ -158,6 +158,21 @@ func TestRefreshPartialAndEmptyCatalogs(t *testing.T) {
 	if catalog, err := m.ReadCatalog(); err != nil || len(catalog) != 0 {
 		t.Fatalf("empty reachable repo retained removed packages: %#v, %v", catalog, err)
 	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "removed", Repo: "online"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "removed", Repo: "online", Category: "screensavers"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Refresh(); err == nil {
+		t.Fatal("partial refresh should report the unavailable repo")
+	}
+	if catalog, err := m.ReadCatalog(); err != nil || len(catalog) != 1 || catalog[0].Category != "screensavers" {
+		t.Fatalf("installed removed package lost its catalog metadata: %#v, %v", catalog, err)
+	}
+	if err := st.RemoveInstalled("removed"); err != nil {
+		t.Fatal(err)
+	}
 	if err := st.WriteRepos(repos[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -284,6 +299,80 @@ func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
 		t.Fatalf("manifest requests = %d, want 0", got)
 	}
 	assertEntryIDs(t, entries, []string{"notebook"})
+}
+
+func TestFetchCatalogUsesReaderBackdropAPI(t *testing.T) {
+	var requested string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"images":[
+			{"id":"abc123","title":"Moonlight","description":"A moonlit library","device":"Kobo Clara","imageUrl":"https://utfs.io/image","thumbnailUrl":"https://utfs.io/thumb","fileSize":1024,"downloads":42,"createdAt":"2026-09-10T12:00:00Z","tags":[{"name":"books"}],"user":{"name":"Artist"}},
+			{"id":"hidden","title":"Hidden","isNSFW":true}
+		]}`))
+	}))
+	defer srv.Close()
+
+	entries, err := FetchCatalog("ReaderBackdrop", srv.URL, 42, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested != "/api/images?sortBy=downloads&limit=24&page=1" {
+		t.Fatalf("requested %q", requested)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("entries = %#v", entries)
+	}
+	entry := entries[0]
+	if entry.ID != "readerbackdrop-abc123" || entry.Name != "Moonlight" || entry.Category != "screensavers" || entry.Priority != 42 {
+		t.Fatalf("entry = %#v", entry)
+	}
+	if entry.Source != srv.URL+"/backgrounds/abc123" || entry.IconURL != "https://utfs.io/thumb" {
+		t.Fatalf("source/icon = %q, %q", entry.Source, entry.IconURL)
+	}
+	for _, want := range []string{`"asset":"readerbackdrop-abc123"`, `"url":"` + srv.URL + `/api/images/abc123/download"`} {
+		if !strings.Contains(entry.Assets, want) {
+			t.Fatalf("assets = %q, want %q", entry.Assets, want)
+		}
+	}
+}
+
+func TestLoadReaderBackdropPageAddsSearchResults(t *testing.T) {
+	var requested string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.RequestURI()
+		_, _ = w.Write([]byte(`{"images":[{"id":"page2","title":"Moon Library","imageUrl":"https://example.invalid/moon.png"}],"total":123,"totalPages":3,"currentPage":2}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ReaderBackdrop", URL: srv.URL, Priority: 100}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "existing", Name: "Existing", Repo: "ZenLabs"}}); err != nil {
+		t.Fatal(err)
+	}
+	totalPages, total, err := New(st).LoadReaderBackdropPage(2, "moon library", "black and white")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested != "/api/images?sortBy=downloads&limit=24&page=2&search=moon+library&tag=black+and+white" {
+		t.Fatalf("requested %q", requested)
+	}
+	if totalPages != 3 {
+		t.Fatalf("total pages = %d", totalPages)
+	}
+	if total != 123 {
+		t.Fatalf("total images = %d", total)
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil || len(catalog) != 2 {
+		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
 }
 
 func TestFetchCatalogFallbackLogNamesActualRepository(t *testing.T) {

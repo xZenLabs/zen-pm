@@ -184,6 +184,7 @@ function App:new(plugin)
             visible_categories = {},
             category_packages = {},
             repos = {},
+            readerbackdrop = { enabled = false, page = 1, query = "", tag = "", loaded_tag = "", loading = false },
             readme_cache = {},
             release_notes_cache = {},
             current_package = nil,
@@ -1144,6 +1145,16 @@ local function installed_image_target(kind)
         or _("KOReader sleep screen")
 end
 
+local function png_has_alpha(path)
+    local file = io.open(path, "rb")
+    if not file then return false end
+    local header = file:read(26)
+    file:close()
+    if not header or header:sub(1, 8) ~= "\137PNG\r\n\26\n" then return false end
+    local color_type = header:byte(26)
+    return color_type == 4 or color_type == 6
+end
+
 local function installed_image_prompt_kind(app, pkg)
     if not (pkg and pkg.installed) then return nil end
     local path, kind = installed_image_path(app, pkg)
@@ -1170,6 +1181,9 @@ function App:apply_installed_image(pkg)
         end
         settings:saveSetting("screensaver_type", "document_cover")
         settings:saveSetting("screensaver_document_cover", path)
+        if png_has_alpha(path) then
+            settings:saveSetting("screensaver_img_background", "none")
+        end
         if type(settings.flush) == "function" then settings:flush() end
         return true
     end
@@ -1208,7 +1222,9 @@ function App:prompt_installed_image(pkg, on_done)
     on_done = on_done or function() end
     local name = package_title(pkg, pkg.installed_asset or _("Image"))
     Modals.close_status()
-    Modals.actions(string.format(_("Set %s as the %s?"), name, installed_image_target(kind)), {
+    local prompt = kind == "screensavers" and string.format(_("Do you want to set %s as the screensaver?"), name)
+        or string.format(_("Set %s as the %s?"), name, installed_image_target(kind))
+    Modals.actions(prompt, {
         {
             text = _("Set image"),
             callback = function()
@@ -2121,6 +2137,11 @@ function App:load_next_package_image()
     end)
 end
 
+function App:begin_package_image_render()
+    self.package_image_queue = {}
+    self.package_image_pending = {}
+end
+
 function App:queue_package_image(value)
     value = tostring(value or "")
     if value == "" or self.package_image_pending[value] or Images.is_failed(value) then return end
@@ -2352,6 +2373,129 @@ function App:load_repos(force)
     return true, repos
 end
 
+function App:has_readerbackdrop()
+    local state = self.state.readerbackdrop or {}
+    self.state.readerbackdrop = state
+    if state.enabled then return true end
+    for _, repo in ipairs(self.state.repos or {}) do
+        if repo.name == Constants.REPO_READERBACKDROP_NAME then
+            state.enabled = true
+            return true
+        end
+    end
+    for _, pkg in ipairs(self.state.packages or {}) do
+        if pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+            state.enabled = true
+            return true
+        end
+    end
+    return false
+end
+
+function App:readerbackdrop_query()
+    if self.state.page == "category_details" and self.state.current_category
+            and self.state.current_category.id == "screensavers" then
+        return self.state.filters.category or ""
+    end
+    if self.state.page == "source_details" and self.state.current_repo
+            and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME then
+        return self.state.filters.source or ""
+    end
+end
+
+function App:set_readerbackdrop_category(value)
+    local state = self.state.readerbackdrop
+    state.tag = value or ""
+    self:reset_scroll("category:screensavers")
+    if self:load_readerbackdrop_page(1, self:readerbackdrop_query() or "") then
+        self:show_category_details("screensavers")
+    end
+end
+
+function App:prompt_readerbackdrop_categories()
+    Modals.status(_("Loading categories..."))
+    local ok, data = self.client:readerbackdrop_categories()
+    Modals.close_status()
+    if not ok then
+        Modals.info_for(_("Could not load categories: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return
+    end
+    data = type(data) == "table" and data or {}
+    local state = self.state.readerbackdrop
+    state.tag = state.tag or ""
+    local rows = {
+        {
+            text = _("All"),
+            checked_func = function() return state.tag == "" end,
+            callback = function() self:set_readerbackdrop_category("") end,
+        },
+    }
+    for _, tag in ipairs(type(data.tags) == "table" and data.tags or {}) do
+        local item = tag
+        if type(item.name) == "string" and item.name ~= "" then
+            table.insert(rows, {
+                text = item.name .. (tonumber(item.count) and " (" .. tostring(item.count) .. ")" or ""),
+                checked_func = function() return state.tag == item.name end,
+                callback = function() self:set_readerbackdrop_category(item.name) end,
+            })
+        end
+    end
+    Modals.actions(_("Categories"), rows, { show_cancel = false, align = "left" })
+end
+
+function App:load_readerbackdrop_page(page, query)
+    if not self:has_readerbackdrop() then return false end
+    query = Util.trim(query)
+    local state = self.state.readerbackdrop
+    local tag = self.state.page == "category_details" and self.state.current_category
+        and self.state.current_category.id == "screensavers" and state.tag or ""
+    if state.loading or (page > 1 and state.query == query and state.loaded_tag == tag
+            and state.total_pages and page > state.total_pages) then
+        return false
+    end
+    state.loading = true
+    Modals.status(page == 1 and (query ~= "" and _("Searching ReaderBackdrop...") or _("Loading screensavers..."))
+        or _("Loading more screensavers..."))
+    local ok, data = self.client:load_readerbackdrop(page, query, tag)
+    Modals.close_status()
+    state.loading = false
+    if not ok then
+        Modals.info_for(_("Could not load ReaderBackdrop: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return false
+    end
+    data = type(data) == "table" and data or {}
+    state.page = tonumber(data.page) or page
+    local total_pages = tonumber(data.total_pages)
+    local total = tonumber(data.total)
+    state.total_pages = total_pages and total_pages > 0 and total_pages or nil
+    state.total = total and total > 0 and total or nil
+    state.query = query
+    state.loaded_tag = tag
+    if query == "" and tag == "" and state.total then
+        state.site_total = state.total
+    end
+    local loaded, packages, err = self:load_packages(false, true)
+    if not loaded then
+        Modals.info_for(_("Could not load packages: ") .. tostring(err), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return false
+    end
+    self.state.packages = packages
+    return true
+end
+
+function App:load_more_readerbackdrop()
+    local query = self:readerbackdrop_query()
+    if query == nil or not self:has_readerbackdrop() then return false end
+    local state = self.state.readerbackdrop
+    local tag = self.state.page == "category_details" and self.state.current_category
+        and self.state.current_category.id == "screensavers" and state.tag or ""
+    local page = state.query == query and state.loaded_tag == tag
+        and (tonumber(state.page) or 1) + 1 or 1
+    if not self:load_readerbackdrop_page(page, query) then return false end
+    self:reload_current_page()
+    return true
+end
+
 function App:show_featured()
     self.state.page = "home"
     self.state.active_tab = "home"
@@ -2429,8 +2573,16 @@ function App:show_categories()
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local categories = Models.category_cards(packages, self.state.show_kindle_scriptlets)
     self.state.packages = packages
+    local categories = Models.category_cards(packages, self.state.show_kindle_scriptlets)
+    if self:has_readerbackdrop() then
+        for category_index, category in ipairs(categories) do
+            if category.id == "screensavers" then
+                category.count_label = tostring(self.state.readerbackdrop.site_total or 2085)
+                break
+            end
+        end
+    end
     self.state.categories = categories
     self.state.visible_categories = Models.filter_categories(categories, self.state.filters.categories)
     self.state.current_category = nil
@@ -2453,9 +2605,24 @@ function App:show_category_details(category_id)
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local category_packages = Models.packages_in_category(packages, category)
     self.state.packages = packages
     self.state.current_category = category
+    if category.id == "screensavers" and self:has_readerbackdrop() then
+        local readerbackdrop = self.state.readerbackdrop
+        local query = self.state.filters.category or ""
+        local tag = readerbackdrop.tag or ""
+        if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= tag then
+            if self:load_readerbackdrop_page(1, query) then
+                packages = self.state.packages
+            end
+        end
+    end
+    local category_packages = Models.packages_in_category(packages, category)
+    if category.id == "screensavers" then
+        category_packages = Models.filter_packages_by_tag(
+            category_packages, (self.state.readerbackdrop or {}).tag)
+    end
+    self.state.packages = packages
     self.state.category_packages = category_packages
     self.state.visible_packages = self:sorted_packages("category", Models.filter_packages(category_packages, self.state.filters.category))
     self:clear_status()
@@ -2518,15 +2685,25 @@ function App:show_source_details(name)
         self:set_error(_("Failed to load packages: ") .. tostring(pkg_err))
         return
     end
+    self.state.repos = repos
+    self.state.packages = packages
+    self.state.current_repo = repo
+    if repo.name == Constants.REPO_READERBACKDROP_NAME then
+        local readerbackdrop = self.state.readerbackdrop
+        local query = self.state.filters.source or ""
+        if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= "" then
+            if self:load_readerbackdrop_page(1, query) then
+                packages = self.state.packages
+            end
+        end
+    end
     local visible = {}
     for _, pkg in ipairs(packages) do
         if pkg.repo == repo.name then
             table.insert(visible, pkg)
         end
     end
-    self.state.repos = repos
     self.state.packages = packages
-    self.state.current_repo = repo
     self.state.visible_packages = self:sorted_packages("source", Models.filter_packages(visible, self.state.filters.source))
     self:clear_status()
     self:refresh()
@@ -2736,6 +2913,12 @@ function App:set_filter(kind, value)
     else
         self:reset_scroll("search")
     end
+    if (kind == "category" and self.state.current_category
+            and self.state.current_category.id == "screensavers")
+            or (kind == "source" and self.state.current_repo
+                and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME) then
+        self:load_readerbackdrop_page(1, self.state.filters[kind])
+    end
     if kind == "categories" then
         self:show_categories()
     elseif kind == "category" and self.state.current_category then
@@ -2834,8 +3017,10 @@ function App:prompt_sort(kind)
     end
     local rows = {
         {
-            icon = "star",
-            text = _("Stars"),
+            icon = kind == "category" and self.state.current_category
+                and self.state.current_category.id == "screensavers" and "download" or "star",
+            text = kind == "category" and self.state.current_category
+                and self.state.current_category.id == "screensavers" and _("Downloads") or _("Stars"),
             checked_func = selected("stars"),
             callback = function() self:set_sort(kind, "stars") end,
         },
@@ -2901,6 +3086,11 @@ function App:add_source(url)
 end
 
 function App:detect_repo_name(url)
+    local normalized = url:lower():gsub("/+$", "")
+    if normalized == Constants.REPO_READERBACKDROP_URL
+            or normalized == "https://readerbackdrop.com" then
+        return Constants.REPO_READERBACKDROP_NAME
+    end
     local base = url:gsub("/+$", "") .. "/"
     local ok, data = self.client:request("GET", base .. "manifest.json", nil)
     if ok and type(data) == "table" and type(data.repo) == "table" and data.repo.name then
@@ -3624,6 +3814,7 @@ function App:refresh_repos()
 
     self.state.readme_cache = {}
     self.state.release_notes_cache = {}
+    self.state.readerbackdrop = { enabled = false, page = 1, query = "", tag = "", loaded_tag = "", loading = false }
     self.image_files = {}
     Images.invalidate_cache()
     local found, packages = self:load_packages(false, true)

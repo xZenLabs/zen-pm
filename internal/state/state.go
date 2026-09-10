@@ -11,14 +11,16 @@ import (
 )
 
 const (
-	defaultKindleHome            = "/mnt/us/ZenPM"
-	defaultKoboHome              = "/mnt/onboard/.adds/ZenPM"
-	kindlePersistDir             = "/mnt/us/.ZenPM"
-	koboPersistDir               = "/mnt/onboard/.adds/.ZenPM"
-	DefaultZenLabsRepoName       = "ZenLabs"
-	DefaultKindleForgeRepoName   = "KindleForge"
-	DefaultKindleForgeRepoURL    = "https://kf.penguins184.xyz"
-	CatalogPublishedAtRefreshKey = "catalog_published_at_refresh_required"
+	defaultKindleHome             = "/mnt/us/ZenPM"
+	defaultKoboHome               = "/mnt/onboard/.adds/ZenPM"
+	kindlePersistDir              = "/mnt/us/.ZenPM"
+	koboPersistDir                = "/mnt/onboard/.adds/.ZenPM"
+	DefaultZenLabsRepoName        = "ZenLabs"
+	DefaultReaderBackdropRepoName = "ReaderBackdrop"
+	DefaultReaderBackdropRepoURL  = "https://www.readerbackdrop.com"
+	DefaultKindleForgeRepoName    = "KindleForge"
+	DefaultKindleForgeRepoURL     = "https://kf.penguins184.xyz"
+	CatalogPublishedAtRefreshKey  = "catalog_published_at_refresh_required"
 )
 
 // DefaultZenLabsRepoURL may be overridden at link time by development builds.
@@ -212,6 +214,7 @@ func seedReposDB(s *State) error {
 	// Default repos seeded on first run.
 	defaults := []RepoEntry{
 		{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true},
+		{Name: DefaultReaderBackdropRepoName, URL: DefaultReaderBackdropRepoURL, Priority: 20, Trust: "trusted", Default: true},
 	}
 
 	// Allow override via env var for custom setups.
@@ -232,6 +235,7 @@ func reconcileDefaultRepos(s *State) error {
 	}
 	changed := false
 	hasZenLabs := false
+	hasReaderBackdrop := false
 
 	filtered := repos[:0]
 	for i := range repos {
@@ -240,6 +244,17 @@ func reconcileDefaultRepos(s *State) error {
 			if repos[i].URL != DefaultZenLabsRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
 				repos[i].URL = DefaultZenLabsRepoURL
 				repos[i].Priority = 10
+				repos[i].Trust = "trusted"
+				repos[i].Default = true
+				changed = true
+			}
+		}
+		if IsReaderBackdropRepo(repos[i].Name, repos[i].URL) {
+			hasReaderBackdrop = true
+			if repos[i].Name != DefaultReaderBackdropRepoName || repos[i].URL != DefaultReaderBackdropRepoURL || repos[i].Priority != 20 || repos[i].Trust != "trusted" || !repos[i].Default {
+				repos[i].Name = DefaultReaderBackdropRepoName
+				repos[i].URL = DefaultReaderBackdropRepoURL
+				repos[i].Priority = 20
 				repos[i].Trust = "trusted"
 				repos[i].Default = true
 				changed = true
@@ -259,6 +274,10 @@ func reconcileDefaultRepos(s *State) error {
 
 	if !hasZenLabs {
 		repos = append([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true}}, repos...)
+		changed = true
+	}
+	if !hasReaderBackdrop {
+		repos = append(repos, RepoEntry{Name: DefaultReaderBackdropRepoName, URL: DefaultReaderBackdropRepoURL, Priority: 20, Trust: "trusted", Default: true})
 		changed = true
 	}
 	if !changed {
@@ -283,6 +302,14 @@ func IsKindleForgeRepo(name, url string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
 	url = strings.ToLower(strings.TrimRight(strings.TrimSpace(url), "/"))
 	return name == strings.ToLower(DefaultKindleForgeRepoName) || url == strings.ToLower(DefaultKindleForgeRepoURL)
+}
+
+// IsReaderBackdropRepo reports whether a name or URL identifies ReaderBackdrop.
+func IsReaderBackdropRepo(name, url string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	url = strings.ToLower(strings.TrimRight(strings.TrimSpace(url), "/"))
+	return name == strings.ToLower(DefaultReaderBackdropRepoName) ||
+		url == strings.ToLower(DefaultReaderBackdropRepoURL) || url == "https://readerbackdrop.com"
 }
 
 // LockAcquire grabs a named lock via mkdir (atomic on Linux/macOS).

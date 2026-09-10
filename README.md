@@ -192,6 +192,11 @@ compatible Kindle, **Show Kindle Scriptlets** adds KindleForge as an opt-in
 source. User-added repositories are refreshed from their URL and assigned
 trust automatically.
 
+ReaderBackdrop is included as a default source. ZenPM loads its 48 most-downloaded
+public images without an API key. Scroll past the bottom to load another page;
+searching within Screensavers also searches ReaderBackdrop, and **Categories**
+filters by ReaderBackdrop's popular tags.
+
 ### Updates and removal
 
 On Kindle, use **Update** from ZenPM's three-dot system menu. It checks the

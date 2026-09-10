@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -362,6 +363,15 @@ func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName 
 
 func installKOReaderImage(root, assetName string, data []byte, kind string) (string, error) {
 	extension := strings.ToLower(filepath.Ext(assetName))
+	if extension == "" {
+		switch http.DetectContentType(data) {
+		case "image/jpeg":
+			extension = ".jpg"
+		case "image/png":
+			extension = ".png"
+		}
+		assetName += extension
+	}
 	validFormat := extension == ".jpg"
 	formats := "JPG"
 	if kind == genericScreensaverInstaller {

@@ -432,9 +432,42 @@ type kfRegistryEntry struct {
 	Tags         []string `json:"tags"`
 }
 
+type readerBackdropImage struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Device       string `json:"device"`
+	ImageURL     string `json:"imageUrl"`
+	ThumbnailURL string `json:"thumbnailUrl"`
+	FileSize     int64  `json:"fileSize"`
+	Downloads    int    `json:"downloads"`
+	CreatedAt    string `json:"createdAt"`
+	IsNSFW       bool   `json:"isNSFW"`
+	Tags         []struct {
+		Name string `json:"name"`
+	} `json:"tags"`
+	User struct {
+		Name string `json:"name"`
+	} `json:"user"`
+}
+
+type readerBackdropResponse struct {
+	Images     []readerBackdropImage `json:"images"`
+	Total      int                   `json:"total"`
+	TotalPages int                   `json:"totalPages"`
+}
+
+type ReaderBackdropTag struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
 // FetchCatalog downloads the repo catalog, auto-detecting between ZenPM manifest.json
 // and KindleForge registry.json formats.
 func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	if IsReaderBackdropRepo(repoName, repoURL) {
+		return fetchReaderBackdropCatalog(repoName, repoURL, priority, cacheDir)
+	}
 	if IsKindleForgeRepo(repoName, repoURL) {
 		return fetchKindleForgeCatalog(repoName, repoURL, priority, cacheDir)
 	}
@@ -478,6 +511,100 @@ func shouldTryRegistryFallback(err error) bool {
 // IsKindleForgeRepo reports whether a repo is the known KindleForge registry.
 func IsKindleForgeRepo(repoName, repoURL string) bool {
 	return state.IsKindleForgeRepo(repoName, repoURL)
+}
+
+// IsReaderBackdropRepo reports whether a source should use ReaderBackdrop's public API.
+func IsReaderBackdropRepo(repoName, repoURL string) bool {
+	return state.IsReaderBackdropRepo(repoName, repoURL)
+}
+
+func fetchReaderBackdropCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	entries, _, _, err := fetchReaderBackdropPage(repoName, repoURL, priority, cacheDir, 1, "", "")
+	return entries, err
+}
+
+func fetchReaderBackdropPage(repoName, repoURL string, priority int, cacheDir string, page int, search, tag string) ([]*CatalogEntry, int, int, error) {
+	if page < 1 {
+		return nil, 0, 0, fmt.Errorf("invalid ReaderBackdrop page %d", page)
+	}
+	apiURL := joinURL(repoURL, "api/images?sortBy=downloads&limit=24&page="+strconv.Itoa(page))
+	if search = strings.TrimSpace(search); search != "" {
+		apiURL += "&search=" + url.QueryEscape(search)
+	}
+	if tag = strings.TrimSpace(tag); tag != "" {
+		apiURL += "&tag=" + url.QueryEscape(tag)
+	}
+	data, err := fetchBytes(apiURL)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("fetch %s: %w", apiURL, err)
+	}
+	_ = os.WriteFile(filepath.Join(cacheDir, "manifest-"+repoName+".json"), data, 0644)
+
+	var response readerBackdropResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, 0, 0, fmt.Errorf("parse ReaderBackdrop images from %s: %w", repoName, err)
+	}
+	return parseReaderBackdropCatalog(repoName, repoURL, priority, response.Images), response.TotalPages, response.Total, nil
+}
+
+func fetchReaderBackdropTags(repoURL string) ([]ReaderBackdropTag, error) {
+	data, err := fetchBytes(joinURL(repoURL, "api/tags/popular"))
+	if err != nil {
+		return nil, err
+	}
+	var tags []ReaderBackdropTag
+	if err := json.Unmarshal(data, &tags); err != nil {
+		return nil, fmt.Errorf("parse ReaderBackdrop tags: %w", err)
+	}
+	return tags, nil
+}
+
+func parseReaderBackdropCatalog(repoName, repoURL string, priority int, images []readerBackdropImage) []*CatalogEntry {
+	entries := make([]*CatalogEntry, 0, len(images))
+	for _, image := range images {
+		image.ID = strings.TrimSpace(image.ID)
+		if image.ID == "" || strings.ContainsAny(image.ID, "/\\") || image.IsNSFW {
+			continue
+		}
+		packageID := "readerbackdrop-" + image.ID
+		downloadURL := joinURL(repoURL, "api/images/"+url.PathEscape(image.ID)+"/download")
+		size := ""
+		if image.FileSize > 0 {
+			size = strconv.FormatInt(image.FileSize, 10)
+		}
+		assetsJSON, _ := json.Marshal([]map[string]string{{
+			"arch": "any", "asset": packageID, "url": downloadURL, "size": size,
+		}})
+		tags := make([]string, 0, len(image.Tags)+1)
+		for _, tag := range image.Tags {
+			if name := strings.TrimSpace(tag.Name); name != "" {
+				tags = append(tags, name)
+			}
+		}
+		if device := strings.TrimSpace(image.Device); device != "" {
+			tags = append(tags, device)
+		}
+		stars := ""
+		if image.Downloads > 0 {
+			stars = strconv.Itoa(image.Downloads)
+		}
+		iconURL := strings.TrimSpace(image.ThumbnailURL)
+		if iconURL == "" {
+			iconURL = strings.TrimSpace(image.ImageURL)
+		}
+		entries = append(entries, &CatalogEntry{
+			Repo: repoName, Priority: priority,
+			ID: packageID, Name: strings.TrimSpace(image.Title),
+			Description: strings.TrimSpace(image.Description), Author: strings.TrimSpace(image.User.Name),
+			Platforms: []string{"koreader"}, Category: "screensavers", Tags: tags,
+			IconURL: iconURL, Images: []string{strings.TrimSpace(image.ImageURL)},
+			RepoIconURL: joinURL(repoURL, "images/logosvg.svg"),
+			Source:      joinURL(repoURL, "backgrounds/"+url.PathEscape(image.ID)),
+			SourceAsset: packageID, Assets: string(assetsJSON), Size: size,
+			Stars: stars, PublishedAt: strings.TrimSpace(image.CreatedAt),
+		})
+	}
+	return entries
 }
 
 // parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.

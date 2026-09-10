@@ -327,8 +327,9 @@ local function image_entry(view, block, image_base_url, width, image_refs)
         local text = block.alt ~= "" and string.format(_("[Image: %s]"), block.alt) or _("[Image]")
         return fallback_text_entry(text, width)
     end
-    local url = Markdown.resolve_url(image_base_url, block.url)
-    if not url:match("^https://") then
+    local url = tostring(block.url or ""):match("^/packages/[^/]+/preview$")
+        and block.url or Markdown.resolve_url(image_base_url, block.url)
+    if not url:match("^https://") and not url:match("^/packages/[^/]+/preview$") then
         log_image(view, block.url, "skipped", "resolved=" .. url)
         return fallback_text_entry(block.alt ~= "" and block.alt or block.url, width)
     end
