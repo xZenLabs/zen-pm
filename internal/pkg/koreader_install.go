@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/fs"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +25,7 @@ const (
 	genericFontInstaller        = "font"
 	genericWallpaperInstaller   = "wallpapers"
 	genericScreensaverInstaller = "screensavers"
+	maxKOReaderImagePixels      = 12 * 1024 * 1024
 )
 
 func validKOReaderPluginName(name string) bool {
@@ -362,25 +365,49 @@ func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName 
 }
 
 func installKOReaderImage(root, assetName string, data []byte, kind string) (string, error) {
+	if filepath.Base(assetName) != assetName {
+		return "", fmt.Errorf("invalid %s asset %q", strings.TrimSuffix(kind, "s"), assetName)
+	}
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return "", fmt.Errorf("decode %s asset %q: %w", strings.TrimSuffix(kind, "s"), assetName, err)
+	}
+	if config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > maxKOReaderImagePixels {
+		return "", fmt.Errorf("unsafe image dimensions %dx%d", config.Width, config.Height)
+	}
 	extension := strings.ToLower(filepath.Ext(assetName))
 	if extension == "" {
-		switch http.DetectContentType(data) {
-		case "image/jpeg":
+		switch format {
+		case "jpeg":
 			extension = ".jpg"
-		case "image/png":
+		case "png":
 			extension = ".png"
 		}
 		assetName += extension
 	}
-	validFormat := extension == ".jpg"
+	validFormat := extension == ".jpg" && format == "jpeg"
 	formats := "JPG"
 	if kind == genericScreensaverInstaller {
-		validFormat = validFormat || extension == ".png"
+		validFormat = validFormat || extension == ".png" && format == "png"
 		formats = "JPG or PNG"
 	}
-	if filepath.Base(assetName) != assetName || !validFormat {
+	if !validFormat {
 		return "", fmt.Errorf("%s asset %q must be a %s image", strings.TrimSuffix(kind, "s"), assetName, formats)
 	}
+	decoded, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return "", fmt.Errorf("decode %s asset %q: %w", strings.TrimSuffix(kind, "s"), assetName, err)
+	}
+	var clean bytes.Buffer
+	if extension == ".jpg" {
+		err = jpeg.Encode(&clean, decoded, &jpeg.Options{Quality: 90})
+	} else {
+		err = png.Encode(&clean, decoded)
+	}
+	if err != nil {
+		return "", fmt.Errorf("encode %s asset %q: %w", strings.TrimSuffix(kind, "s"), assetName, err)
+	}
+	data = clean.Bytes()
 	directory := filepath.Join(root, "resources", kind)
 	if err := os.MkdirAll(directory, 0755); err != nil {
 		return "", fmt.Errorf("create KOReader %s directory: %w", kind, err)

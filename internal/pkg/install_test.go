@@ -3,6 +3,10 @@ package pkg
 import (
 	"archive/zip"
 	"bytes"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -587,14 +591,25 @@ func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			payload := []byte(test.category)
+			var payload bytes.Buffer
 			installedAsset := test.asset
+			input := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+			input.Set(0, 0, color.NRGBA{R: 255, A: 255})
+			if filepath.Ext(test.asset) == ".jpg" {
+				if err := jpeg.Encode(&payload, input, &jpeg.Options{Quality: 90}); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := png.Encode(&payload, input); err != nil {
+					t.Fatal(err)
+				}
+			}
+			payload.WriteString("trailing non-image payload")
 			if filepath.Ext(test.asset) == "" {
-				payload = []byte("\x89PNG\r\n\x1a\n")
 				installedAsset += ".png"
 			}
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, _ = w.Write(payload)
+				_, _ = w.Write(payload.Bytes())
 			}))
 			defer srv.Close()
 
@@ -612,8 +627,15 @@ func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
 				t.Fatal(err)
 			}
 			destination := filepath.Join(koRoot, "resources", test.category, installedAsset)
-			if data, err := os.ReadFile(destination); err != nil || string(data) != string(payload) {
+			data, err := os.ReadFile(destination)
+			if err != nil {
 				t.Fatalf("installed image = %q, %v", data, err)
+			}
+			if bytes.Contains(data, []byte("trailing non-image payload")) {
+				t.Fatal("installed image retained trailing payload")
+			}
+			if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
+				t.Fatalf("installed image is invalid: %v", err)
 			}
 			installed, err := st.ReadInstalled()
 			if err != nil || len(installed) != 1 || installed[0].InstallPath != destination || installed[0].Asset != installedAsset {
