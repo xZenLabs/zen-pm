@@ -1027,7 +1027,7 @@ do
     settings.sorts = nil
 
     local packages = {
-        { id = "alpha", name = "Alpha", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 100 },
+        { id = "alpha", name = "Alpha", description = "Zulu", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 100 },
         { id = "zulu", name = "Zulu", installed = true, update_available = true, stars = 2 },
         { id = "beta", name = "Beta", installed = true, category = "fonts", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 1 },
         { id = "gamma", name = "Gamma", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 24 * 60 * 60), stars = 200 },

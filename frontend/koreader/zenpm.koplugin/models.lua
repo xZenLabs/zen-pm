@@ -39,16 +39,11 @@ function Models.filter_packages(packages, query)
     end
     local out = {}
     for _, pkg in ipairs(packages or {}) do
-        local tags = type(pkg.tags) == "table" and table.concat(pkg.tags, " ") or tostring(pkg.tags or "")
-        local hay = table.concat({
+        local title = table.concat({
             tostring(pkg.name or ""),
             tostring(I18n.dynamic(pkg.name) or ""),
-            tostring(pkg.author or ""),
-            tostring(I18n.dynamic(pkg.author) or ""),
-            tostring(pkg.description or ""),
-            tags,
         }, " "):lower()
-        if hay:find(query, 1, true) then
+        if title:find(query, 1, true) then
             table.insert(out, pkg)
         end
     end
