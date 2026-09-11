@@ -69,9 +69,7 @@ return {
         "Improve README url/image handling"
     },
     ["1.6.0"] = {
-        "Add wallpapers/screensavers sections",
-        "Add ReaderBackdrop screensaver browsing, tags, and search",
-        "Populate Wallpapers from ReaderBackdrop's zen-wallpaper tag",
+        "Add wallpapers/screensavers sections from ReaderBackdrop",
         "Add status bar from ZenOS",
         "Fix absolute vs relative plugin path on some devices",
         "Update settings layout",
