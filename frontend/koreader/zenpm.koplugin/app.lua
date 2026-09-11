@@ -1172,6 +1172,21 @@ local function installed_image_prompt_kind(app, pkg)
         and kind or nil
 end
 
+local function installed_image_is_active(app, pkg)
+    local path, kind = installed_image_path(app, pkg)
+    if not path then return false end
+    if kind == "screensavers" then
+        local settings = rawget(_G, "G_reader_settings")
+        return settings and type(settings.readSetting) == "function"
+            and settings:readSetting("screensaver_type") == "document_cover"
+            and settings:readSetting("screensaver_document_cover") == path
+    end
+
+    local zen = koreader_plugin_instance(Models.find_package(app.state.packages, "zen-ui"))
+    local background = zen and type(zen.config) == "table" and zen.config.library_background
+    return type(background) == "table" and background.enabled == true and background.path == path
+end
+
 function App:apply_installed_image(pkg)
     local path, kind = installed_image_path(self, pkg)
     if not path then return false, _("Installed image path is unavailable.") end
@@ -3194,10 +3209,15 @@ function App:perform_package_action(pkg, on_done)
         local has_versions = not Models.is_direct_asset_package(pkg)
             and (Models.has_version_history(pkg)
                 or (self.state.direct_github and package_has_github_source(pkg)))
+        local can_set_image = installed_image_prompt_kind(self, pkg)
+            and not installed_image_is_active(self, pkg)
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
+            end or nil,
+            set_image = can_set_image and function()
+                self:prompt_installed_image(pkg, on_done)
             end or nil,
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)

@@ -262,6 +262,9 @@ function Modals.package_modify(pkg, callbacks)
     if callbacks.info then
         add_button("info", _("Details"), callbacks.info)
     end
+    if callbacks.set_image then
+        add_button("wallpaper", _("Set image"), callbacks.set_image)
+    end
     if callbacks.update then
         add_button("update", _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""), callbacks.update)
     end

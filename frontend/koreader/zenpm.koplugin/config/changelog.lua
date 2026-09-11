@@ -70,6 +70,7 @@ return {
     },
     ["1.6.0"] = {
         "Add wallpapers/screensavers sections from ReaderBackdrop",
+        "Set & configure screensaver/wallpaper directly from ZenPM",
         "Add status bar from ZenOS",
         "Fix absolute vs relative plugin path on some devices",
         "Update settings layout",
