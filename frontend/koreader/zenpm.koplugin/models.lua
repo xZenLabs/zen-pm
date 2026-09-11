@@ -131,8 +131,9 @@ function Models.package_in_category(pkg, category)
     if not pkg or not category then
         return false
     end
-    if normalize_category(pkg.category) == "screensavers" then
-        return normalize_category(category.id) == "screensavers"
+    local package_category = normalize_category(pkg.category)
+    if package_category == "screensavers" or package_category == "wallpapers" then
+        return normalize_category(category.id) == package_category
     end
     if Models.is_kindle_scriptlet(pkg) then
         return is_kindle_scriptlets_category(category)
@@ -141,7 +142,7 @@ function Models.package_in_category(pkg, category)
         return false
     end
     local wanted = normalize_category(category.id)
-    if normalize_category(pkg.category) == wanted then
+    if package_category == wanted then
         return true
     end
     if type(pkg.tags) == "table" then
@@ -191,14 +192,12 @@ function Models.category_cards(packages, show_kindle_scriptlets)
                 count = count + 1
             end
         end
-        if count > 0 then
-            table.insert(cards, {
-                id = category.id,
-                label = category.label,
-                icon = category.icon,
-                count = count,
-            })
-        end
+        table.insert(cards, {
+            id = category.id,
+            label = category.label,
+            icon = category.icon,
+            count = count,
+        })
     end
     return cards
 end

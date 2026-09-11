@@ -46,9 +46,10 @@ function Header.page_title(view)
     elseif page == "category_details" then
         local category = state.current_category or {}
         local readerbackdrop = state.readerbackdrop or {}
-        if category.id == "screensavers" and readerbackdrop.enabled then
+        if (category.id == "screensavers" or category.id == "wallpapers")
+                and readerbackdrop.enabled then
             return I18n.dynamic_or(category.label, _("Category")) .. " ("
-                .. tostring(readerbackdrop.total or 2085) .. ")"
+                .. tostring(readerbackdrop.total or (category.id == "wallpapers" and 10 or 2085)) .. ")"
         end
         return I18n.dynamic_or(category.label, _("Category")) .. " ("
             .. filtered_count(state.visible_packages, state.category_packages, state.filters.category) .. ")"

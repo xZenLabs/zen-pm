@@ -194,8 +194,9 @@ trust automatically.
 
 ReaderBackdrop is included as a default source. ZenPM loads its 48 most-downloaded
 public images without an API key. Scroll past the bottom to load another page;
-searching within Screensavers also searches ReaderBackdrop, and **Categories**
-filters by ReaderBackdrop's popular tags.
+searching within Wallpapers or Screensavers also searches ReaderBackdrop.
+Wallpapers use its `zen-wallpaper` tag, and **Categories** filters Screensavers
+by ReaderBackdrop's popular tags.
 
 ### Updates and removal
 

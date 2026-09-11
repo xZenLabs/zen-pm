@@ -2404,9 +2404,17 @@ function App:has_readerbackdrop()
     return false
 end
 
+local function readerbackdrop_tag(state)
+    local category = state.page == "category_details" and state.current_category or {}
+    if category.id == "wallpapers" then return "zen-wallpaper" end
+    if category.id == "screensavers" then return (state.readerbackdrop or {}).tag or "" end
+    return ""
+end
+
 function App:readerbackdrop_query()
     if self.state.page == "category_details" and self.state.current_category
-            and self.state.current_category.id == "screensavers" then
+            and (self.state.current_category.id == "screensavers"
+                or self.state.current_category.id == "wallpapers") then
         return self.state.filters.category or ""
     end
     if self.state.page == "source_details" and self.state.current_repo
@@ -2444,7 +2452,8 @@ function App:prompt_readerbackdrop_categories()
     }
     for _, tag in ipairs(type(data.tags) == "table" and data.tags or {}) do
         local item = tag
-        if type(item.name) == "string" and item.name ~= "" then
+        if type(item.name) == "string" and item.name ~= ""
+                and Util.trim(item.name):lower() ~= "zen-wallpaper" then
             table.insert(rows, {
                 text = item.name .. (tonumber(item.count) and " (" .. tostring(item.count) .. ")" or ""),
                 checked_func = function() return state.tag == item.name end,
@@ -2459,15 +2468,16 @@ function App:load_readerbackdrop_page(page, query)
     if not self:has_readerbackdrop() then return false end
     query = Util.trim(query)
     local state = self.state.readerbackdrop
-    local tag = self.state.page == "category_details" and self.state.current_category
-        and self.state.current_category.id == "screensavers" and state.tag or ""
+    local tag = readerbackdrop_tag(self.state)
     if state.loading or (page > 1 and state.query == query and state.loaded_tag == tag
             and state.total_pages and page > state.total_pages) then
         return false
     end
     state.loading = true
-    Modals.status(page == 1 and (query ~= "" and _("Searching ReaderBackdrop...") or _("Loading screensavers..."))
-        or _("Loading more screensavers..."))
+    local wallpapers = tag == "zen-wallpaper"
+    Modals.status(page == 1 and (query ~= "" and _("Searching ReaderBackdrop...")
+        or wallpapers and _("Loading wallpapers...") or _("Loading screensavers..."))
+        or wallpapers and _("Loading more wallpapers...") or _("Loading more screensavers..."))
     UIManager:forceRePaint()
     local ok, data = self.client:load_readerbackdrop(page, query, tag)
     Modals.close_status()
@@ -2484,8 +2494,12 @@ function App:load_readerbackdrop_page(page, query)
     state.total = total and total > 0 and total or nil
     state.query = query
     state.loaded_tag = tag
-    if query == "" and tag == "" and state.total then
-        state.site_total = state.total
+    if query == "" and state.total then
+        if tag == "" then
+            state.site_total = state.total
+        elseif tag == "zen-wallpaper" then
+            state.wallpaper_total = state.total
+        end
     end
     local loaded, packages, err = self:load_packages(false, true)
     if not loaded then
@@ -2500,8 +2514,7 @@ function App:load_more_readerbackdrop()
     local query = self:readerbackdrop_query()
     if query == nil or not self:has_readerbackdrop() then return false end
     local state = self.state.readerbackdrop
-    local tag = self.state.page == "category_details" and self.state.current_category
-        and self.state.current_category.id == "screensavers" and state.tag or ""
+    local tag = readerbackdrop_tag(self.state)
     local page = state.query == query and state.loaded_tag == tag
         and (tonumber(state.page) or 1) + 1 or 1
     if not self:load_readerbackdrop_page(page, query) then return false end
@@ -2596,10 +2609,11 @@ function App:show_categories()
     self.state.packages = packages
     local categories = Models.category_cards(packages, self.state.show_kindle_scriptlets)
     if self:has_readerbackdrop() then
-        for category_index, category in ipairs(categories) do
+        for _, category in ipairs(categories) do
             if category.id == "screensavers" then
                 category.count_label = tostring(self.state.readerbackdrop.site_total or 2085)
-                break
+            elseif category.id == "wallpapers" then
+                category.count_label = tostring(self.state.readerbackdrop.wallpaper_total or 10)
             end
         end
     end
@@ -2627,10 +2641,10 @@ function App:show_category_details(category_id)
     end
     self.state.packages = packages
     self.state.current_category = category
-    if category.id == "screensavers" and self:has_readerbackdrop() then
+    if (category.id == "screensavers" or category.id == "wallpapers") and self:has_readerbackdrop() then
         local readerbackdrop = self.state.readerbackdrop
         local query = self.state.filters.category or ""
-        local tag = readerbackdrop.tag or ""
+        local tag = readerbackdrop_tag(self.state)
         if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= tag then
             if self:load_readerbackdrop_page(1, query) then
                 packages = self.state.packages
@@ -2934,7 +2948,8 @@ function App:set_filter(kind, value)
         self:reset_scroll("search")
     end
     if (kind == "category" and self.state.current_category
-            and self.state.current_category.id == "screensavers")
+            and (self.state.current_category.id == "screensavers"
+                or self.state.current_category.id == "wallpapers"))
             or (kind == "source" and self.state.current_repo
                 and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME) then
         self:load_readerbackdrop_page(1, self.state.filters[kind])
@@ -2985,14 +3000,12 @@ function App:prompt_installed_category_filter()
     }
     for _, category in ipairs(Models.category_cards(
             self.state.installed_packages, self.state.show_kindle_scriptlets)) do
-        if category.count > 0 then
-            local item = category
-            table.insert(rows, {
-                text = Models.category_label(item) .. " (" .. tostring(item.count) .. ")",
-                checked_func = function() return current == item.id end,
-                callback = function() self:set_installed_category_filter(item.id) end,
-            })
-        end
+        local item = category
+        table.insert(rows, {
+            text = Models.category_label(item) .. " (" .. tostring(item.count) .. ")",
+            checked_func = function() return current == item.id end,
+            callback = function() self:set_installed_category_filter(item.id) end,
+        })
     end
     Modals.actions(_("Filter by category"), rows, { show_cancel = false, align = "left" })
 end
@@ -3035,12 +3048,15 @@ function App:prompt_sort(kind)
         Modals.actions(title, rows, { show_cancel = false, align = "left" })
         return
     end
+    local downloads = kind == "category" and self.state.current_category
+            and (self.state.current_category.id == "screensavers"
+                or self.state.current_category.id == "wallpapers")
+        or kind == "source" and self.state.current_repo
+            and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME
     local rows = {
         {
-            icon = kind == "category" and self.state.current_category
-                and self.state.current_category.id == "screensavers" and "download" or "star",
-            text = kind == "category" and self.state.current_category
-                and self.state.current_category.id == "screensavers" and _("Downloads") or _("Stars"),
+            icon = downloads and "download" or "star",
+            text = downloads and _("Downloads") or _("Stars"),
             checked_func = selected("stars"),
             callback = function() self:set_sort(kind, "stars") end,
         },

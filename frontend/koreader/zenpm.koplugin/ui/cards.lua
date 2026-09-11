@@ -222,7 +222,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     -- Reserve meta-row room only when it includes the verification badge.
     local verify_size = Theme.font_scale(20)
     local verify_gap = Theme.font_scale(5)
-    local show_verification = Util.trim(tostring(pkg.category or "")):lower():gsub("[%s_%-]+", "") ~= "screensavers"
+    local show_verification = not is_image_asset
     local meta_w = show_verification and text_w - verify_size - verify_gap or text_w
 
     local rows = {}
@@ -492,12 +492,15 @@ end
 
 function Cards.category(view, bb, category, x, y, w, opts)
     opts = opts or {}
+    local empty_image_category = category.count == 0
+        and (category.id == "screensavers" or category.id == "wallpapers")
     return Cards.compact(view, bb, x, y, w, {
         height = opts.height,
         icon = Images.asset(category.icon or "packages.svg"),
         icon_fallback = tostring(category.label or "?"):sub(1, 1),
         title = I18n.dynamic_or(category.label, _("Category")),
-        subtitle = tostring(category.count_label or category.count or 0) .. " " .. _("packages"),
+        subtitle = empty_image_category and ""
+            or tostring(category.count_label or category.count or 0) .. " " .. _("packages"),
         subtitle_gap = 0,
         border = false,
         radius = false,

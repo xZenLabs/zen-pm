@@ -179,6 +179,7 @@ package.preload["models"] = function()
                 { id = "fonts", label = "Fonts", count = 2 },
                 { id = "games", label = "Games", count = 0 },
                 { id = "screensavers", label = "Screensavers", count = 0 },
+                { id = "wallpapers", label = "Wallpapers", count = 1 },
             }
         end,
         category_label = function(category) return category.label end,
@@ -1063,9 +1064,14 @@ do
     assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "zulu")
     list_app:prompt_sort("installed")
     assert(#modal_rows == 4 and modal_rows[1].checked_func())
-    list_app.state.current_category = { id = "screensavers" }
-    list_app:prompt_sort("category")
-    assert(modal_rows[1].text == "Downloads")
+    for _, category in ipairs({ "screensavers", "wallpapers" }) do
+        list_app.state.current_category = { id = category }
+        list_app:prompt_sort("category")
+        assert(modal_rows[1].text == "Downloads" and modal_rows[1].icon == "download")
+    end
+    list_app.state.current_repo = { name = "ReaderBackdrop" }
+    list_app:prompt_sort("source")
+    assert(modal_rows[1].text == "Downloads" and modal_rows[1].icon == "download")
     list_app:set_installed_category_filter("fonts")
     assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "beta")
     list_app:set_installed_category_filter("")
@@ -1077,6 +1083,9 @@ do
     list_app.state.readerbackdrop.enabled = true
     list_app:navigate("categories")
     assert(list_app.state.categories[3].count_label == "2085")
+    assert(list_app.state.categories[4].id == "wallpapers"
+        and list_app.state.categories[4].count == 1
+        and list_app.state.categories[4].count_label == "10")
     settings.sorts = nil
 end
 
@@ -2397,7 +2406,7 @@ local category_app = {
 }
 App.prompt_installed_category_filter(category_app)
 assert(modal_title == "Filter by category")
-assert(#modal_rows == 2)
+assert(#modal_rows == 5)
 assert(modal_rows[1].text == "All categories")
 assert(modal_rows[2].text == "Fonts (2)")
 modal_rows[2].callback()
@@ -2448,6 +2457,13 @@ assert(readerbackdrop_requests[1].page == 2 and readerbackdrop_requests[1].query
 assert(readerbackdrop_requests[1].tag == "minimalist")
 assert(readerbackdrop_app.state.readerbackdrop.page == 2 and readerbackdrop_reloads == 1)
 assert(readerbackdrop_app.state.readerbackdrop.total == 2083)
+readerbackdrop_app.state.current_category.id = "wallpapers"
+readerbackdrop_app.state.filters.category = ""
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[2].page == 1 and readerbackdrop_requests[2].query == ""
+    and readerbackdrop_requests[2].tag == "zen-wallpaper")
+assert(readerbackdrop_app.state.readerbackdrop.wallpaper_total == 2083)
 
 local selected_readerbackdrop
 local readerbackdrop_category_app = {
@@ -2460,7 +2476,8 @@ local readerbackdrop_category_app = {
     client = {
         readerbackdrop_categories = function()
             return true, {
-                tags = { { name = "quote", count = 12 }, { name = "black and white", count = 8 } },
+                tags = { { name = "quote", count = 12 }, { name = "zen-wallpaper", count = 10 },
+                    { name = "black and white", count = 8 } },
             }
         end,
     },

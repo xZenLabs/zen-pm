@@ -152,6 +152,9 @@ local categorized = {
 local screensaver = { id = "screensaver", category = "screensavers", tags = { "Games" } }
 assert(Models.package_in_category(screensaver, { id = "screensavers" }))
 assert(not Models.package_in_category(screensaver, { id = "games" }))
+local wallpaper = { id = "wallpaper", category = "wallpapers", tags = { "Games" } }
+assert(Models.package_in_category(wallpaper, { id = "wallpapers" }))
+assert(not Models.package_in_category(wallpaper, { id = "games" }))
 assert(Models.filter_packages_by_category(categorized, "") == categorized)
 local games = Models.filter_packages_by_category(categorized, "games")
 assert(#games == 1 and games[1].id == "game")
@@ -166,7 +169,8 @@ assert(#scriptlets == 3 and scriptlets[1].id == "scriptlet"
     and scriptlets[3].id == "zenlabs-koreader-kindle")
 assert(#Models.filter_kindle_scriptlets(categorized, false) == 3)
 assert(Models.filter_kindle_scriptlets(categorized, true) == categorized)
-assert(#Models.category_cards({}, true) == 0)
+local empty_category_cards = Models.category_cards({}, true)
+assert(#empty_category_cards == 4 and empty_category_cards[1].count == 0)
 assert(#Models.category_cards(categorized, false) == 3)
 local category_cards = Models.category_cards(categorized, true)
 assert(#category_cards == 4)

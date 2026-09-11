@@ -308,6 +308,7 @@ func TestFetchCatalogUsesReaderBackdropAPI(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"images":[
 			{"id":"abc123","title":"Moonlight","description":"A moonlit library","device":"Kobo Clara","imageUrl":"https://utfs.io/image","thumbnailUrl":"https://utfs.io/thumb","fileSize":1024,"downloads":42,"createdAt":"2026-09-10T12:00:00Z","tags":[{"name":"books"}],"user":{"name":"Artist"}},
+			{"id":"wallpaper","title":"Zen","imageUrl":"https://utfs.io/wallpaper","tags":[{"name":"ZEN-WALLPAPER"}]},
 			{"id":"hidden","title":"Hidden","isNSFW":true}
 		]}`))
 	}))
@@ -320,7 +321,7 @@ func TestFetchCatalogUsesReaderBackdropAPI(t *testing.T) {
 	if requested != "/api/images?sortBy=downloads&limit=24&page=1" {
 		t.Fatalf("requested %q", requested)
 	}
-	if len(entries) != 1 {
+	if len(entries) != 2 {
 		t.Fatalf("entries = %#v", entries)
 	}
 	entry := entries[0]
@@ -334,6 +335,9 @@ func TestFetchCatalogUsesReaderBackdropAPI(t *testing.T) {
 		if !strings.Contains(entry.Assets, want) {
 			t.Fatalf("assets = %q, want %q", entry.Assets, want)
 		}
+	}
+	if entries[1].Category != "wallpapers" {
+		t.Fatalf("wallpaper category = %q", entries[1].Category)
 	}
 }
 

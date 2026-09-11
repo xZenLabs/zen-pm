@@ -176,6 +176,18 @@ assert(#painted_rects == 2 and painted_rects[1].y == 0 and painted_rects[2].y ==
 assert(painted_text_y["2085 packages"] == painted_text_y.Wallpapers + 1)
 
 painted_text = {}
+Cards.category({
+    app = { show_category_details = function() end },
+}, {}, {
+    id = "wallpapers",
+    label = "Wallpapers",
+    count = 0,
+    count_label = "2085",
+}, 0, 0, 300)
+assert(painted_text[1] == "Wallpapers" and painted_text[2] == "")
+assert(hit_callbacks["category:wallpapers"])
+
+painted_text = {}
 local opened_update_details
 Cards.package({
     app = {
@@ -252,7 +264,7 @@ local readerbackdrop_package = {
     name = "Moonlight",
     version = "9.9.9",
     repo = "ReaderBackdrop",
-    category = "screensavers",
+    category = "wallpapers",
     platforms = { "koreader" },
     tags = { "illustration" },
     icon_url = "/packages/readerbackdrop-moonlight/preview",
@@ -317,15 +329,15 @@ for index = 1, 50 do
         id = "readerbackdrop-" .. tostring(index),
         name = "Screensaver " .. tostring(index),
         repo = "ReaderBackdrop",
-        category = "screensavers",
+        category = "wallpapers",
     })
 end
 Pages.packages_page({
     app = {
         state = {
             page = "category_details",
-            current_category = { id = "screensavers" },
-            readerbackdrop = { page = 1, total = 2083, total_pages = 44, tag = "quotes" },
+            current_category = { id = "wallpapers" },
+            readerbackdrop = { page = 1, total_pages = 44 },
         },
         package_disabled = function() return false end,
         package_icon_file = function()
@@ -336,8 +348,8 @@ Pages.packages_page({
         load_more_readerbackdrop = function() load_more_calls = load_more_calls + 1 end,
     },
 }, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
-assert(table.concat(painted_text, "\n"):find("Load more screensavers", 1, true))
-assert(table.concat(painted_text, "\n"):find("24 of 2083 loaded", 1, true))
+assert(table.concat(painted_text, "\n"):find("Load more wallpapers", 1, true))
+assert(table.concat(painted_text, "\n"):find("24 of 10 loaded", 1, true))
 assert(rendered_screensavers == 24)
 hit_callbacks["readerbackdrop-load-more"]()
 assert(load_more_calls == 1)
@@ -368,7 +380,7 @@ Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
 assert(#rendered_detail_blocks == 0)
 screensaver_details_view.app.state.current_package.category = "wallpapers"
 Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
-assert(#rendered_detail_blocks == 2)
+assert(#rendered_detail_blocks == 0)
 
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local Header = require("ui/header")
@@ -377,6 +389,16 @@ assert(Header.page_title({ app = { state = {
     current_category = { id = "screensavers", label = "Screensavers" },
     readerbackdrop = { enabled = true, total = 2083 },
 } } }) == "Screensavers (2083)")
+assert(Header.page_title({ app = { state = {
+    page = "category_details",
+    current_category = { id = "wallpapers", label = "Wallpapers" },
+    readerbackdrop = { enabled = true, total = 42 },
+} } }) == "Wallpapers (42)")
+assert(Header.page_title({ app = { state = {
+    page = "category_details",
+    current_category = { id = "wallpapers", label = "Wallpapers" },
+    readerbackdrop = { enabled = true },
+} } }) == "Wallpapers (10)")
 assert(Header.page_title({ app = { state = {
     page = "source_details",
     current_repo = { name = "ReaderBackdrop" },

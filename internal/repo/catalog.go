@@ -576,9 +576,13 @@ func parseReaderBackdropCatalog(repoName, repoURL string, priority int, images [
 			"arch": "any", "asset": packageID, "url": downloadURL, "size": size,
 		}})
 		tags := make([]string, 0, len(image.Tags)+1)
+		category := "screensavers"
 		for _, tag := range image.Tags {
 			if name := strings.TrimSpace(tag.Name); name != "" {
 				tags = append(tags, name)
+				if strings.EqualFold(name, "zen-wallpaper") {
+					category = "wallpapers"
+				}
 			}
 		}
 		if device := strings.TrimSpace(image.Device); device != "" {
@@ -596,7 +600,7 @@ func parseReaderBackdropCatalog(repoName, repoURL string, priority int, images [
 			Repo: repoName, Priority: priority,
 			ID: packageID, Name: strings.TrimSpace(image.Title),
 			Description: strings.TrimSpace(image.Description), Author: strings.TrimSpace(image.User.Name),
-			Platforms: []string{"koreader"}, Category: "screensavers", Tags: tags,
+			Platforms: []string{"koreader"}, Category: category, Tags: tags,
 			IconURL: iconURL, Images: []string{strings.TrimSpace(image.ImageURL)},
 			RepoIconURL: joinURL(repoURL, "images/logosvg.svg"),
 			Source:      joinURL(repoURL, "backgrounds/"+url.PathEscape(image.ID)),

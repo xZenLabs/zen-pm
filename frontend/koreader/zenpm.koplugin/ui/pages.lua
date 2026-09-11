@@ -40,11 +40,14 @@ local function readerbackdrop_rows(view, visible)
     local readerbackdrop = state.readerbackdrop or {}
     local category = state.current_category or {}
     local source = state.current_repo or {}
-    local active = state.page == "category_details" and category.id == "screensavers"
+    local active = state.page == "category_details"
+            and (category.id == "screensavers" or category.id == "wallpapers")
         or state.page == "source_details" and source.name == Constants.REPO_READERBACKDROP_NAME
     local page = tonumber(readerbackdrop.page) or 1
     local total_pages = tonumber(readerbackdrop.total_pages)
     if not active then return visible end
+    local total = readerbackdrop.total
+        or (state.page == "category_details" and category.id == "wallpapers" and 10 or 2085)
     local rows = {}
     local loaded = 0
     for _, pkg in ipairs(visible or {}) do
@@ -56,7 +59,7 @@ local function readerbackdrop_rows(view, visible)
     if not total_pages or page < total_pages then
         table.insert(rows, {
             readerbackdrop_load_more = true,
-            subtitle = string.format(_("%d of %s loaded"), loaded, tostring(readerbackdrop.total or 2085)),
+            subtitle = string.format(_("%d of %s loaded"), loaded, tostring(total)),
         })
     end
     return rows
@@ -68,7 +71,9 @@ local function draw_readerbackdrop_load_more(view, bb, item, x, y, w, h, group, 
         height = h,
         icon = Images.asset("downloads.svg"),
         icon_fallback = "+",
-        title = _("Load more screensavers"),
+        title = view.app.state.page == "category_details" and view.app.state.current_category
+            and view.app.state.current_category.id == "wallpapers"
+            and _("Load more wallpapers") or _("Load more screensavers"),
         subtitle = item.subtitle,
         callback = callback,
         hit_id = "readerbackdrop-load-more",
@@ -664,7 +669,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     iy = description_y
     local is_font = Models.is_font_package(pkg)
     local readme_blocks = {}
-    if pkg.category ~= "screensavers" or Util.trim(tostring(pkg.description or "")) ~= "" then
+    if not is_image_asset or Util.trim(tostring(pkg.description or "")) ~= "" then
         table.insert(readme_blocks, { kind = "heading", level = 2, text = _("Description"), plain = true })
         table.insert(readme_blocks, {
             kind = "paragraph",
