@@ -56,6 +56,8 @@ type Server struct {
 	readmeImages   readmeImagePreparer
 	catalogRefresh *catalogRefresh
 	previewJobs    map[string]*previewJob
+	packageOps     map[string]packageOperation
+	nextPackageOp  uint64
 }
 
 type catalogRefresh struct {
@@ -68,6 +70,14 @@ type previewJob struct {
 	file        string
 	transparent bool
 	err         error
+}
+
+type packageOperation struct {
+	ID        string `json:"id"`
+	PackageID string `json:"package_id"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+	Error     string `json:"error,omitempty"`
 }
 
 type readmeImagePreparer interface {
@@ -174,6 +184,7 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	mux.HandleFunc("/packages", s.wrap(s.handlePackageList))
 	mux.HandleFunc("/packages/update", s.wrap(s.handlePackageUpdate))
 	mux.HandleFunc("/packages/", s.wrap(s.handlePackageAction))
+	mux.HandleFunc("/package-operations/", s.wrap(s.handlePackageOperation))
 	mux.HandleFunc("/log", s.wrap(s.handleLog))
 	mux.HandleFunc("/log/client", s.wrap(s.handleClientLog))
 	mux.HandleFunc("/dialog", s.wrap(s.handleDialog))
@@ -593,6 +604,9 @@ func shouldLogAccess(r *http.Request, status int) bool {
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return true
+	}
+	if strings.HasPrefix(r.URL.Path, "/package-operations/") {
+		return false
 	}
 	switch r.URL.Path {
 	case "/health", "/log", "/packages", "/repos":
@@ -1141,27 +1155,14 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fire async; the WAF polls /log after a delay.
+	operationID := s.startPackageOperation(id, action)
+
+	// Fire async; current clients poll the operation endpoint while older clients
+	// can continue observing the package list and log.
 	log.Infof("Package %s: starting %s", id, action)
 	s.runBackground(func() {
-		var err error
-		if action == "install" {
-			if directGitHub {
-				err = s.pkgs.InstallGitHubRelease(id, releaseTag, asset)
-			} else if releaseTag != "" {
-				err = s.pkgs.InstallRelease(id, releaseTag, asset)
-			} else {
-				err = s.pkgs.InstallAsset(id, asset)
-			}
-		} else if action == "reinstall" {
-			if directGitHub {
-				err = s.pkgs.ReinstallGitHubRelease(id, asset, releaseTag)
-			} else {
-				err = s.pkgs.Reinstall(id, asset, releaseTag)
-			}
-		} else {
-			err = s.pkgs.Uninstall(id, asset)
-		}
+		err := s.performPackageAction(id, action, asset, releaseTag, directGitHub)
+		s.finishPackageOperation(operationID, err)
 		if err != nil {
 			log.Errorf("Package %s %s failed: %v", id, action, err)
 		} else {
@@ -1169,7 +1170,89 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"ok": true, "started": true, "operation_id": operationID,
+	})
+}
+
+func (s *Server) performPackageAction(id, action, asset, releaseTag string, directGitHub bool) error {
+	if action == "install" {
+		if directGitHub {
+			return s.pkgs.InstallGitHubRelease(id, releaseTag, asset)
+		}
+		if releaseTag != "" {
+			return s.pkgs.InstallRelease(id, releaseTag, asset)
+		}
+		return s.pkgs.InstallAsset(id, asset)
+	}
+	if action == "reinstall" {
+		if directGitHub {
+			return s.pkgs.ReinstallGitHubRelease(id, asset, releaseTag)
+		}
+		return s.pkgs.Reinstall(id, asset, releaseTag)
+	}
+	return s.pkgs.Uninstall(id, asset)
+}
+
+func (s *Server) startPackageOperation(packageID, action string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.packageOps == nil {
+		s.packageOps = make(map[string]packageOperation)
+	}
+	// Retain a small terminal history for clients retrying a lost response.
+	if len(s.packageOps) >= 64 {
+		for id, operation := range s.packageOps {
+			if operation.Status != "running" {
+				delete(s.packageOps, id)
+				if len(s.packageOps) < 64 {
+					break
+				}
+			}
+		}
+	}
+	s.nextPackageOp++
+	id := strconv.FormatUint(s.nextPackageOp, 10)
+	s.packageOps[id] = packageOperation{
+		ID: id, PackageID: packageID, Action: action, Status: "running",
+	}
+	return id
+}
+
+func (s *Server) finishPackageOperation(id string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	operation, ok := s.packageOps[id]
+	if !ok {
+		return
+	}
+	operation.Status = "succeeded"
+	if err != nil {
+		operation.Status = "failed"
+		operation.Error = err.Error()
+	}
+	s.packageOps[id] = operation
+}
+
+func (s *Server) handlePackageOperation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/package-operations/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid operation id", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	operation, ok := s.packageOps[id]
+	s.mu.Unlock()
+	if !ok {
+		http.Error(w, "package operation not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, operation)
 }
 
 func (s *Server) handlePackagePreview(w http.ResponseWriter, r *http.Request, id string) {

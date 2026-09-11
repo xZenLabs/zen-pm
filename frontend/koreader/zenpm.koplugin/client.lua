@@ -17,7 +17,7 @@ local UI_TOTAL_TIMEOUT_SECONDS = ok_android and 30 or 4
 local REPO_REFRESH_TIMEOUT = { block = 10, total = 60 }
 local PACKAGE_LIST_TIMEOUT = { block = 5, total = 20 }
 local PACKAGE_README_TIMEOUT = { block = 10, total = 20 }
-local PACKAGE_RELEASES_TIMEOUT = { block = 10, total = 15 }
+local PACKAGE_RELEASES_TIMEOUT = { block = 10, total = 35 }
 local PLUGIN_SCAN_TIMEOUT = { block = 10, total = 60 }
 local LOG_TIMEOUT = { block = 5, total = 30 }
 
@@ -370,6 +370,10 @@ function Client:package_action(id, action, asset, release, direct_github)
         path = path .. "?" .. table.concat(query, "&")
     end
     return self:request("POST", path, nil)
+end
+
+function Client:package_operation(id, timeout)
+    return self:request("GET", "/package-operations/" .. url_encode(id), nil, timeout)
 end
 
 function Client:set_package_updates_ignored(id, ignored, ignored_version)

@@ -1185,6 +1185,71 @@ func TestHandlePackageActionReturnsPreflightInstallErrors(t *testing.T) {
 	}
 }
 
+func TestPackageActionReportsDefinitiveOperationResult(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+
+	rec := httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodPost, "/packages/missing/uninstall", nil))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var started struct {
+		OperationID string `json:"operation_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &started); err != nil || started.OperationID == "" {
+		t.Fatalf("response = %s, %v", rec.Body.String(), err)
+	}
+
+	for deadline := time.Now().Add(time.Second); srv.backgroundJobs.Load() != 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	status := httptest.NewRecorder()
+	srv.handlePackageOperation(status, httptest.NewRequest(http.MethodGet, "/package-operations/"+started.OperationID, nil))
+	if status.Code != http.StatusOK {
+		t.Fatalf("operation status = %d, body = %s", status.Code, status.Body.String())
+	}
+	var operation packageOperation
+	if err := json.Unmarshal(status.Body.Bytes(), &operation); err != nil {
+		t.Fatal(err)
+	}
+	if operation.PackageID != "missing" || operation.Action != "uninstall" || operation.Status != "failed" ||
+		!strings.Contains(operation.Error, "not installed") {
+		t.Fatalf("operation = %#v", operation)
+	}
+}
+
+func TestPackageOperationLifecycle(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	id := srv.startPackageOperation("reader", "install")
+	srv.finishPackageOperation(id, nil)
+
+	rec := httptest.NewRecorder()
+	srv.handlePackageOperation(rec, httptest.NewRequest(http.MethodGet, "/package-operations/"+id, nil))
+	var operation packageOperation
+	if err := json.Unmarshal(rec.Body.Bytes(), &operation); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || operation.Status != "succeeded" || operation.PackageID != "reader" {
+		t.Fatalf("status = %d, operation = %#v", rec.Code, operation)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", rec.Header().Get("Cache-Control"))
+	}
+
+	missing := httptest.NewRecorder()
+	srv.handlePackageOperation(missing, httptest.NewRequest(http.MethodGet, "/package-operations/missing", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing status = %d, want 404", missing.Code)
+	}
+}
+
 func TestHandlePackageReleasesWithoutVersionsURLReturnsEmpty(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -1570,6 +1635,7 @@ func TestShouldLogAccessSkipsRoutineSuccessfulPolling(t *testing.T) {
 		{http.MethodGet, "/packages?platform=kindle", http.StatusOK, false},
 		{http.MethodGet, "/log?tail=500", http.StatusOK, false},
 		{http.MethodGet, "/repos", http.StatusOK, false},
+		{http.MethodGet, "/package-operations/42", http.StatusOK, false},
 		{http.MethodGet, "/packages?platform=kindle", http.StatusInternalServerError, true},
 		{http.MethodPost, "/packages/reader/uninstall", http.StatusAccepted, true},
 		{http.MethodGet, "/packages/reader/assets", http.StatusOK, true},

@@ -334,7 +334,8 @@ paths:
       summary: Start package installation
       description: |
         Starts installation asynchronously and returns immediately. Clients can
-        poll `/log` to observe progress and failures. Passing `release` installs
+        poll the returned `/package-operations/{operationId}` resource for the
+        definitive result. Passing `release` installs
         that repository-cached release and records its tag as the installed version.
       operationId: installPackage
       parameters:
@@ -366,7 +367,8 @@ paths:
       summary: Reinstall a package cleanly
       description: |
         Starts an uninstall followed by an installation asynchronously. Clients
-        can poll `/log` to observe progress and failures. Passing `release`
+        can poll the returned `/package-operations/{operationId}` resource for the
+        definitive result. Passing `release`
         installs that repository-cached release after removal.
       operationId: reinstallPackage
       parameters:
@@ -462,13 +464,32 @@ paths:
         - Packages
       summary: Start package removal
       description: |
-        Starts uninstallation asynchronously and returns immediately. Clients can
-        poll `/log` to observe progress and failures.
+        Starts uninstallation asynchronously and returns immediately. Clients poll
+        the returned `/package-operations/{operationId}` resource for the result.
       operationId: uninstallPackage
       responses:
         "202":
           $ref: "#/components/responses/Started"
         "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /package-operations/{operationId}:
+    parameters:
+      - $ref: "#/components/parameters/OperationId"
+    get:
+      tags:
+        - Packages
+      summary: Read an asynchronous package operation result
+      operationId: getPackageOperation
+      responses:
+        "200":
+          description: Current operation state and any definitive failure detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageOperation"
+        "404":
           $ref: "#/components/responses/TextError"
         "405":
           $ref: "#/components/responses/TextError"
@@ -661,6 +682,15 @@ components:
         type: string
         minLength: 1
       example: koreader-kindle
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      description: Identifier returned when a package action is accepted.
+      schema:
+        type: string
+        minLength: 1
+      example: "42"
   responses:
     Ok:
       description: Operation completed.
@@ -679,6 +709,7 @@ components:
           example:
             ok: true
             started: true
+            operation_id: "42"
     JsonError:
       description: JSON error response.
       content:
@@ -996,6 +1027,7 @@ components:
       required:
         - ok
         - started
+        - operation_id
       properties:
         ok:
           type: boolean
@@ -1003,6 +1035,29 @@ components:
         started:
           type: boolean
           example: true
+        operation_id:
+          type: string
+          example: "42"
+    PackageOperation:
+      type: object
+      required:
+        - id
+        - package_id
+        - action
+        - status
+      properties:
+        id:
+          type: string
+        package_id:
+          type: string
+        action:
+          type: string
+          enum: [install, reinstall, uninstall]
+        status:
+          type: string
+          enum: [running, succeeded, failed]
+        error:
+          type: string
     ErrorResponse:
       type: object
       required:

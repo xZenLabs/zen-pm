@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -263,16 +264,27 @@ func appendRSACertificates(output *bytes.Buffer, seen map[string]struct{}, data 
 	}
 }
 
+var (
+	clientTransportOnce sync.Once
+	clientTransport     *http.Transport
+)
+
 // Client returns an HTTP client that trusts the system roots plus the bundled
 // roots required by the legacy Kindle CA store.
 func Client(timeout time.Duration) *http.Client {
-	roots, err := x509.SystemCertPool()
-	if err != nil || roots == nil {
-		roots = x509.NewCertPool()
-	}
-	roots.AppendCertsFromPEM([]byte(pemData))
+	clientTransportOnce.Do(func() {
+		roots, err := x509.SystemCertPool()
+		if err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+		roots.AppendCertsFromPEM([]byte(pemData))
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{RootCAs: roots}
-	return &http.Client{Timeout: timeout, Transport: transport}
+		clientTransport = http.DefaultTransport.(*http.Transport).Clone()
+		clientTransport.TLSClientConfig = &tls.Config{
+			RootCAs:            roots,
+			ClientSessionCache: tls.NewLRUClientSessionCache(32),
+		}
+		clientTransport.TLSHandshakeTimeout = 30 * time.Second
+	})
+	return &http.Client{Timeout: timeout, Transport: clientTransport}
 }

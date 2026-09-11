@@ -180,7 +180,7 @@ end
 
 assert(client:get_package_releases("example"))
 assert(requested_timeout.block == 10)
-assert(requested_timeout.total == 15)
+assert(requested_timeout.total == 35)
 
 client.request = function(_, method, path, body)
     assert(method == "GET")
@@ -197,6 +197,14 @@ client.request = function(_, method, path, body)
     return true, {}
 end
 assert(client:package_action("example", "install", nil, "v2.0.0", true))
+
+client.request = function(_, method, path, body, timeout)
+    assert(method == "GET")
+    assert(path == "/package-operations/op%201")
+    assert(body == nil and timeout == poll_timeout)
+    return true, { status = "running" }
+end
+assert(client:package_operation("op 1", poll_timeout))
 
 client.request = function(_, method, path, body, timeout)
     assert(method == "POST")

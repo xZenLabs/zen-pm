@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
@@ -28,8 +29,11 @@ import (
 )
 
 const (
-	packageFetchTimeout  = time.Minute
-	packageFetchAttempts = 2
+	repositoryFetchTimeout = time.Minute
+	// ponytail: use a generous total bound; add an idle-body timeout only if valid downloads exceed it.
+	packageFetchTimeout    = 10 * time.Minute
+	packageFetchAttempts   = 2
+	packageFetchRetryDelay = 250 * time.Millisecond
 )
 
 // CatalogEntry is the internal merged-catalog representation.
@@ -925,14 +929,18 @@ func normalizePlatform(platform string) string {
 
 // FetchBytes downloads or reads (file://) a URL and returns raw bytes.
 func FetchBytes(url string) ([]byte, error) {
-	return fetchBytes(url)
+	return fetchBytesWithTimeout(url, packageFetchTimeout)
 }
 
 func fetchBytes(url string) ([]byte, error) {
+	return fetchBytesWithTimeout(url, repositoryFetchTimeout)
+}
+
+func fetchBytesWithTimeout(url string, timeout time.Duration) ([]byte, error) {
 	if strings.HasPrefix(url, "file://") {
 		return os.ReadFile(strings.TrimPrefix(url, "file://"))
 	}
-	return fetchHTTPBytes(url, cabundle.Client(packageFetchTimeout), packageFetchAttempts)
+	return fetchHTTPBytes(url, cabundle.Client(timeout), packageFetchAttempts)
 }
 
 func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, error) {
@@ -947,6 +955,7 @@ func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, erro
 			return nil, lastErr
 		}
 		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, attempts, lastErr)
+		time.Sleep(time.Duration(attempt) * packageFetchRetryDelay)
 	}
 	return nil, lastErr
 }
@@ -962,11 +971,13 @@ func fetchHTTPBytesOnce(url string, client *http.Client) ([]byte, bool, error) {
 	if err != nil {
 		return nil, retryableFetchError(err), err
 	}
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		err := httpdiag.ResponseError(resp)
 		resp.Body.Close()
 		log.Warn(err.Error())
-		return nil, false, err
+		retry := resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests ||
+			(resp.StatusCode >= 500 && resp.StatusCode < 600)
+		return nil, retry, err
 	}
 	data, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
@@ -979,6 +990,8 @@ func fetchHTTPBytesOnce(url string, client *http.Client) ([]byte, bool, error) {
 func retryableFetchError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) ||
 		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 

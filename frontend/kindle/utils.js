@@ -50,7 +50,9 @@ var ZenUtils = (function () {
                         var parsed = JSON.parse(t);
                         if (parsed && parsed.error) message = parsed.error;
                     } catch (_e) {}
-                    throw new Error(message);
+                    var error = new Error(message);
+                    error.status = resp.status;
+                    throw error;
                 });
             }
             return resp.text().then(function (t) {
@@ -69,6 +71,35 @@ var ZenUtils = (function () {
         return fetch(API + path, { method: method }).then(function (resp) {
             if (!resp.ok) throw new Error("HTTP " + resp.status);
             return resp.text();
+        });
+    }
+
+    function waitForPackageOperation(id) {
+        var attempts = 0;
+        return new Promise(function (resolve, reject) {
+            function poll() {
+                attempts += 1;
+                fetchJSON("GET", "/package-operations/" + encodeURIComponent(id), null).then(function (operation) {
+                    if (operation && operation.status === "succeeded") {
+                        resolve(operation);
+                    } else if (operation && operation.status === "failed") {
+                        reject(new Error(operation.error || "Package operation failed."));
+                    } else if (attempts >= 360) {
+                        reject(new Error("Package operation did not complete."));
+                    } else {
+                        setTimeout(poll, 3500);
+                    }
+                }, function (err) {
+                    if (err && err.status === 404) {
+                        reject(err);
+                    } else if (attempts >= 360) {
+                        reject(err);
+                    } else {
+                        setTimeout(poll, 3500);
+                    }
+                });
+            }
+            poll();
         });
     }
 
@@ -973,6 +1004,7 @@ var ZenUtils = (function () {
         postLog:         postLog,
         fetchJSON:       fetchJSON,
         fetchText:       fetchText,
+        waitForPackageOperation: waitForPackageOperation,
         xhrJSON:         xhrJSON,
         xhrText:         xhrText,
         goBack:          goBack,

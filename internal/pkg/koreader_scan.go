@@ -188,7 +188,9 @@ func (m *Manager) ScanKOReaderPlugins(pluginDirs []string) (KOReaderPluginScanRe
 			}
 
 			previous, exists := installedByID[id]
-			if exists && version == "0.0.0" && previous.Version != "" && previous.Version != "0.0.0" {
+			// ponytail: keep the highest known version; split selected/self-reported versions if external downgrades must be tracked.
+			if exists && previous.Version != "" && previous.Version != "0.0.0" &&
+				(version == "0.0.0" || releases.VersionGreater(previous.Version, version)) {
 				version = previous.Version
 			}
 			current := state.InstalledEntry{

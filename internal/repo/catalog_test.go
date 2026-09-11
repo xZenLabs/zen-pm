@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -540,6 +542,62 @@ func TestFetchHTTPBytesRetriesHeaderTimeout(t *testing.T) {
 	}
 	if got := requests.Load(); got != 2 {
 		t.Fatalf("requests = %d, want 2", got)
+	}
+}
+
+func TestFetchHTTPBytesRetriesTransientStatus(t *testing.T) {
+	for _, status := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			var requests atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if requests.Add(1) == 1 {
+					w.WriteHeader(status)
+					return
+				}
+				_, _ = w.Write([]byte("package data"))
+			}))
+			defer srv.Close()
+
+			data, err := fetchHTTPBytes(srv.URL, srv.Client(), 2)
+			if err != nil || string(data) != "package data" {
+				t.Fatalf("fetchHTTPBytes() = %q, %v", data, err)
+			}
+			if got := requests.Load(); got != 2 {
+				t.Fatalf("requests = %d, want 2", got)
+			}
+		})
+	}
+}
+
+func TestFetchHTTPBytesRejectsNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer srv.Close()
+
+	if _, err := fetchHTTPBytes(srv.URL, srv.Client(), 1); err == nil || !strings.Contains(err.Error(), "304") {
+		t.Fatalf("fetchHTTPBytes() error = %v, want HTTP 304", err)
+	}
+}
+
+func TestRetryableFetchErrorIncludesResetAndEOF(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("read failed: %w", syscall.ECONNRESET),
+		fmt.Errorf("read failed: %w", syscall.ECONNABORTED),
+		fmt.Errorf("connect failed: %w", syscall.ENETUNREACH),
+		fmt.Errorf("connect failed: %w", syscall.EHOSTUNREACH),
+		io.EOF,
+		io.ErrUnexpectedEOF,
+	} {
+		if !retryableFetchError(err) {
+			t.Errorf("retryableFetchError(%v) = false", err)
+		}
+	}
+}
+
+func TestPackageFetchTimeoutAccommodatesSlowKindleTransfers(t *testing.T) {
+	if packageFetchTimeout < 10*time.Minute || packageFetchTimeout <= repositoryFetchTimeout {
+		t.Fatalf("package timeout = %s, repository timeout = %s", packageFetchTimeout, repositoryFetchTimeout)
 	}
 }
 

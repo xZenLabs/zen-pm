@@ -2212,7 +2212,7 @@ App.run_package_action({
     client = {
         package_action = function(_, id, action)
             assert(id == "zen-ui" and action == "install")
-            return true
+            return true, { operation_id = "op-42" }
         end,
     },
     poll_package_action = function(_, op, attempt)
@@ -2227,6 +2227,62 @@ App.run_package_action({
     platforms = { "koreader" },
 }, "update")
 assert(plugin_poll_op.is_plugin)
+assert(plugin_poll_op.operation_id == "op-42")
+
+-- New backends expose a definitive lightweight operation result, avoiding a
+-- full package-list and log read on every poll.
+do
+    local statuses = { "running", "succeeded" }
+    local status_calls = 0
+    local load_calls = 0
+    local next_poll
+    local result
+    local operation_app = setmetatable({
+        busy = true,
+        state = {},
+        client = {
+            package_operation = function(_, id, timeout)
+                assert(id == "op-42" and timeout.total <= 1)
+                status_calls = status_calls + 1
+                return true, { status = statuses[status_calls] }
+            end,
+        },
+        load_packages = function()
+            load_calls = load_calls + 1
+            return true, {{ id = "reader", installed = true, installed_version = "6.5.0" }}
+        end,
+        package_action_failure_detail = function() error("log polling should not run") end,
+    }, { __index = App })
+    operation_app.poll_package_action = function(_, op, attempt)
+        next_poll = function() App.poll_package_action(operation_app, op, attempt) end
+    end
+    App.poll_package_action(operation_app, {
+        id = "reader", name = "Reader", action = "update", operation_id = "op-42",
+        target_version = "6.5.1", on_result = function(ok, detail) result = { ok, detail } end,
+    }, 1)
+    assert(status_calls == 1 and load_calls == 0 and next_poll)
+    next_poll()
+    assert(status_calls == 2 and load_calls == 1)
+    assert(result[1] == true and result[2] == nil and not operation_app.busy)
+end
+
+do
+    local result
+    App.poll_package_action({
+        busy = true,
+        client = {
+            package_operation = function()
+                return true, { status = "failed", error = "connection reset" }
+            end,
+        },
+        package_action_failure_detail = function() error("log polling should not run") end,
+        load_packages = function() error("package list should not load") end,
+    }, {
+        id = "reader", name = "Reader", action = "update", operation_id = "op-failed",
+        on_result = function(ok, detail) result = { ok, detail } end,
+    }, 1)
+    assert(result[1] == false and result[2] == "connection reset")
+end
 
 local recovery_scan_calls = 0
 local recovery_load_calls = 0

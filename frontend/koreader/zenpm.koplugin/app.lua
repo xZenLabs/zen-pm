@@ -3652,16 +3652,16 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
     local direct_github = self.state and self.state.direct_github
         and not Models.is_direct_asset_package(pkg) and package_has_github_source(pkg)
-    local ok, err = true, nil
+    local ok, response = true, nil
     if action == "update" or package_is_koreader_plugin(pkg) or is_patch then
-        ok, err = App.close_book_before_update(self)
+        ok, response = App.close_book_before_update(self)
     end
     if ok then
-        ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil, direct_github)
+        ok, response = self.client:package_action(id, backend_action, asset, opts and opts.release or nil, direct_github)
     end
     if not ok then
         self.busy = false
-        local message = _("Failed to start package action: ") .. tostring(err)
+        local message = _("Failed to start package action: ") .. tostring(response)
         if opts and opts.on_result then
             opts.on_result(false, message)
         else
@@ -3685,6 +3685,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         failure_baseline = failure_baseline,
         on_done = on_done,
         on_result = opts and opts.on_result or nil,
+        operation_id = type(response) == "table" and response.operation_id or nil,
     }, 1)
 end
 
@@ -3793,7 +3794,44 @@ end
 
 function App:poll_package_action(op, attempt)
     UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
-        local detail = self:package_action_failure_detail(op)
+        local operation_status
+        local detail
+        local max_retries = op.operation_id
+            and (Constants.PACKAGE_OPERATION_MAX_POLL_RETRIES or Constants.PACKAGE_ACTION_MAX_POLL_RETRIES)
+            or Constants.PACKAGE_ACTION_MAX_POLL_RETRIES
+        if op.operation_id and type(self.client.package_operation) == "function" then
+            local status_ok, status, status_code = self.client:package_operation(op.operation_id, PACKAGE_POLL_TIMEOUT)
+            if status_ok and type(status) == "table" then
+                operation_status = status.status
+                if operation_status == "failed" then
+                    detail = status.error or _("Check the debug log for details.")
+                elseif operation_status ~= "running" and operation_status ~= "succeeded" then
+                    if attempt < max_retries then
+                        self:poll_package_action(op, attempt + 1)
+                        return
+                    end
+                    detail = _("Package operation status could not be checked. See Debug log.")
+                end
+            elseif status_code == 404 then
+                -- Compatibility with a backend restart or an older backend.
+                op.operation_id = nil
+            elseif attempt < max_retries then
+                self:poll_package_action(op, attempt + 1)
+                return
+            else
+                detail = _("Package operation status could not be checked. See Debug log.")
+            end
+            if operation_status == "running" then
+                if attempt < max_retries then
+                    self:poll_package_action(op, attempt + 1)
+                    return
+                end
+                detail = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
+            end
+        end
+        if not op.operation_id then
+            detail = self:package_action_failure_detail(op)
+        end
         if detail then
             self.busy = false
             if op.on_result then
@@ -3809,7 +3847,7 @@ function App:poll_package_action(op, attempt)
         -- leaves state.packages holding the updated status for the list/detail view.
         local ok, packages = self:load_packages(false, true, PACKAGE_POLL_TIMEOUT)
         if not ok then
-            if attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+            if attempt >= max_retries then
                 self.busy = false
                 local message = _("Package operation status could not be checked. See Debug log.")
                 if op.on_result then
@@ -3824,11 +3862,11 @@ function App:poll_package_action(op, attempt)
         end
 
         local pkg = Models.find_package(packages, op.id)
-        local succeeded = self:package_action_succeeded(op, pkg)
+        local succeeded = operation_status == "succeeded" or self:package_action_succeeded(op, pkg)
         if not succeeded then
             succeeded = self:patch_action_succeeded_from_db(op)
         end
-        if not succeeded and attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+        if not succeeded and attempt >= max_retries then
             succeeded = self:recover_interrupted_plugin_action(op)
         end
 
@@ -3877,7 +3915,7 @@ function App:poll_package_action(op, attempt)
                 return
             end
             finish()
-        elseif attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+        elseif attempt >= max_retries then
             self.busy = false
             detail = self:package_action_failure_detail(op)
             local message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " did not complete."

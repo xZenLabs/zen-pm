@@ -204,6 +204,25 @@ func TestScanKOReaderPluginsKeepsKnownInstalledVersionWhenMetadataHasNone(t *tes
 	}
 }
 
+func TestScanKOReaderPluginsKeepsHigherTrackedReleaseWhenMetadataLags(t *testing.T) {
+	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
+		ID: "reader", Name: "Reader", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "reader",
+	}})
+	writeKOReaderPlugin(t, plugins, "reader", `return { version = "6.5.0" }`)
+	if err := st.AppendInstalled(state.InstalledEntry{
+		ID: "reader", Name: "Reader", Version: "v6.5.1", Repo: "ZenLabs", Asset: "reader.koplugin.zip",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := manager.ScanKOReaderPlugins(nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("reader"); version != "v6.5.1" {
+		t.Fatalf("installed version = %q, want v6.5.1", version)
+	}
+}
+
 func TestScanKOReaderPluginsReconcilesCanonicalModuleAlias(t *testing.T) {
 	manager, st, plugins := newKOReaderScanner(t, []state.CatalogEntry{{
 		ID: "zen-ui", Name: "ZenOS", Repo: "ZenLabs", Platforms: []string{"koreader"},

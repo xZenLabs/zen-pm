@@ -162,6 +162,8 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 		switch r.URL.Path {
 		case "/plugin.koplugin.zip":
 			w.Write(zipContents(t, map[string]string{"plugin.koplugin/_meta.lua": metadata}))
+		case "/versions.json":
+			io.WriteString(w, `{"releases":[{"tag_name":"v1.2.5","assets":[{"name":"plugin.koplugin.zip","url":"http://`+r.Host+`/plugin.koplugin.zip"}]}]}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -169,13 +171,14 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	defer srv.Close()
 
 	if err := st.WriteCatalog([]state.CatalogEntry{{
-		ID:        "plugin",
-		Name:      "Plugin",
-		Version:   "1.0.0",
-		Repo:      "ZenLabs",
-		Platforms: []string{"koreader"},
-		Source:    "https://github.com/owner/plugin",
-		Assets:    `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
+		ID:          "plugin",
+		Name:        "Plugin",
+		Version:     "1.0.0",
+		Repo:        "ZenLabs",
+		Platforms:   []string{"koreader"},
+		Source:      "https://github.com/owner/plugin",
+		Assets:      `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
+		VersionsURL: srv.URL + "/versions.json",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -205,6 +208,27 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if err != nil || len(installed) != 1 || installed[0].Version != "1.2.4" || !installed[0].LauncherAddPending {
 		t.Fatalf("launcher pending flag after update = %#v, %v", installed, err)
 	}
+	if err := manager.InstallRelease("plugin", "v1.2.5", "plugin.koplugin.zip"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("plugin"); version != "v1.2.5" {
+		t.Fatalf("selected release version = %q, want v1.2.5", version)
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil || len(catalog) != 1 {
+		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
+	catalog[0].Version = "1.2.6"
+	if err := st.WriteCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	metadata = `return { version = "1.2.5" }`
+	if err := manager.Install("plugin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("plugin"); version != "1.2.6" {
+		t.Fatalf("catalog release version = %q, want 1.2.6", version)
+	}
 	if err := manager.Uninstall("plugin", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -216,8 +240,61 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if err := manager.Install("plugin"); err != nil {
 		t.Fatal(err)
 	}
-	if _, version := st.IsInstalled("plugin"); version != "" {
-		t.Fatalf("installed version = %q, want empty", version)
+	if _, version := st.IsInstalled("plugin"); version != "1.2.6" {
+		t.Fatalf("installed version = %q, want catalog version 1.2.6", version)
+	}
+}
+
+func TestInstallReleaseDoesNotApplyTargetTagToDependency(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/dependency.koplugin.zip":
+			w.Write(zipContents(t, map[string]string{"dependency.koplugin/_meta.lua": `return { version = "1.0.0" }`}))
+		case "/target.koplugin.zip":
+			w.Write(zipContents(t, map[string]string{"target.koplugin/_meta.lua": `return { version = "1.9.0" }`}))
+		case "/versions.json":
+			io.WriteString(w, `{"releases":[{"tag_name":"v2.0.0","assets":[{"name":"target.koplugin.zip","url":"http://`+r.Host+`/target.koplugin.zip"}]}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{
+			ID: "dependency", Name: "Dependency", Version: "1.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+			Assets: `[{"arch":"any","asset":"dependency.koplugin.zip","url":"` + srv.URL + `/dependency.koplugin.zip"}]`,
+		},
+		{
+			ID: "target", Name: "Target", Version: "2.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+			Deps: []string{"dependency"}, Source: "https://github.com/owner/target", SourceAsset: "target.koplugin.zip", VersionsURL: srv.URL + "/versions.json",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").InstallRelease("target", "v2.0.0", "target.koplugin.zip"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("dependency"); version != "1.0.0" {
+		t.Fatalf("dependency version = %q, want 1.0.0", version)
+	}
+	if _, version := st.IsInstalled("target"); version != "v2.0.0" {
+		t.Fatalf("target version = %q, want v2.0.0", version)
 	}
 }
 

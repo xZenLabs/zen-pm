@@ -132,18 +132,20 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		}
 		entry := byID[pkgID]
 		override := ""
+		selectedReleaseTag := ""
 		if pkgID == id {
 			override = assetOverride
+			selectedReleaseTag = releaseTag
 		}
 		installEntry := entry
-		if pkgID == id && releaseTag != "" && !isDirectKOReaderAssetPackage(entry) {
-			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
+		if selectedReleaseTag != "" && !isDirectKOReaderAssetPackage(entry) {
+			releaseSource, err := releases.GitHubReleaseURL(entry.Source, selectedReleaseTag)
 			if err != nil {
 				return err
 			}
 			entryCopy := *entry
 			entryCopy.Source = releaseSource
-			entryCopy.Version = releaseTag
+			entryCopy.Version = selectedReleaseTag
 			installEntry = &entryCopy
 		}
 		patchReason := patchPackageReason(entry)
@@ -168,7 +170,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		installedPath := ""
 		if genericInstaller != "" {
 			var err error
-			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller, directGitHub && pkgID == id)
+			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, selectedReleaseTag, genericInstaller, directGitHub && pkgID == id)
 			if err != nil {
 				return fmt.Errorf("install %s: %w", pkgID, err)
 			}
@@ -189,9 +191,16 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 
 		installedVersion := installEntry.Version
 		if genericInstaller == genericPluginInstaller {
-			installedVersion = releaseTag
-			if installedPluginVersion != "" && installedPluginVersion != "0.0.0" {
+			if selectedReleaseTag != "" {
+				installedVersion = selectedReleaseTag
+			}
+			if selectedReleaseTag == "" && installedPluginVersion != "" && installedPluginVersion != "0.0.0" &&
+				releases.VersionGreater(installedPluginVersion, installedVersion) {
 				installedVersion = installedPluginVersion
+			}
+			if installedPluginVersion != "" && installedPluginVersion != "0.0.0" &&
+				releases.NormalizeVersion(installedVersion) != releases.NormalizeVersion(installedPluginVersion) {
+				log.Warnf("Package %s selected version %s reports embedded version %s; recording the selected version", pkgID, installedVersion, installedPluginVersion)
 			}
 		}
 
