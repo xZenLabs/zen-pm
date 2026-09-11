@@ -29,6 +29,7 @@ local FOCUS_NAVBAR_HOLD_DELAY = 0.4
 
 local AppView = InputContainer:extend{
     modal = false,
+    covers_fullscreen = true,
     stop_events_propagation = true,
 }
 
@@ -610,10 +611,6 @@ end
 
 function AppView:refresh(full)
     UIManager:setDirty(self, full and "full" or "ui", self.dimen)
-end
-
-function AppView:onResume()
-    self:refresh(true)
 end
 
 function AppView:_zen_status_refresh()
