@@ -3,6 +3,7 @@ local root = assert(source:match("^(.*)/tests/[^/]+$"))
 package.path = root .. "/?.lua;" .. root .. "/ui/?.lua;" .. package.path
 
 local painted_text = {}
+local painted_text_x = {}
 local painted_text_y = {}
 local painted_images = {}
 local painted_boxes = {}
@@ -48,13 +49,15 @@ package.preload["ui/primitives"] = function()
         rect = function(_, x, y, w, h)
             table.insert(painted_rects, { x = x, y = y, w = w, h = h })
         end,
-        text = function(_, text, _, y)
+        text = function(_, text, x, y)
             table.insert(painted_text, text)
+            painted_text_x[text] = x
             painted_text_y[text] = y
         end,
         text_size = function(text) return { w = #text, h = 1 } end,
-        image = function(_, file, _, _, w, h, opts)
-            painted_images[file] = { w = w, h = h, is_icon = opts and opts.is_icon }
+        vcenter_text = function(_, text) return { w = #text, h = 1 } end,
+        image = function(_, file, x, y, w, h, opts)
+            painted_images[file] = { x = x, y = y, w = w, h = h, is_icon = opts and opts.is_icon }
             return true
         end,
         image_zoomed = function(_, file, _, _, w, h, zoom, opts)
@@ -79,7 +82,7 @@ package.preload["ui/theme"] = function()
         muted = 0,
         soft = 0,
         metrics = function()
-            return { card_h = 80, category_h = 84, action_w = 40, action_h = 20, pad = 8, card_gap = 4, touch_min = 20 }
+            return { card_h = 80, category_h = 84, action_w = 40, action_h = 20, pad = 8, card_gap = 4, touch_min = 20, titlebar_h = 58, toolbar_h = 58 }
         end,
         scale = function(value) return value end,
         font_scale = function(value) return value end,
@@ -276,6 +279,16 @@ assert(not table.concat(painted_text, "\n"):find("v9.9.9", 1, true))
 assert(painted_images["downloads.svg"] and not painted_images["star.filled.svg"])
 assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
 painted_text = {}
+painted_images = {}
+readerbackdrop_package.installed = true
+readerbackdrop_view.app.state.active_tab = "installed"
+Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
+assert(painted_images["downloads.svg"] and painted_images["checkmark.svg"])
+assert(painted_text_x["42"] < painted_images["downloads.svg"].x)
+assert(painted_images["downloads.svg"].x < painted_images["checkmark.svg"].x)
+readerbackdrop_package.installed = nil
+readerbackdrop_view.app.state.active_tab = "search"
+painted_text = {}
 readerbackdrop_package.icon_url = "/packages/readerbackdrop-opaque/preview"
 Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
 assert(table.concat(painted_text, "\n"):find("ReaderBackdrop • Opaque", 1, true))
@@ -296,7 +309,7 @@ Cards.source({
 assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
 
 package.preload["ui/font"] = function() return {} end
-package.preload["ui/inline_icon_map"] = function() return {} end
+package.preload["ui/inline_icon_map"] = function() return { icon = function() return "" end } end
 package.preload["ui/markdown"] = function()
     return {
         base_url = function() return "" end,
@@ -404,6 +417,17 @@ assert(Header.page_title({ app = { state = {
     current_repo = { name = "ReaderBackdrop" },
     readerbackdrop = {},
 } } }) == "ReaderBackdrop (2085)")
+
+local queue_closed = false
+Header.draw({ app = {
+    state = { page = "queue", queue_running = false },
+    queue_count = function() return 0 end,
+    close_queue = function() queue_closed = true end,
+    show_actions = function() end,
+} }, {}, 0, 0, 300)
+assert(type(hit_callbacks["back-title"]) == "function")
+hit_callbacks["back-title"]()
+assert(queue_closed)
 
 painted_text = {}
 Pages.queue({

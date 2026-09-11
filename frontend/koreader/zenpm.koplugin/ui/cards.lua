@@ -47,11 +47,9 @@ local function package_stars(pkg)
     return stars
 end
 
-local function should_show_stars(view, pkg)
+local function should_show_stars(pkg)
     return package_stars(pkg) ~= nil
         and package_has_platform(pkg, "koreader")
-        and not pkg.installed
-        and view.app.state.active_tab ~= "installed"
 end
 
 local function package_author_text(pkg)
@@ -174,7 +172,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     end
     local action_x = x + w - action_w - pad
     local action_y = y + math.floor((h - action_h) / 2)
-    local status_icon_size = (pkg.installed or should_show_stars(view, pkg)) and Theme.font_scale(28) or 0
+    local status_icon_size = (pkg.installed or should_show_stars(pkg)) and Theme.font_scale(28) or 0
     if status_icon_size > 0 then
         action_y = math.min(
             y + h - action_h - pad,
@@ -288,11 +286,13 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
+    local metric_right_x = x + w - Theme.scale(6)
     if pkg.installed then
         local check = Theme.font_scale(20)
         local gap = Theme.scale(12)
         local status_w = check + (pkg.update_ignored and check + gap or 0)
         local status_x = x + w - status_w - Theme.scale(6)
+        metric_right_x = status_x - gap
         local status_y = y + Theme.scale(5)
         local check_x = status_x + status_w - check
         if pkg.update_ignored then
@@ -307,17 +307,21 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
                 P.dim(bb, status_x, status_y, check, check)
             end
         end
-    elseif should_show_stars(view, pkg) then
+    end
+    if should_show_stars(pkg) then
         local star = Theme.font_scale(20)
-        local sx = x + w - star - Theme.scale(6)
+        local sx = metric_right_x - star
         local sy = y + Theme.scale(5)
         local stars = package_stars(pkg)
         local gap = Theme.font_scale(4)
         local number_size = P.text_size(stars, Theme.scale(72), "small", { bold = true })
-        P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true })
+        P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true, color = ink })
         local readerbackdrop = pkg.repo == Constants.REPO_READERBACKDROP_NAME
         if not P.image(bb, Images.asset(readerbackdrop and "downloads.svg" or "star.filled.svg"), sx, sy, star, star, { is_icon = true }) then
             P.center_text(bb, readerbackdrop and "↓" or "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
+        end
+        if disabled then
+            P.dim(bb, sx, sy, star, star)
         end
     end
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
@@ -14,7 +15,8 @@ import (
 
 // Manager wraps all repository operations.
 type Manager struct {
-	st *state.State
+	st        *state.State
+	catalogMu sync.Mutex
 }
 
 // UserAddedPriority is the fixed priority assigned to all user-added repos.
@@ -118,9 +120,20 @@ func (m *Manager) Refresh() error {
 			all = append(all, entry)
 		}
 	}
+	m.catalogMu.Lock()
+	latest, latestErr := m.ReadCatalog()
+	if latestErr != nil {
+		latest = previous
+	}
 	present := make(map[string]bool, len(all))
 	for _, entry := range all {
 		present[entry.ID] = true
+	}
+	for _, entry := range latest {
+		if entry != nil && IsReaderBackdropRepo(entry.Repo, "") && !present[entry.ID] {
+			all = append(all, entry)
+			present[entry.ID] = true
+		}
 	}
 	if installed, err := m.st.ReadInstalled(); err == nil {
 		installedSet := make(map[string]bool, len(installed))
@@ -134,8 +147,10 @@ func (m *Manager) Refresh() error {
 		}
 	}
 	merged := MergeCatalogs(all)
-	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
-		return fmt.Errorf("write merged catalog: %w", err)
+	writeErr := m.st.WriteCatalog(toStateCatalog(merged))
+	m.catalogMu.Unlock()
+	if writeErr != nil {
+		return fmt.Errorf("write merged catalog: %w", writeErr)
 	}
 	m.CacheInstalledUninstallScripts(merged)
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
@@ -173,6 +188,8 @@ func (m *Manager) LoadReaderBackdropPage(page int, search, tag string) (int, int
 	if err != nil {
 		return 0, 0, err
 	}
+	m.catalogMu.Lock()
+	defer m.catalogMu.Unlock()
 	catalog, err := m.ReadCatalog()
 	if err != nil && !os.IsNotExist(err) {
 		return 0, 0, err
@@ -191,7 +208,7 @@ func (m *Manager) LoadReaderBackdropPage(page int, search, tag string) (int, int
 	if err := m.st.WriteCatalog(toStateCatalog(MergeCatalogs(all))); err != nil {
 		return 0, 0, fmt.Errorf("write ReaderBackdrop catalog page: %w", err)
 	}
-	// ponytail: requested pages stay cached until the next source refresh; add eviction only if catalog growth becomes measurable.
+	// ponytail: requested pages stay cached; add eviction only if catalog growth becomes measurable.
 	return totalPages, total, nil
 }
 

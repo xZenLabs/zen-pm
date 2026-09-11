@@ -121,6 +121,55 @@ func TestRefreshKeepsCatalogWhenRepositoriesAreUnavailable(t *testing.T) {
 	}
 }
 
+func TestRefreshKeepsLoadedReaderBackdropEntries(t *testing.T) {
+	refreshStarted := make(chan struct{})
+	finishRefresh := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "1" {
+			close(refreshStarted)
+			<-finishRefresh
+			_, _ = fmt.Fprint(w, `{"images":[{"id":"current","title":"Current"}]}`)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"images":[{"id":"loaded","title":"Loaded"}]}`)
+	}))
+	defer srv.Close()
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ReaderBackdrop", URL: srv.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "readerbackdrop-previous", Repo: "ReaderBackdrop", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := New(st)
+	refreshDone := make(chan error, 1)
+	go func() { refreshDone <- m.Refresh() }()
+	<-refreshStarted
+	_, _, loadErr := m.LoadReaderBackdropPage(2, "", "")
+	close(finishRefresh)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if err := <-refreshDone; err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := st.ReadCatalog()
+	ids := make(map[string]bool, len(catalog))
+	for _, entry := range catalog {
+		ids[entry.ID] = true
+	}
+	if err != nil || !ids["readerbackdrop-previous"] || !ids["readerbackdrop-loaded"] || !ids["readerbackdrop-current"] {
+		t.Fatalf("catalog after refresh = %#v, %v", catalog, err)
+	}
+}
+
 func TestRefreshPartialAndEmptyCatalogs(t *testing.T) {
 	t.Setenv("ZENPM_HOME", t.TempDir())
 	st, err := state.Init("host")

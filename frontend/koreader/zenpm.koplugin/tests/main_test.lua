@@ -4,6 +4,7 @@ package.path = root .. "/?.lua;" .. package.path
 
 local stopped = 0
 local uninstalled = 0
+local quit = 0
 local scheduled
 local reopened
 local actions = {}
@@ -50,6 +51,7 @@ package.preload["launcher"] = function()
     return {
         open = function() return true end,
         open_after_restart = function(plugin) reopened = plugin end,
+        quit = function() quit = quit + 1 end,
         get_app = function()
             return {
                 close_book_before_update = function()
@@ -109,6 +111,7 @@ ZenPM:onCloseWidget()
 
 assert(stopped == 1)
 assert(uninstalled == 1)
+assert(quit == 1)
 
 network_connected = false
 assert(ZenPM:onUpdateAllZenPMPlugins())
