@@ -1063,7 +1063,7 @@ do
     assert(list_app.state.page == "installed" and list_app.state.active_tab == "installed")
     assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "zulu")
     list_app:prompt_sort("installed")
-    assert(#modal_rows == 4 and modal_rows[1].checked_func())
+    assert(#modal_rows == 4 and modal_rows[1].text == "Name (A-Z)" and modal_rows[1].checked_func())
     for _, category in ipairs({ "screensavers", "wallpapers" }) do
         list_app.state.current_category = { id = category }
         list_app:prompt_sort("category")

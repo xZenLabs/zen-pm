@@ -21,13 +21,18 @@ local I18n = dofile(root .. "/i18n.lua")
 I18n.install()
 
 local translations = {
+    Downloads = "Downloads",
     Fonts = "Fontes",
     Games = "Jogos",
     Media = "Mídia",
+    ["Name (A-Z)"] = "Nome (A-Z)",
+    ["Name (Z-A)"] = "Nome (Z-A)",
     Patches = "Correções",
     Productivity = "Produtividade",
+    Screensavers = "Protetores de tela",
     Theme = "Tema",
     Utility = "Utilitário",
+    Wallpapers = "Papéis de parede",
     ["ZenLabs Repo"] = "Repositório ZenLabs",
 }
 for msgid, expected in pairs(translations) do

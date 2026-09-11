@@ -336,6 +336,9 @@ msgstr "Baixe este ativo: "
 msgid "Downloaded update checksum did not match."
 msgstr "A soma de verificação da atualização baixada não corresponde."
 
+msgid "Downloads"
+msgstr "Downloads"
+
 msgid "enable"
 msgstr "habilitar"
 
@@ -530,6 +533,12 @@ msgstr "Modificar"
 
 msgid "Name"
 msgstr "Nome"
+
+msgid "Name (A-Z)"
+msgstr "Nome (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Nome (Z-A)"
 
 msgid "network error"
 msgstr "erro de rede"
@@ -768,6 +777,9 @@ msgstr "Verificar plug-ins instalados"
 msgid "Scanning installed plugins..."
 msgstr "Verificando plug-ins instalados..."
 
+msgid "Screensavers"
+msgstr "Protetores de tela"
+
 msgid "Search"
 msgstr "Pesquisar"
 
@@ -876,12 +888,6 @@ msgstr "Isso será instalado como um “livro” na tela inicial do Kindle."
 msgid "timeout"
 msgstr "tempo esgotado"
 
-msgid "Title (A-Z)"
-msgstr "Título (AZ)"
-
-msgid "Title (Z-A)"
-msgstr "Título (ZA)"
-
 msgid "to"
 msgstr "para"
 
@@ -968,6 +974,9 @@ msgstr "Versão: "
 
 msgid "Versions"
 msgstr "Versões"
+
+msgid "Wallpapers"
+msgstr "Papéis de parede"
 
 msgid "Welcome"
 msgstr "Bem-vindo"

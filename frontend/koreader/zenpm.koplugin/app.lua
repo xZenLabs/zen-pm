@@ -3077,13 +3077,13 @@ function App:prompt_sort(kind)
         local rows = {
             {
                 icon = "sort_asc",
-                text = _("Title (A-Z)"),
+                text = _("Name (A-Z)"),
                 checked_func = selected("name_asc"),
                 callback = function() self:set_sort(kind, "name_asc") end,
             },
             {
                 icon = "sort_desc",
-                text = _("Title (Z-A)"),
+                text = _("Name (Z-A)"),
                 checked_func = selected("name_desc"),
                 callback = function() self:set_sort(kind, "name_desc") end,
             },

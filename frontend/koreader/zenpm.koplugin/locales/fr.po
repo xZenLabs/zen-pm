@@ -336,6 +336,9 @@ msgstr "Téléchargez cet actif : "
 msgid "Downloaded update checksum did not match."
 msgstr "La somme de contrôle de la mise à jour téléchargée ne correspond pas."
 
+msgid "Downloads"
+msgstr "Téléchargements"
+
 msgid "enable"
 msgstr "activer"
 
@@ -530,6 +533,12 @@ msgstr "Modifier"
 
 msgid "Name"
 msgstr "Nom"
+
+msgid "Name (A-Z)"
+msgstr "Nom (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Nom (Z-A)"
 
 msgid "network error"
 msgstr "erreur reseau"
@@ -768,6 +777,9 @@ msgstr "Analyser les plugins installés"
 msgid "Scanning installed plugins..."
 msgstr "Analyse des plugins installés..."
 
+msgid "Screensavers"
+msgstr "Économiseurs d’écran"
+
 msgid "Search"
 msgstr "Rechercher"
 
@@ -876,12 +888,6 @@ msgstr "Cela s'installera comme un « livre » sur l'écran d'accueil du Kindle.
 msgid "timeout"
 msgstr "temps mort"
 
-msgid "Title (A-Z)"
-msgstr "Titre (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Titre (Z-A)"
-
 msgid "to"
 msgstr "à"
 
@@ -968,6 +974,9 @@ msgstr "Version : "
 
 msgid "Versions"
 msgstr "Versions"
+
+msgid "Wallpapers"
+msgstr "Fonds d’écran"
 
 msgid "Welcome"
 msgstr "Bienvenue"

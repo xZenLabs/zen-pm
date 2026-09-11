@@ -336,6 +336,9 @@ msgstr "Scarica questa risorsa: "
 msgid "Downloaded update checksum did not match."
 msgstr "Il checksum dell'aggiornamento scaricato non corrisponde."
 
+msgid "Downloads"
+msgstr "Download"
+
 msgid "enable"
 msgstr "abilitare"
 
@@ -530,6 +533,12 @@ msgstr "Modifica"
 
 msgid "Name"
 msgstr "Nome"
+
+msgid "Name (A-Z)"
+msgstr "Nome (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Nome (Z-A)"
 
 msgid "network error"
 msgstr "errore di rete"
@@ -768,6 +777,9 @@ msgstr "Scansiona i plugin installati"
 msgid "Scanning installed plugins..."
 msgstr "Scansione dei plugin installati..."
 
+msgid "Screensavers"
+msgstr "Salvaschermi"
+
 msgid "Search"
 msgstr "Cerca"
 
@@ -876,12 +888,6 @@ msgstr "Questo verrà installato come un \"libro\" sulla schermata iniziale di K
 msgid "timeout"
 msgstr "tempo scaduto"
 
-msgid "Title (A-Z)"
-msgstr "Titolo (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Titolo (Z-A)"
-
 msgid "to"
 msgstr "A"
 
@@ -968,6 +974,9 @@ msgstr "Versione: "
 
 msgid "Versions"
 msgstr "Versioni"
+
+msgid "Wallpapers"
+msgstr "Sfondi"
 
 msgid "Welcome"
 msgstr "Benvenuto"

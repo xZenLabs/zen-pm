@@ -336,6 +336,9 @@ msgstr "下載該資源： "
 msgid "Downloaded update checksum did not match."
 msgstr "下載的更新校驗和不符。"
 
+msgid "Downloads"
+msgstr "下載次數"
+
 msgid "enable"
 msgstr "使能夠"
 
@@ -529,7 +532,13 @@ msgid "Modify"
 msgstr "修改"
 
 msgid "Name"
-msgstr "姓名"
+msgstr "名稱"
+
+msgid "Name (A-Z)"
+msgstr "名稱（A-Z）"
+
+msgid "Name (Z-A)"
+msgstr "名稱（Z-A）"
 
 msgid "network error"
 msgstr "網路錯誤"
@@ -768,6 +777,9 @@ msgstr "掃描已安裝的插件"
 msgid "Scanning installed plugins..."
 msgstr "正在掃描已安裝的插件..."
 
+msgid "Screensavers"
+msgstr "螢幕保護程式"
+
 msgid "Search"
 msgstr "搜尋"
 
@@ -876,12 +888,6 @@ msgstr "這將作為一本「書」安裝在 Kindle 主螢幕上。"
 msgid "timeout"
 msgstr "暫停"
 
-msgid "Title (A-Z)"
-msgstr "標題（A-Z）"
-
-msgid "Title (Z-A)"
-msgstr "標題 (Z-A)"
-
 msgid "to"
 msgstr "到"
 
@@ -968,6 +974,9 @@ msgstr "版本： "
 
 msgid "Versions"
 msgstr "版本"
+
+msgid "Wallpapers"
+msgstr "桌布"
 
 msgid "Welcome"
 msgstr "歡迎"
