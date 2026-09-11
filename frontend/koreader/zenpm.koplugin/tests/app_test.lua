@@ -1816,15 +1816,32 @@ local image_status_closes = status_close_count
 image_app:perform_package_action(image_packages[2], function() image_prompt_done = true end)
 assert(package_modify_callbacks.set_image)
 package_modify_callbacks.set_image()
-assert(modal_title == "Set Mountain View Grey as the ZenOS library background?")
+assert(modal_title == "Set Mountain View Grey as:")
+assert(#modal_rows == 2)
+assert(modal_rows[1].text == "Set as wallpaper" and modal_rows[2].text == "Set as screensaver")
 assert(status_close_count == image_status_closes + 1)
 modal_rows[1].callback()
 assert(zen_background_plugin.config.library_background.enabled)
 assert(zen_background_plugin.config.library_background.path
     == "/koreader/resources/wallpapers/mountain-view-grey.jpg")
+assert(modal_message == "Wallpaper set successfully.")
 assert(zen_background_saves == 1 and zen_home_rebuilds == 1 and image_prompt_done)
 image_app:perform_package_action(image_packages[2])
-assert(not package_modify_callbacks.set_image)
+assert(package_modify_callbacks.set_image)
+package_modify_callbacks.set_image()
+modal_rows[2].callback()
+assert(reader_settings.screensaver_document_cover
+    == "/koreader/resources/wallpapers/mountain-view-grey.jpg")
+assert(modal_message == "Screensaver set successfully.")
+
+image_app:perform_package_action(image_packages[3])
+assert(package_modify_callbacks.set_image)
+package_modify_callbacks.set_image()
+modal_rows[1].callback()
+assert(zen_background_plugin.config.library_background.path
+    == "/koreader/resources/screensavers/books.png")
+assert(modal_message == "Wallpaper set successfully.")
+assert(zen_background_saves == 2 and zen_home_rebuilds == 2)
 
 local reader_plugin = { id = "reader-plugin", installed = true, platforms = { "koreader" } }
 local failed_image = {
@@ -1927,7 +1944,8 @@ image_app:perform_package_action(image_packages[3], function()
 end)
 assert(package_modify_callbacks.set_image)
 package_modify_callbacks.set_image()
-assert(modal_title == "Do you want to set Books as the screensaver?")
+assert(modal_title == "Set Books as:")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as screensaver")
 local original_io_open = io.open
 io.open = function(path, mode)
     assert(path == "/koreader/resources/screensavers/books.png" and mode == "rb")
@@ -1944,11 +1962,21 @@ io.open = original_io_open
 assert(screensaver_without_zen)
 assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/books.png")
 assert(reader_settings.screensaver_img_background == "none")
+assert(modal_message == "Screensaver set successfully.")
 image_app:perform_package_action(image_packages[3])
 assert(not package_modify_callbacks.set_image)
 
 local apply_error_acknowledged = false
 image_app.apply_installed_image = function() return false, "save failed" end
+modal_message = nil
+image_app:prompt_installed_image_target(image_packages[3], function()
+    apply_error_acknowledged = true
+end)
+modal_rows[1].callback()
+assert(modal_message == "Could not set screensaver: save failed")
+assert(apply_error_acknowledged)
+
+apply_error_acknowledged = false
 image_app:prompt_installed_image(image_packages[3], function()
     apply_error_acknowledged = true
 end)

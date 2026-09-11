@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/xZenLabs/zen-pm/internal/assets"
 	"github.com/xZenLabs/zen-pm/internal/log"
@@ -18,9 +19,10 @@ import (
 
 // Manager drives package install/uninstall/update operations.
 type Manager struct {
-	st    *state.State
-	repos *repo.Manager
-	plat  string
+	st          *state.State
+	repos       *repo.Manager
+	plat        string
+	operationMu sync.Mutex
 }
 
 func New(st *state.State, repos *repo.Manager, plat string) *Manager {
@@ -41,6 +43,20 @@ func (m *Manager) Install(id string) error {
 func (m *Manager) CheckInstall(id string) error {
 	_, _, _, _, err := m.installPlan(id)
 	return err
+}
+
+func (m *Manager) lockOperation() error {
+	m.operationMu.Lock()
+	if err := m.st.LockAcquire("operation"); err != nil {
+		m.operationMu.Unlock()
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) unlockOperation() {
+	m.st.LockRelease("operation")
+	m.operationMu.Unlock()
 }
 
 // InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
@@ -91,12 +107,12 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		return err
 	}
 
-	if err := m.st.LockAcquire("operation"); err != nil {
+	if err := m.lockOperation(); err != nil {
 		return err
 	}
 	log.Infof("Package operation started: install %s", id)
 	defer func() {
-		m.st.LockRelease("operation")
+		m.unlockOperation()
 		if retErr != nil {
 			log.Errorf("Package operation failed: install %s: %v", id, retErr)
 			return
@@ -322,12 +338,12 @@ func (m *Manager) Uninstall(id, asset string) (retErr error) {
 		}
 	}
 
-	if err := m.st.LockAcquire("operation"); err != nil {
+	if err := m.lockOperation(); err != nil {
 		return err
 	}
 	log.Infof("Package operation started: uninstall %s", id)
 	defer func() {
-		m.st.LockRelease("operation")
+		m.unlockOperation()
 		if retErr != nil {
 			log.Errorf("Package operation failed: uninstall %s: %v", id, retErr)
 			return

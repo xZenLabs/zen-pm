@@ -201,9 +201,12 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
             draw_readerbackdrop_load_more(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, card_h, kind, index, count)
             return
         end
+        local image_kind = kind == "installed" and (pkg.category == "screensavers" and _("Screensaver")
+            or pkg.category == "wallpapers" and _("Wallpaper")) or nil
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
-            meta_suffix = (kind == "search" or (kind == "installed" and pkg.update_available and not pkg.update_ignored))
+            meta_suffix = image_kind or (kind == "search"
+                or (kind == "installed" and pkg.update_available and not pkg.update_ignored))
                 and Models.friendly_published_at(pkg) or nil,
             focus_group = kind,
             focus_index = index,

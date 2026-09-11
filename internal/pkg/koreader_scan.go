@@ -56,10 +56,10 @@ var koreaderMetaVersion = regexp.MustCompile(`\bversion\s*=\s*["']([^"']+)["']`)
 // Always reconcile disk contents, including installs made outside ZenPM.
 func (m *Manager) ScanKOReaderPlugins(pluginDirs []string) (KOReaderPluginScanResult, error) {
 	var result KOReaderPluginScanResult
-	if err := m.st.LockAcquire("operation"); err != nil {
+	if err := m.lockOperation(); err != nil {
 		return result, err
 	}
-	defer m.st.LockRelease("operation")
+	defer m.unlockOperation()
 	if pluginDirs != nil {
 		for _, dir := range pluginDirs {
 			if !filepath.IsAbs(dir) || strings.ContainsRune(dir, '\x00') {

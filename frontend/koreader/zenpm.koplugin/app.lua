@@ -1156,25 +1156,28 @@ local function png_has_alpha(path)
     return color_type == 4 or color_type == 6
 end
 
-local function installed_image_prompt_kind(app, pkg)
-    if not (pkg and pkg.installed) then return nil end
-    local path, kind = installed_image_path(app, pkg)
-    if not path then return nil end
+local function installed_image_target_available(app, kind)
     if kind == "screensavers" then
         local settings = rawget(_G, "G_reader_settings")
-        return settings and type(settings.saveSetting) == "function" and kind or nil
+        return settings and type(settings.saveSetting) == "function"
     end
 
     local zen_pkg = Models.find_package(app.state.packages, "zen-ui")
     local zen = zen_pkg and not app:package_disabled(zen_pkg)
         and koreader_plugin_instance(zen_pkg) or nil
     return zen and type(zen.config) == "table" and type(zen.saveConfig) == "function"
-        and kind or nil
 end
 
-local function installed_image_is_active(app, pkg)
+local function installed_image_prompt_kind(app, pkg)
+    if not (pkg and pkg.installed) then return nil end
+    local path, kind = installed_image_path(app, pkg)
+    return path and installed_image_target_available(app, kind) and kind or nil
+end
+
+local function installed_image_is_active(app, pkg, target_kind)
     local path, kind = installed_image_path(app, pkg)
     if not path then return false end
+    kind = target_kind or kind
     if kind == "screensavers" then
         local settings = rawget(_G, "G_reader_settings")
         return settings and type(settings.readSetting) == "function"
@@ -1187,9 +1190,10 @@ local function installed_image_is_active(app, pkg)
     return type(background) == "table" and background.enabled == true and background.path == path
 end
 
-function App:apply_installed_image(pkg)
+function App:apply_installed_image(pkg, target_kind)
     local path, kind = installed_image_path(self, pkg)
     if not path then return false, _("Installed image path is unavailable.") end
+    kind = target_kind or kind
     if kind == "screensavers" then
         local settings = rawget(_G, "G_reader_settings")
         if not (settings and type(settings.saveSetting) == "function") then
@@ -1221,8 +1225,21 @@ function App:apply_installed_image(pkg)
     return true
 end
 
-local function apply_installed_image_choice(app, pkg, on_done)
-    local ok, err = app:apply_installed_image(pkg)
+local function apply_installed_image_choice(app, pkg, on_done, target_kind)
+    local ok, err = app:apply_installed_image(pkg, target_kind)
+    if target_kind then
+        local message
+        if ok then
+            message = target_kind == "wallpapers" and _("Wallpaper set successfully.")
+                or _("Screensaver set successfully.")
+        else
+            message = (target_kind == "wallpapers" and _("Could not set wallpaper: ")
+                or _("Could not set screensaver: ")) .. tostring(err)
+        end
+        Modals.notice(message)
+        on_done()
+        return
+    end
     if ok then
         on_done()
         return
@@ -1248,6 +1265,31 @@ function App:prompt_installed_image(pkg, on_done)
             end,
         },
     }, { cancel_callback = on_done })
+    return true
+end
+
+function App:prompt_installed_image_target(pkg, on_done)
+    if not (pkg and pkg.installed and installed_image_path(self, pkg)) then return false end
+    on_done = on_done or function() end
+    local rows = {}
+    for _, target in ipairs({
+        { kind = "wallpapers", text = _("Set as wallpaper") },
+        { kind = "screensavers", text = _("Set as screensaver") },
+    }) do
+        if installed_image_target_available(self, target.kind) then
+            local choice = target
+            table.insert(rows, {
+                text = choice.text,
+                callback = function()
+                    apply_installed_image_choice(self, pkg, on_done, choice.kind)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then return false end
+    local name = package_title(pkg, pkg.installed_asset or _("Image"))
+    Modals.close_status()
+    Modals.actions(string.format(_("Set %s as:"), name), rows, { cancel_callback = on_done })
     return true
 end
 
@@ -3209,15 +3251,20 @@ function App:perform_package_action(pkg, on_done)
         local has_versions = not Models.is_direct_asset_package(pkg)
             and (Models.has_version_history(pkg)
                 or (self.state.direct_github and package_has_github_source(pkg)))
-        local can_set_image = installed_image_prompt_kind(self, pkg)
-            and not installed_image_is_active(self, pkg)
+        local image_path = installed_image_path(self, pkg)
+        local can_set_image = image_path and (
+            installed_image_target_available(self, "wallpapers")
+                and not installed_image_is_active(self, pkg, "wallpapers")
+            or installed_image_target_available(self, "screensavers")
+                and not installed_image_is_active(self, pkg, "screensavers")
+        )
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
             end or nil,
             set_image = can_set_image and function()
-                self:prompt_installed_image(pkg, on_done)
+                self:prompt_installed_image_target(pkg, on_done)
             end or nil,
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)

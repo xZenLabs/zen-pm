@@ -367,6 +367,25 @@ assert(rendered_screensavers == 24)
 hit_callbacks["readerbackdrop-load-more"]()
 assert(load_more_calls == 1)
 
+painted_text = {}
+Pages.packages_page({
+    app = {
+        state = { page = "installed", active_tab = "installed", queue = {} },
+        package_disabled = function() return false end,
+        package_icon_file = function() return "image.svg", true end,
+        show_package_details = function() end,
+    },
+}, {}, 0, 0, 300, 300, 0, "Installed", "installed", {
+    { id = "clouds", name = "Clouds", repo = "ReaderBackdrop", category = "wallpapers" },
+    { id = "books", name = "Books", repo = "ReaderBackdrop", category = "screensavers" },
+    { id = "reader", name = "Reader", repo = "ZenLabs", category = "applications" },
+}, {}, "")
+local installed_image_text = table.concat(painted_text, "\n")
+assert(installed_image_text:find("Wallpaper", 1, true))
+assert(installed_image_text:find("Screensaver", 1, true))
+assert(not installed_image_text:find("ReaderBackdrop", 1, true))
+assert(installed_image_text:find("ZenLabs", 1, true))
+
 local screensaver_details_view = {
     app = {
         state = {

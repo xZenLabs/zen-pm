@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/platform"
 	"github.com/xZenLabs/zen-pm/internal/repo"
@@ -68,6 +69,52 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	}
 	if _, err := os.Stat(st.CachedUninstallScriptPath("zen-mtp-koplugin")); err != nil {
 		t.Fatalf("cached plugin uninstall script missing: %v", err)
+	}
+}
+
+func TestPackageOperationsWaitForPreviousOperation(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstStarted := make(chan struct{})
+	finishFirst := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/first" {
+			close(firstStarted)
+			<-finishFirst
+		}
+		io.WriteString(w, "#!/bin/sh\nexit 0\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "first", Name: "First", Version: "1.0.0", Repo: "ZenLabs", InstallURL: srv.URL + "/first"},
+		{ID: "second", Name: "Second", Version: "1.0.0", Repo: "ZenLabs", InstallURL: srv.URL + "/second"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- manager.Install("first") }()
+	<-firstStarted
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- manager.Install("second") }()
+	select {
+	case err := <-secondDone:
+		close(finishFirst)
+		t.Fatalf("second operation returned before the first finished: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(finishFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatal(err)
 	}
 }
 
