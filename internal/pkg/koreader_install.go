@@ -365,7 +365,11 @@ func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName 
 }
 
 func installKOReaderImage(root, assetName string, data []byte, kind string) (string, error) {
-	if filepath.Base(assetName) != assetName {
+	assetName = strings.TrimSpace(assetName)
+	if assetName == "" ||
+		filepath.Base(assetName) != assetName ||
+		strings.Contains(assetName, "..") ||
+		strings.ContainsAny(assetName, `/\`) {
 		return "", fmt.Errorf("invalid %s asset %q", strings.TrimSuffix(kind, "s"), assetName)
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
