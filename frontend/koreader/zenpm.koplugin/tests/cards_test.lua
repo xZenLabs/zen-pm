@@ -274,7 +274,7 @@ local readerbackdrop_package = {
     stars = "42",
 }
 Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
-assert(table.concat(painted_text, "\n"):find("ReaderBackdrop • Transparent", 1, true))
+assert(table.concat(painted_text, "\n"):find("Wallpaper • Transparent", 1, true))
 assert(not table.concat(painted_text, "\n"):find("v9.9.9", 1, true))
 assert(painted_images["downloads.svg"] and not painted_images["star.filled.svg"])
 assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
@@ -291,13 +291,19 @@ readerbackdrop_view.app.state.active_tab = "search"
 painted_text = {}
 readerbackdrop_package.icon_url = "/packages/readerbackdrop-opaque/preview"
 Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
-assert(table.concat(painted_text, "\n"):find("ReaderBackdrop • Opaque", 1, true))
+assert(table.concat(painted_text, "\n"):find("Wallpaper • Opaque", 1, true))
 painted_text = {}
 readerbackdrop_package.icon_url = "/packages/readerbackdrop-unknown/preview"
 Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
-assert(table.concat(painted_text, "\n"):find("ReaderBackdrop", 1, true))
+assert(table.concat(painted_text, "\n"):find("Wallpaper", 1, true))
+assert(not table.concat(painted_text, "\n"):find("ReaderBackdrop", 1, true))
 assert(not table.concat(painted_text, "\n"):find("Transparent", 1, true))
 assert(not table.concat(painted_text, "\n"):find("Opaque", 1, true))
+painted_text = {}
+readerbackdrop_package.category = "screensavers"
+Cards.package(readerbackdrop_view, {}, readerbackdrop_package, 0, 0, 300, { compact = true })
+assert(table.concat(painted_text, "\n"):find("Screensaver", 1, true))
+assert(not table.concat(painted_text, "\n"):find("ReaderBackdrop", 1, true))
 
 painted_images = {}
 Cards.source({

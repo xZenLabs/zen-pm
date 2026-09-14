@@ -97,6 +97,8 @@ local function package_version_repo_text(pkg, meta_suffix)
         table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
     table.insert(parts, meta_suffix and meta_suffix ~= "" and meta_suffix
+        or pkg and pkg.category == "screensavers" and _("Screensaver")
+        or pkg and pkg.category == "wallpapers" and _("Wallpaper")
         or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
     if pkg and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
         local transparent = Images.is_transparent(Images.package_icon(pkg))
