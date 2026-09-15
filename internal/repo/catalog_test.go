@@ -382,7 +382,7 @@ func TestFetchCatalogUsesReaderBackdropAPI(t *testing.T) {
 	if entry.Source != srv.URL+"/backgrounds/abc123" || entry.IconURL != "https://utfs.io/thumb" {
 		t.Fatalf("source/icon = %q, %q", entry.Source, entry.IconURL)
 	}
-	for _, want := range []string{`"asset":"readerbackdrop-abc123"`, `"url":"` + srv.URL + `/api/images/abc123/download"`} {
+	for _, want := range []string{`"asset":"Moonlight"`, `"url":"` + srv.URL + `/api/images/abc123/download"`} {
 		if !strings.Contains(entry.Assets, want) {
 			t.Fatalf("assets = %q, want %q", entry.Assets, want)
 		}

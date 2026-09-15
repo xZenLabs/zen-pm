@@ -571,13 +571,18 @@ func parseReaderBackdropCatalog(repoName, repoURL string, priority int, images [
 			continue
 		}
 		packageID := "readerbackdrop-" + image.ID
+		name := strings.TrimSpace(image.Title)
+		assetName := strings.NewReplacer("/", "-", "\\", "-").Replace(name)
+		if assetName == "" || assetName == "." || assetName == ".." || strings.ContainsRune(assetName, 0) {
+			assetName = packageID
+		}
 		downloadURL := joinURL(repoURL, "api/images/"+url.PathEscape(image.ID)+"/download")
 		size := ""
 		if image.FileSize > 0 {
 			size = strconv.FormatInt(image.FileSize, 10)
 		}
 		assetsJSON, _ := json.Marshal([]map[string]string{{
-			"arch": "any", "asset": packageID, "url": downloadURL, "size": size,
+			"arch": "any", "asset": assetName, "url": downloadURL, "size": size,
 		}})
 		tags := make([]string, 0, len(image.Tags)+1)
 		category := "screensavers"
@@ -602,7 +607,7 @@ func parseReaderBackdropCatalog(repoName, repoURL string, priority int, images [
 		}
 		entries = append(entries, &CatalogEntry{
 			Repo: repoName, Priority: priority,
-			ID: packageID, Name: strings.TrimSpace(image.Title),
+			ID: packageID, Name: name,
 			Description: strings.TrimSpace(image.Description), Author: strings.TrimSpace(image.User.Name),
 			Platforms: []string{"koreader"}, Category: category, Tags: tags,
 			IconURL: iconURL, Images: []string{strings.TrimSpace(image.ImageURL)},
