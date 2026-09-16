@@ -532,16 +532,17 @@ func fetchReaderBackdropPage(repoName, repoURL string, priority int, cacheDir st
 	if page < 1 {
 		return nil, 0, 0, fmt.Errorf("invalid ReaderBackdrop page %d", page)
 	}
-	apiURL := joinURL(repoURL, "api/images?sortBy=downloads&limit=24&page="+strconv.Itoa(page))
+	query := "sortBy=downloads&limit=24&page=" + strconv.Itoa(page)
 	if search = strings.TrimSpace(search); search != "" {
-		apiURL += "&search=" + url.QueryEscape(search)
+		query += "&search=" + url.QueryEscape(search)
 	}
 	if tag = strings.TrimSpace(tag); tag != "" {
-		apiURL += "&tag=" + url.QueryEscape(tag)
+		query += "&tag=" + url.QueryEscape(tag)
 	}
-	data, err := fetchBytes(apiURL)
+	apiURL := joinURL(repoURL, "api/images")
+	data, err := fetchBytesWithTimeout(apiURL, repositoryFetchTimeout, query)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("fetch %s: %w", apiURL, err)
+		return nil, 0, 0, fmt.Errorf("fetch %s?%s: %w", apiURL, query, err)
 	}
 	_ = os.WriteFile(filepath.Join(cacheDir, "manifest-"+repoName+".json"), data, 0644)
 
@@ -942,7 +943,7 @@ func fetchBytes(url string) ([]byte, error) {
 	return fetchBytesWithTimeout(url, repositoryFetchTimeout)
 }
 
-func fetchBytesWithTimeout(rawURL string, timeout time.Duration) ([]byte, error) {
+func fetchBytesWithTimeout(rawURL string, timeout time.Duration, query ...string) ([]byte, error) {
 	if strings.HasPrefix(rawURL, "file://") {
 		return os.ReadFile(strings.TrimPrefix(rawURL, "file://"))
 	}
@@ -962,7 +963,7 @@ func fetchBytesWithTimeout(rawURL string, timeout time.Duration) ([]byte, error)
 			return ValidatePublicRepoURL(request.URL.String())
 		}
 	}
-	return fetchHTTPBytes(rawURL, client, packageFetchAttempts)
+	return fetchHTTPBytes(rawURL, client, packageFetchAttempts, query...)
 }
 
 var (
@@ -1033,10 +1034,10 @@ func publicRepoIP(ip net.IP) bool {
 	return ip.IsGlobalUnicast() && !ip.IsPrivate()
 }
 
-func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, error) {
+func fetchHTTPBytes(url string, client *http.Client, attempts int, query ...string) ([]byte, error) {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		data, retry, err := fetchHTTPBytesOnce(url, client)
+		data, retry, err := fetchHTTPBytesOnce(url, client, query...)
 		if err == nil {
 			return data, nil
 		}
@@ -1050,15 +1051,16 @@ func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, erro
 	return nil, lastErr
 }
 
-func fetchHTTPBytesOnce(url string, client *http.Client) ([]byte, bool, error) {
-	// codeql[go/request-forgery]: ReaderBackdrop filters are query-escaped; browser repo URLs are validated and public fetches pin DNS and check redirects.
+func fetchHTTPBytesOnce(url string, client *http.Client, query ...string) ([]byte, bool, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, false, err
 	}
+	if len(query) != 0 {
+		req.URL.RawQuery = query[0]
+	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
-	// codeql[go/request-forgery]: Public URLs are validated before fetch; the transport pins public IPs and rechecks redirects. Local repos are explicit on-device config.
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, retryableFetchError(err), err
