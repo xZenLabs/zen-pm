@@ -54,8 +54,13 @@ function Header.page_title(view)
         return I18n.dynamic_or(category.label, _("Category")) .. " ("
             .. filtered_count(state.visible_packages, state.category_packages, state.filters.category) .. ")"
     elseif page == "installed" then
+        if state.installed_folder then
+            local category = Models.category_for_id(state.installed_folder)
+            return Models.category_label(category) .. " (" .. tostring(#(state.visible_packages or {})) .. ")"
+        end
         return _("Installed") .. " ("
-            .. filtered_count(state.visible_packages, state.installed_packages, state.filters.installed) .. ")"
+            .. (state.filters.installed ~= "" and filtered_count(state.visible_packages, state.installed_packages, state.filters.installed)
+                or tostring(#(state.installed_packages or {}))) .. ")"
     elseif page == "sources" then
         return _("Sources") .. " (" .. tostring(#(state.repos or {})) .. ")"
     elseif page == "source_details" then
@@ -207,7 +212,9 @@ local function draw_title_button(view, bb, x, y, label, callback, hit_id, enable
 end
 
 local function page_back_callback(view, page)
-    if page == "category_details" then
+    if page == "installed" and view.app.state.installed_folder then
+        return function() view.app:close_installed_folder() end
+    elseif page == "category_details" then
         return function() view.app:show_categories() end
     elseif page == "source_details" then
         return function() view.app:show_sources() end
@@ -302,7 +309,9 @@ local function draw_title_bar(view, bb, x, y, w)
         P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
     else
         local title_size = P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
-        if page == "category_details" or page == "package_details" or page == "queue" or page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
+        if (page == "installed" and back_callback) or page == "category_details" or page == "package_details"
+                or page == "queue" or page == "advanced_settings" or page == "updates_settings"
+                or page == "about_settings" then
             P.hit(view, title_x, y, title_size.w, h, back_callback, "back-title")
         end
     end
@@ -337,14 +346,14 @@ function Header.draw(view, bb, x, y, w)
     local sort_kind = ({
         search = "search",
         category_details = "category",
-        installed = "installed",
+        installed = view.app.state.installed_folder and "installed_images" or "installed",
         sources = "sources",
         source_details = "source",
     })[page]
     if sort_kind then
         control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
     end
-    if page == "installed" then
+    if page == "installed" and not view.app.state.installed_folder then
         control_x = control_x + Header.draw_installed_category_button(view, bb, control_x, button_y) + gap
     end
     local right_x = x + w - pad

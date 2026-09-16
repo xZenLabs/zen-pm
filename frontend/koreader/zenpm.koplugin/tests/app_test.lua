@@ -83,7 +83,11 @@ package.preload["zenpm_constants"] = function()
         REPO_READERBACKDROP_NAME = "ReaderBackdrop",
         REPO_READERBACKDROP_URL = "https://www.readerbackdrop.com",
         KINDLE_SCRIPTLETS_CATEGORY = { id = "kindle-scriptlets" },
-        CATEGORIES = { { id = "fonts", label = "Fonts" } },
+        CATEGORIES = {
+            { id = "fonts", label = "Fonts" },
+            { id = "screensavers", label = "Screensavers", icon = "screensaver.svg" },
+            { id = "wallpapers", label = "Wallpapers", icon = "wallpaper.svg" },
+        },
     }
 end
 package.preload["daemon"] = function()
@@ -144,6 +148,7 @@ package.preload["models"] = function()
         filter_packages = models.filter_packages,
         filter_categories = models.filter_categories,
         installed_packages = models.installed_packages,
+        visible_installed_packages = models.visible_installed_packages,
         filter_packages_by_category = models.filter_packages_by_category,
         has_release_notes = function(pkg, allow_prerelease)
             if allow_prerelease and pkg.prerelease_notes_url then return true end
@@ -172,6 +177,8 @@ package.preload["models"] = function()
         package_assets = function(pkg) return pkg and pkg.assets or {} end,
         category_for_id = function(id)
             if id == "fonts" then return { id = "fonts", label = "Fonts" } end
+            if id == "screensavers" then return { id = id, label = "Screensavers" } end
+            if id == "wallpapers" then return { id = id, label = "Wallpapers" } end
             return nil
         end,
         category_cards = function()
@@ -1018,6 +1025,7 @@ do
     local list_app = App:new({})
     assert(list_app.state.sorts.search == "published_at_desc")
     assert(list_app.state.sorts.installed == "name_asc")
+    assert(list_app.state.sorts.installed_images == "installed_at_desc")
     settings.sorts = { search = "stars", installed = "update_available" }
     settings.discover_sort_migrated = nil
     local saved_app = App:new({})
@@ -1025,6 +1033,7 @@ do
     assert(settings.sorts.search == "published_at_desc")
     assert(settings.discover_sort_migrated == true)
     assert(saved_app.state.sorts.installed == "name_asc")
+    assert(saved_app.state.sorts.installed_images == "installed_at_desc")
     settings.sorts = nil
 
     local packages = {
@@ -1032,8 +1041,9 @@ do
         { id = "zulu", name = "Zulu", installed = true, update_available = true, stars = 2 },
         { id = "beta", name = "Beta", installed = true, category = "fonts", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 1 },
         { id = "gamma", name = "Gamma", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 24 * 60 * 60), stars = 200 },
-        { id = "wallpaper", name = "Wallpaper", category = "wallpapers" },
-        { id = "screensaver", name = "Screensaver", category = "screensavers" },
+        { id = "wallpaper", name = "Wallpaper", category = "wallpapers", installed = true },
+        { id = "screensaver", name = "Screensaver", category = "screensavers", installed = true, installed_at = "2026-08-01T10:00:00Z" },
+        { id = "screensaver-z", name = "ZZ Screensaver", category = "screensavers", installed = true, installed_at = "2026-08-02T10:00:00Z" },
     }
     local refreshes = 0
     list_app.ensure_backend = function() return true end
@@ -1043,7 +1053,7 @@ do
     list_app.refresh = function() refreshes = refreshes + 1 end
     list_app:navigate("search")
     assert(list_app.state.page == "search" and list_app.state.active_tab == "search")
-    assert(#list_app.state.packages == 6 and #list_app.state.discover_packages == 4)
+    assert(#list_app.state.packages == 7 and #list_app.state.discover_packages == 4)
     assert(#list_app.state.visible_packages == 4 and refreshes == 1)
     assert(list_app.state.visible_packages[1].id == "beta")
     assert(list_app.state.visible_packages[2].id == "alpha")
@@ -1062,6 +1072,37 @@ do
     list_app:navigate("installed")
     assert(list_app.state.page == "installed" and list_app.state.active_tab == "installed")
     assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "zulu")
+    assert(#list_app.state.installed_packages == 5)
+    list_app:show_installed("screensavers")
+    assert(list_app:scroll_key() == "installed:screensavers")
+    assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "screensaver-z")
+    list_app:reload_current_page()
+    assert(list_app.state.installed_folder == "screensavers")
+    list_app:prompt_sort("installed_images")
+    assert(#modal_rows == 4 and modal_rows[3].checked_func())
+    modal_rows[1].callback()
+    assert(list_app.state.visible_packages[1].id == "screensaver")
+    list_app:prompt_sort("installed_images")
+    modal_rows[2].callback()
+    assert(list_app.state.installed_folder == "screensavers" and list_app.state.visible_packages[1].id == "screensaver-z")
+    assert(list_app.state.sorts.installed == "name_asc" and list_app.state.sorts.installed_images == "name_desc")
+    assert(App:new({}).state.sorts.installed_images == "name_desc")
+    list_app:refresh_queue_package_state()
+    assert(list_app.state.visible_packages[1].id == "screensaver-z")
+    list_app:show_package_details("screensaver", "installed")
+    list_app:go_back_from_details()
+    assert(list_app.state.installed_folder == "screensavers" and list_app.state.page == "installed")
+    list_app:go_back()
+    assert(list_app.state.installed_folder == nil and #list_app.state.visible_packages == 2)
+    list_app:set_sort("installed", "name_desc")
+    assert(list_app.state.sorts.installed_images == "name_desc")
+    list_app:set_sort("installed", "name_asc")
+    list_app:show_installed("wallpapers")
+    assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "wallpaper")
+    list_app:prompt_sort("installed_images")
+    assert(modal_rows[2].checked_func())
+    list_app:navigate("installed")
+    assert(list_app.state.installed_folder == nil and #list_app.state.visible_packages == 2)
     list_app:prompt_sort("installed")
     assert(#modal_rows == 4 and modal_rows[1].text == "Name (A-Z)" and modal_rows[1].checked_func())
     for _, category in ipairs({ "screensavers", "wallpapers" }) do

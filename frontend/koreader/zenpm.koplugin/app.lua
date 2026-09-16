@@ -171,6 +171,7 @@ function App:new(plugin)
             sorts = {
                 search = saved_sorts.search or "published_at_desc",
                 installed = saved_sorts.installed ~= "update_available" and saved_sorts.installed or "name_asc",
+                installed_images = saved_sorts.installed_images or "installed_at_desc",
                 sources = saved_sorts.sources or "name_asc",
                 category = saved_sorts.category or "stars",
                 source = saved_sorts.source or "stars",
@@ -181,6 +182,7 @@ function App:new(plugin)
             visible_packages = {},
             featured_packages = {},
             installed_packages = {},
+            installed_folder = nil,
             categories = {},
             visible_categories = {},
             category_packages = {},
@@ -1499,9 +1501,10 @@ function App:refresh_queue_package_state()
     self.state.packages = packages
     local installed = Models.installed_packages(packages)
     self.state.installed_packages = installed
-    local visible = Models.filter_packages_by_category(
-        installed, self.state.filters.installed, self.state.show_kindle_scriptlets)
-    self.state.visible_packages = self:sorted_packages("installed", visible)
+    local visible = Models.visible_installed_packages(
+        installed, self.state.filters.installed, self.state.installed_folder, self.state.show_kindle_scriptlets)
+    self.state.visible_packages = self:sorted_packages(
+        self.state.installed_folder and "installed_images" or "installed", visible)
 end
 
 function App:finish_queue_batch(batch)
@@ -2255,6 +2258,9 @@ function App:repo_icon_file(repo)
 end
 
 function App:scroll_key()
+    if self.state.page == "installed" and self.state.installed_folder then
+        return "installed:" .. self.state.installed_folder
+    end
     if self.state.page == "source_details" and self.state.current_repo then
         return "source:" .. tostring(self.state.current_repo.name)
     end
@@ -2280,6 +2286,7 @@ function App:navigate(tab_id, full_refresh)
     elseif tab_id == "sources" then
         self:show_sources()
     elseif tab_id == "installed" then
+        self.state.installed_folder = nil
         self:show_installed()
     elseif tab_id == "debug" then
         self:show_debug()
@@ -2292,6 +2299,8 @@ end
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
         self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset)
+    elseif self.state.page == "installed" and self.state.installed_folder then
+        self:show_installed()
     elseif self.state.page == "category_details" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
@@ -2720,7 +2729,8 @@ function App:show_category_details(category_id)
     self:refresh()
 end
 
-function App:show_installed()
+function App:show_installed(folder_id)
+    if folder_id then self.state.installed_folder = folder_id end
     self.state.page = "installed"
     self.state.active_tab = "installed"
     if not self:ensure_backend() then return end
@@ -2733,9 +2743,10 @@ function App:show_installed()
     local installed = Models.installed_packages(packages)
     self.state.packages = packages
     self.state.installed_packages = installed
-    local visible = Models.filter_packages_by_category(
-        installed, self.state.filters.installed, self.state.show_kindle_scriptlets)
-    self.state.visible_packages = self:sorted_packages("installed", visible)
+    local visible = Models.visible_installed_packages(
+        installed, self.state.filters.installed, self.state.installed_folder, self.state.show_kindle_scriptlets)
+    self.state.visible_packages = self:sorted_packages(
+        self.state.installed_folder and "installed_images" or "installed", visible)
     self:clear_status()
     self:refresh()
 end
@@ -2807,6 +2818,7 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
             tab = self.state.active_tab,
             repo = self.state.current_repo,
             category = self.state.current_category,
+            installed_folder = self.state.installed_folder,
         }
     end
     self.state.page = "package_details"
@@ -2940,6 +2952,9 @@ function App:go_back_from_details()
             self.state.current_category = origin.category
             self:show_category_details(origin.category.id)
             return
+        elseif origin.page == "installed" and origin.installed_folder then
+            self:show_installed(origin.installed_folder)
+            return
         end
     end
     self:navigate(self.state.details_from or "search")
@@ -2947,7 +2962,9 @@ end
 
 function App:go_back()
     local page = self.state.page
-    if page == "category_details" then
+    if page == "installed" and self.state.installed_folder then
+        self:close_installed_folder()
+    elseif page == "category_details" then
         self:show_categories()
     elseif page == "source_details" then
         self:show_sources()
@@ -2962,6 +2979,11 @@ function App:go_back()
     else
         self:quit()
     end
+end
+
+function App:close_installed_folder()
+    self.state.installed_folder = nil
+    self:show_installed()
 end
 
 function App:show_debug()
@@ -2986,7 +3008,7 @@ function App:show_debug()
 end
 
 function App:sorted_packages(kind, packages)
-    return Models.sort_packages(packages, self.state.sorts[kind], kind)
+    return Models.sort_packages(packages, self.state.sorts[kind], kind == "installed_images" and "installed" or kind)
 end
 
 function App:sorted_repos(repos)
@@ -3026,7 +3048,7 @@ function App:set_sort(kind, value)
     self.state.sorts[kind] = value or (kind == "search" and "published_at_desc" or "stars")
     App.save_setting("sorts", self.state.sorts)
     self:reset_scroll(self:scroll_key())
-    if kind == "installed" then
+    if kind == "installed" or kind == "installed_images" then
         self:show_installed()
     elseif kind == "sources" then
         self:show_sources()
@@ -3042,6 +3064,7 @@ end
 function App:set_installed_category_filter(category_id)
     local category = Models.category_for_id(category_id, self.state.show_kindle_scriptlets)
     self.state.filters.installed = category and category.id or ""
+    self.state.installed_folder = nil
     self:reset_scroll("installed")
     self:show_installed()
 end
@@ -3073,7 +3096,7 @@ function App:prompt_sort(kind)
     local function selected(key)
         return function() return current == key end
     end
-    if kind == "installed" or kind == "sources" then
+    if kind == "installed" or kind == "installed_images" or kind == "sources" then
         local rows = {
             {
                 icon = "sort_asc",
@@ -3088,7 +3111,7 @@ function App:prompt_sort(kind)
                 callback = function() self:set_sort(kind, "name_desc") end,
             },
         }
-        if kind == "installed" then
+        if kind == "installed" or kind == "installed_images" then
             table.insert(rows, {
                 icon = "date",
                 text = _("Installed date (newest first)"),

@@ -418,6 +418,16 @@ function Models.installed_packages(packages)
     return out
 end
 
+function Models.visible_installed_packages(installed, category_id, folder_id, show_kindle_scriptlets)
+    local visible = Models.filter_packages_by_category(installed, folder_id or category_id, show_kindle_scriptlets)
+    if folder_id or (category_id and category_id ~= "") then return visible end
+    local out = {}
+    for _, pkg in ipairs(visible) do
+        if not Models.is_image_asset_package(pkg) then table.insert(out, pkg) end
+    end
+    return out
+end
+
 function Models.select_featured(packages)
     local featured = {}
     for index, pkg in ipairs(packages or {}) do

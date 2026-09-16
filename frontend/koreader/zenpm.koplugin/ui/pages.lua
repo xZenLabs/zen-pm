@@ -181,10 +181,25 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     local card_h = package_card_height(list_h, m.card_gap)
-    if #(visible or {}) == 0 then
+    local rows = readerbackdrop_rows(view, visible)
+    if kind == "installed" and not view.app.state.installed_folder and (not query or query == "") then
+        local installed_rows = {}
+        for _, pkg in ipairs(rows) do table.insert(installed_rows, pkg) end
+        for _, id in ipairs({ "screensavers", "wallpapers" }) do
+            local category = Models.category_for_id(id)
+            table.insert(installed_rows, {
+                installed_folder = category,
+                count = #Models.filter_packages_by_category(total, id),
+            })
+        end
+        rows = installed_rows
+    end
+    if #rows == 0 then
         local msg = _("No packages found. Try Refresh.")
         if kind == "installed" then
-            msg = query and query ~= "" and _("No installed packages match the filter.") or _("No packages installed. Browse Search to find packages.")
+            msg = view.app.state.installed_folder and _("No packages found for this category.")
+                or query and query ~= "" and _("No installed packages match the filter.")
+                or _("No packages installed. Browse Search to find packages.")
         elseif kind == "category" then
             msg = query and query ~= "" and _("No packages match the filter.") or _("No packages found for this category.")
         elseif query and query ~= "" then
@@ -194,9 +209,32 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    local rows = readerbackdrop_rows(view, visible)
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.installed_folder then
+            local category = pkg.installed_folder
+            local callback = function() view.app:show_installed(category.id) end
+            Cards.compact(view, bb, x + pad, row_y, w - pad * 2 - gutter, {
+                height = card_h,
+                icon = Images.asset(category.icon),
+                title = Models.category_label(category),
+                subtitle = tostring(pkg.count) .. " " .. _("packages"),
+                right_icon = Images.asset("chevron.right.svg"),
+                callback = callback,
+                hit_id = "installed-folder:" .. category.id,
+                focus = {
+                    id = "installed-folder:" .. category.id,
+                    focus_type = "package",
+                    focus_column = "main",
+                    focus_content = true,
+                    focus_primary = true,
+                    list_group = kind,
+                    list_index = index,
+                    list_count = count,
+                },
+            })
+            return
+        end
         if pkg.readerbackdrop_load_more then
             draw_readerbackdrop_load_more(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, card_h, kind, index, count)
             return

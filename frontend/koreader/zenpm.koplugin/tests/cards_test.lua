@@ -28,6 +28,18 @@ package.preload["models"] = function()
         is_image_asset_package = function(pkg)
             return pkg.category == "wallpapers" or pkg.category == "screensavers"
         end,
+        category_for_id = function(id)
+            return { id = id, label = id == "wallpapers" and "Wallpapers" or "Screensavers",
+                icon = id == "wallpapers" and "wallpaper.svg" or "screensaver.svg" }
+        end,
+        category_label = function(category) return category.label end,
+        filter_packages_by_category = function(packages, id)
+            local out = {}
+            for _, pkg in ipairs(packages or {}) do
+                if pkg.category == id then table.insert(out, pkg) end
+            end
+            return out
+        end,
         repo_display_name = function(value) return value end,
     }
 end
@@ -374,23 +386,42 @@ hit_callbacks["readerbackdrop-load-more"]()
 assert(load_more_calls == 1)
 
 painted_text = {}
-Pages.packages_page({
+local opened_folder
+local installed_view = {
     app = {
-        state = { page = "installed", active_tab = "installed", queue = {} },
+        state = { page = "installed", active_tab = "installed", queue = {}, filters = { installed = "" } },
         package_disabled = function() return false end,
         package_icon_file = function() return "image.svg", true end,
         show_package_details = function() end,
+        show_installed = function(_, id) opened_folder = id end,
     },
-}, {}, 0, 0, 300, 300, 0, "Installed", "installed", {
+}
+local installed_images = {
     { id = "clouds", name = "Clouds", repo = "ReaderBackdrop", category = "wallpapers" },
     { id = "books", name = "Books", repo = "ReaderBackdrop", category = "screensavers" },
     { id = "reader", name = "Reader", repo = "ZenLabs", category = "applications" },
-}, {}, "")
+}
+Pages.packages_page(installed_view, {}, 0, 0, 300, 300, 0, "Installed", "installed",
+    { installed_images[3] }, installed_images, "")
+assert(painted_text[1] == "Reader")
+assert(painted_text[#painted_text - 3] == "Screensavers")
+assert(painted_text[#painted_text - 1] == "Wallpapers")
+assert(table.concat(painted_text, "\n"):find("ZenLabs", 1, true))
+assert(painted_images["screensaver.svg"] and painted_images["wallpaper.svg"])
+assert(hit_callbacks["installed-folder:screensavers"] and hit_callbacks["installed-folder:wallpapers"])
+assert(not hit_callbacks["package:clouds:"] and not hit_callbacks["package:books:"])
+hit_callbacks["installed-folder:screensavers"]()
+assert(opened_folder == "screensavers")
+hit_callbacks["installed-folder:wallpapers"]()
+assert(opened_folder == "wallpapers")
+installed_view.app.state.installed_folder = "wallpapers"
+painted_text = {}
+Pages.packages_page(installed_view, {}, 0, 0, 300, 300, 0, "Wallpapers", "installed",
+    { installed_images[1] }, installed_images, "")
 local installed_image_text = table.concat(painted_text, "\n")
 assert(installed_image_text:find("Wallpaper", 1, true))
-assert(installed_image_text:find("Screensaver", 1, true))
+assert(not installed_image_text:find("Screensaver", 1, true))
 assert(not installed_image_text:find("ReaderBackdrop", 1, true))
-assert(installed_image_text:find("ZenLabs", 1, true))
 
 local screensaver_details_view = {
     app = {
@@ -423,6 +454,10 @@ assert(#rendered_detail_blocks == 0)
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local Header = require("ui/header")
 assert(Header.page_title({ app = { state = {
+    page = "installed", installed_folder = "wallpapers",
+    visible_packages = { installed_images[1] },
+} } }) == "Wallpapers (1)")
+assert(Header.page_title({ app = { state = {
     page = "category_details",
     current_category = { id = "screensavers", label = "Screensavers" },
     readerbackdrop = { enabled = true, total = 2083 },
@@ -453,6 +488,25 @@ Header.draw({ app = {
 assert(type(hit_callbacks["back-title"]) == "function")
 hit_callbacks["back-title"]()
 assert(queue_closed)
+
+local folder_closed = 0
+local folder_sort
+local folder_view = { app = {
+    state = { page = "installed", installed_folder = "wallpapers", filters = { installed = "" },
+        visible_packages = { installed_images[1] } },
+    installed_update_count = function() return 0 end,
+    prompt_sort = function(_, kind) folder_sort = kind end,
+    close_installed_folder = function() folder_closed = folder_closed + 1 end,
+} }
+Header.draw(folder_view, {}, 0, 0, 300)
+assert(hit_callbacks.back and hit_callbacks["back-title"])
+assert(hit_callbacks["sort:installed_images"])
+hit_callbacks["sort:installed_images"]()
+assert(folder_sort == "installed_images")
+assert(not hit_callbacks["filter-category:installed"])
+hit_callbacks.back()
+hit_callbacks["back-title"]()
+assert(folder_closed == 2)
 
 painted_text = {}
 Pages.queue({
