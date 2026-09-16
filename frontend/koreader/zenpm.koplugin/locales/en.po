@@ -291,6 +291,9 @@ msgstr "Could not verify the update download."
 msgid "Debug"
 msgstr "Debug"
 
+msgid "Debug logging must be enabled to submit bug reports."
+msgstr "Debug logging must be enabled to submit bug reports."
+
 msgid "Descending"
 msgstr "Descending"
 
@@ -353,6 +356,9 @@ msgstr "enable"
 
 msgid "Enable"
 msgstr "Enable"
+
+msgid "Enabling debug logging requires a restart. Please reproduce the issue, then submit the report."
+msgstr "Enabling debug logging requires a restart. Please reproduce the issue, then submit the report."
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Enter your GitHub username to be tagged in the issue"
