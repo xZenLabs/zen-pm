@@ -948,6 +948,9 @@ func fetchBytesWithTimeout(rawURL string, timeout time.Duration) ([]byte, error)
 	}
 	client := cabundle.Client(timeout)
 	if target, err := url.Parse(rawURL); err == nil && publicRepoHost(target.Hostname()) {
+		if err := ValidatePublicRepoURL(rawURL); err != nil {
+			return nil, err
+		}
 		client.Transport = publicFetchTransport()
 		client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
@@ -1048,12 +1051,14 @@ func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, erro
 }
 
 func fetchHTTPBytesOnce(url string, client *http.Client) ([]byte, bool, error) {
+	// codeql[go/request-forgery]: ReaderBackdrop filters are query-escaped; browser repo URLs are validated and public fetches pin DNS and check redirects.
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, false, err
 	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
+	// codeql[go/request-forgery]: Public URLs are validated before fetch; the transport pins public IPs and rechecks redirects. Local repos are explicit on-device config.
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, retryableFetchError(err), err

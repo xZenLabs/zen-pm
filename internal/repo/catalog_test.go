@@ -83,6 +83,13 @@ func TestPublicRepoURLRejectsLocalTargets(t *testing.T) {
 	}
 }
 
+func TestPublicFetchRejectsCredentialedURL(t *testing.T) {
+	_, err := fetchBytesWithTimeout("https://user:pass@example.invalid/manifest.json", time.Second)
+	if err == nil || !strings.Contains(err.Error(), "public HTTP(S)") {
+		t.Fatalf("credentialed public fetch error = %v, want URL rejection", err)
+	}
+}
+
 func TestAddRejectsEscapingRepoName(t *testing.T) {
 	t.Setenv("ZENPM_HOME", t.TempDir())
 	st, err := state.Init("host")
@@ -446,11 +453,11 @@ func TestLoadReaderBackdropPageAddsSearchResults(t *testing.T) {
 	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "existing", Name: "Existing", Repo: "ZenLabs"}}); err != nil {
 		t.Fatal(err)
 	}
-	totalPages, total, err := New(st).LoadReaderBackdropPage(2, "moon library", "black and white")
+	totalPages, total, err := New(st).LoadReaderBackdropPage(2, "moon library#@127.0.0.1/?x=1&", "black and white#@127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if requested != "/api/images?sortBy=downloads&limit=24&page=2&search=moon+library&tag=black+and+white" {
+	if requested != "/api/images?sortBy=downloads&limit=24&page=2&search=moon+library%23%40127.0.0.1%2F%3Fx%3D1%26&tag=black+and+white%23%40127.0.0.1" {
 		t.Fatalf("requested %q", requested)
 	}
 	if totalPages != 3 {
