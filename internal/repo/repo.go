@@ -37,6 +37,9 @@ func (m *Manager) List() ([]state.RepoEntry, error) {
 }
 
 func (m *Manager) Add(name, url string, priority int, trust string) error {
+	if !filepath.IsLocal(name) || filepath.Base(name) != name {
+		return fmt.Errorf("invalid repository name %q", name)
+	}
 	if IsKindleForgeRepo(name, url) && !m.st.AllowsKindleWAF() {
 		return errors.New("KindleForge is only available on compatible Kindle devices")
 	}

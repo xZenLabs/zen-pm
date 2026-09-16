@@ -977,6 +977,65 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 	}
 }
 
+func TestKOReaderPatchRejectsEscapingPackageID(t *testing.T) {
+	root := t.TempDir()
+	for _, id := range []string{"..", "../elsewhere", "sub/patch"} {
+		entry := &repo.CatalogEntry{ID: id}
+		if _, err := (&Manager{}).installKOReaderPatch(entry, root, "patch.lua", []byte("return {}")); err == nil {
+			t.Errorf("install accepted patch ID %q", id)
+		}
+		if err := removeKOReaderPatch(root, id, "patch.lua", ""); err == nil {
+			t.Errorf("uninstall accepted patch ID %q", id)
+		}
+	}
+}
+
+func TestKOReaderRemovalDoesNotFollowTrackedSymlinkParents(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	patches, fonts := filepath.Join(root, "patches"), filepath.Join(root, "fonts")
+	for _, dir := range []string{patches, fonts, filepath.Join(outside, "target"), filepath.Join(outside, "victim")} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(outside, "victim", "keep"), []byte("safe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "target"), filepath.Join(fonts, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "victim"), filepath.Join(patches, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeKOReaderPatch(root, "patch", "patch.zip", filepath.Join(patches, "link", "keep")); err == nil {
+		t.Fatal("nested patch path was accepted")
+	}
+	if err := removeKOReaderFont(root, "font", filepath.Join(fonts, "link")+"/../victim"); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(outside, "victim", "keep")); err != nil || string(data) != "safe" {
+		t.Fatalf("tracked path escaped KOReader root: %q, %v", data, err)
+	}
+}
+
+func TestKOReaderZIPRejectsUnsafeNamesAndAllowsDirectories(t *testing.T) {
+	for _, name := range []string{"../outside", "/absolute", "folder/../outside"} {
+		if err := extractZip(zipContents(t, map[string]string{name: "bad"}), t.TempDir()); err == nil {
+			t.Errorf("ZIP entry %q was accepted", name)
+		}
+	}
+	root := t.TempDir()
+	if err := extractZip(zipContents(t, map[string]string{"./folder/": "", "./folder/file": "safe"}), root); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "folder", "file")); err != nil || string(data) != "safe" {
+		t.Fatalf("extracted file = %q, %v", data, err)
+	}
+}
+
 func TestNativeKOReaderInstallerClassifiesPackagesWithoutScripts(t *testing.T) {
 	manager := &Manager{plat: "host"}
 	patch := &repo.CatalogEntry{

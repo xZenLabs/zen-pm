@@ -90,6 +90,9 @@ func update(parentPID int) error {
 	}
 	defer os.RemoveAll(tempDir)
 
+	if !filepath.IsLocal(asset.Name) || filepath.Base(asset.Name) != asset.Name {
+		return fmt.Errorf("invalid update asset name %q", asset.Name)
+	}
 	archivePath := filepath.Join(tempDir, asset.Name)
 	if err := downloadAsset(asset, archivePath); err != nil {
 		showAlert("Update Failed!", err.Error())
@@ -213,13 +216,17 @@ func extractZip(archive, destination string) error {
 	}
 	defer reader.Close()
 	for _, entry := range reader.File {
-		target := filepath.Join(destination, entry.Name)
-		rel, err := filepath.Rel(destination, target)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("unsafe archive path: %s", entry.Name)
-		}
+		entryName := strings.TrimPrefix(entry.Name, "./")
 		if entry.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, entry.Mode()); err != nil {
+			entryName = strings.TrimSuffix(entryName, "/")
+		}
+		name, err := filepath.Localize(entryName)
+		if err != nil {
+			return fmt.Errorf("unsafe archive path %q: %w", entry.Name, err)
+		}
+		target := filepath.Join(destination, name)
+		if entry.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, entry.Mode().Perm()|0700); err != nil {
 				return err
 			}
 			continue
@@ -230,11 +237,15 @@ func extractZip(archive, destination string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 			return err
 		}
+		mode := entry.Mode().Perm()
+		if mode == 0 {
+			mode = 0644
+		}
 		source, err := entry.Open()
 		if err != nil {
 			return err
 		}
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, entry.Mode())
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 		if err == nil {
 			_, err = io.Copy(out, source)
 			closeErr := out.Close()

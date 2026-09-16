@@ -35,6 +35,38 @@ func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	}
 }
 
+func TestExtractZipAllowsDirectoryEntries(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "update.zip")
+	file, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	if _, err := writer.Create("./ZenPM/"); err != nil {
+		t.Fatal(err)
+	}
+	entry, err := writer.Create("./ZenPM/VERSION")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("1.2.3")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	destination := t.TempDir()
+	if err := extractZip(archive, destination); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(destination, "ZenPM", "VERSION")); err != nil || string(data) != "1.2.3" {
+		t.Fatalf("extracted version = %q, %v", data, err)
+	}
+}
+
 func TestReadVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "VERSION")
 	if err := os.WriteFile(path, []byte("v1.2.3\n"), 0644); err != nil {

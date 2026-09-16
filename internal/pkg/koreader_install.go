@@ -303,6 +303,9 @@ func pluginArchiveSource(sourceDir string) string {
 }
 
 func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, error) {
+	if !validKOReaderResourceID(entry.ID) {
+		return "", fmt.Errorf("invalid KOReader patch package %q", entry.ID)
+	}
 	patchesDir := koreaderPatchDir(root)
 	if err := os.MkdirAll(patchesDir, 0755); err != nil {
 		return "", fmt.Errorf("create KOReader patches directory: %w", err)
@@ -333,7 +336,7 @@ func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName 
 	if !strings.HasSuffix(strings.ToLower(assetName), ".zip") {
 		return "", fmt.Errorf("font asset %q must be a ZIP archive", assetName)
 	}
-	if filepath.Base(entry.ID) != entry.ID {
+	if !validKOReaderResourceID(entry.ID) {
 		return "", fmt.Errorf("invalid font package %q", entry.ID)
 	}
 	fontsDir := filepath.Join(root, "fonts")
@@ -509,7 +512,7 @@ func (m *Manager) installedPatchPath(id, asset string) (string, error) {
 }
 
 func removeKOReaderFont(root, id, fontDir string) error {
-	if filepath.Base(id) != id {
+	if !validKOReaderResourceID(id) {
 		return fmt.Errorf("invalid KOReader font package %q", id)
 	}
 	if fontDir == "" {
@@ -521,7 +524,8 @@ func removeKOReaderFont(root, id, fontDir string) error {
 	}
 	if fontDir != "" {
 		fontsDir := filepath.Join(root, "fonts")
-		if filepath.Dir(filepath.Clean(fontDir)) != fontsDir || !pathWithinRoot(fontsDir, fontDir) {
+		fontDir = filepath.Clean(fontDir)
+		if filepath.Dir(fontDir) != fontsDir || !pathWithinRoot(fontsDir, fontDir) {
 			return fmt.Errorf("invalid tracked KOReader font directory %q", fontDir)
 		}
 		if err := os.RemoveAll(fontDir); err != nil {
@@ -609,8 +613,11 @@ func removeKOReaderPluginPath(path string) error {
 }
 
 func removeKOReaderPatch(root, id, asset, patchPath string) error {
+	if !validKOReaderResourceID(id) {
+		return fmt.Errorf("invalid KOReader patch package %q", id)
+	}
 	asset = filepath.Base(strings.TrimSpace(asset))
-	if asset == "" {
+	if !filepath.IsLocal(asset) || filepath.Base(asset) != asset {
 		return fmt.Errorf("KOReader patch asset is required")
 	}
 	if patchPath == "" {
@@ -622,7 +629,8 @@ func removeKOReaderPatch(root, id, asset, patchPath string) error {
 	}
 	if patchPath != "" {
 		patchesDir := koreaderPatchDir(root)
-		if filepath.Clean(patchPath) == filepath.Clean(patchesDir) || !pathWithinRoot(patchesDir, patchPath) {
+		patchPath = filepath.Clean(patchPath)
+		if filepath.Dir(patchPath) != filepath.Clean(patchesDir) || !pathWithinRoot(patchesDir, patchPath) {
 			return fmt.Errorf("invalid tracked KOReader patch path %q", patchPath)
 		}
 		if err := os.RemoveAll(patchPath); err != nil {
@@ -728,7 +736,7 @@ func (m *Manager) migrateLegacyKOReaderTracking() error {
 		return err
 	}
 	for _, entry := range installed {
-		if entry.InstallPath != "" {
+		if entry.InstallPath != "" || !validKOReaderResourceID(entry.ID) {
 			continue
 		}
 		path, err := legacyKOReaderFontPath(root, entry.ID)
@@ -738,8 +746,12 @@ func (m *Manager) migrateLegacyKOReaderTracking() error {
 		if err != nil {
 			return err
 		}
+		if path == "" {
+			continue
+		}
+		path = filepath.Clean(path)
 		fontsDir := filepath.Join(root, "fonts")
-		if path == "" || filepath.Dir(filepath.Clean(path)) != fontsDir || !pathWithinRoot(fontsDir, path) {
+		if filepath.Dir(path) != fontsDir || !pathWithinRoot(fontsDir, path) {
 			continue
 		}
 		entry.InstallPath = path
@@ -756,15 +768,19 @@ func (m *Manager) migrateLegacyKOReaderTracking() error {
 		return err
 	}
 	for _, entry := range patches {
-		if entry.InstallPath != "" {
+		if entry.InstallPath != "" || !validKOReaderResourceID(entry.PackageID) || !validKOReaderResourceID(entry.Asset) {
 			continue
 		}
 		path, err := legacyKOReaderPatchPath(root, entry.PackageID, entry.Asset)
 		if err != nil {
 			return err
 		}
+		if path == "" {
+			continue
+		}
 		patchesDir := koreaderPatchDir(root)
-		if path == "" || filepath.Clean(path) == filepath.Clean(patchesDir) || !pathWithinRoot(patchesDir, path) {
+		path = filepath.Clean(path)
+		if filepath.Dir(path) != filepath.Clean(patchesDir) || !pathWithinRoot(patchesDir, path) {
 			continue
 		}
 		entry.InstallPath = path
@@ -781,6 +797,10 @@ func (m *Manager) migrateLegacyKOReaderTracking() error {
 func pathWithinRoot(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func validKOReaderResourceID(id string) bool {
+	return filepath.IsLocal(id) && filepath.Base(id) == id
 }
 
 func pluginTrackingName(entry *repo.CatalogEntry, assetName string) string {
@@ -827,14 +847,15 @@ func extractZip(data []byte, destination string) error {
 		return fmt.Errorf("read ZIP archive: %w", err)
 	}
 	for _, file := range reader.File {
-		name := filepath.Clean(file.Name)
-		if name == "." || filepath.IsAbs(name) || name == ".." || strings.HasPrefix(name, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("ZIP contains unsafe path %q", file.Name)
+		entryName := strings.TrimPrefix(file.Name, "./")
+		if file.FileInfo().IsDir() {
+			entryName = strings.TrimSuffix(entryName, "/")
+		}
+		name, err := filepath.Localize(entryName)
+		if err != nil {
+			return fmt.Errorf("ZIP contains unsafe path %q: %w", file.Name, err)
 		}
 		path := filepath.Join(destination, name)
-		if path != destination && !strings.HasPrefix(path, destination+string(filepath.Separator)) {
-			return fmt.Errorf("ZIP contains unsafe path %q", file.Name)
-		}
 		if file.FileInfo().IsDir() {
 			if err := os.MkdirAll(path, 0755); err != nil {
 				return err

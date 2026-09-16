@@ -198,9 +198,9 @@ final class ZenPMUpdater {
         return result.toString();
     }
 
-    private static int compareVersions(String left, String right) {
-        String leftValue = left.replaceFirst("^v", "");
-        String rightValue = right.replaceFirst("^v", "");
+    static int compareVersions(String left, String right) {
+        String leftValue = left.startsWith("v") ? left.substring(1) : left;
+        String rightValue = right.startsWith("v") ? right.substring(1) : right;
         String[] leftParts = leftValue.split("[-+]", 2)[0].split("\\.");
         String[] rightParts = rightValue.split("[-+]", 2)[0].split("\\.");
         for (int i = 0; i < 3; i++) {
@@ -208,16 +208,23 @@ final class ZenPMUpdater {
             int b = i < rightParts.length ? Integer.parseInt(rightParts[i]) : 0;
             if (a != b) return a < b ? -1 : 1;
         }
-        boolean leftPrerelease = leftValue.matches(".*[-+].+");
-        boolean rightPrerelease = rightValue.matches(".*[-+].+");
+        boolean leftPrerelease = hasVersionSuffix(leftValue);
+        boolean rightPrerelease = hasVersionSuffix(rightValue);
         if (leftPrerelease != rightPrerelease) return leftPrerelease ? -1 : 1;
         if (!leftPrerelease) return 0;
         return Integer.compare(prereleaseNumber(leftValue), prereleaseNumber(rightValue));
     }
 
+    private static boolean hasVersionSuffix(String value) {
+        int dash = value.indexOf('-');
+        int plus = value.indexOf('+');
+        return dash >= 0 && dash < value.length() - 1 || plus >= 0 && plus < value.length() - 1;
+    }
+
     private static int prereleaseNumber(String value) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)$").matcher(value);
-        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+        int start = value.length();
+        while (start > 0 && value.charAt(start - 1) >= '0' && value.charAt(start - 1) <= '9') start--;
+        return start < value.length() ? Integer.parseInt(value.substring(start)) : 0;
     }
 
     private static final class Release {

@@ -670,6 +670,10 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "name and url required", http.StatusBadRequest)
 			return
 		}
+		if err := repo.ValidatePublicRepoURL(body.URL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		// Priority and trust are backend-determined — callers cannot set them.
 		priority := repo.UserAddedPriority
@@ -745,6 +749,10 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
 			http.Error(w, "url required", http.StatusBadRequest)
+			return
+		}
+		if err := repo.ValidatePublicRepoURL(body.URL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if body.Priority == 0 {
@@ -1667,7 +1675,6 @@ func tailLog(path string, n int) (string, error) {
 }
 
 // handleDialog shows a native Kindle UI alert dialog via LIPC pillowAlert.
-// Uses the same shell-based approach as KindleForge's KFPM.
 func (s *Server) handleDialog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -1684,20 +1691,20 @@ func (s *Server) handleDialog(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("Dialog requested: title=%q message=%q", body.Title, body.Message)
 
-	titleEsc := strings.ReplaceAll(body.Title, `"`, `\"`)
-	msgEsc := strings.ReplaceAll(body.Message, `\`, `\\`)
-	msgEsc = strings.ReplaceAll(msgEsc, "\n", `\n`)
-	msgEsc = strings.ReplaceAll(msgEsc, `"`, `\"`)
-
-	script := fmt.Sprintf(
-		`JSON='{"clientParams":{"alertId":"appAlert1","show":true,"customStrings":[{"matchStr":"alertTitle","replaceStr":"%s"},{"matchStr":"alertText","replaceStr":"%s"}]}}'
-lipc-set-prop com.lab126.pillow pillowAlert "$JSON"`,
-		titleEsc, msgEsc,
-	)
-
-	log.Infof("Running dialog script: %s", script)
-
-	cmd := exec.Command("/bin/sh", "-c", script)
+	payload, err := json.Marshal(map[string]interface{}{
+		"clientParams": map[string]interface{}{
+			"alertId": "appAlert1", "show": true,
+			"customStrings": []map[string]string{
+				{"matchStr": "alertTitle", "replaceStr": body.Title},
+				{"matchStr": "alertText", "replaceStr": body.Message},
+			},
+		},
+	})
+	if err != nil {
+		http.Error(w, "invalid dialog", http.StatusBadRequest)
+		return
+	}
+	cmd := exec.Command("lipc-set-prop", "com.lab126.pillow", "pillowAlert", string(payload))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Warnf("Native dialog failed: %v — output: %s", err, string(out))

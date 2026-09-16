@@ -94,6 +94,77 @@ func TestCatalogRefreshRunsInBackgroundAndSharesRequests(t *testing.T) {
 	}
 }
 
+func TestDialogPassesUntrustedTextAsOneJSONArgument(t *testing.T) {
+	dir := t.TempDir()
+	argument := filepath.Join(dir, "argument.json")
+	marker := filepath.Join(dir, "injected")
+	t.Setenv("PATH", dir)
+	t.Setenv("ZENPM_DIALOG_ARGUMENT", argument)
+	if err := os.WriteFile(filepath.Join(dir, "lipc-set-prop"), []byte("#!/bin/sh\nprintf '%s' \"$3\" > \"$ZENPM_DIALOG_ARGUMENT\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	title := "ZenPM'; touch " + marker + "; #"
+	message := "quote \" and newline\nthen a slash \\"
+	body, err := json.Marshal(map[string]string{"title": title, "message": message})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	(&Server{}).handleDialog(rec, httptest.NewRequest(http.MethodPost, "/dialog", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("dialog response: %d %s", rec.Code, rec.Body.String())
+	}
+	data, err := os.ReadFile(argument)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		ClientParams struct {
+			CustomStrings []struct {
+				ReplaceStr string `json:"replaceStr"`
+			} `json:"customStrings"`
+		} `json:"clientParams"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil || len(payload.ClientParams.CustomStrings) != 2 ||
+		payload.ClientParams.CustomStrings[0].ReplaceStr != title || payload.ClientParams.CustomStrings[1].ReplaceStr != message {
+		t.Fatalf("dialog payload = %q, %v", data, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("injected command ran: %v", err)
+	}
+}
+
+func TestRepoAPIRejectsLocalURLsBeforeChangingRepos(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "custom", URL: "https://example.com/repo"}}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, repo.New(st), nil, 0)
+	for _, req := range []struct{ method, path, body string }{
+		{http.MethodPost, "/repos", `{"name":"bad","url":"file:///etc"}`},
+		{http.MethodPut, "/repos/custom", `{"url":"http://127.0.0.1:8080"}`},
+	} {
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest(req.method, req.path, strings.NewReader(req.body))
+		if req.method == http.MethodPost {
+			srv.handleRepos(rec, r)
+		} else {
+			srv.handleRepoByName(rec, r)
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s %s: %d %s", req.method, req.path, rec.Code, rec.Body.String())
+		}
+	}
+	repos, err := st.ReadRepos()
+	if err != nil || len(repos) != 1 || repos[0].URL != "https://example.com/repo" {
+		t.Fatalf("repositories changed: %#v, %v", repos, err)
+	}
+}
+
 func TestReaderBackdropPageRefresh(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/tags/popular" {

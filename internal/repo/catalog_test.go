@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -58,6 +59,40 @@ func TestAddRejectsKindleForgeOnUnsupportedPlatform(t *testing.T) {
 	err = New(st).Add("KindleForge", "https://kf.penguins184.xyz", UserAddedPriority, "trusted")
 	if err == nil || !strings.Contains(err.Error(), "compatible Kindle") {
 		t.Fatalf("Add KindleForge error = %v", err)
+	}
+}
+
+func TestPublicRepoURLRejectsLocalTargets(t *testing.T) {
+	for _, value := range []string{
+		"file:///etc", "http://localhost:8080", "https://localhost./repo",
+		"http://127.0.0.1", "http://10.1.2.3", "http://169.254.169.254",
+		"http://100.100.100.100", "http://[::1]", "https://device.local",
+		"https://user:pass@example.com", "ftp://example.com",
+	} {
+		if err := ValidatePublicRepoURL(value); err == nil {
+			t.Errorf("allowed unsafe repository URL %q", value)
+		}
+	}
+	for _, value := range []string{"https://repo.zen-labs.org", "http://example.com/repo", "https://example.com/asset?token=abc"} {
+		if err := ValidatePublicRepoURL(value); err != nil {
+			t.Errorf("rejected public URL %q: %v", value, err)
+		}
+	}
+	if _, err := publicFetchTransport().DialContext(context.Background(), "tcp", "127.0.0.1:80"); err == nil || !strings.Contains(err.Error(), "refusing private") {
+		t.Fatalf("public fetch dialed a loopback address: %v", err)
+	}
+}
+
+func TestAddRejectsEscapingRepoName(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../outside", "../../outside", "sub/other", ".."} {
+		if err := New(st).Add(name, "https://example.com", UserAddedPriority, "trusted"); err == nil {
+			t.Errorf("accepted repository name %q", name)
+		}
 	}
 }
 

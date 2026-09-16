@@ -2,6 +2,7 @@ package repo
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/hex"
@@ -941,11 +942,92 @@ func fetchBytes(url string) ([]byte, error) {
 	return fetchBytesWithTimeout(url, repositoryFetchTimeout)
 }
 
-func fetchBytesWithTimeout(url string, timeout time.Duration) ([]byte, error) {
-	if strings.HasPrefix(url, "file://") {
-		return os.ReadFile(strings.TrimPrefix(url, "file://"))
+func fetchBytesWithTimeout(rawURL string, timeout time.Duration) ([]byte, error) {
+	if strings.HasPrefix(rawURL, "file://") {
+		return os.ReadFile(strings.TrimPrefix(rawURL, "file://"))
 	}
-	return fetchHTTPBytes(url, cabundle.Client(timeout), packageFetchAttempts)
+	client := cabundle.Client(timeout)
+	if target, err := url.Parse(rawURL); err == nil && publicRepoHost(target.Hostname()) {
+		client.Transport = publicFetchTransport()
+		client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if via[0].URL.Scheme == "https" && request.URL.Scheme != "https" {
+				return fmt.Errorf("refusing HTTPS downgrade")
+			}
+			return ValidatePublicRepoURL(request.URL.String())
+		}
+	}
+	return fetchHTTPBytes(rawURL, client, packageFetchAttempts)
+}
+
+var (
+	publicTransportOnce sync.Once
+	publicTransport     *http.Transport
+)
+
+func publicFetchTransport() *http.Transport {
+	publicTransportOnce.Do(func() {
+		publicTransport = cabundle.Client(repositoryFetchTimeout).Transport.(*http.Transport).Clone()
+		// ponytail: bypass proxies for public fetches; add proxy-aware target checks if proxy support is needed.
+		publicTransport.Proxy = nil
+		publicTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			var dialErr error
+			for _, ip := range ips {
+				if publicRepoIP(ip.IP) {
+					connection, err := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.IP.String(), port))
+					if err == nil {
+						return connection, nil
+					}
+					dialErr = err
+				}
+			}
+			if dialErr != nil {
+				return nil, dialErr
+			}
+			return nil, fmt.Errorf("refusing private network address for %s", host)
+		}
+	})
+	return publicTransport
+}
+
+// ValidatePublicRepoURL guards the browser-facing repository API. Local file
+// and loopback repositories are still available to explicit on-device setups.
+func ValidatePublicRepoURL(rawURL string) error {
+	target, err := url.Parse(rawURL)
+	if err != nil || target == nil || (target.Scheme != "http" && target.Scheme != "https") ||
+		target.User != nil || target.Fragment != "" || !publicRepoHost(target.Hostname()) {
+		return fmt.Errorf("repository URL must be a public HTTP(S) address")
+	}
+	return nil
+}
+
+func publicRepoHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") ||
+		strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return publicRepoIP(ip)
+	}
+	return true
+}
+
+func publicRepoIP(ip net.IP) bool {
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
+		return false // Carrier-grade NAT addresses can reach device-local services.
+	}
+	return ip.IsGlobalUnicast() && !ip.IsPrivate()
 }
 
 func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, error) {

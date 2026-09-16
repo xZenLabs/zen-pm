@@ -270,7 +270,7 @@ func rejectDuplicateKOReaderPluginCatalogPaths(pluginDirs []string, byModule map
 }
 
 func isScannableKOReaderPluginDir(pluginDir string, entry os.DirEntry) bool {
-	if !strings.HasSuffix(entry.Name(), ".koplugin") {
+	if !filepath.IsLocal(entry.Name()) || filepath.Base(entry.Name()) != entry.Name() || !strings.HasSuffix(entry.Name(), ".koplugin") {
 		return false
 	}
 	if entry.IsDir() {
