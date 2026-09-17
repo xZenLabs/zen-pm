@@ -312,12 +312,19 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 		return "", fmt.Errorf("create KOReader patches directory: %w", err)
 	}
 	if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
-		name := filepath.Base(assetName)
-		path := filepath.Join(patchesDir, name)
+		if !validKOReaderResourceID(assetName) {
+			return "", fmt.Errorf("invalid KOReader patch asset %q", assetName)
+		}
+		path := filepath.Join(patchesDir, assetName)
 		if _, err := asset.Seek(0, io.SeekStart); err != nil {
 			return "", err
 		}
-		output, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		patchesRoot, err := os.OpenRoot(patchesDir)
+		if err != nil {
+			return "", fmt.Errorf("open KOReader patches directory: %w", err)
+		}
+		defer patchesRoot.Close()
+		output, err := patchesRoot.OpenFile(assetName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err != nil {
 			return "", fmt.Errorf("write patch %s: %w", path, err)
 		}

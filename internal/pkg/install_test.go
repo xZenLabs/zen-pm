@@ -993,6 +993,40 @@ func TestKOReaderPatchRejectsEscapingPackageID(t *testing.T) {
 	}
 }
 
+func TestKOReaderPatchInstallRejectsUnsafeLuaPaths(t *testing.T) {
+	t.Setenv("ZENPM_KOREADER_PATCH_DIR", "")
+	root := t.TempDir()
+	entry := &repo.CatalogEntry{ID: "patch"}
+	asset := assetFile(t, []byte("return {}"))
+	if _, err := (&Manager{}).installKOReaderPatch(entry, root, "../patch.lua", asset); err == nil {
+		t.Fatal("install accepted a patch asset outside the patches directory")
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	outside := filepath.Join(t.TempDir(), "outside.lua")
+	if err := os.WriteFile(outside, []byte("safe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "patches", "patch.lua")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Manager{}).installKOReaderPatch(entry, root, "patch.lua", asset); err == nil {
+		t.Fatal("install followed a patch symlink outside the patches directory")
+	}
+	if data, err := os.ReadFile(outside); err != nil || string(data) != "safe" {
+		t.Fatalf("outside file changed: %q, %v", data, err)
+	}
+	path, err := (&Manager{}).installKOReaderPatch(entry, root, "valid.lua", asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "return {}" {
+		t.Fatalf("installed patch = %q, %v", data, err)
+	}
+}
+
 func TestKOReaderRemovalDoesNotFollowTrackedSymlinkParents(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on Windows")
