@@ -34,6 +34,23 @@ func validKOReaderPluginName(name string) bool {
 		strings.TrimSuffix(name, ".koplugin") != ""
 }
 
+func validKOReaderPatchFileName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if filepath.Base(name) != name {
+		return false
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return false
+	}
+	if !strings.HasSuffix(strings.ToLower(name), ".lua") {
+		return false
+	}
+	return strings.TrimSuffix(name, ".lua") != ""
+}
+
 var chmodInstallStage = os.Chmod
 
 func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
@@ -312,7 +329,10 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 		return "", fmt.Errorf("create KOReader patches directory: %w", err)
 	}
 	if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
-		name := filepath.Base(assetName)
+		name := strings.TrimSpace(assetName)
+		if !validKOReaderPatchFileName(name) {
+			return "", fmt.Errorf("invalid KOReader patch file name %q", assetName)
+		}
 		path := filepath.Join(patchesDir, name)
 		if _, err := asset.Seek(0, io.SeekStart); err != nil {
 			return "", err
