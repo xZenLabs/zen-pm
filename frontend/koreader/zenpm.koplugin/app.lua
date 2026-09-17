@@ -1,4 +1,5 @@
 local socket = require("socket")
+local Device = require("device")
 local Event = require("ui/event")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
@@ -1161,7 +1162,7 @@ end
 local function installed_image_target_available(app, kind)
     if kind == "screensavers" then
         local settings = rawget(_G, "G_reader_settings")
-        return settings and type(settings.saveSetting) == "function"
+        return Device:supportsScreensaver() and settings and type(settings.saveSetting) == "function"
     end
 
     local zen_pkg = Models.find_package(app.state.packages, "zen-ui")
@@ -1173,7 +1174,8 @@ end
 local function installed_image_prompt_kind(app, pkg)
     if not (pkg and pkg.installed) then return nil end
     local path, kind = installed_image_path(app, pkg)
-    return path and installed_image_target_available(app, kind) and kind or nil
+    return path and (installed_image_target_available(app, kind)
+        or kind == "screensavers" and not Device:supportsScreensaver()) and kind or nil
 end
 
 local function installed_image_is_active(app, pkg, target_kind)
@@ -1197,6 +1199,9 @@ function App:apply_installed_image(pkg, target_kind)
     if not path then return false, _("Installed image path is unavailable.") end
     kind = target_kind or kind
     if kind == "screensavers" then
+        if not Device:supportsScreensaver() then
+            return false, _("This device does not support screensavers.")
+        end
         local settings = rawget(_G, "G_reader_settings")
         if not (settings and type(settings.saveSetting) == "function") then
             return false, _("KOReader settings are unavailable.")
@@ -1251,12 +1256,32 @@ local function apply_installed_image_choice(app, pkg, on_done, target_kind)
     }, { show_cancel = false })
 end
 
+local function prompt_unsupported_screensaver(app, pkg, on_done)
+    Modals.close_status()
+    local can_wallpaper = installed_image_target_available(app, "wallpapers")
+    Modals.actions(_("This device does not support screensavers."), can_wallpaper and {
+        {
+            text = _("Set as wallpaper"),
+            callback = function()
+                apply_installed_image_choice(app, pkg, on_done, "wallpapers")
+            end,
+        },
+    } or { { text = _("Continue"), callback = on_done } }, {
+        cancel_callback = on_done,
+        show_cancel = can_wallpaper == true,
+    })
+    return true
+end
+
 function App:prompt_installed_image(pkg, on_done)
     local kind = installed_image_prompt_kind(self, pkg)
     if not kind then return false end
     on_done = on_done or function() end
-    local name = package_title(pkg, pkg.installed_asset or _("Image"))
+    if kind == "screensavers" and not Device:supportsScreensaver() then
+        return prompt_unsupported_screensaver(self, pkg, on_done)
+    end
     Modals.close_status()
+    local name = package_title(pkg, pkg.installed_asset or _("Image"))
     local prompt = kind == "screensavers" and string.format(_("Do you want to set %s as the screensaver?"), name)
         or string.format(_("Set %s as the %s?"), name, installed_image_target(kind))
     Modals.actions(prompt, {
@@ -1273,6 +1298,9 @@ end
 function App:prompt_installed_image_target(pkg, on_done)
     if not (pkg and pkg.installed and installed_image_path(self, pkg)) then return false end
     on_done = on_done or function() end
+    if not Device:supportsScreensaver() then
+        return prompt_unsupported_screensaver(self, pkg, on_done)
+    end
     local rows = {}
     for _, target in ipairs({
         { kind = "wallpapers", text = _("Set as wallpaper") },
@@ -1322,18 +1350,24 @@ function App:prompt_installed_images(ids, on_done)
             return
         end
 
+        local fallback = kind == "screensavers" and not Device:supportsScreensaver()
+        if fallback and not installed_image_target_available(self, "wallpapers") then
+            prompt_unsupported_screensaver(self, candidates[1], continue)
+            return
+        end
         local rows = {}
         for _, pkg in ipairs(candidates) do
             local candidate = pkg
             table.insert(rows, {
                 text = package_title(candidate, candidate.installed_asset or _("Image")),
                 callback = function()
-                    apply_installed_image_choice(self, candidate, continue)
+                    apply_installed_image_choice(self, candidate, continue, fallback and "wallpapers" or nil)
                 end,
             })
         end
         Modals.close_status()
-        Modals.actions(string.format(_("Choose a %s"), installed_image_target(kind)), rows, {
+        Modals.actions(fallback and _("This device does not support screensavers. Set one as wallpaper instead:")
+            or string.format(_("Choose a %s"), installed_image_target(kind)), rows, {
             cancel_callback = continue,
         })
     end

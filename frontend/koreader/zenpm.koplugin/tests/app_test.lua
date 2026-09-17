@@ -22,6 +22,7 @@ local logged_warnings = {}
 local network_connected = true
 local network_retry_callback
 local browser_url
+local device_supports_screensaver = true
 package.preload["apps/reader/readerui"] = function() return {} end
 package.preload["apps/filemanager/filemanager"] = function() return {} end
 package.preload["socket"] = function() return {} end
@@ -61,6 +62,7 @@ end
 package.preload["device"] = function()
     return {
         screen = { getWidth = function() return 600 end, getHeight = function() return 800 end },
+        supportsScreensaver = function() return device_supports_screensaver end,
         canOpenLink = function() return true end,
         openLink = function(_, url) browser_url = url end,
     }
@@ -2049,6 +2051,49 @@ expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- Wallpaper 
 image_packages[2].installed = true
 assert(skipped_wallpaper == 5)
 table.remove(pluginloader.loaded_plugins)
+
+device_supports_screensaver = false
+image_app.state.packages = image_packages
+table.insert(pluginloader.loaded_plugins, zen_background_plugin)
+reader_settings.screensaver_document_cover = nil
+local applied, unsupported_error = image_app:apply_installed_image(image_packages[3], "screensavers")
+assert(not applied and unsupported_error == "This device does not support screensavers.")
+assert(reader_settings.screensaver_document_cover == nil)
+local fallback_done = false
+assert(image_app:prompt_installed_image(image_packages[3], function() fallback_done = true end))
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as wallpaper")
+modal_rows[1].callback()
+assert(zen_background_plugin.config.library_background.path == "/koreader/resources/screensavers/books.png")
+assert(modal_message == "Wallpaper set successfully." and fallback_done)
+
+image_app:prompt_installed_image_target(image_packages[3])
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as wallpaper")
+image_app:prompt_installed_image_target(image_packages[2])
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as wallpaper")
+image_app:prompt_installed_images({ "books", "moonlight" })
+assert(modal_title == "This device does not support screensavers. Set one as wallpaper instead:")
+assert(#modal_rows == 2 and modal_rows[2].text == "Moonlight")
+modal_rows[2].callback()
+assert(zen_background_plugin.config.library_background.path == "/koreader/resources/screensavers/moonlight.jpg")
+
+table.remove(pluginloader.loaded_plugins)
+fallback_done = false
+image_app.state.packages = { image_packages[3], image_packages[4] }
+image_app:prompt_installed_image(image_packages[3], function() fallback_done = true end)
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Continue" and modal_options.show_cancel == false)
+modal_rows[1].callback()
+assert(fallback_done)
+fallback_done = false
+image_app:prompt_installed_images({ "books", "moonlight" }, function() fallback_done = true end)
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Continue")
+modal_rows[1].callback()
+assert(fallback_done)
+device_supports_screensaver = true
 end
 
 local toggle_done = false

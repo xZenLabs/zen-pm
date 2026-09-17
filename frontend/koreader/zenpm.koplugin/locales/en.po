@@ -900,6 +900,12 @@ msgstr "The standalone payload was installed, but its Kindle setup script failed
 msgid "Theme"
 msgstr "Theme"
 
+msgid "This device does not support screensavers."
+msgstr ""
+
+msgid "This device does not support screensavers. Set one as wallpaper instead:"
+msgstr ""
+
 msgid "This release has no ZIP assets."
 msgstr "This release has no ZIP assets."
 
