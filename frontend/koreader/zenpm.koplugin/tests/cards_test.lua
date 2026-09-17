@@ -450,6 +450,10 @@ assert(#rendered_detail_blocks == 0)
 screensaver_details_view.app.state.current_package.category = "wallpapers"
 Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
 assert(#rendered_detail_blocks == 0)
+screensaver_details_view.app.state.current_package.github_latest_version = "v2.0.0"
+painted_text = {}
+Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
+assert(table.concat(painted_text, "\n"):find("Latest on GitHub: v2.0.0", 1, true))
 
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local Header = require("ui/header")

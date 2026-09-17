@@ -367,6 +367,11 @@ local function package_is_koreader_plugin(pkg)
     return false
 end
 
+local function package_supports_direct_github(pkg)
+    return package_has_github_source(pkg)
+        and (package_is_koreader_plugin(pkg) or Models.is_patch_package(pkg))
+end
+
 local function package_is_kindle_only(pkg)
     if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
         return false
@@ -1499,7 +1504,7 @@ function App:show_queue_entry_modify(entry)
         updates_ignored = queued_update and pkg.update_ignored == true or nil,
         toggle_updates = queued_update and toggle_queued_update or nil,
         downgrade = (Models.has_version_history(pkg)
-            or (self.state.direct_github and package_has_github_source(pkg)))
+            or (self.state.direct_github and package_supports_direct_github(pkg)))
             and not package_is_kindle_only(pkg) and function()
             self:prompt_package_versions(pkg)
         end or nil,
@@ -2845,7 +2850,7 @@ function App:show_source_details(name)
     self:refresh()
 end
 
-function App:show_package_details(package_id, from_tab, force_reload, details_tab, patch_asset)
+function App:show_package_details(requested_id, from_tab, force_reload, details_tab, patch_asset)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -2859,19 +2864,48 @@ function App:show_package_details(package_id, from_tab, force_reload, details_ta
     self.state.active_tab = from_tab or self.state.active_tab or "search"
     self.state.details_from = from_tab or self.state.active_tab or "search"
     if not self:ensure_backend() then return end
-    -- Catalog already carries every field the details view needs (description,
-    -- author, images, icons). load_packages serves from the in-memory session
-    -- cache, so this is a local lookup with no network round-trip unless a
-    -- force_reload (post install/uninstall/refresh) invalidates the cache.
+    -- The catalog lookup is cached; direct GitHub mode checks releases below.
     local ok, packages, err = self:load_packages(false, force_reload)
     if not ok then
         self:set_error(_("Failed to load package: ") .. tostring(err))
         return
     end
-    local pkg = Models.find_package(packages, package_id)
+    local pkg = Models.find_package(packages, requested_id)
     if not pkg then
         self:set_error(_("Package not found."))
         return
+    end
+    if self.state.direct_github and package_supports_direct_github(pkg) then
+        local github_releases = pkg.github_releases
+        if type(github_releases) ~= "table" then
+            local release_ok, release_data = self.client:get_package_releases(pkg.id or pkg.name, true)
+            if release_ok and type(release_data) == "table" and type(release_data.releases) == "table" then
+                github_releases = release_data.releases
+                pkg.github_releases = github_releases
+            end
+        end
+        if type(github_releases) == "table" then
+            local latest
+            local allow_alpha = self.state.alpha_updates and package_id(pkg) == "zen-ui"
+            for _, release in ipairs(github_releases) do
+                local tag = tostring(release.tag_name or "")
+                local alpha = tag:lower():find("-alpha", 1, true) ~= nil
+                if tag ~= "" and ((alpha and allow_alpha)
+                    or (not alpha and (not release.prerelease or (self.state.beta_updates and not allow_alpha))))
+                    and (not latest or version_gt(tag, latest)) then
+                    latest = tag
+                end
+            end
+            if latest then
+                pkg.github_latest_version = latest
+                pkg.version = latest
+                local installed = pkg.installed_version
+                pkg.update_available = pkg.installed and installed and normalized_version(installed) ~= "0.0.0"
+                    and version_gt(latest, installed) or false
+                pkg.latest_version = latest
+                pkg.latest_release = pkg.update_available and latest or nil
+            end
+        end
     end
     -- For an installed patch item, show the patch itself (not its parent package):
     -- rebuild the single-asset item so the title, card and modify menu act on the patch.
@@ -3307,7 +3341,7 @@ function App:perform_package_action(pkg, on_done)
         local is_koplugin = package_is_koreader_plugin(pkg)
         local has_versions = not Models.is_direct_asset_package(pkg)
             and (Models.has_version_history(pkg)
-                or (self.state.direct_github and package_has_github_source(pkg)))
+                or (self.state.direct_github and package_supports_direct_github(pkg)))
         local image_path = installed_image_path(self, pkg)
         local can_set_image = image_path and (
             installed_image_target_available(self, "wallpapers")
@@ -3461,8 +3495,15 @@ end
 
 function App:load_package_releases(pkg, allow_empty)
     Modals.status(_("Loading available versions..."))
-    local direct_github = self.state and self.state.direct_github and package_has_github_source(pkg)
-    local ok, data = self.client:get_package_releases(pkg.id or pkg.name, direct_github)
+    local direct_github = self.state and self.state.direct_github and package_supports_direct_github(pkg)
+    local ok, data = true, direct_github and type(pkg.github_releases) == "table"
+        and { releases = pkg.github_releases } or nil
+    if not data then
+        ok, data = self.client:get_package_releases(pkg.id or pkg.name, direct_github)
+        if ok and direct_github and type(data) == "table" and type(data.releases) == "table" then
+            pkg.github_releases = data.releases
+        end
+    end
     Modals.close_status()
     if not ok then
         Modals.info(_("Could not load available versions: ") .. tostring(data))
@@ -3477,6 +3518,9 @@ function App:load_package_releases(pkg, allow_empty)
                 or (not alpha and (not release.prerelease or (allow_prerelease and not allow_alpha)))) then
             table.insert(releases, release)
         end
+    end
+    if direct_github then
+        table.sort(releases, function(a, b) return version_gt(a.tag_name, b.tag_name) end)
     end
     if #releases == 0 then
         if allow_empty then return releases end
@@ -3606,8 +3650,7 @@ function App:start_package_action(pkg, action, on_done, opts)
         return
     end
     if action_installs_package(action) and self.state and self.state.direct_github
-        and package_has_github_source(pkg) and not Models.is_direct_asset_package(pkg)
-        and not package_is_kindle_only(pkg) then
+        and package_supports_direct_github(pkg) then
         self:prompt_default_package_version(pkg, on_done, action)
         return
     end
@@ -3708,7 +3751,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
         .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
     local direct_github = self.state and self.state.direct_github
-        and not Models.is_direct_asset_package(pkg) and package_has_github_source(pkg)
+        and package_supports_direct_github(pkg)
     local ok, response = true, nil
     if action == "update" or package_is_koreader_plugin(pkg) or is_patch then
         ok, response = App.close_book_before_update(self)

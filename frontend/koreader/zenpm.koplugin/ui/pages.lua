@@ -696,7 +696,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     Cards.package(view, bb, pkg, inner_x, iy, inner_w, {
         height = summary_h,
         show_title = false,
-        second_line = _("By ") .. I18n.dynamic_or(pkg.author, "?"),
+        second_line = pkg.github_latest_version and (_("Latest on GitHub: ") .. pkg.github_latest_version
+            .. " · " .. _("By ") .. I18n.dynamic_or(pkg.author, "?"))
+            or (_("By ") .. I18n.dynamic_or(pkg.author, "?")),
         text_gap = Theme.scale(6),
         border = false,
         focus_group = "package_details",

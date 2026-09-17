@@ -746,6 +746,27 @@ local channel_releases = App.load_package_releases({
 }, { id = "zen-ui" })
 assert(#channel_releases == 2 and channel_releases[1].tag_name == "v2.0.0-beta1")
 
+do
+local direct_release_requests = 0
+local direct_pkg = {
+    id = "reader", source = "https://github.com/owner/reader", platforms = { "koreader" },
+}
+local direct_release_app = {
+    state = { beta_updates = false, direct_github = true },
+    client = {
+        get_package_releases = function(_, _, direct)
+            assert(direct)
+            direct_release_requests = direct_release_requests + 1
+            return true, { releases = { { tag_name = "v1.3.0" }, { tag_name = "v1.4.0" } } }
+        end,
+    },
+}
+local direct_releases = App.load_package_releases(direct_release_app, direct_pkg)
+assert(direct_releases[1].tag_name == "v1.4.0")
+App.load_package_releases(direct_release_app, direct_pkg)
+assert(direct_release_requests == 1)
+end
+
 local alpha_channel_releases = App.load_package_releases({
     state = { beta_updates = true, alpha_updates = true },
     client = {
@@ -841,6 +862,45 @@ assert(failed_readme_app.state.current_package.readme_error_code == nil)
 assert(failed_readme_app.state.readme_cache.reader == nil)
 assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
+
+do
+local catalog_pkg = {
+    id = "reader", source = "https://github.com/owner/reader", version = "v1.0.0",
+    platforms = { "koreader" }, installed = true, installed_version = "v1.0.0", update_available = false,
+}
+local live_release_requests = 0
+local live_details_app = {
+    state = { page = "installed", active_tab = "installed", direct_github = true, readme_cache = {} },
+    ensure_backend = function() return true end,
+    load_packages = function() return true, { catalog_pkg } end,
+    client = {
+        get_package_releases = function(_, id, direct)
+            assert(id == "reader" and direct)
+            live_release_requests = live_release_requests + 1
+            return true, { releases = {
+                { tag_name = "v2.0.0-beta", prerelease = true },
+                { tag_name = "v1.3.0" },
+                { tag_name = "v1.4.0" },
+            } }
+        end,
+    },
+    reset_scroll = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+}
+App.show_package_details(live_details_app, "reader")
+assert(live_details_app.state.current_package.github_latest_version == "v1.4.0")
+assert(live_details_app.state.current_package.update_available)
+assert(live_details_app.state.current_package.latest_release == "v1.4.0")
+assert(catalog_pkg.version == "v1.4.0" and catalog_pkg.update_available)
+live_details_app.state.beta_updates = true
+live_details_app.state.alpha_updates = true
+App.show_package_details(live_details_app, "reader")
+assert(live_details_app.state.current_package.latest_version == "v2.0.0-beta")
+local cached_releases = App.load_package_releases(live_details_app, catalog_pkg)
+assert(cached_releases[1].tag_name == "v2.0.0-beta")
+assert(live_release_requests == 1)
+end
 
 local about_app = {
     daemon = {
