@@ -190,6 +190,9 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin", "_meta.lua")); err != nil {
 		t.Fatalf("native plugin was not installed: %v", err)
 	}
+	if entries, err := os.ReadDir(st.TmpDir); err != nil || len(entries) != 0 {
+		t.Fatalf("temporary install files remain: %v, %v", entries, err)
+	}
 	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins")); !os.IsNotExist(err) {
 		t.Fatalf("plugin tracking directory exists after install: %v", err)
 	}
@@ -371,7 +374,7 @@ func TestInstallKOReaderPluginRejectsBlankArchiveRoot(t *testing.T) {
 	})
 
 	_, _, err = (&Manager{st: st}).installKOReaderPlugin(
-		&repo.CatalogEntry{ID: "connections"}, root, ".koplugin.zip", data,
+		&repo.CatalogEntry{ID: "connections"}, root, ".koplugin.zip", assetFile(t, data),
 	)
 	if err == nil || !strings.Contains(err.Error(), `invalid KOReader plugin directory ".koplugin"`) {
 		t.Fatalf("installKOReaderPlugin() error = %v, want blank plugin directory rejection", err)
@@ -431,7 +434,7 @@ func TestInstallKOReaderPluginUnwrapsPluginsDirectory(t *testing.T) {
 	})
 	version, path, err := (&Manager{st: st}).installKOReaderPlugin(&repo.CatalogEntry{
 		ID: "zlibrary-2", PluginModule: "zlibrary",
-	}, root, "zlibrary_plugin_v1.0.41.zip", data)
+	}, root, "zlibrary_plugin_v1.0.41.zip", assetFile(t, data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -783,7 +786,7 @@ func TestInstallKOReaderImageRejectsUnsafeOrWrongFormat(t *testing.T) {
 	}
 }
 
-func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *testing.T) {
+func TestResolveInstallAssetRequiresVersionsMetadataForRequestedRelease(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID:     "plugin",
 		Source: "https://github.com/owner/plugin",
@@ -793,23 +796,23 @@ func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *test
 		}]`,
 	}
 
-	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "plugin.koplugin.zip", "v1.4.3")
+	_, _, err := (&Manager{}).resolveInstallAssetURL(entry, "plugin.koplugin.zip", "v1.4.3", false)
 	if err == nil || !strings.Contains(err.Error(), "has no versions metadata") {
 		t.Fatalf("download error = %v, want missing versions metadata error", err)
 	}
 }
 
-func TestDownloadInstallAssetDirectRequiresGitHubSource(t *testing.T) {
+func TestResolveInstallAssetDirectRequiresGitHubSource(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID: "plugin", Source: "https://example.com/owner/plugin", SourceAsset: "plugin.koplugin.zip",
 		Platforms: []string{"koreader"},
 	}
-	if _, _, _, err := (&Manager{}).downloadInstallAssetMode(entry, "", "v2.0.0", true); err == nil || !strings.Contains(err.Error(), "GitHub repository") {
+	if _, _, err := (&Manager{}).resolveInstallAssetURL(entry, "", "v2.0.0", true); err == nil || !strings.Contains(err.Error(), "GitHub repository") {
 		t.Fatalf("direct GitHub error = %v", err)
 	}
 }
 
-func TestDownloadInstallAssetDirectUsesCatalogForImages(t *testing.T) {
+func TestResolveInstallAssetDirectUsesCatalogForImages(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "wallpaper")
 	}))
@@ -819,13 +822,13 @@ func TestDownloadInstallAssetDirectUsesCatalogForImages(t *testing.T) {
 		Source: "https://github.com/example/wallpapers",
 		Assets: `[{"arch":"any","asset":"clouds.jpg","url":"` + srv.URL + `/clouds.jpg"}]`,
 	}
-	name, assetURL, data, err := (&Manager{}).downloadInstallAssetMode(entry, "clouds.jpg", "v2.0.0", true)
-	if err != nil || name != "clouds.jpg" || assetURL != srv.URL+"/clouds.jpg" || string(data) != "wallpaper" {
-		t.Fatalf("download image = %q, %q, %q, %v", name, assetURL, data, err)
+	name, assetURL, err := (&Manager{}).resolveInstallAssetURL(entry, "clouds.jpg", "v2.0.0", true)
+	if err != nil || name != "clouds.jpg" || assetURL != srv.URL+"/clouds.jpg" {
+		t.Fatalf("resolve image = %q, %q, %v", name, assetURL, err)
 	}
 }
 
-func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
+func TestResolveInstallAssetUsesVersionsURL(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("zip contents"))
 	}))
@@ -849,16 +852,16 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 		VersionsURL: versionsServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "rakuyomi-kindlehf-v1.39.4.zip", "v1.40.0-pre")
+	name, gotURL, err := (&Manager{}).resolveInstallAssetURL(entry, "rakuyomi-kindlehf-v1.39.4.zip", "v1.40.0-pre", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "rakuyomi-kindlehf-v1.40.0-pre.zip" || gotURL != assetServer.URL || string(data) != "zip contents" {
-		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	if name != "rakuyomi-kindlehf-v1.40.0-pre.zip" || gotURL != assetServer.URL {
+		t.Fatalf("resolve = %q, %q", name, gotURL)
 	}
 }
 
-func TestDownloadInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testing.T) {
+func TestResolveInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/release.zip" {
 			http.NotFound(w, r)
@@ -880,16 +883,16 @@ func TestDownloadInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testi
 		VersionsURL: versionsServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "source-code.zip", "v0.2.3")
+	name, gotURL, err := (&Manager{}).resolveInstallAssetURL(entry, "source-code.zip", "v0.2.3", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "source-code.zip" || gotURL != assetServer.URL+"/release.zip" || string(data) != "release source zip contents" {
-		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	if name != "source-code.zip" || gotURL != assetServer.URL+"/release.zip" {
+		t.Fatalf("resolve = %q, %q", name, gotURL)
 	}
 }
 
-func TestDownloadInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
+func TestResolveInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("current source zip contents"))
 	}))
@@ -902,16 +905,16 @@ func TestDownloadInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
 		SourceURL:  assetServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "", "")
+	name, gotURL, err := (&Manager{}).resolveInstallAssetURL(entry, "", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != ".koplugin.zip" || gotURL != assetServer.URL || string(data) != "current source zip contents" {
-		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	if name != ".koplugin.zip" || gotURL != assetServer.URL {
+		t.Fatalf("resolve = %q, %q", name, gotURL)
 	}
 }
 
-func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
+func TestResolveInstallAssetRequiresExplicitFontURL(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID:       "font-cartisse",
 		Category: "fonts",
@@ -919,7 +922,7 @@ func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
 		Assets:   `[{"asset":"font-cartisse.zip"}]`,
 	}
 
-	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "font-cartisse.zip", "v4.1")
+	_, _, err := (&Manager{}).resolveInstallAssetURL(entry, "font-cartisse.zip", "v4.1", false)
 	if err == nil || !strings.Contains(err.Error(), "requires an explicit asset URL") {
 		t.Fatalf("download error = %v, want explicit asset URL error", err)
 	}
@@ -981,7 +984,7 @@ func TestKOReaderPatchRejectsEscapingPackageID(t *testing.T) {
 	root := t.TempDir()
 	for _, id := range []string{"..", "../elsewhere", "sub/patch"} {
 		entry := &repo.CatalogEntry{ID: id}
-		if _, err := (&Manager{}).installKOReaderPatch(entry, root, "patch.lua", []byte("return {}")); err == nil {
+		if _, err := (&Manager{}).installKOReaderPatch(entry, root, "patch.lua", assetFile(t, []byte("return {}"))); err == nil {
 			t.Errorf("install accepted patch ID %q", id)
 		}
 		if err := removeKOReaderPatch(root, id, "patch.lua", ""); err == nil {
@@ -1023,12 +1026,12 @@ func TestKOReaderRemovalDoesNotFollowTrackedSymlinkParents(t *testing.T) {
 
 func TestKOReaderZIPRejectsUnsafeNamesAndAllowsDirectories(t *testing.T) {
 	for _, name := range []string{"../outside", "/absolute", "folder/../outside"} {
-		if err := extractZip(zipContents(t, map[string]string{name: "bad"}), t.TempDir()); err == nil {
+		if err := extractZip(assetFile(t, zipContents(t, map[string]string{name: "bad"})), t.TempDir()); err == nil {
 			t.Errorf("ZIP entry %q was accepted", name)
 		}
 	}
 	root := t.TempDir()
-	if err := extractZip(zipContents(t, map[string]string{"./folder/": "", "./folder/file": "safe"}), root); err != nil {
+	if err := extractZip(assetFile(t, zipContents(t, map[string]string{"./folder/": "", "./folder/file": "safe"})), root); err != nil {
 		t.Fatal(err)
 	}
 	if data, err := os.ReadFile(filepath.Join(root, "folder", "file")); err != nil || string(data) != "safe" {
@@ -1091,6 +1094,19 @@ func zipContents(t *testing.T, files map[string]string) []byte {
 		t.Fatal(err)
 	}
 	return out.Bytes()
+}
+
+func assetFile(t *testing.T, data []byte) *os.File {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "asset-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { file.Close() })
+	if _, err := file.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	return file
 }
 
 func transitionalZenOSCatalogEntry(version, versionsURL string) state.CatalogEntry {
@@ -1647,7 +1663,7 @@ func TestInstallKOReaderPluginRejectsAliasArchiveRootMismatch(t *testing.T) {
 	_, _, err = (&Manager{st: st, plat: "host"}).installKOReaderPlugin(&repo.CatalogEntry{
 		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
 		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
-	}, filepath.Dir(plugins), "zenos.koplugin.zip", data)
+	}, filepath.Dir(plugins), "zenos.koplugin.zip", assetFile(t, data))
 	if err == nil || !strings.Contains(err.Error(), "does not match selected asset root") {
 		t.Fatalf("installKOReaderPlugin() error = %v", err)
 	}
@@ -1685,7 +1701,7 @@ func TestInstallKOReaderPluginKeepsAliasInAlternateConfiguredDir(t *testing.T) {
 	_, installedPath, err := (&Manager{st: st, plat: "host"}).installKOReaderPlugin(&repo.CatalogEntry{
 		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
 		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
-	}, primaryRoot, "zen_ui.koplugin.zip", data)
+	}, primaryRoot, "zen_ui.koplugin.zip", assetFile(t, data))
 	if err != nil {
 		t.Fatal(err)
 	}

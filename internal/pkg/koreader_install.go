@@ -60,9 +60,18 @@ func (m *Manager) nativeKOReaderInstaller(entry *repo.CatalogEntry, override str
 // installGenericKOReader performs the work of the repository's generic shell
 // installers in-process, so it does not depend on curl, wget, or BusyBox.
 func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, releaseTag, kind string, directGitHub bool) (string, string, error) {
-	assetName, _, data, err := m.downloadInstallAssetMode(entry, override, releaseTag, directGitHub)
+	assetName, assetURL, err := m.resolveInstallAssetURL(entry, override, releaseTag, directGitHub)
 	if err != nil {
 		return "", "", err
+	}
+	asset, err := os.CreateTemp(m.st.TmpDir, "koreader-asset-*")
+	if err != nil {
+		return "", "", err
+	}
+	defer os.Remove(asset.Name())
+	defer asset.Close()
+	if err := repo.FetchToFile(assetURL, asset); err != nil {
+		return "", "", fmt.Errorf("fetch %s: %w", assetURL, err)
 	}
 	root, err := m.koreaderRoot()
 	if err != nil {
@@ -71,15 +80,19 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 
 	switch kind {
 	case genericPluginInstaller:
-		version, path, err := m.installKOReaderPlugin(entry, root, assetName, data)
+		version, path, err := m.installKOReaderPlugin(entry, root, assetName, asset)
 		return version, path, err
 	case genericPatchInstaller:
-		path, err := m.installKOReaderPatch(entry, root, assetName, data)
+		path, err := m.installKOReaderPatch(entry, root, assetName, asset)
 		return "", path, err
 	case genericFontInstaller:
-		path, err := m.installKOReaderFont(entry, root, assetName, data)
+		path, err := m.installKOReaderFont(entry, root, assetName, asset)
 		return "", path, err
 	case genericWallpaperInstaller, genericScreensaverInstaller:
+		data, err := os.ReadFile(asset.Name())
+		if err != nil {
+			return "", "", err
+		}
 		path, err := installKOReaderImage(root, assetName, data, kind)
 		return "", path, err
 	default:
@@ -87,11 +100,7 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 	}
 }
 
-func (m *Manager) downloadInstallAsset(entry *repo.CatalogEntry, override, releaseTag string) (string, string, []byte, error) {
-	return m.downloadInstallAssetMode(entry, override, releaseTag, false)
-}
-
-func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, releaseTag string, directGitHub bool) (string, string, []byte, error) {
+func (m *Manager) resolveInstallAssetURL(entry *repo.CatalogEntry, override, releaseTag string, directGitHub bool) (string, string, error) {
 	assetName := m.installAssetName(entry, override)
 	assetURL := ""
 	if assetName == "" {
@@ -103,20 +112,16 @@ func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, r
 	if directGitHub && !isDirectKOReaderAssetPackage(entry) {
 		_, asset, err := releases.ResolveGitHubReleaseAsset(entry.Source, releaseTag, assetName)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
-		data, err := repo.FetchBytes(asset.URL)
-		if err != nil {
-			return "", "", nil, fmt.Errorf("fetch %s: %w", asset.URL, err)
-		}
-		return asset.Name, asset.URL, data, nil
+		return asset.Name, asset.URL, nil
 	}
 	if isDirectKOReaderAssetPackage(entry) {
 		selected, selectedOK := selectedAsset(entry.Assets, assetName)
 		if selectedOK && strings.TrimSpace(selected.URL) != "" {
 			assetURL = strings.TrimSpace(selected.URL)
 		} else {
-			return "", "", nil, fmt.Errorf("package %q requires an explicit asset URL", entry.ID)
+			return "", "", fmt.Errorf("package %q requires an explicit asset URL", entry.ID)
 		}
 	} else if releaseTag == "" {
 		selected, selectedOK := selectedAsset(entry.Assets, assetName)
@@ -127,7 +132,7 @@ func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, r
 	if assetURL == "" && usesSourcePackage(entry) && strings.TrimSpace(releaseTag) != "" && strings.TrimSpace(entry.VersionsURL) != "" {
 		items, err := releases.FetchVersions(entry.VersionsURL)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
 		if _, releaseAsset, err := releases.FindVersionsAsset(items, releaseTag, assetName); err == nil {
 			assetName = releaseAsset.Name
@@ -150,20 +155,16 @@ func (m *Manager) downloadInstallAssetMode(entry *repo.CatalogEntry, override, r
 	if assetURL == "" {
 		versionsURL := strings.TrimSpace(entry.VersionsURL)
 		if versionsURL == "" {
-			return "", "", nil, fmt.Errorf("package %q has no versions metadata", entry.ID)
+			return "", "", fmt.Errorf("package %q has no versions metadata", entry.ID)
 		}
 		_, releaseAsset, err := releases.ResolveVersionsAsset(versionsURL, releaseTag, assetName)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", err
 		}
 		assetName = releaseAsset.Name
 		assetURL = releaseAsset.URL
 	}
-	data, err := repo.FetchBytes(assetURL)
-	if err != nil {
-		return "", "", nil, fmt.Errorf("fetch %s: %w", assetURL, err)
-	}
-	return assetName, assetURL, data, nil
+	return assetName, assetURL, nil
 }
 
 func (m *Manager) koreaderRoot() (string, error) {
@@ -210,7 +211,7 @@ func koreaderPatchDir(root string) string {
 	return filepath.Join(root, "patches")
 }
 
-func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, string, error) {
+func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetName string, asset *os.File) (string, string, error) {
 	pluginsDir := koreaderPluginDir(root)
 	var identityPluginDirs []string
 	var existingRoot *koreaderPluginRootMatch
@@ -231,7 +232,7 @@ func (m *Manager) installKOReaderPlugin(entry *repo.CatalogEntry, root, assetNam
 	if info, err := os.Stat(pluginsDir); err != nil || !info.IsDir() {
 		return "", "", fmt.Errorf("KOReader plugins directory not found at %s", pluginsDir)
 	}
-	stage, sourceDir, err := m.extractArchive(data)
+	stage, sourceDir, err := m.extractArchive(asset)
 	if err != nil {
 		return "", "", err
 	}
@@ -302,7 +303,7 @@ func pluginArchiveSource(sourceDir string) string {
 	return sourceDir
 }
 
-func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, error) {
+func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName string, asset *os.File) (string, error) {
 	if !validKOReaderResourceID(entry.ID) {
 		return "", fmt.Errorf("invalid KOReader patch package %q", entry.ID)
 	}
@@ -313,13 +314,24 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 	if strings.HasSuffix(strings.ToLower(assetName), ".lua") {
 		name := filepath.Base(assetName)
 		path := filepath.Join(patchesDir, name)
-		if err := os.WriteFile(path, data, 0644); err != nil {
+		if _, err := asset.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
+		output, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err != nil {
+			return "", fmt.Errorf("write patch %s: %w", path, err)
+		}
+		_, err = io.Copy(output, asset)
+		if closeErr := output.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
 			return "", fmt.Errorf("write patch %s: %w", path, err)
 		}
 		return path, nil
 	}
 
-	stage, sourceDir, err := m.extractArchive(data)
+	stage, sourceDir, err := m.extractArchive(asset)
 	if err != nil {
 		return "", err
 	}
@@ -332,7 +344,7 @@ func (m *Manager) installKOReaderPatch(entry *repo.CatalogEntry, root, assetName
 	return destination, nil
 }
 
-func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName string, data []byte) (string, error) {
+func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName string, asset *os.File) (string, error) {
 	if !strings.HasSuffix(strings.ToLower(assetName), ".zip") {
 		return "", fmt.Errorf("font asset %q must be a ZIP archive", assetName)
 	}
@@ -343,7 +355,7 @@ func (m *Manager) installKOReaderFont(entry *repo.CatalogEntry, root, assetName 
 	if err := os.MkdirAll(fontsDir, 0755); err != nil {
 		return "", fmt.Errorf("create KOReader fonts directory: %w", err)
 	}
-	stage, sourceDir, err := m.extractArchive(data)
+	stage, sourceDir, err := m.extractArchive(asset)
 	if err != nil {
 		return "", err
 	}
@@ -821,12 +833,12 @@ func pluginTrackingName(entry *repo.CatalogEntry, assetName string) string {
 	return name
 }
 
-func (m *Manager) extractArchive(data []byte) (string, string, error) {
+func (m *Manager) extractArchive(asset *os.File) (string, string, error) {
 	stage, err := os.MkdirTemp(m.st.TmpDir, "koreader-install-*")
 	if err != nil {
 		return "", "", fmt.Errorf("create extraction directory: %w", err)
 	}
-	if err := extractZip(data, stage); err != nil {
+	if err := extractZip(asset, stage); err != nil {
 		os.RemoveAll(stage)
 		return "", "", err
 	}
@@ -841,8 +853,12 @@ func (m *Manager) extractArchive(data []byte) (string, string, error) {
 	return stage, stage, nil
 }
 
-func extractZip(data []byte, destination string) error {
-	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+func extractZip(asset *os.File, destination string) error {
+	info, err := asset.Stat()
+	if err != nil {
+		return err
+	}
+	reader, err := zip.NewReader(asset, info.Size())
 	if err != nil {
 		return fmt.Errorf("read ZIP archive: %w", err)
 	}

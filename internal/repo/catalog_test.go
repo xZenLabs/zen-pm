@@ -611,6 +611,31 @@ func TestFetchHTTPBytesRetriesTransientStatus(t *testing.T) {
 	}
 }
 
+func TestFetchToFileDiscardsPartialDownloadBeforeRetry(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.Header().Set("Content-Length", "12")
+			_, _ = w.Write([]byte("partial"))
+			return
+		}
+		_, _ = w.Write([]byte("complete"))
+	}))
+	defer srv.Close()
+	file, err := os.CreateTemp(t.TempDir(), "asset-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := FetchToFile(srv.URL, file); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(file.Name())
+	if err != nil || string(data) != "complete" || requests.Load() != 2 {
+		t.Fatalf("download = %q, requests = %d, error = %v", data, requests.Load(), err)
+	}
+}
+
 func TestFetchHTTPBytesRejectsNon2xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)

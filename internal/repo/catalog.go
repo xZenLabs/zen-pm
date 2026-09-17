@@ -939,6 +939,42 @@ func FetchBytes(url string) ([]byte, error) {
 	return fetchBytesWithTimeout(url, packageFetchTimeout)
 }
 
+// FetchToFile streams a package asset into file without holding it in memory.
+func FetchToFile(rawURL string, file *os.File) error {
+	if strings.HasPrefix(rawURL, "file://") {
+		source, err := os.Open(strings.TrimPrefix(rawURL, "file://"))
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		_, err = io.Copy(file, source)
+		return err
+	}
+	client, err := fetchClient(rawURL, packageFetchTimeout)
+	if err != nil {
+		return err
+	}
+	for attempt := 1; attempt <= packageFetchAttempts; attempt++ {
+		if err := file.Truncate(0); err != nil {
+			return err
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		retry, err := fetchHTTPOnce(rawURL, client, file)
+		if err == nil {
+			return nil
+		}
+		err = addTLSClockHint(err, time.Now())
+		if !retry || attempt == packageFetchAttempts {
+			return err
+		}
+		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, packageFetchAttempts, err)
+		time.Sleep(time.Duration(attempt) * packageFetchRetryDelay)
+	}
+	return nil
+}
+
 func fetchBytes(url string) ([]byte, error) {
 	return fetchBytesWithTimeout(url, repositoryFetchTimeout)
 }
@@ -947,6 +983,14 @@ func fetchBytesWithTimeout(rawURL string, timeout time.Duration, query ...string
 	if strings.HasPrefix(rawURL, "file://") {
 		return os.ReadFile(strings.TrimPrefix(rawURL, "file://"))
 	}
+	client, err := fetchClient(rawURL, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return fetchHTTPBytes(rawURL, client, packageFetchAttempts, query...)
+}
+
+func fetchClient(rawURL string, timeout time.Duration) (*http.Client, error) {
 	client := cabundle.Client(timeout)
 	if target, err := url.Parse(rawURL); err == nil && publicRepoHost(target.Hostname()) {
 		if err := ValidatePublicRepoURL(rawURL); err != nil {
@@ -963,7 +1007,7 @@ func fetchBytesWithTimeout(rawURL string, timeout time.Duration, query ...string
 			return ValidatePublicRepoURL(request.URL.String())
 		}
 	}
-	return fetchHTTPBytes(rawURL, client, packageFetchAttempts, query...)
+	return client, nil
 }
 
 var (
@@ -1052,9 +1096,15 @@ func fetchHTTPBytes(url string, client *http.Client, attempts int, query ...stri
 }
 
 func fetchHTTPBytesOnce(url string, client *http.Client, query ...string) ([]byte, bool, error) {
+	var data bytes.Buffer
+	retry, err := fetchHTTPOnce(url, client, &data, query...)
+	return data.Bytes(), retry, err
+}
+
+func fetchHTTPOnce(url string, client *http.Client, dst io.Writer, query ...string) (bool, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, false, err
+		return false, err
 	}
 	if len(query) != 0 {
 		req.URL.RawQuery = query[0]
@@ -1063,7 +1113,7 @@ func fetchHTTPBytesOnce(url string, client *http.Client, query ...string) ([]byt
 	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, retryableFetchError(err), err
+		return retryableFetchError(err), err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		err := httpdiag.ResponseError(resp)
@@ -1071,14 +1121,14 @@ func fetchHTTPBytesOnce(url string, client *http.Client, query ...string) ([]byt
 		log.Warn(err.Error())
 		retry := resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests ||
 			(resp.StatusCode >= 500 && resp.StatusCode < 600)
-		return nil, retry, err
+		return retry, err
 	}
-	data, err := io.ReadAll(resp.Body)
+	_, err = io.Copy(dst, resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return nil, retryableFetchError(err), err
+		return retryableFetchError(err), err
 	}
-	return data, false, nil
+	return false, nil
 }
 
 func retryableFetchError(err error) bool {

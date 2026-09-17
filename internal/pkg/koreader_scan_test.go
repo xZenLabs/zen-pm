@@ -492,7 +492,7 @@ func TestScanKOReaderPluginsExtraPathsPersistForScanUpdateAndRemoval(t *testing.
 		t.Fatalf("extra path scan = %+v, %v", result, err)
 	}
 	data := zipContents(t, map[string]string{"reader.koplugin/_meta.lua": `return { version = "2.0.0" }`})
-	version, path, err := manager.installKOReaderPlugin(&repo.CatalogEntry{ID: "reader", PluginModule: "reader"}, filepath.Dir(plugins), "reader.koplugin.zip", data)
+	version, path, err := manager.installKOReaderPlugin(&repo.CatalogEntry{ID: "reader", PluginModule: "reader"}, filepath.Dir(plugins), "reader.koplugin.zip", assetFile(t, data))
 	if err != nil || version != "2.0.0" || path != filepath.Join(extra, "reader.koplugin") {
 		t.Fatalf("extra path update = %q, %q, %v", version, path, err)
 	}
