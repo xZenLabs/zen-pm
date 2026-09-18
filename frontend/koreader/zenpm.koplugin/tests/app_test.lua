@@ -9,6 +9,7 @@ local restart_message
 local restart_callback
 local restart_actions = {}
 local status_message
+local status_close_count = 0
 local queued_ticks
 local modal_title
 local modal_rows
@@ -16,14 +17,14 @@ local modal_options
 local plugin_settings_prompt
 local package_modify_callbacks
 local ignore_updates_prompt
-local model_changes_days
-local model_changes_limit
-local model_changes_sort
 local updater_reinstall_requests = 0
 local logged_warnings = {}
 local network_connected = true
 local network_retry_callback
 local browser_url
+local device_supports_screensaver = true
+package.preload["apps/reader/readerui"] = function() return {} end
+package.preload["apps/filemanager/filemanager"] = function() return {} end
 package.preload["socket"] = function() return {} end
 package.preload["ui/event"] = function()
     return { new = function(_, name) return name end }
@@ -61,6 +62,7 @@ end
 package.preload["device"] = function()
     return {
         screen = { getWidth = function() return 600 end, getHeight = function() return 800 end },
+        supportsScreensaver = function() return device_supports_screensaver end,
         canOpenLink = function() return true end,
         openLink = function(_, url) browser_url = url end,
     }
@@ -74,18 +76,33 @@ package.preload["zenpm_constants"] = function()
     return {
         PLUGIN_DIR = root,
         PACKAGE_ERROR_NOTICE_SECONDS = 1,
+        MAX_POLL_RETRIES = 20,
+        POLL_DELAY_SECONDS = 0.1,
         PACKAGE_ACTION_MAX_POLL_RETRIES = 20,
         ANDROID_BACKEND_HEALTH_INTERVAL_SECONDS = 60,
         REPO_KINDLEFORGE_NAME = "KindleForge",
         REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
+        REPO_READERBACKDROP_NAME = "ReaderBackdrop",
+        REPO_READERBACKDROP_URL = "https://www.readerbackdrop.com",
         KINDLE_SCRIPTLETS_CATEGORY = { id = "kindle-scriptlets" },
+        CATEGORIES = {
+            { id = "fonts", label = "Fonts" },
+            { id = "screensavers", label = "Screensavers", icon = "screensaver.svg" },
+            { id = "wallpapers", label = "Wallpapers", icon = "wallpaper.svg" },
+        },
     }
 end
-package.preload["daemon"] = function() return { state_home = function() return "/tmp" end } end
+package.preload["daemon"] = function()
+    return { new = function() return {} end, state_home = function() return "/tmp" end }
+end
 package.preload["i18n"] = function() return {} end
 package.preload["ui/images"] = function()
     return {
         asset = function(name) return "assets/" .. name end,
+        category_icon = function(category) return "assets/" .. tostring(category) .. ".svg" end,
+        package_icon = function(pkg) return pkg.icon_url end,
+        package_fallback = function() return "assets/packages.svg" end,
+        is_failed = function() return false end,
         invalidate_cache = function() end,
     }
 end
@@ -102,7 +119,8 @@ package.preload["ui/modals"] = function()
             restart_callback = callback
         end,
         status = function(message) status_message = message end,
-        close_status = function() end,
+        close_status = function() status_close_count = status_close_count + 1 end,
+        search = function(title) modal_title = title end,
         confirm = function() end,
         actions = function(title, rows, options)
             modal_title = title
@@ -126,7 +144,14 @@ package.preload["ui/modals"] = function()
     }
 end
 package.preload["models"] = function()
+    local models = dofile(root .. "/models.lua")
     return {
+        sort_packages = models.sort_packages,
+        filter_packages = models.filter_packages,
+        filter_categories = models.filter_categories,
+        installed_packages = models.installed_packages,
+        visible_installed_packages = models.visible_installed_packages,
+        filter_packages_by_category = models.filter_packages_by_category,
         has_release_notes = function(pkg, allow_prerelease)
             if allow_prerelease and pkg.prerelease_notes_url then return true end
             return pkg.release_notes_url ~= nil
@@ -140,6 +165,8 @@ package.preload["models"] = function()
         is_installed_patch_item = function() return false end,
         is_unmanaged_patch = function() return false end,
         is_font_package = function(pkg) return pkg and pkg.category == "fonts" end,
+        is_image_asset_package = models.is_image_asset_package,
+        is_direct_asset_package = models.is_direct_asset_package,
         has_version_history = function(pkg) return pkg and pkg.versions_url ~= nil end,
         find_package = function(packages, id)
             for _, pkg in ipairs(packages or {}) do
@@ -152,12 +179,16 @@ package.preload["models"] = function()
         package_assets = function(pkg) return pkg and pkg.assets or {} end,
         category_for_id = function(id)
             if id == "fonts" then return { id = "fonts", label = "Fonts" } end
+            if id == "screensavers" then return { id = id, label = "Screensavers" } end
+            if id == "wallpapers" then return { id = id, label = "Wallpapers" } end
             return nil
         end,
         category_cards = function()
             return {
                 { id = "fonts", label = "Fonts", count = 2 },
                 { id = "games", label = "Games", count = 0 },
+                { id = "screensavers", label = "Screensavers", count = 0 },
+                { id = "wallpapers", label = "Wallpapers", count = 1 },
             }
         end,
         category_label = function(category) return category.label end,
@@ -175,15 +206,15 @@ package.preload["models"] = function()
             end
             return visible
         end,
-        changes_packages = function(packages, days, limit, sort_key)
-            model_changes_days = days
-            model_changes_limit = limit
-            model_changes_sort = sort_key
-            return { packages[1] }
-        end,
     }
 end
-package.preload["ui/theme"] = function() return {} end
+package.preload["ui/theme"] = function()
+    return {
+        get_base_font_size = function() return 20 end,
+        normalize_base_font_size = function(value) return value end,
+        set_base_font_size = function() end,
+    }
+end
 local updater_stub = {
     update = function()
         return true, "1.2.4-beta3"
@@ -196,7 +227,7 @@ local updater_stub = {
     reinstall = function(_, _, tag, allow_prerelease, force_refresh)
         updater_reinstall_requests = updater_reinstall_requests + 1
         assert(tag == "v1.2.3")
-        assert(not allow_prerelease)
+        assert(allow_prerelease)
         assert(force_refresh)
         return true, "1.2.3"
     end,
@@ -205,6 +236,8 @@ local updater_stub = {
 package.loaded["updater"] = {}
 package.preload["zenpm_util"] = function()
     return {
+        split_lines = dofile(root .. "/zenpm_util.lua").split_lines,
+        sh_quote = dofile(root .. "/zenpm_util.lua").sh_quote,
         trim = function(value)
             return tostring(value or ""):match("^%s*(.-)%s*$")
         end,
@@ -243,7 +276,7 @@ end
 local original_dofile = dofile
 local updater_dofile_loads = 0
 dofile = function(path)
-    if path == root .. "/client.lua" then return {} end
+    if path == root .. "/client.lua" then return { new = function() return {} end } end
     if path == root .. "/updater.lua" then
         updater_dofile_loads = updater_dofile_loads + 1
         return updater_stub
@@ -251,8 +284,201 @@ dofile = function(path)
     return original_dofile(path)
 end
 local App = require("app")
+
+do
+    local home = os.tmpname()
+    os.remove(home)
+    assert(os.execute("mkdir " .. require("zenpm_util").sh_quote(home)) == 0)
+    local pocketbook = true
+    local token_app = { daemon = {
+        state_home = function() return home end,
+        is_pocketbook = function() return pocketbook end,
+    } }
+    local execute = os.execute
+    local chmod_calls, chmod_result = 0, 1
+    os.execute = function(command)
+        assert(command:find("chmod 600 ", 1, true) == 1)
+        chmod_calls = chmod_calls + 1
+        return chmod_result
+    end
+    assert(App.write_github_token(token_app, "test-token"))
+    assert(App.github_token(token_app) == "test-token")
+    assert(chmod_calls == 0)
+    pocketbook = false
+    assert(not App.write_github_token(token_app, "replacement-token"))
+    assert(App.github_token(token_app) == "test-token")
+    assert(chmod_calls == 1)
+    chmod_result = 0
+    assert(App.write_github_token(token_app, "replacement-token"))
+    assert(App.github_token(token_app) == "replacement-token")
+    assert(chmod_calls == 2)
+    pocketbook = true
+    assert(App.write_github_token(token_app, ""))
+    assert(App.github_token(token_app) == "")
+    assert(chmod_calls == 2)
+    os.execute = execute
+    os.remove(home .. "/github_token.txt")
+    os.execute("rmdir " .. require("zenpm_util").sh_quote(home))
+end
 dofile = original_dofile
 assert(updater_dofile_loads == 1)
+
+do
+    local loaded, refreshes = {}, 0
+    local image_app = setmetatable({
+        state = { show_readme_images = true },
+        readme_image_queue = { "one", "two" },
+        readme_image_pending = { one = true, two = true },
+        readme_image_loading = true,
+        image_file_for = function(_, value) table.insert(loaded, value) end,
+        refresh = function() refreshes = refreshes + 1 end,
+    }, { __index = App })
+    image_app:load_next_readme_image()
+    assert(table.concat(loaded, ",") == "one,two")
+    assert(refreshes == 1)
+    assert(not image_app.readme_image_loading)
+end
+
+do
+    local loaded, refreshes = {}, 0
+    local image_app = setmetatable({
+        state = {},
+        package_image_queue = {},
+        package_image_pending = {},
+        package_image_loading = false,
+        cached_image_file = function() return nil, false end,
+        image_file_for = function(_, value)
+            table.insert(loaded, value)
+            if #loaded > 1 then return "wallpaper.jpg" end
+        end,
+        refresh = function() refreshes = refreshes + 1 end,
+    }, { __index = App })
+    queued_ticks = {}
+    local file, is_icon = image_app:package_icon_file({
+        category = "wallpapers",
+        icon_url = "https://example.test/wallpaper.jpg",
+    })
+    assert(file == "assets/wallpapers.svg" and is_icon == true)
+    assert(#loaded == 0 and #queued_ticks == 1)
+    image_app:begin_package_image_render()
+    queued_ticks[1]()
+    assert(#loaded == 0 and not image_app.package_image_loading)
+    queued_ticks = {}
+    image_app:package_icon_file({
+        category = "wallpapers",
+        icon_url = "https://example.test/wallpaper.jpg",
+    })
+    queued_ticks[1]()
+    queued_ticks = nil
+    assert(table.concat(loaded, ",") == "https://example.test/wallpaper.jpg,https://example.test/wallpaper.jpg")
+    assert(refreshes == 1 and not image_app.package_image_loading)
+
+    image_app.state.show_readme_images = false
+    for _, category in ipairs({ "screensavers", "wallpapers" }) do
+        local image_asset = { category = category, icon_url = "https://example.test/preview.jpg" }
+        local preview, preview_is_icon = image_app:package_icon_file(image_asset)
+        assert(preview == "assets/" .. category .. ".svg" and preview_is_icon and #loaded == 2)
+        assert(image_app:package_featured_file(image_asset) == preview and #loaded == 2)
+    end
+end
+
+-- Updating from the reader must save the book before touching plugin files,
+-- retain ZenPM above the file browser, and reconnect the stopped backend.
+do
+    local ReaderUI = require("apps/reader/readerui")
+    local FileManager = require("apps/filemanager/filemanager")
+    local UIManager = require("ui/uimanager")
+    local old_show, old_close = UIManager.show, UIManager.close
+    local events, reconnect_ok, result
+    local reader_menu = { exitOrRestart = function() end }
+    local original_exit = reader_menu.exitOrRestart
+    local browser_plugin = { ui = { menu = { exitOrRestart = function() end } } }
+    local app = setmetatable({
+        view = {},
+        state = { beta_updates = false },
+        daemon = {
+            ensure = function()
+                assert(ReaderUI.instance == nil)
+                table.insert(events, "reconnect")
+                return reconnect_ok, "backend unavailable"
+            end,
+            is_android = function() return false end,
+        },
+        client = {
+            package_action = function()
+                assert(ReaderUI.instance == nil)
+                table.insert(events, "install")
+                return true
+            end,
+        },
+        package_action_failure_stats = function() return 0 end,
+        poll_package_action = function() end,
+        run_update_task = function(_, _, _, callback)
+            table.insert(events, "self-update")
+            callback(false)
+        end,
+    }, { __index = App })
+    UIManager.close = function(_, view)
+        assert(view == app.view)
+        table.insert(events, "hide")
+    end
+    UIManager.show = function(_, view)
+        assert(view == app.view and app.plugin == browser_plugin)
+        table.insert(events, "show")
+    end
+    local function open_book()
+        events, reconnect_ok, result = {}, true, nil
+        app:restore_koreader_exit()
+        app.plugin = { ui = { menu = reader_menu } }
+        app:intercept_koreader_exit()
+        ReaderUI.instance = {
+            document = { file = "/books/test.epub" },
+            onClose = function()
+                assert(reader_menu.exitOrRestart == original_exit)
+                table.insert(events, "save and close")
+                ReaderUI.instance = nil
+            end,
+            showFileManager = function(_, file)
+                assert(file == "/books/test.epub" and ReaderUI.instance == nil)
+                FileManager.instance = { zenpm = browser_plugin }
+            end,
+        }
+    end
+    local pkg = { id = "reader-plugin", installed = true, platforms = { "koreader" } }
+    local opts = { on_result = function(ok, detail) result = { ok, detail } end }
+
+    open_book()
+    app:run_package_action(pkg, "update", nil, nil, opts)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect,install")
+    assert(app.backend_ready and app.exit_menu == browser_plugin.ui.menu)
+    app:run_package_action(pkg, "update", nil, nil, opts)
+    assert(events[6] == "install" and #events == 6) -- Already closed for the queue.
+
+    open_book()
+    app:apply_update(opts.on_result)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect,self-update")
+    assert(result[1] == false and result[2] == "Update was cancelled.")
+
+    open_book()
+    reconnect_ok = false
+    app:run_package_action(pkg, "update", nil, nil, opts)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect")
+    assert(result[1] == false and not app.busy and not app.backend_ready)
+
+    open_book()
+    reconnect_ok = false
+    app:apply_update(opts.on_result)
+    assert(table.concat(events, ",") == "hide,save and close,show,reconnect")
+    assert(result[1] == false and result[2] == "Update failed: backend unavailable")
+
+    open_book()
+    ReaderUI.instance.onClose = function() error("book save failed") end
+    assert(not pcall(app.run_package_action, app, pkg, "update", nil, nil, opts))
+    assert(table.concat(events, ",") == "hide")
+    app:restore_koreader_exit()
+    ReaderUI.instance, FileManager.instance = nil, nil
+    UIManager.show, UIManager.close = old_show, old_close
+end
 
 local reader_link_url
 local wallabag_url
@@ -292,6 +518,26 @@ App.toggle_beta_updates(app)
 
 assert(app.state.beta_updates)
 assert(settings.beta_updates == true)
+
+app.state.alpha_updates = false
+app.state.alpha_updates_unlocked = false
+app.state.update_version_taps = 0
+App.toggle_alpha_updates(app)
+assert(not app.state.alpha_updates)
+for _ = 1, 9 do
+    assert(not App.tap_update_version(app))
+end
+assert(App.tap_update_version(app))
+assert(app.state.alpha_updates_unlocked)
+assert(settings.alpha_updates_unlocked == true)
+App.toggle_alpha_updates(app)
+assert(app.state.alpha_updates)
+assert(settings.alpha_updates == true)
+app.state.packages = { { latest_version = "2.0.0-alpha1" } }
+App.toggle_alpha_updates(app)
+assert(not app.state.alpha_updates)
+assert(settings.alpha_updates == false)
+assert(#app.state.packages == 0 and app.settings_requires_reload)
 
 local filtered_app = {
     state = {
@@ -391,6 +637,59 @@ App.toggle_advanced(app)
 assert(app.state.advanced)
 assert(settings.advanced_queue == true)
 
+local advanced_app = {
+    state = {
+        page = "settings",
+        active_tab = "home",
+        scroll = {},
+        advanced = false,
+        manual_version_picker = false,
+        show_all_builds = false,
+        beta_updates = false,
+        direct_github = false,
+        filter_installable = true,
+        packages = { { id = "reader" } },
+    },
+    client = {},
+    daemon = { state_home = function() return "/tmp/zenpm-missing-token-dir" end },
+    reset_scroll = App.reset_scroll,
+    clear_status = function() end,
+    refresh = function() end,
+    settings_origin = { page = "home", active_tab = "home" },
+}
+App.show_advanced_settings(advanced_app)
+assert(advanced_app.state.page == "advanced_settings")
+assert(advanced_app.state.scroll.advanced_settings == 0)
+App.toggle_filter_installable(advanced_app)
+assert(not advanced_app.state.filter_installable)
+assert(#advanced_app.state.packages == 0)
+assert(advanced_app.settings_requires_reload)
+App.toggle_direct_github(advanced_app)
+assert(advanced_app.state.direct_github)
+assert(settings.direct_github == true)
+App.show_updates_settings(advanced_app)
+assert(advanced_app.state.page == "updates_settings")
+assert(advanced_app.state.scroll.updates_settings == 0)
+App.show_about(advanced_app)
+assert(advanced_app.state.page == "about_settings")
+assert(advanced_app.state.scroll.about_settings == 0)
+App.show_settings(advanced_app)
+assert(advanced_app.state.page == "settings")
+assert(advanced_app.settings_origin.page == "home")
+
+local direct_release_action
+App.start_package_action({
+    state = { direct_github = true },
+    prompt_default_package_version = function(_, _, _, action)
+        direct_release_action = action
+    end,
+}, {
+    id = "reader",
+    source = "https://github.com/owner/reader",
+    platforms = { "koreader" },
+}, "install")
+assert(direct_release_action == "install")
+
 local cli_installs = 0
 local cli_app = {
     daemon = {
@@ -411,6 +710,11 @@ assert(modal_message == "Could not install the ZenPM command-line wrapper.")
 local zenpm_package = { id = "zenpm-koreader" }
 assert(App.package_icon_file({}, zenpm_package) == "assets/zenpm.svg")
 
+local svg_file, svg_is_icon = App.package_icon_file({
+    image_file_for = function() return "/tmp/package-icon.svg" end,
+}, { icon_url = "https://example.test/package-icon.svg" })
+assert(svg_file == "/tmp/package-icon.svg" and svg_is_icon)
+
 local release_requests = 0
 local zenpm_versions = App.load_package_releases({
     state = { beta_updates = false },
@@ -427,6 +731,69 @@ local zenpm_versions = App.load_package_releases({
     },
 }, zenpm_package)
 assert(release_requests == 1)
+
+local channel_releases = App.load_package_releases({
+    state = { beta_updates = true, alpha_updates = false },
+    client = {
+        get_package_releases = function()
+            return true, { releases = {
+                { tag_name = "v2.0.0-alpha1" },
+                { tag_name = "v2.0.0-beta1", prerelease = true },
+                { tag_name = "v1.0.0" },
+            } }
+        end,
+    },
+}, { id = "zen-ui" })
+assert(#channel_releases == 2 and channel_releases[1].tag_name == "v2.0.0-beta1")
+
+do
+local direct_release_requests = 0
+local direct_pkg = {
+    id = "reader", source = "https://github.com/owner/reader", platforms = { "koreader" },
+}
+local direct_release_app = {
+    state = { beta_updates = false, direct_github = true },
+    client = {
+        get_package_releases = function(_, _, direct)
+            assert(direct)
+            direct_release_requests = direct_release_requests + 1
+            return true, { releases = { { tag_name = "v1.3.0" }, { tag_name = "v1.4.0" } } }
+        end,
+    },
+}
+local direct_releases = App.load_package_releases(direct_release_app, direct_pkg)
+assert(direct_releases[1].tag_name == "v1.4.0")
+App.load_package_releases(direct_release_app, direct_pkg)
+assert(direct_release_requests == 1)
+end
+
+local alpha_channel_releases = App.load_package_releases({
+    state = { beta_updates = true, alpha_updates = true },
+    client = {
+        get_package_releases = function()
+            return true, { releases = {
+                { tag_name = "v2.0.0-alpha1", prerelease = true },
+                { tag_name = "v2.0.0-beta1", prerelease = true },
+                { tag_name = "v1.0.0" },
+            } }
+        end,
+    },
+}, { id = "zen-ui" })
+assert(#alpha_channel_releases == 2 and alpha_channel_releases[1].tag_name == "v2.0.0-alpha1"
+    and alpha_channel_releases[2].tag_name == "v1.0.0")
+
+local non_zenos_alpha_releases = App.load_package_releases({
+    state = { beta_updates = false, alpha_updates = true },
+    client = {
+        get_package_releases = function()
+            return true, { releases = {
+                { tag_name = "v2.0.0-alpha1", prerelease = true },
+                { tag_name = "v1.0.0" },
+            } }
+        end,
+    },
+}, { id = "other-package" })
+assert(#non_zenos_alpha_releases == 1 and non_zenos_alpha_releases[1].tag_name == "v1.0.0")
 
 local source_fallback_action
 App.prompt_latest_package_build({
@@ -496,18 +863,52 @@ assert(failed_readme_app.state.readme_cache.reader == nil)
 assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
 
+do
+local catalog_pkg = {
+    id = "reader", source = "https://github.com/owner/reader", version = "v1.0.0",
+    platforms = { "koreader" }, installed = true, installed_version = "v1.0.0", update_available = false,
+}
+local live_release_requests = 0
+local live_details_app = {
+    state = { page = "installed", active_tab = "installed", direct_github = true, readme_cache = {} },
+    ensure_backend = function() return true end,
+    load_packages = function() return true, { catalog_pkg } end,
+    client = {
+        get_package_releases = function(_, id, direct)
+            assert(id == "reader" and direct)
+            live_release_requests = live_release_requests + 1
+            return true, { releases = {
+                { tag_name = "v2.0.0-beta", prerelease = true },
+                { tag_name = "v1.3.0" },
+                { tag_name = "v1.4.0" },
+            } }
+        end,
+    },
+    reset_scroll = function() end,
+    clear_status = function() end,
+    refresh = function() end,
+}
+App.show_package_details(live_details_app, "reader")
+assert(live_details_app.state.current_package.github_latest_version == "v1.4.0")
+assert(live_details_app.state.current_package.update_available)
+assert(live_details_app.state.current_package.latest_release == "v1.4.0")
+assert(catalog_pkg.version == "v1.4.0" and catalog_pkg.update_available)
+live_details_app.state.beta_updates = true
+live_details_app.state.alpha_updates = true
+App.show_package_details(live_details_app, "reader")
+assert(live_details_app.state.current_package.latest_version == "v2.0.0-beta")
+local cached_releases = App.load_package_releases(live_details_app, catalog_pkg)
+assert(cached_releases[1].tag_name == "v2.0.0-beta")
+assert(live_release_requests == 1)
+end
+
 local about_app = {
     daemon = {
         plugin_version = function() error("About must not use the plugin version") end,
         installed_backend_version = function() return "1.2.3" end,
-        detect_platform = function() return "ereader" end,
-        ereader_backend_suffix = function() return "sf" end,
     },
-    package_platforms = function() return "ereader,koreader" end,
 }
-App.show_about(about_app)
-assert(modal_message:find("Version: 1.2.3", 1, true))
-assert(modal_message:find("ABI: sf", 1, true))
+assert(App.current_version(about_app) == "1.2.3")
 
 modal_message = nil
 local failed_refresh_app = {
@@ -540,6 +941,8 @@ assert(next(refreshed_app.state.readme_cache) == nil)
 
 local open_refreshes = 0
 local open_catalog_reloads = 0
+local open_status_polls = 0
+local open_catalog_loads = 0
 local opened_app = {
     backend_ready = true,
     view = {},
@@ -547,22 +950,29 @@ local opened_app = {
         readme_cache = { reader = { readme = "Cached README" } },
     },
     client = {
-        refresh_repos = function()
+        refresh_repos = function(_, async)
+            assert(async == true)
             open_refreshes = open_refreshes + 1
             return true
         end,
+        repo_refresh_status = function()
+            open_status_polls = open_status_polls + 1
+            if open_status_polls == 1 then return false, "timeout" end
+            return true, { refreshing = open_status_polls == 2, ok = false }
+        end,
     },
-    run_update_task = function(_, task, _, callback)
-        local called, ok = task()
-        callback(true, called, ok)
+    load_packages = function(_, check_updates, force, timeout)
+        assert(not check_updates and force and timeout.total == 1)
+        open_catalog_loads = open_catalog_loads + 1
+        return open_catalog_loads > 1
     end,
-    load_packages = function() end,
     load_repos = function() end,
     reload_current_page = function() open_catalog_reloads = open_catalog_reloads + 1 end,
     refresh_catalog_on_open = App.refresh_catalog_on_open,
 }
 App.refresh_catalog_on_open(opened_app)
 assert(open_refreshes == 1)
+assert(open_status_polls == 4)
 assert(next(opened_app.state.readme_cache) == nil)
 assert(open_catalog_reloads == 1)
 
@@ -593,25 +1003,30 @@ local interrupted_catalog_app = {
     },
     client = {
         refresh_repos = function() return true end,
+        repo_refresh_status = function() error("must not poll a stopped backend") end,
     },
-    run_update_task = function(_, task, _, callback)
-        local called, ok = task()
-        interrupted_catalog_callback = function()
-            callback(true, called, ok)
-        end
-    end,
     load_packages = function() interrupted_catalog_loads = interrupted_catalog_loads + 1 end,
     load_repos = function() end,
     reload_current_page = function() interrupted_catalog_reloads = interrupted_catalog_reloads + 1 end,
 }
+local refresh_ui = require("ui/uimanager")
+local original_refresh_schedule = refresh_ui.scheduleIn
+refresh_ui.scheduleIn = function(_, _, callback) interrupted_catalog_callback = callback end
 App.refresh_catalog_on_open(interrupted_catalog_app)
 assert(interrupted_catalog_app.catalog_refreshing)
+App.refresh_catalog_on_open(interrupted_catalog_app)
 interrupted_catalog_app.backend_ready = false
 interrupted_catalog_callback()
+refresh_ui.scheduleIn = original_refresh_schedule
 assert(not interrupted_catalog_app.catalog_refreshing)
 assert(interrupted_catalog_loads == 0)
 assert(interrupted_catalog_reloads == 0)
 assert(interrupted_catalog_app.state.readme_cache.reader.readme == "Cached README")
+interrupted_catalog_app.view = {}
+interrupted_catalog_app.backend_ready = true
+interrupted_catalog_app.catalog_refreshing = true
+interrupted_catalog_callback()
+assert(interrupted_catalog_app.catalog_refreshing, "an old callback must not alter a reopened view")
 
 local reload_tab
 local reload_full_refresh
@@ -630,6 +1045,9 @@ local back_routes = {
     source_details = "show_sources",
     package_details = "go_back_from_details",
     queue = "close_queue",
+    advanced_settings = "show_settings",
+    updates_settings = "show_settings",
+    about_settings = "show_settings",
     settings = "close_settings",
 }
 for page, method in pairs(back_routes) do
@@ -661,52 +1079,118 @@ App.navigate(navigation_app, "home", false)
 assert(navigation_refreshes[1] == true)
 assert(navigation_refreshes[2] == false)
 
-local changes_refreshes = 0
-local changes_app = {
-    state = {
-        sorts = { changes = "published_at_desc" },
-    },
-    ensure_backend = function() return true end,
-    set_loading = function() end,
-    load_packages = function()
-        return true, {
-            { id = "reader", installed = true },
-            { id = "browser" },
-        }
-    end,
-    clear_status = function() end,
-    refresh = function() changes_refreshes = changes_refreshes + 1 end,
-}
-App.show_changes(changes_app)
-assert(changes_app.state.page == "changes" and changes_app.state.active_tab == "changes")
-assert(model_changes_days == 14)
-assert(model_changes_limit == 40)
-assert(model_changes_sort == "published_at_desc")
-assert(#changes_app.state.changes_packages == 1)
-assert(#changes_app.state.visible_packages == 1)
-assert(changes_refreshes == 1)
+do
+    local tabs = dofile(root .. "/zenpm_constants.lua").TABS
+    assert(#tabs == 4)
+    for _, tab in ipairs(tabs) do assert(tab.id ~= "changes") end
 
-local changes_sort_shown = 0
-local changes_sort_app = {
-    state = { sorts = { changes = "published_at_desc" } },
-    scroll_key = function() return "changes" end,
-    reset_scroll = function() end,
-    show_changes = function() changes_sort_shown = changes_sort_shown + 1 end,
-}
-App.set_sort(changes_sort_app, "changes", "published_at_asc")
-assert(changes_sort_app.state.sorts.changes == "published_at_asc")
-assert(changes_sort_shown == 1)
+    local list_app = App:new({})
+    assert(list_app.state.sorts.search == "published_at_desc")
+    assert(list_app.state.sorts.installed == "name_asc")
+    assert(list_app.state.sorts.installed_images == "installed_at_desc")
+    settings.sorts = { search = "stars", installed = "update_available" }
+    settings.discover_sort_migrated = nil
+    local saved_app = App:new({})
+    assert(saved_app.state.sorts.search == "published_at_desc")
+    assert(settings.sorts.search == "published_at_desc")
+    assert(settings.discover_sort_migrated == true)
+    assert(saved_app.state.sorts.installed == "name_asc")
+    assert(saved_app.state.sorts.installed_images == "installed_at_desc")
+    settings.sorts = nil
 
-local selected_changes_sort
-App.prompt_sort({
-    state = { sorts = { changes = "published_at_desc" } },
-    set_sort = function(_, _, value) selected_changes_sort = value end,
-}, "changes")
-assert(#modal_rows == 2)
-assert(modal_rows[1].text == "Ascending" and modal_rows[2].text == "Descending")
-assert(modal_rows[2].checked_func())
-modal_rows[1].callback()
-assert(selected_changes_sort == "published_at_asc")
+    local packages = {
+        { id = "alpha", name = "Alpha", description = "Zulu", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 100 },
+        { id = "zulu", name = "Zulu", installed = true, update_available = true, stars = 2 },
+        { id = "beta", name = "Beta", installed = true, category = "fonts", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ"), stars = 1 },
+        { id = "gamma", name = "Gamma", published_at = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 24 * 60 * 60), stars = 200 },
+        { id = "wallpaper", name = "Wallpaper", category = "wallpapers", installed = true },
+        { id = "screensaver", name = "Screensaver", category = "screensavers", installed = true, installed_at = "2026-08-01T10:00:00Z" },
+        { id = "screensaver-z", name = "ZZ Screensaver", category = "screensavers", installed = true, installed_at = "2026-08-02T10:00:00Z" },
+    }
+    local refreshes = 0
+    list_app.ensure_backend = function() return true end
+    list_app.set_loading = function() end
+    list_app.load_packages = function() return true, packages end
+    list_app.clear_status = function() end
+    list_app.refresh = function() refreshes = refreshes + 1 end
+    list_app:navigate("search")
+    assert(list_app.state.page == "search" and list_app.state.active_tab == "search")
+    assert(#list_app.state.packages == 7 and #list_app.state.discover_packages == 4)
+    assert(#list_app.state.visible_packages == 4 and refreshes == 1)
+    assert(list_app.state.visible_packages[1].id == "beta")
+    assert(list_app.state.visible_packages[2].id == "alpha")
+    assert(list_app.state.visible_packages[3].id == "gamma")
+    assert(list_app.state.visible_packages[4].id == "zulu")
+    list_app:prompt_sort("search")
+    assert(modal_rows[1].text == "Recently updated" and modal_rows[1].checked_func())
+    modal_rows[2].callback()
+    assert(list_app.state.sorts.search == "stars")
+    assert(list_app.state.visible_packages[1].id == "beta")
+    assert(list_app.state.visible_packages[2].id == "gamma")
+    assert(App:new({}).state.sorts.search == "stars")
+    list_app:set_filter("search", "zulu")
+    assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "zulu")
+
+    list_app:navigate("installed")
+    assert(list_app.state.page == "installed" and list_app.state.active_tab == "installed")
+    assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "zulu")
+    assert(#list_app.state.installed_packages == 5)
+    list_app:show_installed("screensavers")
+    assert(list_app:scroll_key() == "installed:screensavers")
+    assert(#list_app.state.visible_packages == 2 and list_app.state.visible_packages[1].id == "screensaver-z")
+    list_app:reload_current_page()
+    assert(list_app.state.installed_folder == "screensavers")
+    list_app:prompt_sort("installed_images")
+    assert(#modal_rows == 4 and modal_rows[3].checked_func())
+    modal_rows[1].callback()
+    assert(list_app.state.visible_packages[1].id == "screensaver")
+    list_app:prompt_sort("installed_images")
+    modal_rows[2].callback()
+    assert(list_app.state.installed_folder == "screensavers" and list_app.state.visible_packages[1].id == "screensaver-z")
+    assert(list_app.state.sorts.installed == "name_asc" and list_app.state.sorts.installed_images == "name_desc")
+    assert(App:new({}).state.sorts.installed_images == "name_desc")
+    list_app:refresh_queue_package_state()
+    assert(list_app.state.visible_packages[1].id == "screensaver-z")
+    list_app:show_package_details("screensaver", "installed")
+    list_app:go_back_from_details()
+    assert(list_app.state.installed_folder == "screensavers" and list_app.state.page == "installed")
+    list_app:go_back()
+    assert(list_app.state.installed_folder == nil and #list_app.state.visible_packages == 2)
+    list_app:set_sort("installed", "name_desc")
+    assert(list_app.state.sorts.installed_images == "name_desc")
+    list_app:set_sort("installed", "name_asc")
+    list_app:show_installed("wallpapers")
+    assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "wallpaper")
+    list_app:prompt_sort("installed_images")
+    assert(modal_rows[2].checked_func())
+    list_app:navigate("installed")
+    assert(list_app.state.installed_folder == nil and #list_app.state.visible_packages == 2)
+    list_app:prompt_sort("installed")
+    assert(#modal_rows == 4 and modal_rows[1].text == "Name (A-Z)" and modal_rows[1].checked_func())
+    for _, category in ipairs({ "screensavers", "wallpapers" }) do
+        list_app.state.current_category = { id = category }
+        list_app:prompt_sort("category")
+        assert(modal_rows[1].text == "Downloads" and modal_rows[1].icon == "download")
+    end
+    list_app.state.current_repo = { name = "ReaderBackdrop" }
+    list_app:prompt_sort("source")
+    assert(modal_rows[1].text == "Downloads" and modal_rows[1].icon == "download")
+    list_app:set_installed_category_filter("fonts")
+    assert(#list_app.state.visible_packages == 1 and list_app.state.visible_packages[1].id == "beta")
+    list_app:set_installed_category_filter("")
+    list_app:refresh_queue_package_state()
+    assert(list_app.state.visible_packages[1].id == "zulu")
+    packages[2].update_available = false
+    list_app:refresh_queue_package_state()
+    assert(list_app.state.visible_packages[1].id == "beta")
+    list_app.state.readerbackdrop.enabled = true
+    list_app:navigate("categories")
+    assert(list_app.state.categories[3].count_label == "2085")
+    assert(list_app.state.categories[4].id == "wallpapers"
+        and list_app.state.categories[4].count == 1
+        and list_app.state.categories[4].count_label == "10")
+    settings.sorts = nil
+end
 
 local shown_catalog_refreshes = 0
 local show_sequence = {}
@@ -804,14 +1288,38 @@ assert(backend_health_checks == 2)
 assert(backend_health_restarts == 1)
 UIManager.scheduleIn = original_schedule_in
 
+do
+    local scan_calls, reloads = 0, 0
+    local scan_app = {
+        view = {},
+        scan_plugins_on_open = true,
+        state = { packages = {{ id = "reader" }} },
+        client = {
+            scan_installed_plugins = function()
+                scan_calls = scan_calls + 1
+                if scan_calls == 1 then return false, "operation lock busy: operation" end
+                return true
+            end,
+        },
+        scan_plugins_after_open = App.scan_plugins_after_open,
+        reload_current_page = function() reloads = reloads + 1 end,
+    }
+    App.scan_plugins_after_open(scan_app, 1)
+    assert(scan_calls == 2 and reloads == 1 and not scan_app.scan_plugins_on_open)
+end
+
 local sources_menu_calls = 0
 App.show_actions({
     show_sources = function() sources_menu_calls = sources_menu_calls + 1 end,
 })
 assert(modal_title == "ZenPM")
-assert(modal_rows[4].text == "Sources")
-assert(modal_rows[5].text == "Report a Bug")
-modal_rows[4].callback()
+assert(#modal_rows == 5)
+assert(modal_rows[2].text == "Sources")
+assert(modal_rows[3].text == "Report a Bug")
+for _, row in ipairs(modal_rows) do
+    assert(row.text ~= "About" and row.text ~= "Update")
+end
+modal_rows[2].callback()
 assert(sources_menu_calls == 1)
 
 local update_result
@@ -936,6 +1444,31 @@ assert(scriptlet_asset_requests == 0)
 assert(scriptlet_action.action == "install")
 assert(scriptlet_action.asset == nil)
 
+local selected_update_build
+modal_rows = nil
+App.start_package_action({
+    state = { direct_github = false },
+    client = {
+        get_package_assets = function()
+            return true, {
+                needs_choice = true,
+                candidates = { { asset = "reader-kindle.zip" } },
+            }
+        end,
+    },
+    choose_package_asset = App.choose_package_asset,
+    queue_package_action = function(_, _, action, asset, opts)
+        selected_update_build = { action = action, asset = asset, release = opts.release }
+    end,
+}, { id = "reader" }, "update", nil, { release = "v1.2.3" })
+assert(selected_update_build == nil)
+assert(modal_title == "Choose a build for reader")
+assert(#modal_rows == 1)
+modal_rows[1].callback()
+assert(selected_update_build.action == "update")
+assert(selected_update_build.asset == "reader-kindle.zip")
+assert(selected_update_build.release == "v1.2.3")
+
 local scriptlet_entry = App.queue_entry_for({}, scriptlet, "update", nil, { release = "1.0.1" })
 assert(scriptlet_entry.release == nil)
 
@@ -944,6 +1477,21 @@ App.queue_package_action({
     queue_self_update = function() self_update_queued = self_update_queued + 1 return true end,
 }, { id = "zenpm-koreader", plugin_module = "zenpm" }, "update")
 assert(self_update_queued == 2)
+
+local conflict_target = { id = "zen-ui", conflicts = { "simpleui" } }
+local conflict_app = {
+    state = {
+        packages = {
+            conflict_target,
+            { id = "simpleui", name = "SimpleUI", installed = true, platforms = { "koreader" } },
+        },
+        queue = {},
+    },
+    package_disabled = function() return true end,
+}
+assert(#App.conflicting_packages(conflict_app, conflict_target) == 0)
+conflict_app.package_disabled = function() return false end
+assert(#App.conflicting_packages(conflict_app, conflict_target) == 1)
 
 local simple_queue_opened = 0
 modal_message = nil
@@ -999,15 +1547,17 @@ assert(advanced_queue_refreshed == 1)
 assert(modal_message == "Added to Queue")
 
 local companion_update_requests = 0
+local companion_update_prerelease
 local reinstalled_scan_calls = 0
 local reinstalled_backend_restarts = 0
 local reinstalled_result
 App.apply_update({
-    state = { beta_updates = false },
+    state = { beta_updates = true },
     daemon = {
         is_android = function() return true end,
-        request_android_update = function()
+        request_android_update = function(_, allow_prerelease)
             companion_update_requests = companion_update_requests + 1
+            companion_update_prerelease = allow_prerelease
             return true
         end,
         stop_standalone_backend = function() end,
@@ -1029,6 +1579,7 @@ App.apply_update({
     reinstalled_result = { ... }
 end)
 assert(companion_update_requests == 1)
+assert(companion_update_prerelease == true)
 assert(updater_reinstall_requests == 1)
 assert(reinstalled_scan_calls == 1)
 assert(reinstalled_backend_restarts == 1)
@@ -1102,6 +1653,38 @@ App.perform_package_action({
     prompt_default_package_version = function() error("scriptlets must not open the version picker") end,
 }, scriptlet)
 assert(scriptlet_install_action == "install")
+
+local wallpaper_install_action
+App.perform_package_action({
+    state = { direct_github = true },
+    confirm_package_action = function(_, _, action) wallpaper_install_action = action end,
+    prompt_default_package_version = function() error("wallpapers must not open the version picker") end,
+}, {
+    id = "wallpaper-clouds",
+    category = "wallpapers",
+    platforms = { "koreader" },
+    versions_url = "https://example.test/versions.json",
+    source = "https://github.com/example/wallpapers",
+})
+assert(wallpaper_install_action == "install")
+
+local wallpaper_direct_github
+App.run_package_action({
+    state = { direct_github = true },
+    client = {
+        package_action = function(_, _, _, _, _, direct_github)
+            wallpaper_direct_github = direct_github
+            return true
+        end,
+    },
+    package_action_failure_stats = function() return 0 end,
+    poll_package_action = function() end,
+}, {
+    id = "wallpaper-clouds",
+    category = "wallpapers",
+    source = "https://github.com/example/wallpapers",
+}, "install")
+assert(wallpaper_direct_github == false, tostring(wallpaper_direct_github))
 
 local regular_zenpm_action
 local ignored_updates_toggled = 0
@@ -1230,6 +1813,7 @@ assert(prompt_callbacks == 2)
 
 local bulk_queued = {}
 local bulk_queue_opened = 0
+local bulk_asset_requests = 0
 local bulk_app = {
     state = {
         queue_running = false,
@@ -1237,10 +1821,14 @@ local bulk_app = {
         packages = {
             { id = "ignored", installed = true, update_available = true, update_ignored = true },
             { id = "active", installed = true, update_available = true },
+            { id = "wallpaper", category = "wallpapers", installed = true, update_available = true },
         },
     },
     client = {
-        get_package_assets = function() return true, {} end,
+        get_package_assets = function()
+            bulk_asset_requests = bulk_asset_requests + 1
+            return true, {}
+        end,
     },
     queue_package_action = function(_, pkg, action)
         table.insert(bulk_queued, pkg.id .. ":" .. action)
@@ -1249,11 +1837,13 @@ local bulk_app = {
     show_queue = function() bulk_queue_opened = bulk_queue_opened + 1 end,
     refresh = function() end,
 }
-assert(App.installed_update_count(bulk_app) == 1)
+assert(App.installed_update_count(bulk_app) == 2)
 modal_message = nil
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 1)
+assert(#bulk_queued == 2)
 assert(bulk_queued[1] == "active:update")
+assert(bulk_queued[2] == "wallpaper:update")
+assert(bulk_asset_requests == 1)
 assert(bulk_queue_opened == 1)
 assert(modal_message == nil)
 
@@ -1261,7 +1851,8 @@ bulk_app.state.advanced = true
 bulk_queue_opened = 0
 bulk_queued = {}
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 1)
+assert(#bulk_queued == 2)
+assert(bulk_asset_requests == 2)
 assert(bulk_queue_opened == 0)
 assert(modal_message == "Added to Queue")
 
@@ -1275,6 +1866,296 @@ _G.G_reader_settings = {
     saveSetting = function(_, key, value) reader_settings[key] = value end,
     flush = function() end,
 }
+
+do
+local zen_background_saves = 0
+local zen_home_rebuilds = 0
+local zen_background_plugin = {
+    path = "/tmp/zenos.koplugin",
+    config = {},
+    saveConfig = function() zen_background_saves = zen_background_saves + 1 end,
+    _zen_shared = {
+        home = { rebuildActive = function() zen_home_rebuilds = zen_home_rebuilds + 1 end },
+    },
+}
+table.insert(pluginloader.loaded_plugins, zen_background_plugin)
+local image_packages = {
+    {
+        id = "zen-ui",
+        installed = true,
+        platforms = { "koreader" },
+        plugin_module = "zenos",
+        plugin_module_aliases = { "zen_ui" },
+    },
+    {
+        id = "mountain-view-grey",
+        name = "Mountain View Grey",
+        category = "wallpapers",
+        installed = true,
+        installed_asset = "mountain-view-grey.jpg",
+    },
+    {
+        id = "books",
+        name = "Books",
+        category = "screensavers",
+        installed = true,
+        installed_asset = "books.png",
+    },
+    {
+        id = "moonlight",
+        name = "Moonlight",
+        category = "screensavers",
+        installed = true,
+        installed_asset = "moonlight.jpg",
+    },
+}
+local image_app = setmetatable({
+    state = { packages = image_packages },
+    daemon = { koreader_data_dir = function() return "/koreader" end },
+}, { __index = App })
+
+local image_prompt_done = false
+local image_status_closes = status_close_count
+image_app:perform_package_action(image_packages[2], function() image_prompt_done = true end)
+assert(package_modify_callbacks.set_image)
+package_modify_callbacks.set_image()
+assert(modal_title == "Set Mountain View Grey as:")
+assert(#modal_rows == 2)
+assert(modal_rows[1].text == "Set as wallpaper" and modal_rows[2].text == "Set as screensaver")
+assert(status_close_count == image_status_closes + 1)
+modal_rows[1].callback()
+assert(zen_background_plugin.config.library_background.enabled)
+assert(zen_background_plugin.config.library_background.path
+    == "/koreader/resources/wallpapers/mountain-view-grey.jpg")
+assert(modal_message == "Wallpaper set successfully.")
+assert(zen_background_saves == 1 and zen_home_rebuilds == 1 and image_prompt_done)
+image_app:perform_package_action(image_packages[2])
+assert(package_modify_callbacks.set_image)
+package_modify_callbacks.set_image()
+modal_rows[2].callback()
+assert(reader_settings.screensaver_document_cover
+    == "/koreader/resources/wallpapers/mountain-view-grey.jpg")
+assert(modal_message == "Screensaver set successfully.")
+
+image_app:perform_package_action(image_packages[3])
+assert(package_modify_callbacks.set_image)
+package_modify_callbacks.set_image()
+modal_rows[1].callback()
+assert(zen_background_plugin.config.library_background.path
+    == "/koreader/resources/screensavers/books.png")
+assert(modal_message == "Wallpaper set successfully.")
+assert(zen_background_saves == 2 and zen_home_rebuilds == 2)
+
+local reader_plugin = { id = "reader-plugin", installed = true, platforms = { "koreader" } }
+local failed_image = {
+    id = "failed-image",
+    name = "Failed image",
+    category = "screensavers",
+    installed = false,
+    installed_asset = "failed.jpg",
+}
+local image_update = {
+    id = "image-update",
+    name = "Image update",
+    category = "screensavers",
+    installed = true,
+    installed_asset = "update.jpg",
+}
+local image_reinstall = {
+    id = "image-reinstall",
+    name = "Image reinstall",
+    category = "screensavers",
+    installed = true,
+    installed_asset = "reinstall.jpg",
+}
+local image_entries = {
+    { id = image_packages[2].id, action = "install", pkg = image_packages[2] },
+    { id = image_packages[3].id, action = "install", pkg = image_packages[3] },
+    { id = reader_plugin.id, action = "install", pkg = reader_plugin, prompt_restart = true },
+    { id = image_packages[4].id, action = "install", pkg = image_packages[4] },
+    { id = failed_image.id, action = "install", pkg = failed_image },
+    { id = image_update.id, action = "update", pkg = image_update },
+    { id = image_reinstall.id, action = "reinstall", pkg = image_reinstall },
+}
+local image_batch = {
+    operations = image_entries,
+    index = 1,
+    succeeded = {},
+    failed = {},
+    settings_cleanup = {},
+    image_installs = {},
+    prompt_restart = false,
+}
+local image_operations = {}
+local image_batch_finished = false
+image_app.run_package_action = function(_, pkg, action, _, _, options)
+    table.insert(image_operations, pkg.id .. ":" .. action)
+    options.on_result(pkg ~= failed_image, pkg == failed_image and "download failed" or nil)
+end
+image_app.remove_queue_entry = function() end
+image_app.finish_queue_batch = function() image_batch_finished = true end
+modal_title = nil
+App.run_next_queue_operation(image_app, image_batch)
+assert(image_batch_finished and #image_operations == #image_entries and modal_title == nil)
+assert(#image_batch.image_installs == 3)
+assert(image_batch.image_installs[1] == "mountain-view-grey")
+assert(image_batch.image_installs[2] == "books")
+assert(image_batch.image_installs[3] == "moonlight")
+assert(#image_batch.failed == 1 and image_batch.failed[1].entry.pkg == failed_image)
+assert(image_batch.prompt_restart)
+
+image_app.run_package_action = nil
+image_app.remove_queue_entry = nil
+image_app.finish_queue_batch = nil
+image_app.refresh_queue_package_state = function() end
+image_app.refresh = function() end
+image_app.close_queue = function() end
+image_app.reload_current_page = function() end
+image_app.state.packages = {
+    image_packages[1], image_packages[2], image_packages[3], image_packages[4],
+    reader_plugin, image_update, image_reinstall,
+}
+image_app.state.queue_running = true
+restart_message = nil
+modal_title = nil
+App.finish_queue_batch(image_app, image_batch)
+assert(modal_title == "Set Mountain View Grey as the ZenOS library background?")
+modal_options.cancel_callback()
+assert(modal_title == "Choose a KOReader sleep screen")
+assert(#modal_rows == 2 and modal_rows[1].text == "Books" and modal_rows[2].text == "Moonlight")
+reader_settings.screensaver_img_background = "black"
+modal_rows[2].callback()
+assert(reader_settings.screensaver_type == "document_cover")
+assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/moonlight.jpg")
+assert(reader_settings.screensaver_img_background == "black")
+assert(restart_message:find("Queue completed: 6 succeeded, 1 failed.", 1, true))
+assert(not image_app.state.queue_running)
+
+local screensaver_cancelled = false
+image_app:prompt_installed_images({ "books", "moonlight" }, function()
+    screensaver_cancelled = true
+end)
+assert(modal_title == "Choose a KOReader sleep screen")
+modal_options.cancel_callback()
+assert(screensaver_cancelled)
+
+table.remove(pluginloader.loaded_plugins)
+image_app.state.packages = { image_packages[3] }
+local screensaver_without_zen = false
+image_app:perform_package_action(image_packages[3], function()
+    screensaver_without_zen = true
+end)
+assert(package_modify_callbacks.set_image)
+package_modify_callbacks.set_image()
+assert(modal_title == "Set Books as:")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as screensaver")
+local original_io_open = io.open
+io.open = function(path, mode)
+    assert(path == "/koreader/resources/screensavers/books.png" and mode == "rb")
+    return {
+        read = function(_, count)
+            assert(count == 26)
+            return "\137PNG\r\n\26\n\0\0\0\13IHDR\0\0\0\1\0\0\0\1\8\6"
+        end,
+        close = function() end,
+    }
+end
+modal_rows[1].callback()
+io.open = original_io_open
+assert(screensaver_without_zen)
+assert(reader_settings.screensaver_document_cover == "/koreader/resources/screensavers/books.png")
+assert(reader_settings.screensaver_img_background == "none")
+assert(modal_message == "Screensaver set successfully.")
+image_app:perform_package_action(image_packages[3])
+assert(not package_modify_callbacks.set_image)
+
+local apply_error_acknowledged = false
+image_app.apply_installed_image = function() return false, "save failed" end
+modal_message = nil
+image_app:prompt_installed_image_target(image_packages[3], function()
+    apply_error_acknowledged = true
+end)
+modal_rows[1].callback()
+assert(modal_message == "Could not set screensaver: save failed")
+assert(apply_error_acknowledged)
+
+apply_error_acknowledged = false
+image_app:prompt_installed_image(image_packages[3], function()
+    apply_error_acknowledged = true
+end)
+modal_rows[1].callback()
+assert(modal_title == "Could not apply image: save failed")
+assert(#modal_rows == 1 and modal_rows[1].text == "Continue" and modal_options.show_cancel == false)
+modal_rows[1].callback()
+assert(apply_error_acknowledged)
+image_app.apply_installed_image = nil
+
+local skipped_wallpaper = 0
+local function expect_wallpaper_skipped(packages)
+    image_app.state.packages = packages
+    modal_title = nil
+    image_app:prompt_installed_images({ "mountain-view-grey" }, function()
+        skipped_wallpaper = skipped_wallpaper + 1
+    end)
+    assert(modal_title == nil)
+end
+expect_wallpaper_skipped({ image_packages[2] }) -- ZenOS is absent.
+expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- ZenOS is not loaded yet.
+table.insert(pluginloader.loaded_plugins, zen_background_plugin)
+reader_settings.plugins_disabled = { zen_ui = true }
+expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- ZenOS is disabled.
+reader_settings.plugins_disabled = nil
+expect_wallpaper_skipped({ image_packages[2] }) -- ZenOS is being uninstalled.
+image_packages[2].installed = false
+expect_wallpaper_skipped({ image_packages[1], image_packages[2] }) -- Wallpaper is no longer installed.
+image_packages[2].installed = true
+assert(skipped_wallpaper == 5)
+table.remove(pluginloader.loaded_plugins)
+
+device_supports_screensaver = false
+image_app.state.packages = image_packages
+table.insert(pluginloader.loaded_plugins, zen_background_plugin)
+reader_settings.screensaver_document_cover = nil
+local applied, unsupported_error = image_app:apply_installed_image(image_packages[3], "screensavers")
+assert(not applied and unsupported_error == "This device does not support screensavers.")
+assert(reader_settings.screensaver_document_cover == nil)
+local fallback_done = false
+assert(image_app:prompt_installed_image(image_packages[3], function() fallback_done = true end))
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as wallpaper")
+modal_rows[1].callback()
+assert(zen_background_plugin.config.library_background.path == "/koreader/resources/screensavers/books.png")
+assert(modal_message == "Wallpaper set successfully." and fallback_done)
+
+image_app:prompt_installed_image_target(image_packages[3])
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as wallpaper")
+image_app:prompt_installed_image_target(image_packages[2])
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Set as wallpaper")
+image_app:prompt_installed_images({ "books", "moonlight" })
+assert(modal_title == "This device does not support screensavers. Set one as wallpaper instead:")
+assert(#modal_rows == 2 and modal_rows[2].text == "Moonlight")
+modal_rows[2].callback()
+assert(zen_background_plugin.config.library_background.path == "/koreader/resources/screensavers/moonlight.jpg")
+
+table.remove(pluginloader.loaded_plugins)
+fallback_done = false
+image_app.state.packages = { image_packages[3], image_packages[4] }
+image_app:prompt_installed_image(image_packages[3], function() fallback_done = true end)
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Continue" and modal_options.show_cancel == false)
+modal_rows[1].callback()
+assert(fallback_done)
+fallback_done = false
+image_app:prompt_installed_images({ "books", "moonlight" }, function() fallback_done = true end)
+assert(modal_title == "This device does not support screensavers.")
+assert(#modal_rows == 1 and modal_rows[1].text == "Continue")
+modal_rows[1].callback()
+assert(fallback_done)
+device_supports_screensaver = true
+end
+
 local toggle_done = false
 modal_message = nil
 modal_seconds = nil
@@ -1331,12 +2212,17 @@ local queue_app = {
         },
     },
     queue_count = function(self) return #self.state.queue end,
+    confirm_queue = App.confirm_queue,
     prepare_queue_assets = function(_, operations)
         queued_operations = operations
     end,
     refresh = function() end,
 }
+network_connected = false
 App.confirm_queue(queue_app)
+assert(not queue_app.state.queue_running and type(network_retry_callback) == "function")
+network_connected = true
+network_retry_callback()
 assert(queue_app.state.queue_running)
 assert(queued_operations[1].name == "Uninstall")
 assert(queued_operations[2].name == "Install")
@@ -1415,6 +2301,40 @@ local local_plugin_entry = App.queue_entry_for({
 }, "uninstall")
 assert(type(local_plugin_entry.settings_deleter) == "function")
 
+-- A stalled backend must use short probes and leave the queue waiting for
+-- the existing operation, then complete it when the backend responds again.
+do
+    local responding = false
+    local completed = false
+    local next_poll
+    local polling_app = setmetatable({
+        busy = true,
+        state = {},
+        client = {
+            get_log = function(_, _, timeout)
+                assert(timeout and timeout.total <= 1)
+                return responding, ""
+            end,
+            list_packages = function(_, _, _, _, _, timeout)
+                assert(timeout and timeout.total <= 1)
+                if not responding then return false, "timeout" end
+                return true, {{ id = "zlibrary-2", installed = true, installed_version = "1.0.49" }}
+            end,
+        },
+    }, { __index = App })
+    polling_app.poll_package_action = function(_, op, attempt)
+        next_poll = function() App.poll_package_action(polling_app, op, attempt) end
+    end
+    App.poll_package_action(polling_app, {
+        id = "zlibrary-2", action = "update", target_version = "1.0.49",
+        on_result = function(ok) assert(ok); completed = true end,
+    }, 1)
+    assert(polling_app.busy and next_poll and not completed)
+    responding = true
+    next_poll()
+    assert(completed and not polling_app.busy)
+end
+
 App.poll_package_action({
     busy = true,
     package_action_failure_detail = function() return nil end,
@@ -1438,7 +2358,7 @@ App.run_package_action({
     client = {
         package_action = function(_, id, action)
             assert(id == "zen-ui" and action == "install")
-            return true
+            return true, { operation_id = "op-42" }
         end,
     },
     poll_package_action = function(_, op, attempt)
@@ -1453,6 +2373,62 @@ App.run_package_action({
     platforms = { "koreader" },
 }, "update")
 assert(plugin_poll_op.is_plugin)
+assert(plugin_poll_op.operation_id == "op-42")
+
+-- New backends expose a definitive lightweight operation result, avoiding a
+-- full package-list and log read on every poll.
+do
+    local statuses = { "running", "succeeded" }
+    local status_calls = 0
+    local load_calls = 0
+    local next_poll
+    local result
+    local operation_app = setmetatable({
+        busy = true,
+        state = {},
+        client = {
+            package_operation = function(_, id, timeout)
+                assert(id == "op-42" and timeout.total <= 1)
+                status_calls = status_calls + 1
+                return true, { status = statuses[status_calls] }
+            end,
+        },
+        load_packages = function()
+            load_calls = load_calls + 1
+            return true, {{ id = "reader", installed = true, installed_version = "6.5.0" }}
+        end,
+        package_action_failure_detail = function() error("log polling should not run") end,
+    }, { __index = App })
+    operation_app.poll_package_action = function(_, op, attempt)
+        next_poll = function() App.poll_package_action(operation_app, op, attempt) end
+    end
+    App.poll_package_action(operation_app, {
+        id = "reader", name = "Reader", action = "update", operation_id = "op-42",
+        target_version = "6.5.1", on_result = function(ok, detail) result = { ok, detail } end,
+    }, 1)
+    assert(status_calls == 1 and load_calls == 0 and next_poll)
+    next_poll()
+    assert(status_calls == 2 and load_calls == 1)
+    assert(result[1] == true and result[2] == nil and not operation_app.busy)
+end
+
+do
+    local result
+    App.poll_package_action({
+        busy = true,
+        client = {
+            package_operation = function()
+                return true, { status = "failed", error = "connection reset" }
+            end,
+        },
+        package_action_failure_detail = function() error("log polling should not run") end,
+        load_packages = function() error("package list should not load") end,
+    }, {
+        id = "reader", name = "Reader", action = "update", operation_id = "op-failed",
+        on_result = function(ok, detail) result = { ok, detail } end,
+    }, 1)
+    assert(result[1] == false and result[2] == "connection reset")
+end
 
 local recovery_scan_calls = 0
 local recovery_load_calls = 0
@@ -1490,6 +2466,12 @@ assert(recovery_scan_calls == 1)
 assert(recovery_load_calls == 2)
 assert(recovery_result[1] == true and recovery_result[2] == nil)
 assert(not recovery_app.busy)
+assert(not App.package_action_succeeded({}, {
+    action = "update", target_version = "3.3.0-beta1",
+}, { installed = true, installed_version = "3.3.0-alpha9" }))
+assert(App.package_action_succeeded({}, {
+    action = "update", target_version = "3.3.0-alpha9",
+}, { installed = true, installed_version = "3.3.0-beta1" }))
 
 local zenfm_companion_updates = 0
 table.insert(pluginloader.loaded_plugins, {
@@ -1662,7 +2644,7 @@ local category_app = {
 }
 App.prompt_installed_category_filter(category_app)
 assert(modal_title == "Filter by category")
-assert(#modal_rows == 2)
+assert(#modal_rows == 5)
 assert(modal_rows[1].text == "All categories")
 assert(modal_rows[2].text == "Fonts (2)")
 modal_rows[2].callback()
@@ -1680,5 +2662,102 @@ local closing_app = {
 App.close(closing_app)
 assert(android_stops == 1)
 assert(not closing_app.backend_ready)
+
+local readerbackdrop_requests = {}
+local readerbackdrop_reloads = 0
+local readerbackdrop_repaints = #restart_actions
+local readerbackdrop_app = {
+    state = {
+        page = "category_details",
+        current_category = { id = "screensavers" },
+        filters = { category = "forest" },
+        readerbackdrop = { enabled = true, page = 1, query = "forest", tag = "minimalist", loaded_tag = "minimalist", loading = false },
+        packages = {},
+    },
+    client = {
+        load_readerbackdrop = function(_, page, query, tag)
+            assert(#restart_actions == readerbackdrop_repaints + 1
+                and restart_actions[#restart_actions] == "paint")
+            table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag })
+            return true, { page = page, total = 2083, total_pages = 3 }
+        end,
+    },
+    has_readerbackdrop = App.has_readerbackdrop,
+    readerbackdrop_query = App.readerbackdrop_query,
+    load_readerbackdrop_page = App.load_readerbackdrop_page,
+    load_packages = function()
+        return true, { { id = "forest", repo = "ReaderBackdrop" } }
+    end,
+    reload_current_page = function() readerbackdrop_reloads = readerbackdrop_reloads + 1 end,
+}
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[1].page == 2 and readerbackdrop_requests[1].query == "forest")
+assert(readerbackdrop_requests[1].tag == "minimalist")
+assert(readerbackdrop_app.state.readerbackdrop.page == 2 and readerbackdrop_reloads == 1)
+assert(readerbackdrop_app.state.readerbackdrop.total == 2083)
+readerbackdrop_app.state.current_category.id = "wallpapers"
+readerbackdrop_app.state.filters.category = ""
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[2].page == 1 and readerbackdrop_requests[2].query == ""
+    and readerbackdrop_requests[2].tag == "zen-wallpaper")
+assert(readerbackdrop_app.state.readerbackdrop.wallpaper_total == 2083)
+
+local selected_readerbackdrop
+local readerbackdrop_category_app = {
+    state = {
+        page = "category_details",
+        current_category = { id = "screensavers" },
+        filters = { category = "" },
+        readerbackdrop = { tag = "" },
+    },
+    client = {
+        readerbackdrop_categories = function()
+            return true, {
+                tags = { { name = "quote", count = 12 }, { name = "zen-wallpaper", count = 10 },
+                    { name = "black and white", count = 8 } },
+            }
+        end,
+    },
+    reset_scroll = function() end,
+    readerbackdrop_query = App.readerbackdrop_query,
+    load_readerbackdrop_page = function(_, page, query)
+        selected_readerbackdrop = { page = page, query = query }
+        return true
+    end,
+    show_category_details = function() end,
+    set_readerbackdrop_category = App.set_readerbackdrop_category,
+}
+App.prompt_readerbackdrop_categories(readerbackdrop_category_app)
+assert(modal_title == "Tags" and #modal_rows == 3)
+assert(modal_rows[1].checked_func() and modal_rows[2].text == "quote (12)")
+modal_rows[3].callback()
+assert(readerbackdrop_category_app.state.readerbackdrop.tag == "black and white")
+assert(selected_readerbackdrop.page == 1 and selected_readerbackdrop.query == "")
+
+local searched_page, searched_query
+local readerbackdrop_search_app = {
+    state = {
+        filters = { category = "" },
+        current_category = { id = "screensavers", label = "Screensavers" },
+    },
+    reset_scroll = function() end,
+    load_readerbackdrop_page = function(_, page, query)
+        searched_page, searched_query = page, query
+    end,
+    show_category_details = function() end,
+}
+App.prompt_filter(readerbackdrop_search_app, "category")
+assert(modal_title == "Search Screensavers")
+App.set_filter(readerbackdrop_search_app, "category", "moon")
+assert(searched_page == 1 and searched_query == "moon")
+
+local detection_requests = 0
+local detection_app = {
+    client = { request = function() detection_requests = detection_requests + 1 end },
+}
+assert(App.detect_repo_name(detection_app, "https://www.readerbackdrop.com/") == "ReaderBackdrop")
+assert(App.detect_repo_name(detection_app, "https://readerbackdrop.com") == "ReaderBackdrop")
+assert(detection_requests == 0)
 
 print("app tests passed")

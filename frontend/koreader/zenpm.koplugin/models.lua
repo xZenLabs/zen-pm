@@ -39,14 +39,27 @@ function Models.filter_packages(packages, query)
     end
     local out = {}
     for _, pkg in ipairs(packages or {}) do
-        local hay = table.concat({
+        local title = table.concat({
             tostring(pkg.name or ""),
             tostring(I18n.dynamic(pkg.name) or ""),
-            tostring(pkg.author or ""),
-            tostring(I18n.dynamic(pkg.author) or ""),
         }, " "):lower()
-        if hay:find(query, 1, true) then
+        if title:find(query, 1, true) then
             table.insert(out, pkg)
+        end
+    end
+    return out
+end
+
+function Models.filter_packages_by_tag(packages, wanted)
+    wanted = Util.trim(wanted):lower()
+    if wanted == "" then return packages or {} end
+    local out = {}
+    for _, pkg in ipairs(packages or {}) do
+        for _, tag in ipairs(type(pkg.tags) == "table" and pkg.tags or {}) do
+            if Util.trim(tag):lower() == wanted then
+                table.insert(out, pkg)
+                break
+            end
         end
     end
     return out
@@ -118,6 +131,10 @@ function Models.package_in_category(pkg, category)
     if not pkg or not category then
         return false
     end
+    local package_category = normalize_category(pkg.category)
+    if package_category == "screensavers" or package_category == "wallpapers" then
+        return normalize_category(category.id) == package_category
+    end
     if Models.is_kindle_scriptlet(pkg) then
         return is_kindle_scriptlets_category(category)
     end
@@ -125,7 +142,7 @@ function Models.package_in_category(pkg, category)
         return false
     end
     local wanted = normalize_category(category.id)
-    if normalize_category(pkg.category) == wanted then
+    if package_category == wanted then
         return true
     end
     if type(pkg.tags) == "table" then
@@ -252,24 +269,33 @@ local function compare_text(a, b)
     return tostring(a and a.id or "") < tostring(b and b.id or "")
 end
 
-function Models.sort_packages(packages, sort_key)
-    local out = {}
+function Models.sort_packages(packages, sort_key, kind, now)
+    sort_key = sort_key or (kind == "search" and "published_at_desc" or "stars")
+    local out, priority = {}, {}
+    local cutoff, current
+    if kind == "search" then
+        now = tonumber(now) or os.time()
+        cutoff = os.date("!%Y-%m-%dT%H:%M:%S", now - 7 * 24 * 60 * 60)
+        current = os.date("!%Y-%m-%dT%H:%M:%S", now)
+    end
     for _, pkg in ipairs(packages or {}) do
         table.insert(out, pkg)
+        if kind == "installed" then
+            priority[pkg] = pkg.update_available == true and not pkg.update_ignored
+        elseif kind == "search" then
+            local published_at = normalized_published_at(pkg)
+            priority[pkg] = pkg.installed == true and not pkg.update_ignored
+                and published_at ~= nil and published_at >= cutoff and published_at <= current
+        end
     end
-    sort_key = sort_key or "stars"
     table.sort(out, function(a, b)
+        if priority[a] ~= priority[b] then
+            return priority[a]
+        end
         if sort_key == "name" or sort_key == "name_asc" then
             return compare_text(a, b)
         elseif sort_key == "name_desc" then
             return compare_text(b, a)
-        elseif sort_key == "update_available" then
-            local a_update = a.update_available == true and not a.update_ignored
-            local b_update = b.update_available == true and not b.update_ignored
-            if a_update ~= b_update then
-                return a_update
-            end
-            return compare_text(a, b)
         elseif sort_key == "repo" then
             local ar, br = package_repo(a), package_repo(b)
             if ar ~= br then
@@ -310,50 +336,6 @@ function Models.sort_packages(packages, sort_key)
         return compare_text(a, b)
     end)
     return out
-end
-
-function Models.changes_packages(packages, days, limit, sort_key, now)
-    now = tonumber(now) or os.time()
-    local cutoff = os.date("!%Y-%m-%dT%H:%M:%S", now - (tonumber(days) or 14) * 24 * 60 * 60)
-    local current = os.date("!%Y-%m-%dT%H:%M:%S", now)
-    local updates, published, recent = {}, {}, {}
-    for _, pkg in ipairs(packages or {}) do
-        local published_at = normalized_published_at(pkg)
-        if pkg.installed == true then
-            local actionable_update = pkg.update_available == true and not pkg.update_ignored
-            if actionable_update and (not published_at or published_at <= current) then
-                table.insert(updates, pkg)
-            end
-        elseif published_at and published_at <= current then
-            table.insert(published, pkg)
-            if published_at >= cutoff then
-                table.insert(recent, pkg)
-            end
-        end
-    end
-    updates = Models.sort_packages(updates, "published_at_desc")
-    local uninstalled = Models.sort_packages(#recent > 0 and recent or published, "published_at_desc")
-    local selected_updates, selected_uninstalled = {}, {}
-    local max_packages = tonumber(limit) or 40
-    for _, pkg in ipairs(updates) do
-        if #selected_updates >= max_packages then break end
-        table.insert(selected_updates, pkg)
-    end
-    for _, pkg in ipairs(uninstalled) do
-        if #selected_updates + #selected_uninstalled >= max_packages then break end
-        table.insert(selected_uninstalled, pkg)
-    end
-    local display_sort = sort_key == "published_at_asc" and "published_at_asc" or "published_at_desc"
-    selected_updates = Models.sort_packages(selected_updates, display_sort)
-    selected_uninstalled = Models.sort_packages(selected_uninstalled, display_sort)
-    local changes = {}
-    for _, pkg in ipairs(selected_updates) do
-        table.insert(changes, pkg)
-    end
-    for _, pkg in ipairs(selected_uninstalled) do
-        table.insert(changes, pkg)
-    end
-    return changes
 end
 
 local days_before_month = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 }
@@ -436,6 +418,16 @@ function Models.installed_packages(packages)
     return out
 end
 
+function Models.visible_installed_packages(installed, category_id, folder_id, show_kindle_scriptlets)
+    local visible = Models.filter_packages_by_category(installed, folder_id or category_id, show_kindle_scriptlets)
+    if folder_id or (category_id and category_id ~= "") then return visible end
+    local out = {}
+    for _, pkg in ipairs(visible) do
+        if not Models.is_image_asset_package(pkg) then table.insert(out, pkg) end
+    end
+    return out
+end
+
 function Models.select_featured(packages)
     local featured = {}
     for index, pkg in ipairs(packages or {}) do
@@ -496,6 +488,17 @@ end
 
 function Models.is_font_package(pkg)
     return pkg and normalize_category(pkg.category) == "fonts" or false
+end
+
+function Models.is_image_asset_package(pkg)
+    if not pkg then return false end
+    local category = normalize_category(pkg.category)
+    return category == "wallpapers" or category == "screensavers"
+end
+
+function Models.is_direct_asset_package(pkg)
+    if not pkg then return false end
+    return Models.is_font_package(pkg) or Models.is_image_asset_package(pkg)
 end
 
 function Models.is_installed_patch_item(pkg)

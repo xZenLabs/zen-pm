@@ -42,6 +42,9 @@ msgstr "%d packages queued"
 msgid "%s conflicts with %s. They should not be used together. Install anyway?"
 msgstr "%s conflicts with %s. They should not be used together. Install anyway?"
 
+msgid "%s screensaver"
+msgstr "%s screensaver"
+
 msgid "(installed)"
 msgstr "(installed)"
 
@@ -288,6 +291,9 @@ msgstr "Could not verify the update download."
 msgid "Debug"
 msgstr "Debug"
 
+msgid "Debug logging must be enabled to submit bug reports."
+msgstr "Debug logging must be enabled to submit bug reports."
+
 msgid "Descending"
 msgstr "Descending"
 
@@ -342,11 +348,17 @@ msgstr "Download this asset: "
 msgid "Downloaded update checksum did not match."
 msgstr "Downloaded update checksum did not match."
 
+msgid "Downloads"
+msgstr "Downloads"
+
 msgid "enable"
 msgstr "enable"
 
 msgid "Enable"
 msgstr "Enable"
+
+msgid "Enabling debug logging requires a restart. Please reproduce the issue, then submit the report."
+msgstr "Enabling debug logging requires a restart. Please reproduce the issue, then submit the report."
 
 msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Enter your GitHub username to be tagged in the issue"
@@ -539,6 +551,12 @@ msgstr "Modify"
 
 msgid "Name"
 msgstr "Name"
+
+msgid "Name (A-Z)"
+msgstr "Name (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Name (Z-A)"
 
 msgid "network error"
 msgstr "network error"
@@ -777,6 +795,9 @@ msgstr "Scan installed plugins"
 msgid "Scanning installed plugins..."
 msgstr "Scanning installed plugins..."
 
+msgid "Screensavers"
+msgstr "Screensavers"
+
 msgid "Search"
 msgstr "Search"
 
@@ -879,6 +900,12 @@ msgstr "The standalone payload was installed, but its Kindle setup script failed
 msgid "Theme"
 msgstr "Theme"
 
+msgid "This device does not support screensavers."
+msgstr ""
+
+msgid "This device does not support screensavers. Set one as wallpaper instead:"
+msgstr ""
+
 msgid "This release has no ZIP assets."
 msgstr "This release has no ZIP assets."
 
@@ -887,12 +914,6 @@ msgstr "This will install as a \"book\" on the Kindle homescreen."
 
 msgid "timeout"
 msgstr "timeout"
-
-msgid "Title (A-Z)"
-msgstr "Title (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Title (Z-A)"
 
 msgid "to"
 msgstr "to"
@@ -983,6 +1004,9 @@ msgstr "Version: "
 
 msgid "Versions"
 msgstr "Versions"
+
+msgid "Wallpapers"
+msgstr "Wallpapers"
 
 msgid "Welcome"
 msgstr "Welcome"

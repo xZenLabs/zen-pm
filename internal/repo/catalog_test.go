@@ -1,9 +1,11 @@
 package repo
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -59,6 +62,47 @@ func TestAddRejectsKindleForgeOnUnsupportedPlatform(t *testing.T) {
 	}
 }
 
+func TestPublicRepoURLRejectsLocalTargets(t *testing.T) {
+	for _, value := range []string{
+		"file:///etc", "http://localhost:8080", "https://localhost./repo",
+		"http://127.0.0.1", "http://10.1.2.3", "http://169.254.169.254",
+		"http://100.100.100.100", "http://[::1]", "https://device.local",
+		"https://user:pass@example.com", "ftp://example.com",
+	} {
+		if err := ValidatePublicRepoURL(value); err == nil {
+			t.Errorf("allowed unsafe repository URL %q", value)
+		}
+	}
+	for _, value := range []string{"https://repo.zen-labs.org", "http://example.com/repo", "https://example.com/asset?token=abc"} {
+		if err := ValidatePublicRepoURL(value); err != nil {
+			t.Errorf("rejected public URL %q: %v", value, err)
+		}
+	}
+	if _, err := publicFetchTransport().DialContext(context.Background(), "tcp", "127.0.0.1:80"); err == nil || !strings.Contains(err.Error(), "refusing private") {
+		t.Fatalf("public fetch dialed a loopback address: %v", err)
+	}
+}
+
+func TestPublicFetchRejectsCredentialedURL(t *testing.T) {
+	_, err := fetchBytesWithTimeout("https://user:pass@example.invalid/manifest.json", time.Second)
+	if err == nil || !strings.Contains(err.Error(), "public HTTP(S)") {
+		t.Fatalf("credentialed public fetch error = %v, want URL rejection", err)
+	}
+}
+
+func TestAddRejectsEscapingRepoName(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../outside", "../../outside", "sub/other", ".."} {
+		if err := New(st).Add(name, "https://example.com", UserAddedPriority, "trusted"); err == nil {
+			t.Errorf("accepted repository name %q", name)
+		}
+	}
+}
+
 func TestRefreshSkipsKindleForgeOnUnsupportedPlatform(t *testing.T) {
 	t.Setenv("ZENPM_HOME", t.TempDir())
 	st, err := state.Init("host")
@@ -98,6 +142,9 @@ func TestRefreshKeepsCatalogWhenRepositoriesAreUnavailable(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.WriteValue(state.CatalogPublishedAtRefreshKey, "1"); err != nil {
+		t.Fatal(err)
+	}
 
 	err = New(st).Refresh()
 	if err == nil {
@@ -109,6 +156,125 @@ func TestRefreshKeepsCatalogWhenRepositoriesAreUnavailable(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].ID != "cached" {
 		t.Fatalf("catalog after failed refresh = %#v, want cached entry", catalog)
+	}
+	if marker, _ := st.ReadValue(state.CatalogPublishedAtRefreshKey); marker != "1" {
+		t.Fatal("failed refresh cleared the metadata refresh requirement")
+	}
+	if New(st).CatalogAge() < 24*time.Hour {
+		t.Fatal("failed refresh marked the cached catalog fresh")
+	}
+}
+
+func TestRefreshKeepsLoadedReaderBackdropEntries(t *testing.T) {
+	refreshStarted := make(chan struct{})
+	finishRefresh := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "1" {
+			close(refreshStarted)
+			<-finishRefresh
+			_, _ = fmt.Fprint(w, `{"images":[{"id":"current","title":"Current"}]}`)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"images":[{"id":"loaded","title":"Loaded"}]}`)
+	}))
+	defer srv.Close()
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ReaderBackdrop", URL: srv.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "readerbackdrop-previous", Repo: "ReaderBackdrop", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := New(st)
+	refreshDone := make(chan error, 1)
+	go func() { refreshDone <- m.Refresh() }()
+	<-refreshStarted
+	_, _, loadErr := m.LoadReaderBackdropPage(2, "", "")
+	close(finishRefresh)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if err := <-refreshDone; err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := st.ReadCatalog()
+	ids := make(map[string]bool, len(catalog))
+	for _, entry := range catalog {
+		ids[entry.ID] = true
+	}
+	if err != nil || !ids["readerbackdrop-previous"] || !ids["readerbackdrop-loaded"] || !ids["readerbackdrop-current"] {
+		t.Fatalf("catalog after refresh = %#v, %v", catalog, err)
+	}
+}
+
+func TestRefreshPartialAndEmptyCatalogs(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{"packages":[{"id":"new","name":"New"}]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	repos := []state.RepoEntry{{Name: "online", URL: "file://" + dir}, {Name: "offline", URL: "file://" + dir + "/missing"}}
+	if err := st.WriteRepos(repos); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "cached", Repo: "offline"}}); err != nil {
+		t.Fatal(err)
+	}
+	m := New(st)
+	if err := m.Refresh(); err == nil {
+		t.Fatal("partial refresh should report the unavailable repo")
+	}
+	catalog, err := m.ReadCatalog()
+	if err != nil || len(catalog) != 2 || m.CatalogAge() < 24*time.Hour {
+		t.Fatalf("partial catalog = %#v, error = %v, age = %v", catalog, err, m.CatalogAge())
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{"packages":[]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "removed", Repo: "online"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Refresh(); err == nil {
+		t.Fatal("partial refresh should report the unavailable repo")
+	}
+	if catalog, err := m.ReadCatalog(); err != nil || len(catalog) != 0 {
+		t.Fatalf("empty reachable repo retained removed packages: %#v, %v", catalog, err)
+	}
+	if err := st.AppendInstalled(state.InstalledEntry{ID: "removed", Repo: "online"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "removed", Repo: "online", Category: "screensavers"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Refresh(); err == nil {
+		t.Fatal("partial refresh should report the unavailable repo")
+	}
+	if catalog, err := m.ReadCatalog(); err != nil || len(catalog) != 1 || catalog[0].Category != "screensavers" {
+		t.Fatalf("installed removed package lost its catalog metadata: %#v, %v", catalog, err)
+	}
+	if err := st.RemoveInstalled("removed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos(repos[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err = m.ReadCatalog()
+	if err != nil || len(catalog) != 0 || m.CatalogAge() > time.Minute {
+		t.Fatalf("empty catalog = %#v, error = %v, age = %v", catalog, err, m.CatalogAge())
 	}
 }
 
@@ -228,6 +394,84 @@ func TestFetchCatalogUsesKindleForgeRegistryOnly(t *testing.T) {
 	assertEntryIDs(t, entries, []string{"notebook"})
 }
 
+func TestFetchCatalogUsesReaderBackdropAPI(t *testing.T) {
+	var requested string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"images":[
+			{"id":"abc123","title":"Moonlight","description":"A moonlit library","device":"Kobo Clara","imageUrl":"https://utfs.io/image","thumbnailUrl":"https://utfs.io/thumb","fileSize":1024,"downloads":42,"createdAt":"2026-09-10T12:00:00Z","tags":[{"name":"books"}],"user":{"name":"Artist"}},
+			{"id":"wallpaper","title":"Zen","imageUrl":"https://utfs.io/wallpaper","tags":[{"name":"ZEN-WALLPAPER"}]},
+			{"id":"hidden","title":"Hidden","isNSFW":true}
+		]}`))
+	}))
+	defer srv.Close()
+
+	entries, err := FetchCatalog("ReaderBackdrop", srv.URL, 42, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested != "/api/images?sortBy=downloads&limit=24&page=1" {
+		t.Fatalf("requested %q", requested)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries = %#v", entries)
+	}
+	entry := entries[0]
+	if entry.ID != "readerbackdrop-abc123" || entry.Name != "Moonlight" || entry.Category != "screensavers" || entry.Priority != 42 {
+		t.Fatalf("entry = %#v", entry)
+	}
+	if entry.Source != srv.URL+"/backgrounds/abc123" || entry.IconURL != "https://utfs.io/thumb" {
+		t.Fatalf("source/icon = %q, %q", entry.Source, entry.IconURL)
+	}
+	for _, want := range []string{`"asset":"Moonlight"`, `"url":"` + srv.URL + `/api/images/abc123/download"`} {
+		if !strings.Contains(entry.Assets, want) {
+			t.Fatalf("assets = %q, want %q", entry.Assets, want)
+		}
+	}
+	if entries[1].Category != "wallpapers" {
+		t.Fatalf("wallpaper category = %q", entries[1].Category)
+	}
+}
+
+func TestLoadReaderBackdropPageAddsSearchResults(t *testing.T) {
+	var requested string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.RequestURI()
+		_, _ = w.Write([]byte(`{"images":[{"id":"page2","title":"Moon Library","imageUrl":"https://example.invalid/moon.png"}],"total":123,"totalPages":3,"currentPage":2}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ReaderBackdrop", URL: srv.URL, Priority: 100}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "existing", Name: "Existing", Repo: "ZenLabs"}}); err != nil {
+		t.Fatal(err)
+	}
+	totalPages, total, err := New(st).LoadReaderBackdropPage(2, "moon library#@127.0.0.1/?x=1&", "black and white#@127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested != "/api/images?sortBy=downloads&limit=24&page=2&search=moon+library%23%40127.0.0.1%2F%3Fx%3D1%26&tag=black+and+white%23%40127.0.0.1" {
+		t.Fatalf("requested %q", requested)
+	}
+	if totalPages != 3 {
+		t.Fatalf("total pages = %d", totalPages)
+	}
+	if total != 123 {
+		t.Fatalf("total images = %d", total)
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil || len(catalog) != 2 {
+		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
+}
+
 func TestFetchCatalogFallbackLogNamesActualRepository(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "zenpm.log")
 	log.Init(logPath)
@@ -343,6 +587,87 @@ func TestFetchHTTPBytesRetriesHeaderTimeout(t *testing.T) {
 	}
 }
 
+func TestFetchHTTPBytesRetriesTransientStatus(t *testing.T) {
+	for _, status := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			var requests atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if requests.Add(1) == 1 {
+					w.WriteHeader(status)
+					return
+				}
+				_, _ = w.Write([]byte("package data"))
+			}))
+			defer srv.Close()
+
+			data, err := fetchHTTPBytes(srv.URL, srv.Client(), 2)
+			if err != nil || string(data) != "package data" {
+				t.Fatalf("fetchHTTPBytes() = %q, %v", data, err)
+			}
+			if got := requests.Load(); got != 2 {
+				t.Fatalf("requests = %d, want 2", got)
+			}
+		})
+	}
+}
+
+func TestFetchToFileDiscardsPartialDownloadBeforeRetry(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.Header().Set("Content-Length", "12")
+			_, _ = w.Write([]byte("partial"))
+			return
+		}
+		_, _ = w.Write([]byte("complete"))
+	}))
+	defer srv.Close()
+	file, err := os.CreateTemp(t.TempDir(), "asset-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := FetchToFile(srv.URL, file); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(file.Name())
+	if err != nil || string(data) != "complete" || requests.Load() != 2 {
+		t.Fatalf("download = %q, requests = %d, error = %v", data, requests.Load(), err)
+	}
+}
+
+func TestFetchHTTPBytesRejectsNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer srv.Close()
+
+	if _, err := fetchHTTPBytes(srv.URL, srv.Client(), 1); err == nil || !strings.Contains(err.Error(), "304") {
+		t.Fatalf("fetchHTTPBytes() error = %v, want HTTP 304", err)
+	}
+}
+
+func TestRetryableFetchErrorIncludesResetAndEOF(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("read failed: %w", syscall.ECONNRESET),
+		fmt.Errorf("read failed: %w", syscall.ECONNABORTED),
+		fmt.Errorf("connect failed: %w", syscall.ENETUNREACH),
+		fmt.Errorf("connect failed: %w", syscall.EHOSTUNREACH),
+		io.EOF,
+		io.ErrUnexpectedEOF,
+	} {
+		if !retryableFetchError(err) {
+			t.Errorf("retryableFetchError(%v) = false", err)
+		}
+	}
+}
+
+func TestPackageFetchTimeoutAccommodatesSlowKindleTransfers(t *testing.T) {
+	if packageFetchTimeout < 10*time.Minute || packageFetchTimeout <= repositoryFetchTimeout {
+		t.Fatalf("package timeout = %s, repository timeout = %s", packageFetchTimeout, repositoryFetchTimeout)
+	}
+}
+
 func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	featuredOrder := 10
 	entry := &CatalogEntry{
@@ -367,6 +692,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 		ReleaseNotesURL:       "https://example.invalid/release-notes.md",
 		PrereleaseNotesURL:    "https://example.invalid/prerelease-notes.md",
 		PrereleaseVersion:     "1.3.0-rc.1",
+		AlphaVersion:          "1.3.0-alpha1",
 		PluginModule:          "zenos",
 		PluginModuleAliases:   []string{"zen_ui"},
 		SourceAssetAliases:    []string{"zen_ui.koplugin.zip"},
@@ -388,7 +714,7 @@ func TestCatalogSourceAssetRoundTrip(t *testing.T) {
 	if got.PluginModule != "zenos" || len(got.PluginModuleAliases) != 1 || got.PluginModuleAliases[0] != "zen_ui" || len(got.SourceAssetAliases) != 1 || got.SourceAssetAliases[0] != "zen_ui.koplugin.zip" {
 		t.Fatalf("plugin identity aliases = %#v", got)
 	}
-	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.VersionsURL != entry.VersionsURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
+	if got.SourceType != entry.SourceType || got.SourceURL != entry.SourceURL || got.Assets != entry.Assets || got.Constraints != entry.Constraints || got.ReadmeURL != entry.ReadmeURL || got.VersionsURL != entry.VersionsURL || got.ReleaseNotesURL != entry.ReleaseNotesURL || got.PrereleaseNotesURL != entry.PrereleaseNotesURL || got.PrereleaseVersion != entry.PrereleaseVersion || got.AlphaVersion != entry.AlphaVersion || len(got.Conflicts) != 1 || got.Conflicts[0] != "zen-ui" || len(got.IncompatiblePlatforms) != 2 || got.IncompatiblePlatforms[0] != "android" || got.IncompatiblePlatforms[1] != "host" {
 		t.Fatalf("round trip = %#v, want source/assets fields from %#v", got, entry)
 	}
 }
@@ -411,6 +737,21 @@ func TestParseZenPMCatalogDerivesPluginModuleFromSource(t *testing.T) {
 	entries := parseZenPMCatalog("ZenLabs", "https://example.invalid/repo", 10, manifest)
 	if len(entries) != 1 || entries[0].PluginModule != "zlibrary" {
 		t.Fatalf("entries = %#v, want zlibrary plugin module", entries)
+	}
+}
+
+func TestCatalogEntryDerivesPluginModuleFromVersionedAsset(t *testing.T) {
+	for _, test := range []struct {
+		asset, version, module string
+	}{
+		{"foot-cream-v1.8.3.koplugin.zip", "1.8.3", "foot-cream"},
+		{"remote_turner-1.6.8.koplugin.zip", "1.6.8", "remote_turner"},
+	} {
+		entry := CatalogEntry{SourceAsset: test.asset, Version: test.version}
+		entry.ensurePluginModule()
+		if entry.PluginModule != test.module {
+			t.Fatalf("module for %q = %q, want %q", test.asset, entry.PluginModule, test.module)
+		}
 	}
 }
 
@@ -465,6 +806,7 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 				"versions_url": "packages/koreader/koreader-rsvp-plugin/versions.json",
 				"release_notes_url": "packages/koreader/koreader-rsvp-plugin/RELEASE_NOTES.md",
 				"prerelease_version": "1.1.0-rc.1",
+				"alpha_version": "1.1.0-alpha1",
 				"prerelease_notes_url": "packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md",
 				"published_at": "2026-07-24T12:00:00Z",
 				"featured_order": 10,
@@ -518,6 +860,9 @@ func TestParseZenPMCatalogIncludesManifestDBFields(t *testing.T) {
 	}
 	if entries[0].PrereleaseNotesURL != "https://example.invalid/repo/packages/koreader/koreader-rsvp-plugin/PRERELEASE_NOTES.md" || entries[0].PrereleaseVersion != "1.1.0-rc.1" {
 		t.Fatalf("prerelease notes = %q / %q", entries[0].PrereleaseNotesURL, entries[0].PrereleaseVersion)
+	}
+	if entries[0].AlphaVersion != "1.1.0-alpha1" {
+		t.Fatalf("AlphaVersion = %q", entries[0].AlphaVersion)
 	}
 	if entries[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", entries[0].PublishedAt)

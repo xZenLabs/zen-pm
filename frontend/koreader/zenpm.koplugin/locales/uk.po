@@ -336,6 +336,9 @@ msgstr "Завантажити цей ресурс: "
 msgid "Downloaded update checksum did not match."
 msgstr "Контрольна сума завантаженого оновлення не збігається."
 
+msgid "Downloads"
+msgstr "Завантаження"
+
 msgid "enable"
 msgstr "включити"
 
@@ -529,7 +532,13 @@ msgid "Modify"
 msgstr "Змінити"
 
 msgid "Name"
-msgstr "Ім'я"
+msgstr "Назва"
+
+msgid "Name (A-Z)"
+msgstr "Назва (А-Я)"
+
+msgid "Name (Z-A)"
+msgstr "Назва (Я-А)"
 
 msgid "network error"
 msgstr "помилка мережі"
@@ -768,6 +777,9 @@ msgstr "Сканувати встановлені плагіни"
 msgid "Scanning installed plugins..."
 msgstr "Сканування встановлених плагінів..."
 
+msgid "Screensavers"
+msgstr "Заставки"
+
 msgid "Search"
 msgstr "Пошук"
 
@@ -876,12 +888,6 @@ msgstr "Це буде встановлено як «книгу» на голов
 msgid "timeout"
 msgstr "тайм-аут"
 
-msgid "Title (A-Z)"
-msgstr "Назва (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Назва (Я-А)"
-
 msgid "to"
 msgstr "до"
 
@@ -968,6 +974,9 @@ msgstr "Версія: "
 
 msgid "Versions"
 msgstr "Версії"
+
+msgid "Wallpapers"
+msgstr "Шпалери"
 
 msgid "Welcome"
 msgstr "Ласкаво просимо"

@@ -154,13 +154,41 @@ paths:
         "404":
           $ref: "#/components/responses/JsonError"
   /repo/refresh:
+    get:
+      tags:
+        - Repositories
+      summary: Read the status of the latest catalog refresh
+      operationId: repoRefreshStatus
+      responses:
+        "200":
+          description: Status remains available after completion, including partial refresh errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refreshing:
+                    type: boolean
+                  ok:
+                    type: boolean
+                  error:
+                    type: string
     post:
       tags:
         - Repositories
       summary: Refresh the merged package catalog
       description: Fetches all configured repositories, merges catalog entries by priority, and caches uninstall scripts for installed packages.
       operationId: refreshRepos
+      parameters:
+        - in: query
+          name: async
+          schema:
+            type: string
+            enum: ["1"]
+          description: Return immediately and poll GET /repo/refresh for completion. Concurrent requests share the active refresh.
       responses:
+        "202":
+          description: Background refresh accepted.
         "200":
           description: Catalog refresh completed.
           content:
@@ -190,8 +218,23 @@ paths:
       description: |
         Forces a scan of external `.koplugin` directories, excluding KOReader
         built-ins and patch packages. Matching catalog packages are recorded as
-        installed using their `_meta.lua` version.
+        installed using their `_meta.lua` version. Scans also run on backend
+        startup and after catalog refreshes, including after a previous scan.
+        Optional plugin directories reported by KOReader are saved for future
+        scans and package operations, alongside the configured/default paths.
       operationId: scanKOReaderPlugins
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plugin_dirs:
+                  type: array
+                  description: Absolute paths, including KOReader extra_plugin_paths. Omit to reuse saved paths; an empty array clears them.
+                  items:
+                    type: string
       responses:
         "200":
           description: Plugin scan completed.
@@ -205,6 +248,8 @@ paths:
                 matched: 2
                 added: 1
                 updated: 1
+        "400":
+          $ref: "#/components/responses/JsonError"
         "405":
           $ref: "#/components/responses/TextError"
         "500":
@@ -229,6 +274,18 @@ paths:
           schema:
             type: string
           example: kindle,koreader
+        - name: beta
+          in: query
+          required: false
+          description: Set to `1` to include beta updates.
+          schema:
+            type: boolean
+        - name: alpha
+          in: query
+          required: false
+          description: Set to `1` to include ZenOS alpha updates.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Package list. If the catalog has not been built yet, this may be an empty array.
@@ -277,7 +334,8 @@ paths:
       summary: Start package installation
       description: |
         Starts installation asynchronously and returns immediately. Clients can
-        poll `/log` to observe progress and failures. Passing `release` installs
+        poll the returned `/package-operations/{operationId}` resource for the
+        definitive result. Passing `release` installs
         that repository-cached release and records its tag as the installed version.
       operationId: installPackage
       parameters:
@@ -309,7 +367,8 @@ paths:
       summary: Reinstall a package cleanly
       description: |
         Starts an uninstall followed by an installation asynchronously. Clients
-        can poll `/log` to observe progress and failures. Passing `release`
+        can poll the returned `/package-operations/{operationId}` resource for the
+        definitive result. Passing `release`
         installs that repository-cached release after removal.
       operationId: reinstallPackage
       parameters:
@@ -405,13 +464,32 @@ paths:
         - Packages
       summary: Start package removal
       description: |
-        Starts uninstallation asynchronously and returns immediately. Clients can
-        poll `/log` to observe progress and failures.
+        Starts uninstallation asynchronously and returns immediately. Clients poll
+        the returned `/package-operations/{operationId}` resource for the result.
       operationId: uninstallPackage
       responses:
         "202":
           $ref: "#/components/responses/Started"
         "400":
+          $ref: "#/components/responses/TextError"
+        "405":
+          $ref: "#/components/responses/TextError"
+  /package-operations/{operationId}:
+    parameters:
+      - $ref: "#/components/parameters/OperationId"
+    get:
+      tags:
+        - Packages
+      summary: Read an asynchronous package operation result
+      operationId: getPackageOperation
+      responses:
+        "200":
+          description: Current operation state and any definitive failure detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageOperation"
+        "404":
           $ref: "#/components/responses/TextError"
         "405":
           $ref: "#/components/responses/TextError"
@@ -604,6 +682,15 @@ components:
         type: string
         minLength: 1
       example: koreader-kindle
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      description: Identifier returned when a package action is accepted.
+      schema:
+        type: string
+        minLength: 1
+      example: "42"
   responses:
     Ok:
       description: Operation completed.
@@ -622,6 +709,7 @@ components:
           example:
             ok: true
             started: true
+            operation_id: "42"
     JsonError:
       description: JSON error response.
       content:
@@ -854,6 +942,12 @@ components:
         latest_version:
           type: string
           description: Latest stable or enabled prerelease version declared by the repository.
+        prerelease_version:
+          type: string
+          description: Latest beta version declared by the repository.
+        alpha_version:
+          type: string
+          description: Latest ZenOS alpha version declared by the repository.
         update_available:
           type: boolean
           description: True when `latest_version` is newer than `installed_version`.
@@ -933,6 +1027,7 @@ components:
       required:
         - ok
         - started
+        - operation_id
       properties:
         ok:
           type: boolean
@@ -940,6 +1035,29 @@ components:
         started:
           type: boolean
           example: true
+        operation_id:
+          type: string
+          example: "42"
+    PackageOperation:
+      type: object
+      required:
+        - id
+        - package_id
+        - action
+        - status
+      properties:
+        id:
+          type: string
+        package_id:
+          type: string
+        action:
+          type: string
+          enum: [install, reinstall, uninstall]
+        status:
+          type: string
+          enum: [running, succeeded, failed]
+        error:
+          type: string
     ErrorResponse:
       type: object
       required:

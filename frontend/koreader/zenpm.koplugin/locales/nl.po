@@ -336,6 +336,9 @@ msgstr "Download dit item: "
 msgid "Downloaded update checksum did not match."
 msgstr "De gedownloade updatecontrolesom kwam niet overeen."
 
+msgid "Downloads"
+msgstr "Downloads"
+
 msgid "enable"
 msgstr "inschakelen"
 
@@ -530,6 +533,12 @@ msgstr "Wijzigen"
 
 msgid "Name"
 msgstr "Naam"
+
+msgid "Name (A-Z)"
+msgstr "Naam (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Naam (Z-A)"
 
 msgid "network error"
 msgstr "netwerkfout"
@@ -768,6 +777,9 @@ msgstr "Geïnstalleerde plug-ins scannen"
 msgid "Scanning installed plugins..."
 msgstr "Geïnstalleerde plug-ins scannen..."
 
+msgid "Screensavers"
+msgstr "Schermbeveiligingen"
+
 msgid "Search"
 msgstr "Zoeken"
 
@@ -876,12 +888,6 @@ msgstr "Dit wordt als een \"boek\" op het Kindle-startscherm geïnstalleerd."
 msgid "timeout"
 msgstr "time-out"
 
-msgid "Title (A-Z)"
-msgstr "Titel (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Titel (Z-A)"
-
 msgid "to"
 msgstr "naar"
 
@@ -968,6 +974,9 @@ msgstr "Versie: "
 
 msgid "Versions"
 msgstr "Versies"
+
+msgid "Wallpapers"
+msgstr "Achtergronden"
 
 msgid "Welcome"
 msgstr "Welkom"

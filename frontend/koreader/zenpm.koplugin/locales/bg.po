@@ -336,6 +336,9 @@ msgstr "Изтеглете този актив: "
 msgid "Downloaded update checksum did not match."
 msgstr "Контролната сума на изтеглената актуализация не съответства."
 
+msgid "Downloads"
+msgstr "Изтегляния"
+
 msgid "enable"
 msgstr "активирайте"
 
@@ -530,6 +533,12 @@ msgstr "Промени"
 
 msgid "Name"
 msgstr "Име"
+
+msgid "Name (A-Z)"
+msgstr "Име (А-Я)"
+
+msgid "Name (Z-A)"
+msgstr "Име (Я-А)"
 
 msgid "network error"
 msgstr "мрежова грешка"
@@ -768,6 +777,9 @@ msgstr "Сканирайте инсталираните добавки"
 msgid "Scanning installed plugins..."
 msgstr "Сканиране на инсталирани добавки..."
 
+msgid "Screensavers"
+msgstr "Скрийнсейвъри"
+
 msgid "Search"
 msgstr "Търсене"
 
@@ -876,12 +888,6 @@ msgstr "Това ще се инсталира като „книга“ на н�
 msgid "timeout"
 msgstr "таймаут"
 
-msgid "Title (A-Z)"
-msgstr "Заглавие (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Заглавие (Я-А)"
-
 msgid "to"
 msgstr "към"
 
@@ -968,6 +974,9 @@ msgstr "Версия: "
 
 msgid "Versions"
 msgstr "Версии"
+
+msgid "Wallpapers"
+msgstr "Тапети"
 
 msgid "Welcome"
 msgstr "Добре дошли"

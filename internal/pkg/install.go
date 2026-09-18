@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/xZenLabs/zen-pm/internal/assets"
 	"github.com/xZenLabs/zen-pm/internal/log"
@@ -18,9 +19,10 @@ import (
 
 // Manager drives package install/uninstall/update operations.
 type Manager struct {
-	st    *state.State
-	repos *repo.Manager
-	plat  string
+	st          *state.State
+	repos       *repo.Manager
+	plat        string
+	operationMu sync.Mutex
 }
 
 func New(st *state.State, repos *repo.Manager, plat string) *Manager {
@@ -43,21 +45,49 @@ func (m *Manager) CheckInstall(id string) error {
 	return err
 }
 
+func (m *Manager) lockOperation() error {
+	m.operationMu.Lock()
+	if err := m.st.LockAcquire("operation"); err != nil {
+		m.operationMu.Unlock()
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) unlockOperation() {
+	m.st.LockRelease("operation")
+	m.operationMu.Unlock()
+}
+
 // InstallAsset installs id, forcing assetOverride as the release asset when non-empty.
 // When empty, the asset is auto-selected for the current device.
 func (m *Manager) InstallAsset(id, assetOverride string) error {
-	return m.installAssetRelease(id, assetOverride, "", true)
+	return m.installAssetRelease(id, assetOverride, "", true, false)
 }
 
 // InstallRelease installs a specific release and records its tag as the
 // installed version.
 func (m *Manager) InstallRelease(id, tag, assetOverride string) error {
-	return m.installAssetRelease(id, assetOverride, tag, true)
+	return m.installAssetRelease(id, assetOverride, tag, true, false)
+}
+
+// InstallGitHubRelease resolves release metadata directly from GitHub.
+func (m *Manager) InstallGitHubRelease(id, tag, assetOverride string) error {
+	return m.installAssetRelease(id, assetOverride, tag, true, true)
 }
 
 // Reinstall removes an installed package before installing it again. When tag
 // is non-empty, it installs that specific release.
 func (m *Manager) Reinstall(id, assetOverride, tag string) error {
+	return m.reinstall(id, assetOverride, tag, false)
+}
+
+// ReinstallGitHubRelease resolves release metadata directly from GitHub.
+func (m *Manager) ReinstallGitHubRelease(id, assetOverride, tag string) error {
+	return m.reinstall(id, assetOverride, tag, true)
+}
+
+func (m *Manager) reinstall(id, assetOverride, tag string, directGitHub bool) error {
 	uninstallAsset := ""
 	if m.isPatchFileInstalled(id, assetOverride) {
 		uninstallAsset = assetOverride
@@ -66,23 +96,23 @@ func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 		return fmt.Errorf("uninstall %s: %w", id, err)
 	}
 	if tag != "" {
-		return m.installAssetRelease(id, assetOverride, tag, false)
+		return m.installAssetRelease(id, assetOverride, tag, false, directGitHub)
 	}
-	return m.installAssetRelease(id, assetOverride, "", false)
+	return m.installAssetRelease(id, assetOverride, "", false, directGitHub)
 }
 
-func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, markTargetNew bool) (retErr error) {
+func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, markTargetNew, directGitHub bool) (retErr error) {
 	catalog, plan, installedSet, launcherPendingSet, err := m.installPlan(id)
 	if err != nil {
 		return err
 	}
 
-	if err := m.st.LockAcquire("operation"); err != nil {
+	if err := m.lockOperation(); err != nil {
 		return err
 	}
 	log.Infof("Package operation started: install %s", id)
 	defer func() {
-		m.st.LockRelease("operation")
+		m.unlockOperation()
 		if retErr != nil {
 			log.Errorf("Package operation failed: install %s: %v", id, retErr)
 			return
@@ -102,18 +132,20 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		}
 		entry := byID[pkgID]
 		override := ""
+		selectedReleaseTag := ""
 		if pkgID == id {
 			override = assetOverride
+			selectedReleaseTag = releaseTag
 		}
 		installEntry := entry
-		if pkgID == id && releaseTag != "" && !isFontPackage(entry) {
-			releaseSource, err := releases.GitHubReleaseURL(entry.Source, releaseTag)
+		if selectedReleaseTag != "" && !isDirectKOReaderAssetPackage(entry) {
+			releaseSource, err := releases.GitHubReleaseURL(entry.Source, selectedReleaseTag)
 			if err != nil {
 				return err
 			}
 			entryCopy := *entry
 			entryCopy.Source = releaseSource
-			entryCopy.Version = releaseTag
+			entryCopy.Version = selectedReleaseTag
 			installEntry = &entryCopy
 		}
 		patchReason := patchPackageReason(entry)
@@ -138,7 +170,7 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		installedPath := ""
 		if genericInstaller != "" {
 			var err error
-			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, releaseTag, genericInstaller)
+			installedPluginVersion, installedPath, err = m.installGenericKOReader(entry, override, selectedReleaseTag, genericInstaller, directGitHub && pkgID == id)
 			if err != nil {
 				return fmt.Errorf("install %s: %w", pkgID, err)
 			}
@@ -159,9 +191,16 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 
 		installedVersion := installEntry.Version
 		if genericInstaller == genericPluginInstaller {
-			installedVersion = releaseTag
-			if installedPluginVersion != "" && installedPluginVersion != "0.0.0" {
+			if selectedReleaseTag != "" {
+				installedVersion = selectedReleaseTag
+			}
+			if selectedReleaseTag == "" && installedPluginVersion != "" && installedPluginVersion != "0.0.0" &&
+				releases.VersionGreater(installedPluginVersion, installedVersion) {
 				installedVersion = installedPluginVersion
+			}
+			if installedPluginVersion != "" && installedPluginVersion != "0.0.0" &&
+				releases.NormalizeVersion(installedVersion) != releases.NormalizeVersion(installedPluginVersion) {
+				log.Warnf("Package %s selected version %s reports embedded version %s; recording the selected version", pkgID, installedVersion, installedPluginVersion)
 			}
 		}
 
@@ -181,6 +220,9 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 		}
 
 		selectedName, selectedArch := m.installedAsset(installEntry, override)
+		if (genericInstaller == genericWallpaperInstaller || genericInstaller == genericScreensaverInstaller) && installedPath != "" {
+			selectedName = filepath.Base(installedPath)
+		}
 		if genericInstaller == genericPluginInstaller {
 			if err := m.removeConflictingKOReaderPluginRecords(pkgID, installedPath, catalog); err != nil {
 				return err
@@ -305,12 +347,12 @@ func (m *Manager) Uninstall(id, asset string) (retErr error) {
 		}
 	}
 
-	if err := m.st.LockAcquire("operation"); err != nil {
+	if err := m.lockOperation(); err != nil {
 		return err
 	}
 	log.Infof("Package operation started: uninstall %s", id)
 	defer func() {
-		m.st.LockRelease("operation")
+		m.unlockOperation()
 		if retErr != nil {
 			log.Errorf("Package operation failed: uninstall %s: %v", id, retErr)
 			return
@@ -502,7 +544,9 @@ func (m *Manager) selectAsset(entry *repo.CatalogEntry) assets.Result {
 }
 
 func (m *Manager) selectAssetWithError(entry *repo.CatalogEntry) (assets.Result, error) {
-	result := assets.Select(entry.Assets, m.device())
+	dev := m.device()
+	dev.KOReader = packageHasPlatform(entry, "koreader")
+	result := assets.Select(entry.Assets, dev)
 	if result.Auto != "" || !result.NeedsChoice {
 		return result, nil
 	}
@@ -740,24 +784,40 @@ func isPatchPackage(entry *repo.CatalogEntry) bool {
 }
 
 func isFontPackage(entry *repo.CatalogEntry) bool {
-	if entry == nil {
-		return false
-	}
-	category := strings.ToLower(strings.TrimSpace(entry.Category))
-	category = strings.ReplaceAll(category, "-", "")
-	category = strings.ReplaceAll(category, "_", "")
-	category = strings.ReplaceAll(category, " ", "")
+	category := normalizedPackageCategory(entry)
 	return category == "font" || category == "fonts"
 }
 
-func patchPackageReason(entry *repo.CatalogEntry) string {
+func imagePackageKind(entry *repo.CatalogEntry) string {
+	switch normalizedPackageCategory(entry) {
+	case genericWallpaperInstaller:
+		return genericWallpaperInstaller
+	case genericScreensaverInstaller:
+		return genericScreensaverInstaller
+	default:
+		return ""
+	}
+}
+
+func isDirectKOReaderAssetPackage(entry *repo.CatalogEntry) bool {
+	return isFontPackage(entry) || imagePackageKind(entry) != ""
+}
+
+func normalizedPackageCategory(entry *repo.CatalogEntry) string {
 	if entry == nil {
 		return ""
 	}
 	category := strings.ToLower(strings.TrimSpace(entry.Category))
 	category = strings.ReplaceAll(category, "-", "")
 	category = strings.ReplaceAll(category, "_", "")
-	category = strings.ReplaceAll(category, " ", "")
+	return strings.ReplaceAll(category, " ", "")
+}
+
+func patchPackageReason(entry *repo.CatalogEntry) string {
+	if entry == nil {
+		return ""
+	}
+	category := normalizedPackageCategory(entry)
 	if category == "patch" || category == "patches" ||
 		category == "koreaderpatch" || category == "koreaderpatches" {
 		return "category"

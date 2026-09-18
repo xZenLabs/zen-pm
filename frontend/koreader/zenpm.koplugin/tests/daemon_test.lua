@@ -208,6 +208,7 @@ package.preload["android"] = function()
     }
 end
 local AndroidDaemon = require("daemon")
+local android = require("android")
 local android_daemon = AndroidDaemon:new()
 android_daemon.state_home = function() return "/storage/emulated/0/ZenPM" end
 android_daemon.koreader_root = function() return "/storage/emulated/0/koreader" end
@@ -234,5 +235,13 @@ android_daemon:stop_standalone_backend()
 os.execute = original_execute
 assert(#android_stop_commands == 1)
 assert(android_stop_commands[1]:find("zenpm://stop", 1, true))
+
+local update_uri
+android.openLink = function(uri)
+    update_uri = uri
+    return false
+end
+assert(not android_daemon:request_android_update(true))
+assert(update_uri == "zenpm://update?home=%2Fstorage%2Femulated%2F0%2FZenPM&beta=1")
 
 print("daemon tests passed")

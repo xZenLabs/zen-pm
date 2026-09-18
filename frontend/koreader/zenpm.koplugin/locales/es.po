@@ -336,6 +336,9 @@ msgstr "Descargue este recurso: "
 msgid "Downloaded update checksum did not match."
 msgstr "La suma de comprobación de la actualización descargada no coincide."
 
+msgid "Downloads"
+msgstr "Descargas"
+
 msgid "enable"
 msgstr "permitir"
 
@@ -530,6 +533,12 @@ msgstr "Modificar"
 
 msgid "Name"
 msgstr "Nombre"
+
+msgid "Name (A-Z)"
+msgstr "Nombre (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Nombre (Z-A)"
 
 msgid "network error"
 msgstr "error de red"
@@ -768,6 +777,9 @@ msgstr "Escanear complementos instalados"
 msgid "Scanning installed plugins..."
 msgstr "Escaneando complementos instalados..."
 
+msgid "Screensavers"
+msgstr "Salvapantallas"
+
 msgid "Search"
 msgstr "Buscar"
 
@@ -876,12 +888,6 @@ msgstr "Esto se instalará como un \"libro\" en la pantalla de inicio de Kindle.
 msgid "timeout"
 msgstr "se acabó el tiempo"
 
-msgid "Title (A-Z)"
-msgstr "Título (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Título (Z-A)"
-
 msgid "to"
 msgstr "a"
 
@@ -968,6 +974,9 @@ msgstr "Version: "
 
 msgid "Versions"
 msgstr "Versiones"
+
+msgid "Wallpapers"
+msgstr "Fondos de pantalla"
 
 msgid "Welcome"
 msgstr "Bienvenido"

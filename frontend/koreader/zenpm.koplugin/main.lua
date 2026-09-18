@@ -1,4 +1,5 @@
 local Dispatcher = require("dispatcher")
+local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
@@ -103,6 +104,15 @@ function ZenPM:onOpenZenPM()
 end
 
 function ZenPM:onUpdateAllZenPMPlugins()
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:onUpdateAllZenPMPlugins()
+    end) then return true end
+    local app = Launcher.get_app(self)
+    local closed, close_err = app:close_book_before_update()
+    if not closed then
+        app.daemon:log_cli("dispatcher update all failed to close book: " .. tostring(close_err))
+        return false
+    end
     local daemon = Daemon:new()
     local client = Client:new()
     local ready, err = daemon:ensure(client)
@@ -142,6 +152,7 @@ function ZenPM:onCloseWidget()
     -- USB mass storage unmounts Kobo's onboard filesystem immediately after
     -- KOReader closes. Stop the backend first so it cannot keep that storage
     -- busy and block the handoff.
+    Launcher.quit()
     Daemon:new():stop_standalone_backend()
     I18n.uninstall()
 end

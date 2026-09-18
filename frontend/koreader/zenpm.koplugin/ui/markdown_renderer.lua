@@ -238,7 +238,7 @@ end
 local function queue_prepared_image_poll(view, ref)
     local state = view._readme_image_poll
     if not state then
-        state = { refs = {}, attempts = 0, scheduled = false }
+        state = { refs = {}, attempts = 0, scheduled = false, changed = false }
         view._readme_image_poll = state
     end
     state.refs[ref] = true
@@ -252,6 +252,7 @@ local function queue_prepared_image_poll(view, ref)
             if view.app.state.page and view.app.state.page ~= "package_details" then
                 state.refs = {}
                 state.attempts = 0
+                state.changed = false
                 return
             end
             state.attempts = state.attempts + 1
@@ -266,13 +267,16 @@ local function queue_prepared_image_poll(view, ref)
                     changed = true
                 end
             end
-            if changed then
-                view.app:refresh()
-            elseif pending and state.attempts < PREPARED_IMAGE_POLL_LIMIT then
+            state.changed = state.changed or changed
+            if pending and state.attempts < PREPARED_IMAGE_POLL_LIMIT then
                 poll()
             else
                 state.refs = {}
                 state.attempts = 0
+                if state.changed then
+                    state.changed = false
+                    view.app:refresh()
+                end
             end
         end)
     end
@@ -323,8 +327,9 @@ local function image_entry(view, block, image_base_url, width, image_refs)
         local text = block.alt ~= "" and string.format(_("[Image: %s]"), block.alt) or _("[Image]")
         return fallback_text_entry(text, width)
     end
-    local url = Markdown.resolve_url(image_base_url, block.url)
-    if not url:match("^https://") then
+    local url = tostring(block.url or ""):match("^/packages/[^/]+/preview$")
+        and block.url or Markdown.resolve_url(image_base_url, block.url)
+    if not url:match("^https://") and not url:match("^/packages/[^/]+/preview$") then
         log_image(view, block.url, "skipped", "resolved=" .. url)
         return fallback_text_entry(block.alt ~= "" and block.alt or block.url, width)
     end
@@ -352,10 +357,11 @@ local function image_entry(view, block, image_base_url, width, image_refs)
             backend_managed = backend_pending,
         }
     end
+    local max_height = block.max_height or Theme.scale(240)
     local image_w, image_h = prepared_image_dimensions(
-        prepared_width, prepared_height, width, Theme.scale(240))
+        prepared_width, prepared_height, width, max_height)
     if not image_w then
-        image_w, image_h = P.image_dimensions(file, width, Theme.scale(240))
+        image_w, image_h = P.image_dimensions(file, width, max_height)
     end
     if not image_w then
         log_image(view, url, "unreadable", "file=" .. file)
@@ -410,7 +416,16 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
                 if P.image_cropped(bb, entry.file, x, visible_y, entry.w, visible_h, entry.h, source_y, { is_icon = false }) then
                     log_image(view, entry.file, "painted")
                     P.hit(view, x, visible_y, entry.w, visible_h, function()
-                        UIManager:show(ImageViewer:new{ file = entry.file, fullscreen = true })
+                        local viewer = ImageViewer:new{
+                            file = entry.file,
+                            fullscreen = true,
+                            with_title_bar = false,
+                        }
+                        viewer.onTap = function(viewer_self)
+                            viewer_self:onClose()
+                            return true
+                        end
+                        UIManager:show(viewer)
                     end, "readme-image:" .. entry.file)
                 elseif entry.alt and entry.alt ~= "" then
                     log_image(view, entry.file, "paint-failed")

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -52,7 +54,15 @@ func TestFetchReadmeDocumentUsesFinalRedirectURL(t *testing.T) {
 }
 
 func TestFetchGitHubMetadata(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), "github_token.txt")
+	if err := os.WriteFile(tokenPath, []byte("developer-token\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_GITHUB_TOKEN_FILE", tokenPath)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer developer-token" {
+			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
 		switch r.URL.RequestURI() {
 		case "/repos/owner/repo/releases?per_page=2":
 			fmt.Fprint(w, `[
@@ -208,6 +218,15 @@ func TestVersionGreaterPrefersStableOverSameVersionPrerelease(t *testing.T) {
 	}
 	if !VersionGreater("2.5.4", "2.5.4-beta2") {
 		t.Fatal("2.5.4 did not rank above 2.5.4-beta2")
+	}
+}
+
+func TestVersionGreaterOrdersAlphaBelowBeta(t *testing.T) {
+	if !VersionGreater("2.5.4-beta1", "2.5.4-alpha9") {
+		t.Fatal("beta did not rank above alpha")
+	}
+	if VersionGreater("2.5.4-alpha9", "2.5.4-beta1") {
+		t.Fatal("alpha ranked above beta")
 	}
 }
 

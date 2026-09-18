@@ -2,10 +2,53 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
+
+func TestInitTokenPermissionsOnPocketBookStorage(t *testing.T) {
+	originalChmod := chmodGitHubToken
+	t.Cleanup(func() { chmodGitHubToken = originalChmod })
+	t.Setenv("ZENPM_GITHUB_TOKEN_FILE", "")
+	for _, tc := range []struct {
+		name     string
+		token    string
+		chmodErr error
+		wantErr  bool
+	}{
+		{name: "empty placeholder", chmodErr: syscall.EPERM},
+		{name: "stored token", token: "test-token\n", chmodErr: syscall.EPERM},
+		{name: "IO failure", chmodErr: syscall.EIO, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("ZENPM_HOME", home)
+			path := filepath.Join(home, "github_token.txt")
+			if tc.token != "" {
+				if err := os.WriteFile(path, []byte(tc.token), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			chmodGitHubToken = func(string, os.FileMode) error { return tc.chmodErr }
+			// Retry too: a failed beta startup already left an empty placeholder.
+			for range 2 {
+				st, err := Init("ereader")
+				if st != nil {
+					st.Close()
+				}
+				if tc.wantErr && !errors.Is(err, tc.chmodErr) || !tc.wantErr && err != nil {
+					t.Fatalf("Init = %v, want error: %v", err, tc.wantErr)
+				}
+				if data, err := os.ReadFile(path); err != nil || string(data) != tc.token {
+					t.Fatalf("token file changed: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestResolvePersistDirUsesExplicitHome(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
@@ -58,8 +101,8 @@ func TestInitUsesConfiguredZenLabsRepoURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || repos[0].Name != DefaultZenLabsRepoName || repos[0].URL != "http://localhost:8000" {
-		t.Fatalf("repos = %#v, want local ZenLabs repo", repos)
+	if len(repos) != 2 || repos[0].Name != DefaultZenLabsRepoName || repos[0].URL != "http://localhost:8000" || !hasRepo(repos, DefaultReaderBackdropRepoName) {
+		t.Fatalf("repos = %#v, want local ZenLabs and ReaderBackdrop repos", repos)
 	}
 }
 
@@ -74,11 +117,21 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if _, err := os.Stat(st.SQLiteDB); err != nil {
 		t.Fatalf("sqlite db missing: %v", err)
 	}
+	if data, err := os.ReadFile(st.GitHubTokenFile); err != nil || len(data) != 0 {
+		t.Fatalf("GitHub token placeholder = %q, %v", data, err)
+	}
+	info, err := os.Stat(st.GitHubTokenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("GitHub token permissions = %v", info.Mode().Perm())
+	}
 	repos, err := st.ReadRepos()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || !hasRepo(repos, DefaultZenLabsRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
+	if len(repos) != 2 || !hasRepo(repos, DefaultZenLabsRepoName) || !hasRepo(repos, DefaultReaderBackdropRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("repos = %#v", repos)
 	}
 	if err := st.AppendInstalled(InstalledEntry{ID: "pkg", Version: "1.0.0", Repo: "repo", LauncherAddPending: true, UpdateIgnored: true}); err != nil {
@@ -133,6 +186,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 		ReleaseNotesURL:    "https://example.invalid/RELEASE_NOTES.md",
 		PrereleaseNotesURL: "https://example.invalid/PRERELEASE_NOTES.md",
 		PrereleaseVersion:  "1.2.0-rc.1",
+		AlphaVersion:       "1.2.0-alpha1",
 		PublishedAt:        "2026-07-24T12:00:00Z",
 		Assets:             `[{"arch":"arm","asset":"pkg.zip","url":"https://example.invalid/pkg.zip","size":"12"}]`, Constraints: `{"abi":["hf","sf"]}`,
 	}}
@@ -143,7 +197,7 @@ func TestSQLiteStoreSeedsApplicableDefaultsAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].PluginModule != "zenos" || len(gotCatalog[0].PluginModuleAliases) != 1 || gotCatalog[0].PluginModuleAliases[0] != "zen_ui" || len(gotCatalog[0].SourceAssetAliases) != 1 || gotCatalog[0].SourceAssetAliases[0] != "zen_ui.koplugin.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].VersionsURL != "https://example.invalid/versions.json" || gotCatalog[0].ReleaseNotesURL != "https://example.invalid/RELEASE_NOTES.md" || gotCatalog[0].PrereleaseNotesURL != "https://example.invalid/PRERELEASE_NOTES.md" || gotCatalog[0].PrereleaseVersion != "1.2.0-rc.1" || gotCatalog[0].PublishedAt != "2026-07-24T12:00:00Z" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
+	if len(gotCatalog) != 1 || gotCatalog[0].ID != "pkg" || gotCatalog[0].Deps[0] != "dep" || len(gotCatalog[0].IncompatiblePlatforms) != 1 || gotCatalog[0].IncompatiblePlatforms[0] != "android" || len(gotCatalog[0].Conflicts) != 1 || gotCatalog[0].Conflicts[0] != "zen-ui" || gotCatalog[0].Tags[0] != "tag" || gotCatalog[0].FeaturedOrder == nil || *gotCatalog[0].FeaturedOrder != featuredOrder || gotCatalog[0].SourceAsset != "pkg.zip" || gotCatalog[0].PluginModule != "zenos" || len(gotCatalog[0].PluginModuleAliases) != 1 || gotCatalog[0].PluginModuleAliases[0] != "zen_ui" || len(gotCatalog[0].SourceAssetAliases) != 1 || gotCatalog[0].SourceAssetAliases[0] != "zen_ui.koplugin.zip" || gotCatalog[0].SourceType != "release" || gotCatalog[0].SourceURL != "https://example.invalid/source.zip" || gotCatalog[0].ReadmeURL != "https://example.invalid/README.md" || gotCatalog[0].VersionsURL != "https://example.invalid/versions.json" || gotCatalog[0].ReleaseNotesURL != "https://example.invalid/RELEASE_NOTES.md" || gotCatalog[0].PrereleaseNotesURL != "https://example.invalid/PRERELEASE_NOTES.md" || gotCatalog[0].PrereleaseVersion != "1.2.0-rc.1" || gotCatalog[0].AlphaVersion != "1.2.0-alpha1" || gotCatalog[0].PublishedAt != "2026-07-24T12:00:00Z" || gotCatalog[0].Stars != "42" || gotCatalog[0].Assets == "" || gotCatalog[0].Constraints == "" {
 		t.Fatalf("catalog = %#v", gotCatalog)
 	}
 }
@@ -157,11 +211,14 @@ func TestReconcileDefaultReposDoesNotAddKindleForge(t *testing.T) {
 		t.Fatal(err)
 	}
 	st.kindleWAFAllowed = true
+	if err := st.WriteRepos([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := reconcileDefaultRepos(st); err != nil {
 		t.Fatal(err)
 	}
 	repos, err := st.ReadRepos()
-	if err != nil || hasRepo(repos, DefaultKindleForgeRepoName) {
+	if err != nil || !hasRepo(repos, DefaultReaderBackdropRepoName) || hasRepo(repos, DefaultKindleForgeRepoName) {
 		t.Fatalf("supported repos = %#v, %v", repos, err)
 	}
 
@@ -291,6 +348,31 @@ func TestSQLiteStoreAddsSourceAssetColumnToExistingCatalogTable(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].SourceAsset != "pkg.zip" || catalog[0].SourceType != "release" || catalog[0].SourceURL != "https://example.invalid/source.zip" || catalog[0].Stars != "42" {
 		t.Fatalf("catalog = %#v", catalog)
+	}
+}
+
+func TestCloseReleasesDatabaseAndAllowsReopen(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteValue("test", "persisted"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ReadValue("test"); err == nil {
+		t.Fatal("database connection remained open")
+	}
+	st, err = Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if value, err := st.ReadValue("test"); err != nil || value != "persisted" {
+		t.Fatalf("reopened value = %q, %v", value, err)
 	}
 }
 

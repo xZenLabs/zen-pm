@@ -3,15 +3,38 @@ package cabundle
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestBundledCertificatesAreValid(t *testing.T) {
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM([]byte(pemData)) {
 		t.Fatal("bundled CA file contains no certificates")
+	}
+}
+
+func TestClientsShareTransportWithKindleTLSHandshakeTimeout(t *testing.T) {
+	short := Client(time.Second)
+	long := Client(2 * time.Second)
+	if short.Transport != long.Transport {
+		t.Fatal("clients do not share their HTTP transport")
+	}
+	transport, ok := short.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T, want *http.Transport", short.Transport)
+	}
+	if transport.TLSHandshakeTimeout != 30*time.Second {
+		t.Fatalf("TLS handshake timeout = %s, want 30s", transport.TLSHandshakeTimeout)
+	}
+	if transport.TLSClientConfig == nil || transport.TLSClientConfig.ClientSessionCache == nil {
+		t.Fatal("TLS session cache is disabled")
+	}
+	if short.Timeout != time.Second || long.Timeout != 2*time.Second {
+		t.Fatalf("client timeouts = %s and %s", short.Timeout, long.Timeout)
 	}
 }
 

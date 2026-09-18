@@ -5,15 +5,28 @@ package.path = root .. "/?.lua;" .. package.path
 local Markdown = require("ui/markdown")
 
 local measured_image
+local measured_image_max_height
+local image_tap_callback
+local shown_image_viewer
 local scheduled_callbacks = {}
 package.preload["gettext"] = function() return function(value) return value end end
-package.preload["ui/widget/imageviewer"] = function() return { new = function() return {} end } end
+package.preload["ui/widget/imageviewer"] = function()
+    return {
+        new = function(_, options)
+            options.onClose = function(self) self.closed = true end
+            return options
+        end,
+    }
+end
 package.preload["ui/primitives"] = function()
     return {
-        image_dimensions = function(file)
+        image_dimensions = function(file, _, max_height)
             measured_image = file
+            measured_image_max_height = max_height
             return 80, 40
         end,
+        image_cropped = function() return true end,
+        hit = function(_, _, _, _, _, callback) image_tap_callback = callback end,
         paragraph = function() end,
     }
 end
@@ -25,6 +38,7 @@ end
 package.preload["ui/uimanager"] = function()
     return {
         scheduleIn = function(_, _, callback) table.insert(scheduled_callbacks, callback) end,
+        show = function(_, widget) shown_image_viewer = widget end,
     }
 end
 local Renderer = require("ui/markdown_renderer")
@@ -157,6 +171,37 @@ Renderer.render(image_view, {}, {
 assert(#queued_images == 1)
 assert(queued_images[1] == "https://repo.example/packages/demo/first.png")
 
+Renderer.render(image_view, {}, {
+    { kind = "image", alt = "Preview", url = "/packages/readerbackdrop-test/preview" },
+}, "", "https://www.readerbackdrop.com/", 0, 0, 100, 100, 0)
+assert(queued_images[2] == "/packages/readerbackdrop-test/preview")
+
+Renderer.render({
+    app = {
+        state = { show_readme_images = true },
+        cached_image_file = function() return "wallpaper.jpg", false end,
+    },
+}, {}, {
+    { kind = "image", alt = "Wallpaper", url = "wallpaper.jpg", max_height = 480 },
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0)
+assert(measured_image == "wallpaper.jpg" and measured_image_max_height == 480)
+measured_image = nil
+
+Renderer.render({
+    app = {
+        state = { show_readme_images = true },
+        cached_image_file = function() return "wallpaper.jpg", false end,
+    },
+}, {}, {
+    { kind = "image", alt = "Wallpaper", url = "wallpaper.jpg" },
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, 0)
+assert(image_tap_callback)
+image_tap_callback()
+assert(shown_image_viewer.file == "wallpaper.jpg")
+assert(shown_image_viewer.fullscreen == true and shown_image_viewer.with_title_bar == false)
+assert(shown_image_viewer:onTap() == true and shown_image_viewer.closed == true)
+measured_image = nil
+
 local prepared_file = os.tmpname()
 local prepared_handle = assert(io.open(prepared_file, "w"))
 prepared_handle:write("prepared image")
@@ -192,7 +237,34 @@ Renderer.render(managed_view, {}, {
 })
 assert(#scheduled_callbacks == 1)
 
+local pending_ref_2 = os.tmpname()
+assert(os.remove(pending_ref_2))
+local prepared_refreshes = 0
+managed_view.app.refresh = function() prepared_refreshes = prepared_refreshes + 1 end
+Renderer.render(managed_view, {}, {
+    { kind = "image", alt = "Pending", url = "pending.png" },
+    { kind = "image", alt = "Pending 2", url = "pending-2.png" },
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0, {
+    ["https://repo.example/packages/demo/pending.png"] = pending_ref,
+    ["https://repo.example/packages/demo/pending-2.png"] = pending_ref_2,
+})
+assert(#scheduled_callbacks == 1)
+local first_ref = assert(io.open(pending_ref, "w"))
+first_ref:write(prepared_file .. "\t1200\t600\n")
+first_ref:close()
+table.remove(scheduled_callbacks, 1)()
+assert(prepared_refreshes == 0)
+assert(#scheduled_callbacks == 1)
+local second_ref = assert(io.open(pending_ref_2, "w"))
+second_ref:write(prepared_file .. "\t1200\t600\n")
+second_ref:close()
+table.remove(scheduled_callbacks, 1)()
+assert(prepared_refreshes == 1)
+assert(#scheduled_callbacks == 0)
+
 assert(os.remove(prepared_ref))
 assert(os.remove(prepared_file))
+assert(os.remove(pending_ref))
+assert(os.remove(pending_ref_2))
 
 print("markdown tests passed")

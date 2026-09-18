@@ -29,6 +29,7 @@ local FOCUS_NAVBAR_HOLD_DELAY = 0.4
 
 local AppView = InputContainer:extend{
     modal = false,
+    covers_fullscreen = true,
     stop_events_propagation = true,
 }
 
@@ -612,6 +613,12 @@ function AppView:refresh(full)
     UIManager:setDirty(self, full and "full" or "ui", self.dimen)
 end
 
+function AppView:_zen_status_refresh()
+    if self._zen_status_dimen then
+        UIManager:setDirty(self, "ui", self._zen_status_dimen)
+    end
+end
+
 function AppView:onCloseWidget()
     self:_cancel_navbar_focus_hold()
     UIManager:setDirty("all", "flashui", self.dimen)
@@ -637,7 +644,26 @@ function AppView:paintTo(bb, x, y)
     P.rect(bb, x, y, m.screen_w, m.screen_h, Theme.bg)
 
     local content_top = y
+    self._zen_status_dimen = nil
+    local build_status_row = rawget(_G, "__ZENOS_BUILD_STATUS_ROW")
+    if type(build_status_row) == "function" then
+        local ok, status_row = pcall(build_status_row, m.screen_w)
+        if ok and status_row and status_row.getSize and status_row.paintTo then
+            local status_size = status_row:getSize()
+            if status_size and status_size.h and status_size.h > 0 then
+                status_row:paintTo(bb, x, content_top)
+                self._zen_status_dimen = Geom:new{
+                    x = x, y = content_top, w = m.screen_w, h = status_size.h,
+                }
+                content_top = content_top + status_size.h
+            end
+            if status_row.free then status_row:free() end
+        end
+    end
     content_top = Header.draw(self, bb, x, content_top, m.screen_w)
+    if self._zen_status_dimen then
+        self.koreader_menu_zone = self._zen_status_dimen
+    end
     if self.app.state.page == "queue" then
         self:draw_content(bb, x, content_top, m.screen_w, y + m.screen_h - content_top)
         return
@@ -655,6 +681,9 @@ end
 -- Routes to the active page's content renderer, then draws the scrollbar and
 -- clamps the stored scroll offset.
 function AppView:draw_content(bb, x, y, w, h)
+    if type(self.app.begin_package_image_render) == "function" then
+        self.app:begin_package_image_render()
+    end
     local state = self.app.state
     local page = state.page
     local scroll_key = self.app:scroll_key()
@@ -677,14 +706,18 @@ function AppView:draw_content(bb, x, y, w, h)
 
     if page == "home" then
         max_scroll = Pages.featured(self, bb, x, y, w, h, scroll)
-    elseif page == "changes" then
-        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Changes"), "changes", state.visible_packages, state.changes_packages, "")
     elseif page == "search" then
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Discover"), "search", state.visible_packages, state.packages, state.filters.search)
     elseif page == "categories" then
         max_scroll = Pages.categories(self, bb, x, y, w, h, scroll)
     elseif page == "settings" then
         max_scroll = Pages.settings(self, bb, x, y, w, h, scroll)
+    elseif page == "advanced_settings" then
+        max_scroll = Pages.advanced_settings(self, bb, x, y, w, h, scroll)
+    elseif page == "updates_settings" then
+        max_scroll = Pages.updates_settings(self, bb, x, y, w, h, scroll)
+    elseif page == "about_settings" then
+        max_scroll = Pages.about_settings(self, bb, x, y, w, h, scroll)
     elseif page == "category_details" then
         local category = state.current_category or {}
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)

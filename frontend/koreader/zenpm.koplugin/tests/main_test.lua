@@ -4,9 +4,14 @@ package.path = root .. "/?.lua;" .. package.path
 
 local stopped = 0
 local uninstalled = 0
+local quit = 0
 local scheduled
 local reopened
 local actions = {}
+local update_events = {}
+local close_ok = true
+local network_connected = true
+local network_retry_callback
 
 package.preload["i18n"] = function()
     return {
@@ -24,6 +29,15 @@ end
 package.preload["ui/uimanager"] = function()
     return { nextTick = function(_, callback) scheduled = callback end }
 end
+package.preload["ui/network/manager"] = function()
+    return {
+        willRerunWhenConnected = function(_, callback)
+            if network_connected then return false end
+            network_retry_callback = callback
+            return true
+        end,
+    }
+end
 package.preload["ui/widget/container/widgetcontainer"] = function()
     return { extend = function(_, prototype) return prototype end }
 end
@@ -37,6 +51,16 @@ package.preload["launcher"] = function()
     return {
         open = function() return true end,
         open_after_restart = function(plugin) reopened = plugin end,
+        quit = function() quit = quit + 1 end,
+        get_app = function()
+            return {
+                close_book_before_update = function()
+                    table.insert(update_events, "close")
+                    return close_ok, "backend unavailable"
+                end,
+                daemon = { log_cli = function() end },
+            }
+        end,
     }
 end
 -- KOReader shares package.loaded across plugins. A generic module cached by
@@ -52,6 +76,10 @@ package.preload["daemon"] = function()
                 stop_standalone_backend = function() stopped = stopped + 1 end,
                 log_cli = function() end,
                 ensure_backend_files = function() end,
+                ensure = function()
+                    table.insert(update_events, "ensure")
+                    return true
+                end,
             }
         end,
     }
@@ -60,6 +88,14 @@ end
 local original_dofile = dofile
 dofile = function(path)
     if path == root .. "/i18n.lua" then return require("i18n") end
+    if path == root .. "/client.lua" then
+        return { new = function()
+            return { update_all_packages = function()
+                table.insert(update_events, "update")
+                return true
+            end }
+        end }
+    end
     return original_dofile(path)
 end
 local ZenPM = dofile(root .. "/main.lua")
@@ -75,5 +111,17 @@ ZenPM:onCloseWidget()
 
 assert(stopped == 1)
 assert(uninstalled == 1)
+assert(quit == 1)
+
+network_connected = false
+assert(ZenPM:onUpdateAllZenPMPlugins())
+assert(#update_events == 0 and type(network_retry_callback) == "function")
+network_connected = true
+network_retry_callback()
+assert(table.concat(update_events, ",") == "close,ensure,update")
+update_events = {}
+close_ok = false
+assert(not ZenPM:onUpdateAllZenPMPlugins())
+assert(table.concat(update_events, ",") == "close")
 
 print("main tests passed")

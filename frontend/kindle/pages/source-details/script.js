@@ -78,7 +78,17 @@
     function pollAfterOp() {
         var op = state.pendingOp;
         var attempt = 0;
-        function tryPoll() {
+        function tryPoll(confirmed) {
+            if (op.operationId && !confirmed) {
+                ZenUtils.waitForPackageOperation(op.operationId).then(function () {
+                    tryPoll(true);
+                }, function (err) {
+                    state.pendingOp = null;
+                    showModal("Failed", op.action + " of " + op.id + " failed.\n\n" + String(err));
+                    setBusy(false, "");
+                });
+                return;
+            }
             attempt += 1;
             loadSourceAndPackages().then(function () {
                 if (!state.pendingOp || state.pendingOp.id !== op.id) { return; }
@@ -89,11 +99,11 @@
                         break;
                     }
                 }
-                var succeeded = op.action === "reinstall" ? (pkg && pkg.installed) : (pkg && pkg.installed !== op.wasInstalled);
+                var succeeded = confirmed || (op.action === "reinstall" ? (pkg && pkg.installed) : (pkg && pkg.installed !== op.wasInstalled));
                 if (succeeded) {
                     state.pendingOp = null;
                     var doneAction = op.action === "install" ? "installed" : (op.action === "reinstall" ? "reinstalled" : "uninstalled");
-                    showModal("Done", pkg.name + " " + doneAction + " successfully.");
+                    showModal("Done", ((pkg && pkg.name) || op.name || op.id) + " " + doneAction + " successfully.");
                     setBusy(false, "");
                 } else if (attempt >= MAX_POLL_RETRIES) {
                     state.pendingOp = null;
@@ -110,12 +120,13 @@
     function beginPackageAction(pkg, action, asset) {
         var backendAction = action;
         setBusy(true, (action === "uninstall" ? "Uninstalling " : (action === "reinstall" ? "Reinstalling " : "Installing ")) + pkg.name);
-        state.pendingOp = { id: pkg.id, action: action, wasInstalled: pkg.installed };
+        state.pendingOp = { id: pkg.id, name: pkg.name, action: action, wasInstalled: pkg.installed };
         var actionLabel = action === "uninstall" ? "Uninstalling" : (action === "reinstall" ? "Reinstalling" : "Installing");
         showModal(actionLabel, pkg.name + "\n\nDownloading... Please wait.", { className: "modal-overlay-clear" });
         var path = "/packages/" + encodeURIComponent(pkg.id) + "/" + backendAction;
         if (asset) path += "?asset=" + encodeURIComponent(asset);
-        fetchJSON("POST", path, null).then(function () {
+        fetchJSON("POST", path, null).then(function (response) {
+            state.pendingOp.operationId = response && response.operation_id;
             postLog("[source-details] " + action + " started for " + pkg.id);
             pollAfterOp();
         }).catch(function (err) {

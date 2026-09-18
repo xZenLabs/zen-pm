@@ -6,7 +6,17 @@ local uploaded_logs = {}
 local submitted_reports = {}
 local submitting_repainted = false
 local submitting_ticks = 0
+local confirmation
+local debug_calls = {}
+local restarted = false
+local flushed = false
 package.preload["device"] = function() return { model = "Test device" } end
+package.preload["dbg"] = function()
+    return {
+        turnOn = function() table.insert(debug_calls, "on") end,
+        setVerbose = function(_, enabled) table.insert(debug_calls, enabled and "verbose" or "quiet") end,
+    }
+end
 package.preload["datastorage"] = function()
     return {
         getDataDir = function() return "/tmp/zenpm-bugreporter-test" end,
@@ -15,6 +25,9 @@ end
 package.preload["ui/modals"] = function()
     return {
         close_status = function() end,
+        confirm = function(message, button, callback)
+            confirmation = { message = message, button = button, callback = callback }
+        end,
         notice = function() end,
         status = function(message)
             assert(message == "Submitting report…")
@@ -73,7 +86,30 @@ local app = {
     platform = function() return "test" end,
     state = { beta_updates = false },
     version = "test",
+    restart_koreader = function() restarted = true end,
 }
+
+local settings = { debug = true, debug_verbose = false }
+_G.G_reader_settings = {
+    isTrue = function(_, key) return settings[key] == true end,
+    saveSetting = function(_, key, value) settings[key] = value end,
+    flush = function() flushed = true end,
+}
+Reporter:show(app)
+assert(confirmation.message:find("Debug logging must be enabled", 1, true))
+assert(confirmation.button == "Restart now")
+assert(not restarted)
+confirmation.callback()
+assert(settings.debug and settings.debug_verbose)
+assert(debug_calls[1] == "on" and debug_calls[2] == "verbose")
+assert(flushed and restarted)
+
+local asked_title = false
+Reporter.ask_title = function() asked_title = true end
+Reporter:show(app)
+assert(confirmation.message:find("public GitHub issue", 1, true))
+confirmation.callback()
+assert(asked_title)
 
 Reporter:submit(app, "report", "", "")
 assert(uploaded_logs[1] == "ZenPM log")

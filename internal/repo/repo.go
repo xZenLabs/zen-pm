@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/log"
@@ -14,7 +15,8 @@ import (
 
 // Manager wraps all repository operations.
 type Manager struct {
-	st *state.State
+	st        *state.State
+	catalogMu sync.Mutex
 }
 
 // UserAddedPriority is the fixed priority assigned to all user-added repos.
@@ -35,6 +37,9 @@ func (m *Manager) List() ([]state.RepoEntry, error) {
 }
 
 func (m *Manager) Add(name, url string, priority int, trust string) error {
+	if !filepath.IsLocal(name) || filepath.Base(name) != name {
+		return fmt.Errorf("invalid repository name %q", name)
+	}
 	if IsKindleForgeRepo(name, url) && !m.st.AllowsKindleWAF() {
 		return errors.New("KindleForge is only available on compatible Kindle devices")
 	}
@@ -92,6 +97,7 @@ func (m *Manager) Refresh() error {
 	var all []*CatalogEntry
 	failed := make(map[string]bool)
 	var failures []string
+	refreshed := 0
 	for _, r := range repos {
 		if IsKindleForgeRepo(r.Name, r.URL) && !m.st.AllowsKindleWAF() {
 			log.Infof("Skipping KindleForge on an unsupported device")
@@ -106,30 +112,115 @@ func (m *Manager) Refresh() error {
 			continue
 		}
 		log.Infof("Repo %s: %d packages", r.Name, len(entries))
+		refreshed++
 		all = append(all, entries...)
+	}
+	if refreshed == 0 && len(failures) > 0 {
+		return fmt.Errorf("no repositories could be refreshed: %s", strings.Join(failures, "; "))
 	}
 	for _, entry := range previous {
 		if entry != nil && failed[entry.Repo] {
 			all = append(all, entry)
 		}
 	}
-	if len(all) == 0 && len(failures) > 0 {
-		return fmt.Errorf("no repositories could be refreshed: %s", strings.Join(failures, "; "))
+	m.catalogMu.Lock()
+	latest, latestErr := m.ReadCatalog()
+	if latestErr != nil {
+		latest = previous
+	}
+	present := make(map[string]bool, len(all))
+	for _, entry := range all {
+		present[entry.ID] = true
+	}
+	for _, entry := range latest {
+		if entry != nil && IsReaderBackdropRepo(entry.Repo, "") && !present[entry.ID] {
+			all = append(all, entry)
+			present[entry.ID] = true
+		}
+	}
+	if installed, err := m.st.ReadInstalled(); err == nil {
+		installedSet := make(map[string]bool, len(installed))
+		for _, entry := range installed {
+			installedSet[entry.ID] = true
+		}
+		for _, entry := range previous {
+			if entry != nil && installedSet[entry.ID] && !present[entry.ID] {
+				all = append(all, entry)
+			}
+		}
 	}
 	merged := MergeCatalogs(all)
-	if err := m.st.WriteCatalog(toStateCatalog(merged)); err != nil {
-		return fmt.Errorf("write merged catalog: %w", err)
-	}
-	if err := m.st.WriteValue(state.CatalogPublishedAtRefreshKey, ""); err != nil {
-		log.Warnf("Could not clear catalog metadata refresh marker: %v", err)
+	writeErr := m.st.WriteCatalog(toStateCatalog(merged))
+	m.catalogMu.Unlock()
+	if writeErr != nil {
+		return fmt.Errorf("write merged catalog: %w", writeErr)
 	}
 	m.CacheInstalledUninstallScripts(merged)
-	m.touchRefreshMarker()
 	log.Infof("Catalog refreshed: %d packages total", len(merged))
 	if len(failures) > 0 {
 		return fmt.Errorf("catalog refreshed with cached packages for unavailable repositories: %s", strings.Join(failures, "; "))
 	}
+	if err := m.st.WriteValue(state.CatalogPublishedAtRefreshKey, ""); err != nil {
+		log.Warnf("Could not clear catalog metadata refresh marker: %v", err)
+	}
+	m.touchRefreshMarker()
 	return nil
+}
+
+func (m *Manager) readerBackdropSource() (state.RepoEntry, error) {
+	repositories, err := m.st.ReadRepos()
+	if err != nil {
+		return state.RepoEntry{}, err
+	}
+	for _, source := range repositories {
+		if IsReaderBackdropRepo(source.Name, source.URL) {
+			return source, nil
+		}
+	}
+	return state.RepoEntry{}, errors.New("ReaderBackdrop source is not configured")
+}
+
+// LoadReaderBackdropPage adds one public API page to the local catalog.
+func (m *Manager) LoadReaderBackdropPage(page int, search, tag string) (int, int, error) {
+	source, err := m.readerBackdropSource()
+	if err != nil {
+		return 0, 0, err
+	}
+	entries, totalPages, total, err := fetchReaderBackdropPage(
+		source.Name, source.URL, source.Priority, m.st.CacheDir, page, search, tag)
+	if err != nil {
+		return 0, 0, err
+	}
+	m.catalogMu.Lock()
+	defer m.catalogMu.Unlock()
+	catalog, err := m.ReadCatalog()
+	if err != nil && !os.IsNotExist(err) {
+		return 0, 0, err
+	}
+	fetched := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		fetched[entry.ID] = true
+	}
+	all := make([]*CatalogEntry, 0, len(catalog)+len(entries))
+	for _, entry := range catalog {
+		if entry != nil && !fetched[entry.ID] {
+			all = append(all, entry)
+		}
+	}
+	all = append(all, entries...)
+	if err := m.st.WriteCatalog(toStateCatalog(MergeCatalogs(all))); err != nil {
+		return 0, 0, fmt.Errorf("write ReaderBackdrop catalog page: %w", err)
+	}
+	// ponytail: requested pages stay cached; add eviction only if catalog growth becomes measurable.
+	return totalPages, total, nil
+}
+
+func (m *Manager) ReaderBackdropTags() ([]ReaderBackdropTag, error) {
+	source, err := m.readerBackdropSource()
+	if err != nil {
+		return nil, err
+	}
+	return fetchReaderBackdropTags(source.URL)
 }
 
 // refreshMarkerPath is a tiny file whose mtime records the last successful
@@ -144,14 +235,12 @@ func (m *Manager) touchRefreshMarker() {
 	}
 }
 
-// CatalogAge returns how long ago the catalog was last refreshed, or 0 when no
-// refresh marker exists yet. A missing marker means we can't prove staleness
-// (e.g. catalog written by an older build), so callers treat it as fresh and
-// rely on the empty-catalog check instead of forcing a surprise refresh.
+// CatalogAge treats missing or future timestamps as stale, including after a
+// device clock correction. Only a complete successful refresh proves freshness.
 func (m *Manager) CatalogAge() time.Duration {
 	info, err := os.Stat(m.refreshMarkerPath())
-	if err != nil {
-		return 0
+	if err != nil || info.ModTime().After(time.Now()) {
+		return time.Duration(1<<63 - 1)
 	}
 	return time.Since(info.ModTime())
 }
@@ -252,7 +341,7 @@ func toStateCatalog(entries []*CatalogEntry) []state.CatalogEntry {
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule, PluginModuleAliases: e.PluginModuleAliases, SourceAssetAliases: e.SourceAssetAliases, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
-			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
+			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion, AlphaVersion: e.AlphaVersion,
 		})
 	}
 	return out
@@ -269,7 +358,7 @@ func fromStateCatalog(entries []state.CatalogEntry) []*CatalogEntry {
 			Featured: e.Featured, FeaturedImage: e.FeaturedImage, FeaturedOrder: e.FeaturedOrder, Category: e.Category, Source: e.Source, SourceAsset: e.SourceAsset,
 			SourceType: e.SourceType, SourceURL: e.SourceURL, Stars: e.Stars, Assets: e.Assets, Constraints: e.Constraints,
 			PluginModule: e.PluginModule, PluginModuleAliases: e.PluginModuleAliases, SourceAssetAliases: e.SourceAssetAliases, ReadmeURL: e.ReadmeURL, VersionsURL: e.VersionsURL, PublishedAt: e.PublishedAt,
-			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion,
+			ReleaseNotesURL: e.ReleaseNotesURL, PrereleaseNotesURL: e.PrereleaseNotesURL, PrereleaseVersion: e.PrereleaseVersion, AlphaVersion: e.AlphaVersion,
 		}
 		entry.ensurePluginModule()
 		out = append(out, entry)

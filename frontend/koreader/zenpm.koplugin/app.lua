@@ -1,4 +1,5 @@
 local socket = require("socket")
+local Device = require("device")
 local Event = require("ui/event")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
@@ -22,6 +23,8 @@ local Updater = dofile(Constants.PLUGIN_DIR .. "/updater.lua")
 local Util = require("zenpm_util")
 
 local App = {}
+-- Status probes run on KOReader's UI thread and retry on the next poll.
+local PACKAGE_POLL_TIMEOUT = { block = 1, total = 1 }
 
 local function content_load_error_code(status_code, detail)
     local error_code = tonumber(status_code)
@@ -129,6 +132,11 @@ end
 function App:new(plugin)
     local saved_sorts = App.load_setting("sorts", {})
     if type(saved_sorts) ~= "table" then saved_sorts = {} end
+    if not App.load_setting("discover_sort_migrated", false) then
+        saved_sorts.search = "published_at_desc"
+        App.save_setting("sorts", saved_sorts)
+        App.save_setting("discover_sort_migrated", true)
+    end
     local o = {
         plugin = plugin,
         client = Client:new(),
@@ -142,36 +150,45 @@ function App:new(plugin)
         readme_image_queue = {},
         readme_image_pending = {},
         readme_image_loading = false,
+        package_image_queue = {},
+        package_image_pending = {},
+        package_image_loading = false,
         state = {
             page = "home",
             active_tab = "home",
             filter_installable = App.load_setting("filter_installable", true),
             advanced = App.load_setting("advanced_queue", false),
+            direct_github = App.load_setting("direct_github", false),
             manual_version_picker = App.load_setting("manual_version_picker", App.load_setting("advanced", false)),
             show_all_builds = App.load_setting("show_all_builds", false),
             beta_updates = App.load_setting("beta_updates", false),
+            alpha_updates = App.load_setting("alpha_updates", false),
+            alpha_updates_unlocked = App.load_setting("alpha_updates_unlocked", false),
+            update_version_taps = 0,
             show_kindle_scriptlets = App.load_setting("show_kindle_scriptlets", false),
             show_readme_images = App.load_setting("show_readme_images", true),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
             filters = { search = "", categories = "", category = "", installed = "", source = "" },
             sorts = {
-                search = saved_sorts.search or "stars",
-                changes = saved_sorts.changes or "published_at_desc",
-                installed = saved_sorts.installed or "name_asc",
+                search = saved_sorts.search or "published_at_desc",
+                installed = saved_sorts.installed ~= "update_available" and saved_sorts.installed or "name_asc",
+                installed_images = saved_sorts.installed_images or "installed_at_desc",
                 sources = saved_sorts.sources or "name_asc",
                 category = saved_sorts.category or "stars",
                 source = saved_sorts.source or "stars",
             },
             scroll = {},
             packages = {},
+            discover_packages = {},
             visible_packages = {},
-            changes_packages = {},
             featured_packages = {},
             installed_packages = {},
+            installed_folder = nil,
             categories = {},
             visible_categories = {},
             category_packages = {},
             repos = {},
+            readerbackdrop = { enabled = false, page = 1, query = "", tag = "", loaded_tag = "", loading = false },
             readme_cache = {},
             release_notes_cache = {},
             current_package = nil,
@@ -272,6 +289,10 @@ local function package_uses_source(pkg)
     return Util.trim(tostring(pkg and pkg.source_type or "")):lower() == "source"
 end
 
+local function package_has_github_source(pkg)
+    return tostring(pkg and pkg.source or ""):match("^https://github%.com/[^/]+/[^/]+/?$") ~= nil
+end
+
 local function action_present(action)
     if action == "update" then
         return _("update")
@@ -335,12 +356,20 @@ local function package_is_koreader_plugin(pkg)
     if type(pkg) ~= "table" or type(pkg.platforms) ~= "table" then
         return false
     end
+    if Models.is_patch_package(pkg) or Models.is_direct_asset_package(pkg) then
+        return false
+    end
     for _, platform in ipairs(pkg.platforms) do
         if Util.trim(tostring(platform or "")):lower() == "koreader" then
             return true
         end
     end
     return false
+end
+
+local function package_supports_direct_github(pkg)
+    return package_has_github_source(pkg)
+        and (package_is_koreader_plugin(pkg) or Models.is_patch_package(pkg))
 end
 
 local function package_is_kindle_only(pkg)
@@ -873,7 +902,7 @@ function App:queue_all_updates()
                     add_next(index + 1)
                     return
                 end
-                if Models.is_font_package(pkg) then
+                if Models.is_direct_asset_package(pkg) then
                     if self:queue_package_action(pkg, "update", nil, { silent = true }) then
                         added = added + 1
                         kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
@@ -886,7 +915,7 @@ function App:queue_all_updates()
                 local ok, info = self.client:get_package_assets(pkg.id or pkg.name)
                 local candidates = ok and type(info) == "table" and info.needs_choice
                     and type(info.candidates) == "table" and info.candidates or nil
-                if candidates and #candidates > 0 and not Models.is_font_package(pkg) then
+                if candidates and #candidates > 0 and not Models.is_direct_asset_package(pkg) then
                     self:choose_package_asset(pkg, "update", candidates, nil, {
                         silent = true,
                         on_queued = function(was_added)
@@ -924,7 +953,7 @@ function App:queue_entry_for(pkg, action, asset, opts)
     if not id then return nil end
     opts = opts or {}
     local is_patch = Models.is_patch_package(pkg)
-    local is_font = Models.is_font_package(pkg)
+    local is_direct_asset = Models.is_direct_asset_package(pkg)
     local display_name = is_patch and asset and asset ~= ""
         and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
@@ -941,7 +970,7 @@ function App:queue_entry_for(pkg, action, asset, opts)
         is_patch = is_patch,
         prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
             and (action_installs_package(action) or action == "uninstall"),
-        settings_deleter = action == "uninstall" and not is_patch and not is_font
+        settings_deleter = action == "uninstall" and not is_patch and not is_direct_asset
             and resolve_plugin_settings_deleter(pkg) or nil,
     }
 end
@@ -1089,7 +1118,8 @@ function App:conflicting_packages(pkg)
     local target_conflicts = conflict_set(pkg)
     local conflicts = {}
     for candidate_id, candidate in pairs(present) do
-        if target_conflicts[candidate_id] or conflict_set(candidate)[id] then
+        if (target_conflicts[candidate_id] or conflict_set(candidate)[id])
+            and not self:package_disabled(candidate) then
             table.insert(conflicts, candidate)
         end
     end
@@ -1106,6 +1136,247 @@ function App:zen_ui_installed()
         end
     end
     return false
+end
+
+local function installed_image_path(app, pkg)
+    local kind = Util.trim(tostring(pkg and pkg.category or "")):lower():gsub("[%s_%-]+", "")
+    if kind ~= "wallpapers" and kind ~= "screensavers" then return nil end
+    local asset = Util.trim(tostring(pkg and pkg.installed_asset or ""))
+    if asset == "" or asset:find("/", 1, true) or asset:find("\\", 1, true) then return nil end
+    local root = app.daemon and type(app.daemon.koreader_data_dir) == "function"
+        and app.daemon:koreader_data_dir() or ""
+    if root == "" then return nil end
+    return root .. "/resources/" .. kind .. "/" .. asset, kind
+end
+
+local function installed_image_target(kind)
+    return kind == "wallpapers" and _("ZenOS library background")
+        or _("KOReader sleep screen")
+end
+
+local function png_has_alpha(path)
+    local file = io.open(path, "rb")
+    if not file then return false end
+    local header = file:read(26)
+    file:close()
+    if not header or header:sub(1, 8) ~= "\137PNG\r\n\26\n" then return false end
+    local color_type = header:byte(26)
+    return color_type == 4 or color_type == 6
+end
+
+local function installed_image_target_available(app, kind)
+    if kind == "screensavers" then
+        local settings = rawget(_G, "G_reader_settings")
+        return Device:supportsScreensaver() and settings and type(settings.saveSetting) == "function"
+    end
+
+    local zen_pkg = Models.find_package(app.state.packages, "zen-ui")
+    local zen = zen_pkg and not app:package_disabled(zen_pkg)
+        and koreader_plugin_instance(zen_pkg) or nil
+    return zen and type(zen.config) == "table" and type(zen.saveConfig) == "function"
+end
+
+local function installed_image_prompt_kind(app, pkg)
+    if not (pkg and pkg.installed) then return nil end
+    local path, kind = installed_image_path(app, pkg)
+    return path and (installed_image_target_available(app, kind)
+        or kind == "screensavers" and not Device:supportsScreensaver()) and kind or nil
+end
+
+local function installed_image_is_active(app, pkg, target_kind)
+    local path, kind = installed_image_path(app, pkg)
+    if not path then return false end
+    kind = target_kind or kind
+    if kind == "screensavers" then
+        local settings = rawget(_G, "G_reader_settings")
+        return settings and type(settings.readSetting) == "function"
+            and settings:readSetting("screensaver_type") == "document_cover"
+            and settings:readSetting("screensaver_document_cover") == path
+    end
+
+    local zen = koreader_plugin_instance(Models.find_package(app.state.packages, "zen-ui"))
+    local background = zen and type(zen.config) == "table" and zen.config.library_background
+    return type(background) == "table" and background.enabled == true and background.path == path
+end
+
+function App:apply_installed_image(pkg, target_kind)
+    local path, kind = installed_image_path(self, pkg)
+    if not path then return false, _("Installed image path is unavailable.") end
+    kind = target_kind or kind
+    if kind == "screensavers" then
+        if not Device:supportsScreensaver() then
+            return false, _("This device does not support screensavers.")
+        end
+        local settings = rawget(_G, "G_reader_settings")
+        if not (settings and type(settings.saveSetting) == "function") then
+            return false, _("KOReader settings are unavailable.")
+        end
+        settings:saveSetting("screensaver_type", "document_cover")
+        settings:saveSetting("screensaver_document_cover", path)
+        if png_has_alpha(path) then
+            settings:saveSetting("screensaver_img_background", "none")
+        end
+        if type(settings.flush) == "function" then settings:flush() end
+        return true
+    end
+
+    local zen_pkg = Models.find_package(self.state.packages, "zen-ui")
+    local zen = koreader_plugin_instance(zen_pkg)
+    if not (zen and type(zen.config) == "table" and type(zen.saveConfig) == "function") then
+        return false, _("ZenOS must be enabled to set its library background.")
+    end
+    local background = type(zen.config.library_background) == "table"
+        and zen.config.library_background or { opacity = 100 }
+    background.enabled = true
+    background.path = path
+    zen.config.library_background = background
+    local ok, err = pcall(zen.saveConfig, zen)
+    if not ok then return false, tostring(err) end
+    local home = type(zen._zen_shared) == "table" and zen._zen_shared.home or nil
+    if home and type(home.rebuildActive) == "function" then home.rebuildActive() end
+    return true
+end
+
+local function apply_installed_image_choice(app, pkg, on_done, target_kind)
+    local ok, err = app:apply_installed_image(pkg, target_kind)
+    if target_kind then
+        local message
+        if ok then
+            message = target_kind == "wallpapers" and _("Wallpaper set successfully.")
+                or _("Screensaver set successfully.")
+        else
+            message = (target_kind == "wallpapers" and _("Could not set wallpaper: ")
+                or _("Could not set screensaver: ")) .. tostring(err)
+        end
+        Modals.notice(message)
+        on_done()
+        return
+    end
+    if ok then
+        on_done()
+        return
+    end
+    Modals.actions(_("Could not apply image: ") .. tostring(err), {
+        { text = _("Continue"), callback = on_done },
+    }, { show_cancel = false })
+end
+
+local function prompt_unsupported_screensaver(app, pkg, on_done)
+    Modals.close_status()
+    local can_wallpaper = installed_image_target_available(app, "wallpapers")
+    Modals.actions(_("This device does not support screensavers."), can_wallpaper and {
+        {
+            text = _("Set as wallpaper"),
+            callback = function()
+                apply_installed_image_choice(app, pkg, on_done, "wallpapers")
+            end,
+        },
+    } or { { text = _("Continue"), callback = on_done } }, {
+        cancel_callback = on_done,
+        show_cancel = can_wallpaper == true,
+    })
+    return true
+end
+
+function App:prompt_installed_image(pkg, on_done)
+    local kind = installed_image_prompt_kind(self, pkg)
+    if not kind then return false end
+    on_done = on_done or function() end
+    if kind == "screensavers" and not Device:supportsScreensaver() then
+        return prompt_unsupported_screensaver(self, pkg, on_done)
+    end
+    Modals.close_status()
+    local name = package_title(pkg, pkg.installed_asset or _("Image"))
+    local prompt = kind == "screensavers" and string.format(_("Do you want to set %s as the screensaver?"), name)
+        or string.format(_("Set %s as the %s?"), name, installed_image_target(kind))
+    Modals.actions(prompt, {
+        {
+            text = _("Set image"),
+            callback = function()
+                apply_installed_image_choice(self, pkg, on_done)
+            end,
+        },
+    }, { cancel_callback = on_done })
+    return true
+end
+
+function App:prompt_installed_image_target(pkg, on_done)
+    if not (pkg and pkg.installed and installed_image_path(self, pkg)) then return false end
+    on_done = on_done or function() end
+    if not Device:supportsScreensaver() then
+        return prompt_unsupported_screensaver(self, pkg, on_done)
+    end
+    local rows = {}
+    for _, target in ipairs({
+        { kind = "wallpapers", text = _("Set as wallpaper") },
+        { kind = "screensavers", text = _("Set as screensaver") },
+    }) do
+        if installed_image_target_available(self, target.kind) then
+            local choice = target
+            table.insert(rows, {
+                text = choice.text,
+                callback = function()
+                    apply_installed_image_choice(self, pkg, on_done, choice.kind)
+                end,
+            })
+        end
+    end
+    if #rows == 0 then return false end
+    local name = package_title(pkg, pkg.installed_asset or _("Image"))
+    Modals.close_status()
+    Modals.actions(string.format(_("Set %s as:"), name), rows, { cancel_callback = on_done })
+    return true
+end
+
+function App:prompt_installed_images(ids, on_done)
+    on_done = on_done or function() end
+    local groups = { wallpapers = {}, screensavers = {} }
+    for _, id in ipairs(ids or {}) do
+        local pkg = Models.find_package(self.state.packages, id)
+        local kind = installed_image_prompt_kind(self, pkg)
+        if kind then table.insert(groups[kind], pkg) end
+    end
+
+    local kinds = { "wallpapers", "screensavers" }
+    local function prompt(index)
+        local kind = kinds[index]
+        if not kind then
+            on_done()
+            return
+        end
+        local candidates = groups[kind]
+        if #candidates == 0 then
+            prompt(index + 1)
+            return
+        end
+        local continue = function() prompt(index + 1) end
+        if #candidates == 1 then
+            if not self:prompt_installed_image(candidates[1], continue) then continue() end
+            return
+        end
+
+        local fallback = kind == "screensavers" and not Device:supportsScreensaver()
+        if fallback and not installed_image_target_available(self, "wallpapers") then
+            prompt_unsupported_screensaver(self, candidates[1], continue)
+            return
+        end
+        local rows = {}
+        for _, pkg in ipairs(candidates) do
+            local candidate = pkg
+            table.insert(rows, {
+                text = package_title(candidate, candidate.installed_asset or _("Image")),
+                callback = function()
+                    apply_installed_image_choice(self, candidate, continue, fallback and "wallpapers" or nil)
+                end,
+            })
+        end
+        Modals.close_status()
+        Modals.actions(fallback and _("This device does not support screensavers. Set one as wallpaper instead:")
+            or string.format(_("Choose a %s"), installed_image_target(kind)), rows, {
+            cancel_callback = continue,
+        })
+    end
+    prompt(1)
 end
 
 function App:clear_queue()
@@ -1232,7 +1503,9 @@ function App:show_queue_entry_modify(entry)
         end or nil,
         updates_ignored = queued_update and pkg.update_ignored == true or nil,
         toggle_updates = queued_update and toggle_queued_update or nil,
-        downgrade = Models.has_version_history(pkg) and not package_is_kindle_only(pkg) and function()
+        downgrade = (Models.has_version_history(pkg)
+            or (self.state.direct_github and package_supports_direct_github(pkg)))
+            and not package_is_kindle_only(pkg) and function()
             self:prompt_package_versions(pkg)
         end or nil,
         uninstall = entry.action ~= "uninstall" and function()
@@ -1267,24 +1540,16 @@ function App:refresh_queue_package_state()
     self.state.packages = packages
     local installed = Models.installed_packages(packages)
     self.state.installed_packages = installed
-    local visible = Models.filter_packages_by_category(
-        installed, self.state.filters.installed, self.state.show_kindle_scriptlets)
-    self.state.visible_packages = self:sorted_packages("installed", visible)
+    local visible = Models.visible_installed_packages(
+        installed, self.state.filters.installed, self.state.installed_folder, self.state.show_kindle_scriptlets)
+    self.state.visible_packages = self:sorted_packages(
+        self.state.installed_folder and "installed_images" or "installed", visible)
 end
 
 function App:finish_queue_batch(batch)
     self:refresh_queue_package_state()
 
-    local function finish_prompts(index)
-        local cleanup = batch.settings_cleanup[index]
-        if cleanup then
-            Modals.plugin_settings_cleanup(cleanup.name .. " " .. _("uninstalled successfully.\n\nRemove plugin settings?"), function(remove_settings)
-                if remove_settings then cleanup.callback() end
-                finish_prompts(index + 1)
-            end)
-            return
-        end
-
+    local function finish()
         local result = self:queue_result_text(batch)
         if batch.warning then result = result .. "\n\n" .. batch.warning end
         local queue_completed = #batch.failed == 0
@@ -1305,6 +1570,18 @@ function App:finish_queue_batch(batch)
                 Modals.confirm(result, nil, function() end)
             end
         end
+    end
+
+    local function finish_prompts(index)
+        local cleanup = batch.settings_cleanup[index]
+        if cleanup then
+            Modals.plugin_settings_cleanup(cleanup.name .. " " .. _("uninstalled successfully.\n\nRemove plugin settings?"), function(remove_settings)
+                if remove_settings then cleanup.callback() end
+                finish_prompts(index + 1)
+            end)
+            return
+        end
+        self:prompt_installed_images(batch.image_installs, finish)
     end
     finish_prompts(1)
 end
@@ -1362,6 +1639,10 @@ function App:run_next_queue_operation(batch)
                 end
                 if entry.prompt_restart then batch.prompt_restart = true end
                 if detail and detail ~= "" then batch.warning = detail end
+                if entry.action == "install" and Models.is_image_asset_package(entry.pkg) then
+                    batch.image_installs = batch.image_installs or {}
+                    table.insert(batch.image_installs, entry.id)
+                end
             else
                 table.insert(batch.failed, { entry = entry, detail = detail })
             end
@@ -1430,6 +1711,12 @@ end
 
 function App:confirm_queue()
     if self.busy or self.state.queue_running or self:queue_count() == 0 then return end
+    for _, entry in ipairs(self.state.queue) do
+        if action_installs_package(entry.action) then
+            if NetworkMgr:willRerunWhenConnected(function() self:confirm_queue() end) then return end
+            break
+        end
+    end
     local operations = {}
     for _, entry in ipairs(self.state.queue) do
         if not entry.self_update and not entry.self_reinstall and entry.action == "uninstall" then table.insert(operations, entry) end
@@ -1447,6 +1734,7 @@ function App:confirm_queue()
         succeeded = {},
         failed = {},
         settings_cleanup = {},
+        image_installs = {},
         prompt_restart = false,
     }
     self:prepare_queue_assets(operations, 1, function()
@@ -1492,19 +1780,42 @@ function App:refresh_catalog_on_open()
         return
     end
     self.catalog_refreshing = true
-    self:run_update_task(function()
-        return pcall(self.client.refresh_repos, self.client)
-    end, nil, function(completed, called, ok)
+    local view = self.view
+    local function poll(attempt)
+        if self.view ~= view then return end
+        if not self.backend_ready then
+            self.catalog_refreshing = false
+            return
+        end
+        local ok, data = self.client:repo_refresh_status()
+        local ready = ok and type(data) == "table" and not data.refreshing
+        if ready then
+            ready = self:load_packages(false, true, PACKAGE_POLL_TIMEOUT)
+        end
+        if not ready then
+            if attempt < 300 then
+                UIManager:scheduleIn(1, function() poll(attempt + 1) end)
+            else
+                self.catalog_refreshing = false
+            end
+            return
+        end
         self.catalog_refreshing = false
-        -- Self-update can stop the backend while this refresh is in flight.
-        if not completed or not called or not ok or not self.view or not self.backend_ready then return end
+        -- A partial refresh can update reachable repos even when another fails.
         self.state.readme_cache = {}
+        self.state.release_notes_cache = {}
         self.image_files = {}
-        Images.invalidate_cache()
-        self:load_packages(false, true)
+        Images.invalidate_cache(false)
         self:load_repos(true)
         self:reload_current_page()
-    end)
+    end
+    -- The backend owns the network work; no fork or long UI-thread request.
+    local ok = self.client:refresh_repos(true)
+    if not ok then
+        self.catalog_refreshing = false
+        return
+    end
+    UIManager:scheduleIn(1, function() poll(1) end)
 end
 
 function App:intercept_koreader_exit()
@@ -1533,6 +1844,7 @@ end
 
 function App:close()
     self:restore_koreader_exit()
+    self.catalog_refreshing = false
     -- Scheduled callbacks cannot be removed portably across KOReader builds.
     -- Invalidate them so reopening ZenPM can start a fresh health-check loop.
     self.backend_health_check_generation = (self.backend_health_check_generation or 0) + 1
@@ -1554,6 +1866,29 @@ end
 
 function App:quit()
     self:close()
+end
+
+function App:close_book_before_update()
+    local reader = require("apps/reader/readerui").instance
+    if not reader then return true end
+
+    -- Use the normal book-close path so annotations, progress and plugin data
+    -- are saved while the old plugin files are still in place.
+    App.restore_koreader_exit(self)
+    if self.view then UIManager:close(self.view) end
+    local file = reader.document.file
+    reader:onClose()
+    reader:showFileManager(file)
+    self.plugin = require("apps/filemanager/filemanager").instance.zenpm
+    if self.view then
+        UIManager:show(self.view)
+        App.intercept_koreader_exit(self)
+    end
+
+    -- Closing ReaderUI also closes its ZenPM instance and stops the backend.
+    local ready, err = self.daemon:ensure(self.client)
+    self.backend_ready = ready
+    return ready, err
 end
 
 function App:restart_koreader(reopen_after_restart)
@@ -1631,7 +1966,8 @@ function App:scan_plugins_after_open(attempt)
         self:reload_current_page()
         return
     end
-    if tostring(data):find("non-empty catalog", 1, true)
+    if (tostring(data):find("non-empty catalog", 1, true)
+        or tostring(data):find("operation lock busy", 1, true))
         and attempt < Constants.MAX_POLL_RETRIES then
         UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
             if not self.view then return end
@@ -1854,7 +2190,11 @@ function App:load_next_readme_image()
     end
     self:image_file_for(value)
     self.readme_image_pending[value] = nil
-    self:refresh()
+    if #self.readme_image_queue == 0 then
+        self.readme_image_loading = false
+        self:refresh()
+        return
+    end
     UIManager:scheduleIn(0.05, function()
         self:load_next_readme_image()
     end)
@@ -1879,6 +2219,46 @@ function App:queue_readme_image(value)
     end)
 end
 
+function App:load_next_package_image()
+    local value = table.remove(self.package_image_queue, 1)
+    if not value then
+        self.package_image_loading = false
+        return
+    end
+    local file = self:image_file_for(value)
+    if not file and not Images.is_failed(value) and self.package_image_pending[value] then
+        table.insert(self.package_image_queue, value)
+    else
+        self.package_image_pending[value] = nil
+    end
+    if #self.package_image_queue == 0 then
+        self.package_image_loading = false
+        self:refresh()
+        return
+    end
+    UIManager:scheduleIn(0.05, function()
+        self:load_next_package_image()
+    end)
+end
+
+function App:begin_package_image_render()
+    self.package_image_queue = {}
+    self.package_image_pending = {}
+end
+
+function App:queue_package_image(value)
+    value = tostring(value or "")
+    if value == "" or self.package_image_pending[value] or Images.is_failed(value) then return end
+    if self:cached_image_file(value) then return end
+    self.package_image_pending[value] = true
+    table.insert(self.package_image_queue, value)
+    if self.package_image_loading then return end
+    self.package_image_loading = true
+    UIManager:nextTick(function()
+        self:load_next_package_image()
+    end)
+end
+
 function App:package_icon_file(pkg)
     if is_zenpm_package(pkg) then
         local icon = Images.asset("zenpm.svg")
@@ -1887,14 +2267,28 @@ function App:package_icon_file(pkg)
     local icon_value = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
     local source = icon_value == fallback_value and "repo-fallback" or "package"
+    if Models.is_image_asset_package(pkg) then
+        if self.state.show_readme_images == false then
+            fallback_value = Images.category_icon(pkg.category) or Images.asset("packages.svg")
+            return fallback_value, true, fallback_value, "fallback"
+        end
+        local file = self:cached_image_file(icon_value)
+        if file then return file, false, icon_value, source end
+        self:queue_package_image(icon_value)
+        fallback_value = Images.category_icon(pkg.category) or Images.asset("packages.svg")
+        return fallback_value, true, fallback_value, "fallback"
+    end
     local file = self:image_file_for(icon_value)
     if file then
-        return file, icon_value == fallback_value, icon_value, source
+        return file, icon_value == fallback_value or tostring(file):lower():match("%.svg$") ~= nil, icon_value, source
     end
     return self:image_file_for(fallback_value), true, fallback_value, "fallback"
 end
 
 function App:package_featured_file(pkg)
+    if Models.is_image_asset_package(pkg) and self.state.show_readme_images == false then
+        return self:package_icon_file(pkg)
+    end
     return self:image_file_for(Images.featured_image(pkg)) or self:package_icon_file(pkg)
 end
 
@@ -1903,6 +2297,9 @@ function App:repo_icon_file(repo)
 end
 
 function App:scroll_key()
+    if self.state.page == "installed" and self.state.installed_folder then
+        return "installed:" .. self.state.installed_folder
+    end
     if self.state.page == "source_details" and self.state.current_repo then
         return "source:" .. tostring(self.state.current_repo.name)
     end
@@ -1923,13 +2320,12 @@ function App:navigate(tab_id, full_refresh)
     self._full_refresh = full_refresh ~= false
     if tab_id == "home" then
         self:show_featured()
-    elseif tab_id == "changes" then
-        self:show_changes()
     elseif tab_id == "categories" then
         self:show_categories()
     elseif tab_id == "sources" then
         self:show_sources()
     elseif tab_id == "installed" then
+        self.state.installed_folder = nil
         self:show_installed()
     elseif tab_id == "debug" then
         self:show_debug()
@@ -1942,6 +2338,8 @@ end
 function App:reload_current_page()
     if self.state.page == "package_details" and self.state.current_package then
         self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset)
+    elseif self.state.page == "installed" and self.state.installed_folder then
+        self:show_installed()
     elseif self.state.page == "category_details" and self.state.current_category then
         self:show_category_details(self.state.current_category.id)
     elseif self.state.page == "source_details" and self.state.current_repo then
@@ -1963,19 +2361,29 @@ local function version_gt(a, b)
     a = normalized_version(a)
     b = normalized_version(b)
     local function parts(value)
+        local base, prerelease = value:match("^([%d%.]+)%-(.+)$")
+        if not base then base = value end
         local out = {}
-        for n in value:gmatch("%d+") do
+        for n in base:gmatch("%d+") do
             table.insert(out, tonumber(n) or 0)
         end
-        return out
+        local label = prerelease and prerelease:lower():match("^([%a]+)") or nil
+        local number = prerelease and tonumber(prerelease:match("(%d+)$")) or 0
+        return out, label, number
     end
-    local ap, bp = parts(a), parts(b)
+    local ap, a_label, a_number = parts(a)
+    local bp, b_label, b_number = parts(b)
     local max = math.max(#ap, #bp)
     for i = 1, max do
         local av, bv = ap[i] or 0, bp[i] or 0
         if av > bv then return true end
         if av < bv then return false end
     end
+    if a_label ~= b_label then
+        if not a_label or not b_label then return a_label == nil end
+        return a_label > b_label
+    end
+    if a_label then return a_number > b_number end
     if max > 0 then return false end
     return a > b
 end
@@ -2029,12 +2437,12 @@ end
 -- catalog already carries every field the UI needs, so once loaded we reuse it
 -- across tab/filter/sort/detail navigation with no further /packages calls.
 -- force=true (install/uninstall/refresh) or check_updates bypass the cache.
-function App:load_packages(check_updates, force)
+function App:load_packages(check_updates, force, timeout)
     if not force and not check_updates and self.state.packages and #self.state.packages > 0 then
         return true, self.state.packages
     end
     if not self.state.filter_installable then
-        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates)
+        local ok, data = self.client:list_packages(nil, check_updates, self.state.beta_updates, self.state.alpha_updates, timeout)
         if not ok then
             return false, {}, data
         end
@@ -2045,7 +2453,7 @@ function App:load_packages(check_updates, force)
     end
     local filter = self:package_platforms()
     local capabilities, capability_set = platform_capabilities(filter)
-    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates)
+    local ok, data = self.client:list_packages(filter, check_updates, self.state.beta_updates, self.state.alpha_updates, timeout)
     if not ok then
         return false, {}, data
     end
@@ -2058,7 +2466,7 @@ function App:load_packages(check_updates, force)
         return true, packages
     end
     for _, platform in ipairs(capabilities) do
-        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates)
+        ok, data = self.client:list_packages(platform, check_updates, self.state.beta_updates, self.state.alpha_updates, timeout)
         if not ok then
             return false, {}, data
         end
@@ -2080,6 +2488,143 @@ function App:load_repos(force)
     local repos = type(data) == "table" and data or {}
     self.state.repos = repos
     return true, repos
+end
+
+function App:has_readerbackdrop()
+    local state = self.state.readerbackdrop or {}
+    self.state.readerbackdrop = state
+    if state.enabled then return true end
+    for _, repo in ipairs(self.state.repos or {}) do
+        if repo.name == Constants.REPO_READERBACKDROP_NAME then
+            state.enabled = true
+            return true
+        end
+    end
+    for _, pkg in ipairs(self.state.packages or {}) do
+        if pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+            state.enabled = true
+            return true
+        end
+    end
+    return false
+end
+
+local function readerbackdrop_tag(state)
+    local category = state.page == "category_details" and state.current_category or {}
+    if category.id == "wallpapers" then return "zen-wallpaper" end
+    if category.id == "screensavers" then return (state.readerbackdrop or {}).tag or "" end
+    return ""
+end
+
+function App:readerbackdrop_query()
+    if self.state.page == "category_details" and self.state.current_category
+            and (self.state.current_category.id == "screensavers"
+                or self.state.current_category.id == "wallpapers") then
+        return self.state.filters.category or ""
+    end
+    if self.state.page == "source_details" and self.state.current_repo
+            and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME then
+        return self.state.filters.source or ""
+    end
+end
+
+function App:set_readerbackdrop_category(value)
+    local state = self.state.readerbackdrop
+    state.tag = value or ""
+    self:reset_scroll("category:screensavers")
+    if self:load_readerbackdrop_page(1, self:readerbackdrop_query() or "") then
+        self:show_category_details("screensavers")
+    end
+end
+
+function App:prompt_readerbackdrop_categories()
+    Modals.status(_("Loading categories..."))
+    local ok, data = self.client:readerbackdrop_categories()
+    Modals.close_status()
+    if not ok then
+        Modals.info_for(_("Could not load categories: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return
+    end
+    data = type(data) == "table" and data or {}
+    local state = self.state.readerbackdrop
+    state.tag = state.tag or ""
+    local rows = {
+        {
+            text = _("All"),
+            checked_func = function() return state.tag == "" end,
+            callback = function() self:set_readerbackdrop_category("") end,
+        },
+    }
+    for _, tag in ipairs(type(data.tags) == "table" and data.tags or {}) do
+        local item = tag
+        if type(item.name) == "string" and item.name ~= ""
+                and Util.trim(item.name):lower() ~= "zen-wallpaper" then
+            table.insert(rows, {
+                text = item.name .. (tonumber(item.count) and " (" .. tostring(item.count) .. ")" or ""),
+                checked_func = function() return state.tag == item.name end,
+                callback = function() self:set_readerbackdrop_category(item.name) end,
+            })
+        end
+    end
+    Modals.actions(_("Tags"), rows, { show_cancel = false, align = "left" })
+end
+
+function App:load_readerbackdrop_page(page, query)
+    if not self:has_readerbackdrop() then return false end
+    query = Util.trim(query)
+    local state = self.state.readerbackdrop
+    local tag = readerbackdrop_tag(self.state)
+    if state.loading or (page > 1 and state.query == query and state.loaded_tag == tag
+            and state.total_pages and page > state.total_pages) then
+        return false
+    end
+    state.loading = true
+    local wallpapers = tag == "zen-wallpaper"
+    Modals.status(page == 1 and (query ~= "" and _("Searching ReaderBackdrop...")
+        or wallpapers and _("Loading wallpapers...") or _("Loading screensavers..."))
+        or wallpapers and _("Loading more wallpapers...") or _("Loading more screensavers..."))
+    UIManager:forceRePaint()
+    local ok, data = self.client:load_readerbackdrop(page, query, tag)
+    Modals.close_status()
+    state.loading = false
+    if not ok then
+        Modals.info_for(_("Could not load ReaderBackdrop: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return false
+    end
+    data = type(data) == "table" and data or {}
+    state.page = tonumber(data.page) or page
+    local total_pages = tonumber(data.total_pages)
+    local total = tonumber(data.total)
+    state.total_pages = total_pages and total_pages > 0 and total_pages or nil
+    state.total = total and total > 0 and total or nil
+    state.query = query
+    state.loaded_tag = tag
+    if query == "" and state.total then
+        if tag == "" then
+            state.site_total = state.total
+        elseif tag == "zen-wallpaper" then
+            state.wallpaper_total = state.total
+        end
+    end
+    local loaded, packages, err = self:load_packages(false, true)
+    if not loaded then
+        Modals.info_for(_("Could not load packages: ") .. tostring(err), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return false
+    end
+    self.state.packages = packages
+    return true
+end
+
+function App:load_more_readerbackdrop()
+    local query = self:readerbackdrop_query()
+    if query == nil or not self:has_readerbackdrop() then return false end
+    local state = self.state.readerbackdrop
+    local tag = readerbackdrop_tag(self.state)
+    local page = state.query == query and state.loaded_tag == tag
+        and (tonumber(state.page) or 1) + 1 or 1
+    if not self:load_readerbackdrop_page(page, query) then return false end
+    self:reload_current_page()
+    return true
 end
 
 function App:show_featured()
@@ -2115,8 +2660,8 @@ end
 
 -- Poll the catalog after a first-run background refresh until packages appear.
 function App:reload_featured_until_ready(attempt)
-    if self.state.page ~= "home" then return end
-    local ok, packages = self:load_packages()
+    if not self.view or self.state.page ~= "home" then return end
+    local ok, packages = self:load_packages(false, false, PACKAGE_POLL_TIMEOUT)
     if ok and #packages > 0 then
         self.state.packages = packages
         self.state.featured_packages = Models.select_featured(packages)
@@ -2144,25 +2689,14 @@ function App:show_search()
         return
     end
     self.state.packages = packages
-    self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(packages, self.state.filters.search))
-    self:clear_status()
-    self:refresh()
-end
-
-function App:show_changes()
-    self.state.page = "changes"
-    self.state.active_tab = "changes"
-    if not self:ensure_backend() then return end
-    self:set_loading(_("Loading packages..."))
-    local ok, packages, err = self:load_packages()
-    if not ok then
-        self:set_error(_("Failed to load packages: ") .. tostring(err))
-        return
+    local discover_packages = {}
+    for _, pkg in ipairs(packages) do
+        if not Models.is_image_asset_package(pkg) then
+            table.insert(discover_packages, pkg)
+        end
     end
-    self.state.packages = packages
-    local changes = Models.changes_packages(packages, 14, 40, self.state.sorts.changes)
-    self.state.changes_packages = changes
-    self.state.visible_packages = changes
+    self.state.discover_packages = discover_packages
+    self.state.visible_packages = self:sorted_packages("search", Models.filter_packages(discover_packages, self.state.filters.search))
     self:clear_status()
     self:refresh()
 end
@@ -2177,8 +2711,17 @@ function App:show_categories()
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local categories = Models.category_cards(packages, self.state.show_kindle_scriptlets)
     self.state.packages = packages
+    local categories = Models.category_cards(packages, self.state.show_kindle_scriptlets)
+    if self:has_readerbackdrop() then
+        for _, category in ipairs(categories) do
+            if category.id == "screensavers" then
+                category.count_label = tostring(self.state.readerbackdrop.site_total or 2085)
+            elseif category.id == "wallpapers" then
+                category.count_label = tostring(self.state.readerbackdrop.wallpaper_total or 10)
+            end
+        end
+    end
     self.state.categories = categories
     self.state.visible_categories = Models.filter_categories(categories, self.state.filters.categories)
     self.state.current_category = nil
@@ -2201,16 +2744,32 @@ function App:show_category_details(category_id)
         self:set_error(_("Failed to load packages: ") .. tostring(err))
         return
     end
-    local category_packages = Models.packages_in_category(packages, category)
     self.state.packages = packages
     self.state.current_category = category
+    if (category.id == "screensavers" or category.id == "wallpapers") and self:has_readerbackdrop() then
+        local readerbackdrop = self.state.readerbackdrop
+        local query = self.state.filters.category or ""
+        local tag = readerbackdrop_tag(self.state)
+        if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= tag then
+            if self:load_readerbackdrop_page(1, query) then
+                packages = self.state.packages
+            end
+        end
+    end
+    local category_packages = Models.packages_in_category(packages, category)
+    if category.id == "screensavers" then
+        category_packages = Models.filter_packages_by_tag(
+            category_packages, (self.state.readerbackdrop or {}).tag)
+    end
+    self.state.packages = packages
     self.state.category_packages = category_packages
     self.state.visible_packages = self:sorted_packages("category", Models.filter_packages(category_packages, self.state.filters.category))
     self:clear_status()
     self:refresh()
 end
 
-function App:show_installed()
+function App:show_installed(folder_id)
+    if folder_id then self.state.installed_folder = folder_id end
     self.state.page = "installed"
     self.state.active_tab = "installed"
     if not self:ensure_backend() then return end
@@ -2223,9 +2782,10 @@ function App:show_installed()
     local installed = Models.installed_packages(packages)
     self.state.packages = packages
     self.state.installed_packages = installed
-    local visible = Models.filter_packages_by_category(
-        installed, self.state.filters.installed, self.state.show_kindle_scriptlets)
-    self.state.visible_packages = self:sorted_packages("installed", visible)
+    local visible = Models.visible_installed_packages(
+        installed, self.state.filters.installed, self.state.installed_folder, self.state.show_kindle_scriptlets)
+    self.state.visible_packages = self:sorted_packages(
+        self.state.installed_folder and "installed_images" or "installed", visible)
     self:clear_status()
     self:refresh()
 end
@@ -2266,46 +2826,86 @@ function App:show_source_details(name)
         self:set_error(_("Failed to load packages: ") .. tostring(pkg_err))
         return
     end
+    self.state.repos = repos
+    self.state.packages = packages
+    self.state.current_repo = repo
+    if repo.name == Constants.REPO_READERBACKDROP_NAME then
+        local readerbackdrop = self.state.readerbackdrop
+        local query = self.state.filters.source or ""
+        if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= "" then
+            if self:load_readerbackdrop_page(1, query) then
+                packages = self.state.packages
+            end
+        end
+    end
     local visible = {}
     for _, pkg in ipairs(packages) do
         if pkg.repo == repo.name then
             table.insert(visible, pkg)
         end
     end
-    self.state.repos = repos
     self.state.packages = packages
-    self.state.current_repo = repo
     self.state.visible_packages = self:sorted_packages("source", Models.filter_packages(visible, self.state.filters.source))
     self:clear_status()
     self:refresh()
 end
 
-function App:show_package_details(package_id, from_tab, force_reload, details_tab, patch_asset)
+function App:show_package_details(requested_id, from_tab, force_reload, details_tab, patch_asset)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
             tab = self.state.active_tab,
             repo = self.state.current_repo,
             category = self.state.current_category,
+            installed_folder = self.state.installed_folder,
         }
     end
     self.state.page = "package_details"
     self.state.active_tab = from_tab or self.state.active_tab or "search"
     self.state.details_from = from_tab or self.state.active_tab or "search"
     if not self:ensure_backend() then return end
-    -- Catalog already carries every field the details view needs (description,
-    -- author, images, icons). load_packages serves from the in-memory session
-    -- cache, so this is a local lookup with no network round-trip unless a
-    -- force_reload (post install/uninstall/refresh) invalidates the cache.
+    -- The catalog lookup is cached; direct GitHub mode checks releases below.
     local ok, packages, err = self:load_packages(false, force_reload)
     if not ok then
         self:set_error(_("Failed to load package: ") .. tostring(err))
         return
     end
-    local pkg = Models.find_package(packages, package_id)
+    local pkg = Models.find_package(packages, requested_id)
     if not pkg then
         self:set_error(_("Package not found."))
         return
+    end
+    if self.state.direct_github and package_supports_direct_github(pkg) then
+        local github_releases = pkg.github_releases
+        if type(github_releases) ~= "table" then
+            local release_ok, release_data = self.client:get_package_releases(pkg.id or pkg.name, true)
+            if release_ok and type(release_data) == "table" and type(release_data.releases) == "table" then
+                github_releases = release_data.releases
+                pkg.github_releases = github_releases
+            end
+        end
+        if type(github_releases) == "table" then
+            local latest
+            local allow_alpha = self.state.alpha_updates and package_id(pkg) == "zen-ui"
+            for _, release in ipairs(github_releases) do
+                local tag = tostring(release.tag_name or "")
+                local alpha = tag:lower():find("-alpha", 1, true) ~= nil
+                if tag ~= "" and ((alpha and allow_alpha)
+                    or (not alpha and (not release.prerelease or (self.state.beta_updates and not allow_alpha))))
+                    and (not latest or version_gt(tag, latest)) then
+                    latest = tag
+                end
+            end
+            if latest then
+                pkg.github_latest_version = latest
+                pkg.version = latest
+                local installed = pkg.installed_version
+                pkg.update_available = pkg.installed and installed and normalized_version(installed) ~= "0.0.0"
+                    and version_gt(latest, installed) or false
+                pkg.latest_version = latest
+                pkg.latest_release = pkg.update_available and latest or nil
+            end
+        end
     end
     -- For an installed patch item, show the patch itself (not its parent package):
     -- rebuild the single-asset item so the title, card and modify menu act on the patch.
@@ -2420,6 +3020,9 @@ function App:go_back_from_details()
             self.state.current_category = origin.category
             self:show_category_details(origin.category.id)
             return
+        elseif origin.page == "installed" and origin.installed_folder then
+            self:show_installed(origin.installed_folder)
+            return
         end
     end
     self:navigate(self.state.details_from or "search")
@@ -2427,7 +3030,9 @@ end
 
 function App:go_back()
     local page = self.state.page
-    if page == "category_details" then
+    if page == "installed" and self.state.installed_folder then
+        self:close_installed_folder()
+    elseif page == "category_details" then
         self:show_categories()
     elseif page == "source_details" then
         self:show_sources()
@@ -2435,11 +3040,18 @@ function App:go_back()
         self:go_back_from_details()
     elseif page == "queue" then
         self:close_queue()
+    elseif page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
+        self:show_settings()
     elseif page == "settings" then
         self:close_settings()
     else
         self:quit()
     end
+end
+
+function App:close_installed_folder()
+    self.state.installed_folder = nil
+    self:show_installed()
 end
 
 function App:show_debug()
@@ -2464,7 +3076,7 @@ function App:show_debug()
 end
 
 function App:sorted_packages(kind, packages)
-    return Models.sort_packages(packages, self.state.sorts[kind])
+    return Models.sort_packages(packages, self.state.sorts[kind], kind == "installed_images" and "installed" or kind)
 end
 
 function App:sorted_repos(repos)
@@ -2482,6 +3094,13 @@ function App:set_filter(kind, value)
     else
         self:reset_scroll("search")
     end
+    if (kind == "category" and self.state.current_category
+            and (self.state.current_category.id == "screensavers"
+                or self.state.current_category.id == "wallpapers"))
+            or (kind == "source" and self.state.current_repo
+                and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME) then
+        self:load_readerbackdrop_page(1, self.state.filters[kind])
+    end
     if kind == "categories" then
         self:show_categories()
     elseif kind == "category" and self.state.current_category then
@@ -2494,13 +3113,11 @@ function App:set_filter(kind, value)
 end
 
 function App:set_sort(kind, value)
-    self.state.sorts[kind] = value or (kind == "changes" and "published_at_desc" or "stars")
+    self.state.sorts[kind] = value or (kind == "search" and "published_at_desc" or "stars")
     App.save_setting("sorts", self.state.sorts)
     self:reset_scroll(self:scroll_key())
-    if kind == "installed" then
+    if kind == "installed" or kind == "installed_images" then
         self:show_installed()
-    elseif kind == "changes" then
-        self:show_changes()
     elseif kind == "sources" then
         self:show_sources()
     elseif kind == "category" and self.state.current_category then
@@ -2515,6 +3132,7 @@ end
 function App:set_installed_category_filter(category_id)
     local category = Models.category_for_id(category_id, self.state.show_kindle_scriptlets)
     self.state.filters.installed = category and category.id or ""
+    self.state.installed_folder = nil
     self:reset_scroll("installed")
     self:show_installed()
 end
@@ -2530,63 +3148,38 @@ function App:prompt_installed_category_filter()
     }
     for _, category in ipairs(Models.category_cards(
             self.state.installed_packages, self.state.show_kindle_scriptlets)) do
-        if category.count > 0 then
-            local item = category
-            table.insert(rows, {
-                text = Models.category_label(item) .. " (" .. tostring(item.count) .. ")",
-                checked_func = function() return current == item.id end,
-                callback = function() self:set_installed_category_filter(item.id) end,
-            })
-        end
+        local item = category
+        table.insert(rows, {
+            text = Models.category_label(item) .. " (" .. tostring(item.count) .. ")",
+            checked_func = function() return current == item.id end,
+            callback = function() self:set_installed_category_filter(item.id) end,
+        })
     end
     Modals.actions(_("Filter by category"), rows, { show_cancel = false, align = "left" })
 end
 
 function App:prompt_sort(kind)
-    local current = self.state.sorts[kind] or (kind == "changes" and "published_at_desc" or "stars")
+    local current = self.state.sorts[kind] or (kind == "search" and "published_at_desc" or "stars")
     local title = kind == "sources" and _("Sort sources") or _("Sort packages")
     local function selected(key)
         return function() return current == key end
     end
-    if kind == "changes" then
-        Modals.actions(title, {
-            {
-                icon = "sort_asc",
-                text = _("Ascending"),
-                checked_func = selected("published_at_asc"),
-                callback = function() self:set_sort(kind, "published_at_asc") end,
-            },
-            {
-                icon = "sort_desc",
-                text = _("Descending"),
-                checked_func = selected("published_at_desc"),
-                callback = function() self:set_sort(kind, "published_at_desc") end,
-            },
-        }, { show_cancel = false, align = "left" })
-        return
-    end
-    if kind == "installed" or kind == "sources" then
+    if kind == "installed" or kind == "installed_images" or kind == "sources" then
         local rows = {
             {
                 icon = "sort_asc",
-                text = _("Title (A-Z)"),
+                text = _("Name (A-Z)"),
                 checked_func = selected("name_asc"),
                 callback = function() self:set_sort(kind, "name_asc") end,
             },
             {
                 icon = "sort_desc",
-                text = _("Title (Z-A)"),
+                text = _("Name (Z-A)"),
                 checked_func = selected("name_desc"),
                 callback = function() self:set_sort(kind, "name_desc") end,
             },
         }
-        if kind == "installed" then
-            table.insert(rows, {
-                icon = "update",
-                text = _("Update available"),
-                checked_func = selected("update_available"),
-                callback = function() self:set_sort(kind, "update_available") end,
-            })
+        if kind == "installed" or kind == "installed_images" then
             table.insert(rows, {
                 icon = "date",
                 text = _("Installed date (newest first)"),
@@ -2603,10 +3196,15 @@ function App:prompt_sort(kind)
         Modals.actions(title, rows, { show_cancel = false, align = "left" })
         return
     end
+    local downloads = kind == "category" and self.state.current_category
+            and (self.state.current_category.id == "screensavers"
+                or self.state.current_category.id == "wallpapers")
+        or kind == "source" and self.state.current_repo
+            and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME
     local rows = {
         {
-            icon = "star",
-            text = _("Stars"),
+            icon = downloads and "download" or "star",
+            text = downloads and _("Downloads") or _("Stars"),
             checked_func = selected("stars"),
             callback = function() self:set_sort(kind, "stars") end,
         },
@@ -2618,7 +3216,7 @@ function App:prompt_sort(kind)
         },
     }
     if kind == "search" then
-        table.insert(rows, 2, {
+        table.insert(rows, 1, {
             icon = "date",
             text = _("Recently updated"),
             checked_func = selected("published_at_desc"),
@@ -2635,7 +3233,7 @@ function App:prompt_filter(kind)
         title = _("Search categories")
         hint = _("Search categories...")
     elseif kind == "category" then
-        title = _("Search category")
+        title = _("Search") .. " " .. Models.category_label(self.state.current_category)
         hint = _("Search category...")
     elseif kind == "source" then
         title = _("Search source")
@@ -2672,6 +3270,11 @@ function App:add_source(url)
 end
 
 function App:detect_repo_name(url)
+    local normalized = url:lower():gsub("/+$", "")
+    if normalized == Constants.REPO_READERBACKDROP_URL
+            or normalized == "https://readerbackdrop.com" then
+        return Constants.REPO_READERBACKDROP_NAME
+    end
     local base = url:gsub("/+$", "") .. "/"
     local ok, data = self.client:request("GET", base .. "manifest.json", nil)
     if ok and type(data) == "table" and type(data.repo) == "table" and data.repo.name then
@@ -2736,10 +3339,23 @@ function App:perform_package_action(pkg, on_done)
     end
     if pkg.installed then
         local is_koplugin = package_is_koreader_plugin(pkg)
+        local has_versions = not Models.is_direct_asset_package(pkg)
+            and (Models.has_version_history(pkg)
+                or (self.state.direct_github and package_supports_direct_github(pkg)))
+        local image_path = installed_image_path(self, pkg)
+        local can_set_image = image_path and (
+            installed_image_target_available(self, "wallpapers")
+                and not installed_image_is_active(self, pkg, "wallpapers")
+            or installed_image_target_available(self, "screensavers")
+                and not installed_image_is_active(self, pkg, "screensavers")
+        )
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             info = self.state.page ~= "package_details" and function()
                 self:show_package_details(pkg.id or pkg.name, self.state.active_tab)
+            end or nil,
+            set_image = can_set_image and function()
+                self:prompt_installed_image_target(pkg, on_done)
             end or nil,
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)
@@ -2752,15 +3368,14 @@ function App:perform_package_action(pkg, on_done)
             enable_disable = is_koplugin and function()
                 self:toggle_enable(pkg, "plugin", on_done)
             end or nil,
-            downgrade = Models.has_version_history(pkg) and not Models.is_font_package(pkg)
-                and not package_is_kindle_only(pkg) and function()
+            downgrade = has_versions and not package_is_kindle_only(pkg) and function()
                 self:prompt_package_versions(pkg, on_done)
             end or nil,
             uninstall = function()
                 self:confirm_package_action(pkg, "uninstall", on_done)
             end,
         })
-    elseif Models.has_version_history(pkg) and not Models.is_font_package(pkg)
+    elseif Models.has_version_history(pkg) and not Models.is_direct_asset_package(pkg)
         and not package_is_kindle_only(pkg) then
         self:prompt_default_package_version(pkg, on_done, "install")
     else
@@ -2880,18 +3495,32 @@ end
 
 function App:load_package_releases(pkg, allow_empty)
     Modals.status(_("Loading available versions..."))
-    local ok, data = self.client:get_package_releases(pkg.id or pkg.name)
+    local direct_github = self.state and self.state.direct_github and package_supports_direct_github(pkg)
+    local ok, data = true, direct_github and type(pkg.github_releases) == "table"
+        and { releases = pkg.github_releases } or nil
+    if not data then
+        ok, data = self.client:get_package_releases(pkg.id or pkg.name, direct_github)
+        if ok and direct_github and type(data) == "table" and type(data.releases) == "table" then
+            pkg.github_releases = data.releases
+        end
+    end
     Modals.close_status()
     if not ok then
         Modals.info(_("Could not load available versions: ") .. tostring(data))
         return
     end
     local allow_prerelease = self.state.beta_updates
+    local allow_alpha = self.state.alpha_updates and package_id(pkg) == "zen-ui"
     local releases = {}
     for _, release in ipairs(type(data) == "table" and data.releases or {}) do
-        if release.tag_name and (allow_prerelease or not release.prerelease) then
+        local alpha = tostring(release.tag_name or ""):lower():find("-alpha", 1, true) ~= nil
+        if release.tag_name and ((alpha and allow_alpha)
+                or (not alpha and (not release.prerelease or (allow_prerelease and not allow_alpha)))) then
             table.insert(releases, release)
         end
+    end
+    if direct_github then
+        table.sort(releases, function(a, b) return version_gt(a.tag_name, b.tag_name) end)
     end
     if #releases == 0 then
         if allow_empty then return releases end
@@ -3004,7 +3633,7 @@ function App:confirm_package_version(pkg, release_tag, action, asset, on_done)
 end
 
 function App:confirm_package_action(pkg, action, on_done)
-    local opts = action == "update" and pkg.latest_release and not Models.is_font_package(pkg)
+    local opts = action == "update" and pkg.latest_release and not Models.is_direct_asset_package(pkg)
         and not package_uses_source(pkg)
         and { release = pkg.latest_release } or nil
     self:start_package_action(pkg, action, on_done, opts)
@@ -3020,14 +3649,14 @@ function App:start_package_action(pkg, action, on_done, opts)
         self:queue_self_update(pkg, opts)
         return
     end
-    if action_installs_package(action) and opts and opts.release then
-        self:queue_package_action(pkg, action, nil, opts)
+    if action_installs_package(action) and self.state and self.state.direct_github
+        and package_supports_direct_github(pkg) then
+        self:prompt_default_package_version(pkg, on_done, action)
         return
     end
     if action_installs_package(action) then
-        -- Fonts use an explicit catalog ZIP, while Kindle-only packages run
-        -- repository scripts. Neither needs a cached release asset.
-        if Models.is_font_package(pkg) or package_is_kindle_only(pkg) then
+        -- Direct catalog assets and Kindle-only packages do not need a cached release asset.
+        if Models.is_direct_asset_package(pkg) or package_is_kindle_only(pkg) then
             self:queue_package_action(pkg, action, nil, opts)
             return
         end
@@ -3121,10 +3750,18 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
     self.busy = true
     Modals.status((opts and opts.status_prefix or "") .. action_progress(action) .. " "
         .. display_name .. "\n\n" .. action_progress(action) .. _("... Please wait."))
-    local ok, err = self.client:package_action(id, backend_action, asset, opts and opts.release or nil)
+    local direct_github = self.state and self.state.direct_github
+        and package_supports_direct_github(pkg)
+    local ok, response = true, nil
+    if action == "update" or package_is_koreader_plugin(pkg) or is_patch then
+        ok, response = App.close_book_before_update(self)
+    end
+    if ok then
+        ok, response = self.client:package_action(id, backend_action, asset, opts and opts.release or nil, direct_github)
+    end
     if not ok then
         self.busy = false
-        local message = _("Failed to start package action: ") .. tostring(err)
+        local message = _("Failed to start package action: ") .. tostring(response)
         if opts and opts.on_result then
             opts.on_result(false, message)
         else
@@ -3148,11 +3785,12 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         failure_baseline = failure_baseline,
         on_done = on_done,
         on_result = opts and opts.on_result or nil,
+        operation_id = type(response) == "table" and response.operation_id or nil,
     }, 1)
 end
 
 function App:package_action_failure_stats(op)
-    local ok, log_text = self.client:get_log(200)
+    local ok, log_text = self.client:get_log(200, PACKAGE_POLL_TIMEOUT)
     if not ok or type(log_text) ~= "string" then
         return 0, nil
     end
@@ -3227,7 +3865,7 @@ function App:patch_action_succeeded_from_db(op)
     if not (op.is_patch and op.asset and op.asset ~= "") then
         return false
     end
-    local ok, data = self.client:list_packages(nil, false)
+    local ok, data = self.client:list_packages(nil, false, nil, nil, PACKAGE_POLL_TIMEOUT)
     if not ok or type(data) ~= "table" then
         return false
     end
@@ -3256,7 +3894,44 @@ end
 
 function App:poll_package_action(op, attempt)
     UIManager:scheduleIn(Constants.POLL_DELAY_SECONDS, function()
-        local detail = self:package_action_failure_detail(op)
+        local operation_status
+        local detail
+        local max_retries = op.operation_id
+            and (Constants.PACKAGE_OPERATION_MAX_POLL_RETRIES or Constants.PACKAGE_ACTION_MAX_POLL_RETRIES)
+            or Constants.PACKAGE_ACTION_MAX_POLL_RETRIES
+        if op.operation_id and type(self.client.package_operation) == "function" then
+            local status_ok, status, status_code = self.client:package_operation(op.operation_id, PACKAGE_POLL_TIMEOUT)
+            if status_ok and type(status) == "table" then
+                operation_status = status.status
+                if operation_status == "failed" then
+                    detail = status.error or _("Check the debug log for details.")
+                elseif operation_status ~= "running" and operation_status ~= "succeeded" then
+                    if attempt < max_retries then
+                        self:poll_package_action(op, attempt + 1)
+                        return
+                    end
+                    detail = _("Package operation status could not be checked. See Debug log.")
+                end
+            elseif status_code == 404 then
+                -- Compatibility with a backend restart or an older backend.
+                op.operation_id = nil
+            elseif attempt < max_retries then
+                self:poll_package_action(op, attempt + 1)
+                return
+            else
+                detail = _("Package operation status could not be checked. See Debug log.")
+            end
+            if operation_status == "running" then
+                if attempt < max_retries then
+                    self:poll_package_action(op, attempt + 1)
+                    return
+                end
+                detail = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. _(" did not complete.\n\nCheck the debug log for details.")
+            end
+        end
+        if not op.operation_id then
+            detail = self:package_action_failure_detail(op)
+        end
         if detail then
             self.busy = false
             if op.on_result then
@@ -3270,9 +3945,9 @@ function App:poll_package_action(op, attempt)
         -- Force a fresh catalog read each tick: the session cache would mask the
         -- install/uninstall status change we're polling for. On success this also
         -- leaves state.packages holding the updated status for the list/detail view.
-        local ok, packages = self:load_packages(false, true)
+        local ok, packages = self:load_packages(false, true, PACKAGE_POLL_TIMEOUT)
         if not ok then
-            if attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+            if attempt >= max_retries then
                 self.busy = false
                 local message = _("Package operation status could not be checked. See Debug log.")
                 if op.on_result then
@@ -3287,11 +3962,11 @@ function App:poll_package_action(op, attempt)
         end
 
         local pkg = Models.find_package(packages, op.id)
-        local succeeded = self:package_action_succeeded(op, pkg)
+        local succeeded = operation_status == "succeeded" or self:package_action_succeeded(op, pkg)
         if not succeeded then
             succeeded = self:patch_action_succeeded_from_db(op)
         end
-        if not succeeded and attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+        if not succeeded and attempt >= max_retries then
             succeeded = self:recover_interrupted_plugin_action(op)
         end
 
@@ -3340,7 +4015,7 @@ function App:poll_package_action(op, attempt)
                 return
             end
             finish()
-        elseif attempt >= Constants.PACKAGE_ACTION_MAX_POLL_RETRIES then
+        elseif attempt >= max_retries then
             self.busy = false
             detail = self:package_action_failure_detail(op)
             local message = action_present(op.action) .. " " .. _("of") .. " " .. op.name .. " did not complete."
@@ -3379,6 +4054,8 @@ function App:refresh_repos()
     end
 
     self.state.readme_cache = {}
+    self.state.release_notes_cache = {}
+    self.state.readerbackdrop = { enabled = false, page = 1, query = "", tag = "", loaded_tag = "", loading = false }
     self.image_files = {}
     Images.invalidate_cache()
     local found, packages = self:load_packages(false, true)
@@ -3423,6 +4100,9 @@ end
 
 function App:apply_kindle_homepage_install()
     if self.busy then return end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:apply_kindle_homepage_install()
+    end) then return end
     self.busy = true
     local status = Modals.status(_("Copying ZenPM to Kindle homepage..."))
     UIManager:forceRePaint()
@@ -3454,7 +4134,7 @@ function App:toggle_filter_installable()
     self.state.filter_installable = not self.state.filter_installable
     App.save_setting("filter_installable", self.state.filter_installable)
     self.state.packages = {}
-    if self.state.page == "settings" then
+    if self.state.page == "settings" or self.state.page == "advanced_settings" then
         self.settings_requires_reload = true
         self:refresh()
         return
@@ -3465,6 +4145,86 @@ end
 function App:toggle_advanced()
     self.state.advanced = not self.state.advanced
     App.save_setting("advanced_queue", self.state.advanced)
+end
+
+function App:toggle_direct_github()
+    self.state.direct_github = not self.state.direct_github
+    App.save_setting("direct_github", self.state.direct_github)
+end
+
+local function clean_github_token(value)
+    value = Util.trim(tostring(value or ""))
+    if value == "" or #value > 4096 or value:find("%s") then return nil end
+    return value
+end
+
+function App:github_token()
+    local file = io.open(self.daemon:state_home() .. "/github_token.txt", "rb")
+    if not file then return "" end
+    local value = file:read(4098)
+    file:close()
+    return clean_github_token(value) or ""
+end
+
+function App:write_github_token(value)
+    local path = self.daemon:state_home() .. "/github_token.txt"
+    local stage = path .. ".zen-write"
+    local file, err = io.open(stage, "wb")
+    if not file then return false, err end
+    local wrote, write_err = file:write(value == "" and "" or value .. "\n")
+    local closed, close_err = file:close()
+    if not wrote or not closed
+        or (not self.daemon:is_pocketbook() and os.execute("chmod 600 " .. Util.sh_quote(stage)) ~= 0) then
+        os.remove(stage)
+        return false, write_err or close_err or _("Could not secure the GitHub token file.")
+    end
+    local renamed, rename_err = os.rename(stage, path)
+    if not renamed then os.remove(stage) end
+    return renamed ~= nil, rename_err
+end
+
+function App:prompt_github_token()
+    Modals.input(
+        _("GitHub token"), self:github_token(), _("github_pat_..."), _("Save"),
+        function(value)
+            value = clean_github_token(value)
+            if not value then
+                Modals.info(_("Enter a valid GitHub token without spaces."))
+                return
+            end
+            local ok, err = self:write_github_token(value)
+            if not ok then Modals.info(_("Could not save GitHub token: ") .. tostring(err)) end
+        end,
+        function()
+            local ok, err = self:write_github_token("")
+            if not ok then Modals.info(_("Could not clear GitHub token: ") .. tostring(err)) end
+        end,
+        {
+            description = _("Stored locally as plain text and used only for GitHub API requests."),
+            text_type = "password",
+        }
+    )
+end
+
+function App:show_advanced_settings()
+    self.state.page = "advanced_settings"
+    self:reset_scroll("advanced_settings")
+    self:clear_status()
+    self:refresh()
+end
+
+function App:show_updates_settings()
+    self.state.page = "updates_settings"
+    self:reset_scroll("updates_settings")
+    self:clear_status()
+    self:refresh()
+end
+
+function App:show_about()
+    self.state.page = "about_settings"
+    self:reset_scroll("about_settings")
+    self:clear_status()
+    self:refresh()
 end
 
 function App:toggle_manual_version_picker()
@@ -3480,6 +4240,23 @@ end
 function App:toggle_beta_updates()
     self.state.beta_updates = not self.state.beta_updates
     App.save_setting("beta_updates", self.state.beta_updates)
+end
+
+function App:toggle_alpha_updates()
+    if not self.state.alpha_updates_unlocked then return end
+    self.state.alpha_updates = not self.state.alpha_updates
+    App.save_setting("alpha_updates", self.state.alpha_updates)
+    self.state.packages = {}
+    self.settings_requires_reload = true
+end
+
+function App:tap_update_version()
+    if self.state.alpha_updates_unlocked then return false end
+    self.state.update_version_taps = (self.state.update_version_taps or 0) + 1
+    if self.state.update_version_taps < 10 then return false end
+    self.state.alpha_updates_unlocked = true
+    App.save_setting("alpha_updates_unlocked", true)
+    return true
 end
 
 function App:kindle_scriptlets_available()
@@ -3576,16 +4353,6 @@ end
 function App:show_actions(anchor)
     Modals.actions(_("ZenPM"), {
         {
-            text = _("About"),
-            icon = "details",
-            callback = function() self:show_about() end,
-        },
-        {
-            text = _("Update"),
-            icon = "upgrade",
-            callback = function() self:start_update() end,
-        },
-        {
             text = _("Refresh"),
             icon = "refresh",
             callback = function() self:refresh_repos() end,
@@ -3622,11 +4389,14 @@ function App:show_actions(anchor)
 end
 
 function App:show_settings()
-    self.settings_origin = {
-        page = self.state.page,
-        active_tab = self.state.active_tab,
-    }
-    self.settings_requires_reload = false
+    if self.state.page ~= "settings" and self.state.page ~= "advanced_settings"
+            and self.state.page ~= "updates_settings" and self.state.page ~= "about_settings" then
+        self.settings_origin = {
+            page = self.state.page,
+            active_tab = self.state.active_tab,
+        }
+        self.settings_requires_reload = false
+    end
     self.state.page = "settings"
     self:reset_scroll("settings")
     self:clear_status()
@@ -3647,23 +4417,19 @@ function App:close_settings()
     self:refresh()
 end
 
-function App:show_about()
+function App:current_version()
     local version = self.daemon:installed_backend_version()
     if version == "" then
         version = self.version or "?"
     end
-    version = tostring(version):gsub("^v", "")
-    local platform = tostring(self:package_platforms())
-    local device_platform = self.daemon:detect_platform()
-    local abi = nil
-    if device_platform == "kindle" or device_platform == "kobo" or device_platform == "ereader" then
-        abi = _("\nABI: ") .. tostring(self.daemon:ereader_backend_suffix())
-    end
-    Modals.info(_("ZenPM") .. "\n\n" .. _("Version: ") .. version .. "\n" .. _("Platform: ") .. platform .. (abi or "") .. "\n" .. _("Author: Anthony Gress (ZenLabs)") .. "\n2026")
+    return tostring(version):gsub("^v", "")
 end
 
 function App:start_update()
     if self.busy then return end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:start_update()
+    end) then return end
     self.busy = true
     local status = Modals.status(_("Checking for update..."))
     UIManager:forceRePaint()
@@ -3705,9 +4471,19 @@ function App:apply_update(release_tag, on_result)
         on_result = release_tag
         release_tag = nil
     end
+    if NetworkMgr:willRerunWhenConnected(function()
+        self:apply_update(release_tag, on_result)
+    end) then return end
+    local ready, prepare_err = App.close_book_before_update(self)
+    if not ready then
+        local message = _("Update failed: ") .. tostring(prepare_err)
+        log_update_failure(self, prepare_err)
+        if on_result then on_result(false, message) else Modals.info(message) end
+        return
+    end
     local companion_update_started = false
     if self.daemon:is_android() then
-        local started, err = self.daemon:request_android_update()
+        local started, err = self.daemon:request_android_update(self.state.beta_updates)
         if not started then
             local message = _("Companion update failed to start: ") .. tostring(err)
             log_update_failure(self, message)

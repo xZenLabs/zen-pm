@@ -336,6 +336,9 @@ msgstr "Tải xuống tài sản này: "
 msgid "Downloaded update checksum did not match."
 msgstr "Tổng kiểm tra bản cập nhật đã tải xuống không khớp."
 
+msgid "Downloads"
+msgstr "Lượt tải xuống"
+
 msgid "enable"
 msgstr "cho phép"
 
@@ -530,6 +533,12 @@ msgstr "Sửa"
 
 msgid "Name"
 msgstr "Tên"
+
+msgid "Name (A-Z)"
+msgstr "Tên (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Tên (Z-A)"
 
 msgid "network error"
 msgstr "lỗi mạng"
@@ -768,6 +777,9 @@ msgstr "Quét các plugin đã cài đặt"
 msgid "Scanning installed plugins..."
 msgstr "Đang quét các plugin đã cài đặt..."
 
+msgid "Screensavers"
+msgstr "Trình bảo vệ màn hình"
+
 msgid "Search"
 msgstr "Tìm kiếm"
 
@@ -876,12 +888,6 @@ msgstr "Điều này sẽ cài đặt như một \"cuốn sách\" trên màn hì
 msgid "timeout"
 msgstr "hết thời gian chờ"
 
-msgid "Title (A-Z)"
-msgstr "Tiêu đề (A-Z)"
-
-msgid "Title (Z-A)"
-msgstr "Tiêu đề (Z-A)"
-
 msgid "to"
 msgstr "ĐẾN"
 
@@ -968,6 +974,9 @@ msgstr "Phiên bản: "
 
 msgid "Versions"
 msgstr "Phiên bản"
+
+msgid "Wallpapers"
+msgstr "Hình nền"
 
 msgid "Welcome"
 msgstr "Chào mừng"

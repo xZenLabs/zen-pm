@@ -3,6 +3,10 @@ package pkg
 import (
 	"archive/zip"
 	"bytes"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/platform"
 	"github.com/xZenLabs/zen-pm/internal/repo"
@@ -67,6 +72,52 @@ func TestInstallPassesPackageSourceEnv(t *testing.T) {
 	}
 }
 
+func TestPackageOperationsWaitForPreviousOperation(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstStarted := make(chan struct{})
+	finishFirst := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/first" {
+			close(firstStarted)
+			<-finishFirst
+		}
+		io.WriteString(w, "#!/bin/sh\nexit 0\n")
+	}))
+	defer srv.Close()
+
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "first", Name: "First", Version: "1.0.0", Repo: "ZenLabs", InstallURL: srv.URL + "/first"},
+		{ID: "second", Name: "Second", Version: "1.0.0", Repo: "ZenLabs", InstallURL: srv.URL + "/second"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := New(st, repo.New(st), "host")
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- manager.Install("first") }()
+	<-firstStarted
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- manager.Install("second") }()
+	select {
+	case err := <-secondDone:
+		close(finishFirst)
+		t.Fatalf("second operation returned before the first finished: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(finishFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestKindleScriptEnvUsesRSACABundle(t *testing.T) {
 	st := &state.State{CABundle: "/tmp/cacert.pem", RSACABundle: "/tmp/cacert-rsa.pem"}
 	env := (&Manager{st: st, plat: platform.Kindle}).baseScriptEnv("package")
@@ -111,6 +162,8 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 		switch r.URL.Path {
 		case "/plugin.koplugin.zip":
 			w.Write(zipContents(t, map[string]string{"plugin.koplugin/_meta.lua": metadata}))
+		case "/versions.json":
+			io.WriteString(w, `{"releases":[{"tag_name":"v1.2.5","assets":[{"name":"plugin.koplugin.zip","url":"http://`+r.Host+`/plugin.koplugin.zip"}]}]}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -118,13 +171,14 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	defer srv.Close()
 
 	if err := st.WriteCatalog([]state.CatalogEntry{{
-		ID:        "plugin",
-		Name:      "Plugin",
-		Version:   "1.0.0",
-		Repo:      "ZenLabs",
-		Platforms: []string{"koreader"},
-		Source:    "https://github.com/owner/plugin",
-		Assets:    `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
+		ID:          "plugin",
+		Name:        "Plugin",
+		Version:     "1.0.0",
+		Repo:        "ZenLabs",
+		Platforms:   []string{"koreader"},
+		Source:      "https://github.com/owner/plugin",
+		Assets:      `[{"arch":"any","asset":"plugin.koplugin.zip","url":"` + srv.URL + `/plugin.koplugin.zip"}]`,
+		VersionsURL: srv.URL + "/versions.json",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -135,6 +189,9 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(koRoot, "plugins", "plugin.koplugin", "_meta.lua")); err != nil {
 		t.Fatalf("native plugin was not installed: %v", err)
+	}
+	if entries, err := os.ReadDir(st.TmpDir); err != nil || len(entries) != 0 {
+		t.Fatalf("temporary install files remain: %v, %v", entries, err)
 	}
 	if _, err := os.Stat(filepath.Join(koRoot, ".zenpm-plugins")); !os.IsNotExist(err) {
 		t.Fatalf("plugin tracking directory exists after install: %v", err)
@@ -154,6 +211,27 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if err != nil || len(installed) != 1 || installed[0].Version != "1.2.4" || !installed[0].LauncherAddPending {
 		t.Fatalf("launcher pending flag after update = %#v, %v", installed, err)
 	}
+	if err := manager.InstallRelease("plugin", "v1.2.5", "plugin.koplugin.zip"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("plugin"); version != "v1.2.5" {
+		t.Fatalf("selected release version = %q, want v1.2.5", version)
+	}
+	catalog, err := st.ReadCatalog()
+	if err != nil || len(catalog) != 1 {
+		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
+	catalog[0].Version = "1.2.6"
+	if err := st.WriteCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	metadata = `return { version = "1.2.5" }`
+	if err := manager.Install("plugin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("plugin"); version != "1.2.6" {
+		t.Fatalf("catalog release version = %q, want 1.2.6", version)
+	}
 	if err := manager.Uninstall("plugin", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -165,8 +243,61 @@ func TestInstallGenericPluginNatively(t *testing.T) {
 	if err := manager.Install("plugin"); err != nil {
 		t.Fatal(err)
 	}
-	if _, version := st.IsInstalled("plugin"); version != "" {
-		t.Fatalf("installed version = %q, want empty", version)
+	if _, version := st.IsInstalled("plugin"); version != "1.2.6" {
+		t.Fatalf("installed version = %q, want catalog version 1.2.6", version)
+	}
+}
+
+func TestInstallReleaseDoesNotApplyTargetTagToDependency(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	koRoot := filepath.Join(t.TempDir(), "koreader")
+	t.Setenv("ZENPM_KOREADER_DIR", koRoot)
+	if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(koRoot, "reader.lua"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/dependency.koplugin.zip":
+			w.Write(zipContents(t, map[string]string{"dependency.koplugin/_meta.lua": `return { version = "1.0.0" }`}))
+		case "/target.koplugin.zip":
+			w.Write(zipContents(t, map[string]string{"target.koplugin/_meta.lua": `return { version = "1.9.0" }`}))
+		case "/versions.json":
+			io.WriteString(w, `{"releases":[{"tag_name":"v2.0.0","assets":[{"name":"target.koplugin.zip","url":"http://`+r.Host+`/target.koplugin.zip"}]}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{
+			ID: "dependency", Name: "Dependency", Version: "1.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+			Assets: `[{"arch":"any","asset":"dependency.koplugin.zip","url":"` + srv.URL + `/dependency.koplugin.zip"}]`,
+		},
+		{
+			ID: "target", Name: "Target", Version: "2.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+			Deps: []string{"dependency"}, Source: "https://github.com/owner/target", SourceAsset: "target.koplugin.zip", VersionsURL: srv.URL + "/versions.json",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New(st, repo.New(st), "host").InstallRelease("target", "v2.0.0", "target.koplugin.zip"); err != nil {
+		t.Fatal(err)
+	}
+	if _, version := st.IsInstalled("dependency"); version != "1.0.0" {
+		t.Fatalf("dependency version = %q, want 1.0.0", version)
+	}
+	if _, version := st.IsInstalled("target"); version != "v2.0.0" {
+		t.Fatalf("target version = %q, want v2.0.0", version)
 	}
 }
 
@@ -243,7 +374,7 @@ func TestInstallKOReaderPluginRejectsBlankArchiveRoot(t *testing.T) {
 	})
 
 	_, _, err = (&Manager{st: st}).installKOReaderPlugin(
-		&repo.CatalogEntry{ID: "connections"}, root, ".koplugin.zip", data,
+		&repo.CatalogEntry{ID: "connections"}, root, ".koplugin.zip", assetFile(t, data),
 	)
 	if err == nil || !strings.Contains(err.Error(), `invalid KOReader plugin directory ".koplugin"`) {
 		t.Fatalf("installKOReaderPlugin() error = %v, want blank plugin directory rejection", err)
@@ -303,7 +434,7 @@ func TestInstallKOReaderPluginUnwrapsPluginsDirectory(t *testing.T) {
 	})
 	version, path, err := (&Manager{st: st}).installKOReaderPlugin(&repo.CatalogEntry{
 		ID: "zlibrary-2", PluginModule: "zlibrary",
-	}, root, "zlibrary_plugin_v1.0.41.zip", data)
+	}, root, "zlibrary_plugin_v1.0.41.zip", assetFile(t, data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +695,98 @@ func TestInstallGenericFontNatively(t *testing.T) {
 	}
 }
 
-func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *testing.T) {
+func TestInstallGenericKOReaderImagesNatively(t *testing.T) {
+	for _, test := range []struct {
+		category string
+		asset    string
+	}{
+		{category: "wallpapers", asset: "clouds.jpg"},
+		{category: "screensavers", asset: "books.png"},
+		{category: "screensavers", asset: "library.jpg"},
+		{category: "screensavers", asset: "readerbackdrop-image"},
+	} {
+		t.Run(test.asset, func(t *testing.T) {
+			home := filepath.Join(t.TempDir(), "ZenPM")
+			t.Setenv("ZENPM_HOME", home)
+			koHome := t.TempDir()
+			t.Setenv("HOME", koHome)
+			koRoot := filepath.Join(koHome, ".config", "koreader")
+			if err := os.MkdirAll(filepath.Join(koRoot, "plugins"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			st, err := state.Init("host")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload bytes.Buffer
+			installedAsset := test.asset
+			input := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+			input.Set(0, 0, color.NRGBA{R: 255, A: 255})
+			if filepath.Ext(test.asset) == ".jpg" {
+				if err := jpeg.Encode(&payload, input, &jpeg.Options{Quality: 90}); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := png.Encode(&payload, input); err != nil {
+					t.Fatal(err)
+				}
+			}
+			payload.WriteString("trailing non-image payload")
+			if filepath.Ext(test.asset) == "" {
+				installedAsset += ".png"
+			}
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write(payload.Bytes())
+			}))
+			defer srv.Close()
+
+			id := strings.TrimSuffix(test.asset, filepath.Ext(test.asset))
+			if err := st.WriteCatalog([]state.CatalogEntry{{
+				ID: id, Name: id, Version: "1.0.0", Repo: "ZenLabs",
+				Category: test.category, Platforms: []string{"koreader"},
+				Assets: `[{"arch":"any","asset":"` + test.asset + `","url":"` + srv.URL + `/` + test.asset + `"}]`,
+			}}); err != nil {
+				t.Fatal(err)
+			}
+
+			manager := New(st, repo.New(st), "host")
+			if err := manager.Install(id); err != nil {
+				t.Fatal(err)
+			}
+			destination := filepath.Join(koRoot, "resources", test.category, installedAsset)
+			data, err := os.ReadFile(destination)
+			if err != nil {
+				t.Fatalf("installed image = %q, %v", data, err)
+			}
+			if bytes.Contains(data, []byte("trailing non-image payload")) {
+				t.Fatal("installed image retained trailing payload")
+			}
+			if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
+				t.Fatalf("installed image is invalid: %v", err)
+			}
+			installed, err := st.ReadInstalled()
+			if err != nil || len(installed) != 1 || installed[0].InstallPath != destination || installed[0].Asset != installedAsset {
+				t.Fatalf("installed images = %#v, %v", installed, err)
+			}
+			if err := manager.Uninstall(id, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(destination); !os.IsNotExist(err) {
+				t.Fatalf("image remains after uninstall: %v", err)
+			}
+		})
+	}
+}
+
+func TestInstallKOReaderImageRejectsUnsafeOrWrongFormat(t *testing.T) {
+	for _, asset := range []string{"../outside.jpg", "wallpaper.png"} {
+		if _, err := installKOReaderImage(t.TempDir(), asset, nil, genericWallpaperInstaller); err == nil {
+			t.Fatalf("install image %q succeeded, want error", asset)
+		}
+	}
+}
+
+func TestResolveInstallAssetRequiresVersionsMetadataForRequestedRelease(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID:     "plugin",
 		Source: "https://github.com/owner/plugin",
@@ -574,13 +796,39 @@ func TestDownloadInstallAssetRequiresVersionsMetadataForRequestedRelease(t *test
 		}]`,
 	}
 
-	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "plugin.koplugin.zip", "v1.4.3")
+	_, _, err := (&Manager{}).resolveInstallAssetURL(entry, "plugin.koplugin.zip", "v1.4.3", false)
 	if err == nil || !strings.Contains(err.Error(), "has no versions metadata") {
 		t.Fatalf("download error = %v, want missing versions metadata error", err)
 	}
 }
 
-func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
+func TestResolveInstallAssetDirectRequiresGitHubSource(t *testing.T) {
+	entry := &repo.CatalogEntry{
+		ID: "plugin", Source: "https://example.com/owner/plugin", SourceAsset: "plugin.koplugin.zip",
+		Platforms: []string{"koreader"},
+	}
+	if _, _, err := (&Manager{}).resolveInstallAssetURL(entry, "", "v2.0.0", true); err == nil || !strings.Contains(err.Error(), "GitHub repository") {
+		t.Fatalf("direct GitHub error = %v", err)
+	}
+}
+
+func TestResolveInstallAssetDirectUsesCatalogForImages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "wallpaper")
+	}))
+	defer srv.Close()
+	entry := &repo.CatalogEntry{
+		ID: "clouds", Category: "wallpapers", Platforms: []string{"koreader"},
+		Source: "https://github.com/example/wallpapers",
+		Assets: `[{"arch":"any","asset":"clouds.jpg","url":"` + srv.URL + `/clouds.jpg"}]`,
+	}
+	name, assetURL, err := (&Manager{}).resolveInstallAssetURL(entry, "clouds.jpg", "v2.0.0", true)
+	if err != nil || name != "clouds.jpg" || assetURL != srv.URL+"/clouds.jpg" {
+		t.Fatalf("resolve image = %q, %q, %v", name, assetURL, err)
+	}
+}
+
+func TestResolveInstallAssetUsesVersionsURL(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("zip contents"))
 	}))
@@ -604,16 +852,16 @@ func TestDownloadInstallAssetUsesVersionsURL(t *testing.T) {
 		VersionsURL: versionsServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "rakuyomi-kindlehf-v1.39.4.zip", "v1.40.0-pre")
+	name, gotURL, err := (&Manager{}).resolveInstallAssetURL(entry, "rakuyomi-kindlehf-v1.39.4.zip", "v1.40.0-pre", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "rakuyomi-kindlehf-v1.40.0-pre.zip" || gotURL != assetServer.URL || string(data) != "zip contents" {
-		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	if name != "rakuyomi-kindlehf-v1.40.0-pre.zip" || gotURL != assetServer.URL {
+		t.Fatalf("resolve = %q, %q", name, gotURL)
 	}
 }
 
-func TestDownloadInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testing.T) {
+func TestResolveInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/release.zip" {
 			http.NotFound(w, r)
@@ -635,16 +883,16 @@ func TestDownloadInstallAssetUsesVersionsAssetForRequestedSourceRelease(t *testi
 		VersionsURL: versionsServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "source-code.zip", "v0.2.3")
+	name, gotURL, err := (&Manager{}).resolveInstallAssetURL(entry, "source-code.zip", "v0.2.3", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "source-code.zip" || gotURL != assetServer.URL+"/release.zip" || string(data) != "release source zip contents" {
-		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	if name != "source-code.zip" || gotURL != assetServer.URL+"/release.zip" {
+		t.Fatalf("resolve = %q, %q", name, gotURL)
 	}
 }
 
-func TestDownloadInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
+func TestResolveInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
 	assetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("current source zip contents"))
 	}))
@@ -657,16 +905,16 @@ func TestDownloadInstallAssetUsesSourceURLWithoutSourceReleases(t *testing.T) {
 		SourceURL:  assetServer.URL,
 	}
 
-	name, gotURL, data, err := (&Manager{}).downloadInstallAsset(entry, "", "")
+	name, gotURL, err := (&Manager{}).resolveInstallAssetURL(entry, "", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != ".koplugin.zip" || gotURL != assetServer.URL || string(data) != "current source zip contents" {
-		t.Fatalf("download = %q, %q, %q", name, gotURL, data)
+	if name != ".koplugin.zip" || gotURL != assetServer.URL {
+		t.Fatalf("resolve = %q, %q", name, gotURL)
 	}
 }
 
-func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
+func TestResolveInstallAssetRequiresExplicitFontURL(t *testing.T) {
 	entry := &repo.CatalogEntry{
 		ID:       "font-cartisse",
 		Category: "fonts",
@@ -674,9 +922,9 @@ func TestDownloadInstallAssetRequiresExplicitFontURL(t *testing.T) {
 		Assets:   `[{"asset":"font-cartisse.zip"}]`,
 	}
 
-	_, _, _, err := (&Manager{}).downloadInstallAsset(entry, "font-cartisse.zip", "v4.1")
-	if err == nil || !strings.Contains(err.Error(), "requires an explicit ZIP asset URL") {
-		t.Fatalf("download error = %v, want explicit font ZIP URL error", err)
+	_, _, err := (&Manager{}).resolveInstallAssetURL(entry, "font-cartisse.zip", "v4.1", false)
+	if err == nil || !strings.Contains(err.Error(), "requires an explicit asset URL") {
+		t.Fatalf("download error = %v, want explicit asset URL error", err)
 	}
 }
 
@@ -732,6 +980,99 @@ func TestInstallGenericPatchNatively(t *testing.T) {
 	}
 }
 
+func TestKOReaderPatchRejectsEscapingPackageID(t *testing.T) {
+	root := t.TempDir()
+	for _, id := range []string{"..", "../elsewhere", "sub/patch"} {
+		entry := &repo.CatalogEntry{ID: id}
+		if _, err := (&Manager{}).installKOReaderPatch(entry, root, "patch.lua", assetFile(t, []byte("return {}"))); err == nil {
+			t.Errorf("install accepted patch ID %q", id)
+		}
+		if err := removeKOReaderPatch(root, id, "patch.lua", ""); err == nil {
+			t.Errorf("uninstall accepted patch ID %q", id)
+		}
+	}
+}
+
+func TestKOReaderPatchInstallRejectsUnsafeLuaPaths(t *testing.T) {
+	t.Setenv("ZENPM_KOREADER_PATCH_DIR", "")
+	root := t.TempDir()
+	entry := &repo.CatalogEntry{ID: "patch"}
+	asset := assetFile(t, []byte("return {}"))
+	if _, err := (&Manager{}).installKOReaderPatch(entry, root, "../patch.lua", asset); err == nil {
+		t.Fatal("install accepted a patch asset outside the patches directory")
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	outside := filepath.Join(t.TempDir(), "outside.lua")
+	if err := os.WriteFile(outside, []byte("safe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "patches", "patch.lua")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Manager{}).installKOReaderPatch(entry, root, "patch.lua", asset); err == nil {
+		t.Fatal("install followed a patch symlink outside the patches directory")
+	}
+	if data, err := os.ReadFile(outside); err != nil || string(data) != "safe" {
+		t.Fatalf("outside file changed: %q, %v", data, err)
+	}
+	path, err := (&Manager{}).installKOReaderPatch(entry, root, "valid.lua", asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "return {}" {
+		t.Fatalf("installed patch = %q, %v", data, err)
+	}
+}
+
+func TestKOReaderRemovalDoesNotFollowTrackedSymlinkParents(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	patches, fonts := filepath.Join(root, "patches"), filepath.Join(root, "fonts")
+	for _, dir := range []string{patches, fonts, filepath.Join(outside, "target"), filepath.Join(outside, "victim")} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(outside, "victim", "keep"), []byte("safe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "target"), filepath.Join(fonts, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "victim"), filepath.Join(patches, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeKOReaderPatch(root, "patch", "patch.zip", filepath.Join(patches, "link", "keep")); err == nil {
+		t.Fatal("nested patch path was accepted")
+	}
+	if err := removeKOReaderFont(root, "font", filepath.Join(fonts, "link")+"/../victim"); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(outside, "victim", "keep")); err != nil || string(data) != "safe" {
+		t.Fatalf("tracked path escaped KOReader root: %q, %v", data, err)
+	}
+}
+
+func TestKOReaderZIPRejectsUnsafeNamesAndAllowsDirectories(t *testing.T) {
+	for _, name := range []string{"../outside", "/absolute", "folder/../outside"} {
+		if err := extractZip(assetFile(t, zipContents(t, map[string]string{name: "bad"})), t.TempDir()); err == nil {
+			t.Errorf("ZIP entry %q was accepted", name)
+		}
+	}
+	root := t.TempDir()
+	if err := extractZip(assetFile(t, zipContents(t, map[string]string{"./folder/": "", "./folder/file": "safe"})), root); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "folder", "file")); err != nil || string(data) != "safe" {
+		t.Fatalf("extracted file = %q, %v", data, err)
+	}
+}
+
 func TestNativeKOReaderInstallerClassifiesPackagesWithoutScripts(t *testing.T) {
 	manager := &Manager{plat: "host"}
 	patch := &repo.CatalogEntry{
@@ -749,6 +1090,16 @@ func TestNativeKOReaderInstallerClassifiesPackagesWithoutScripts(t *testing.T) {
 	}
 	if got := manager.nativeKOReaderInstaller(plugin, ""); got != genericPluginInstaller {
 		t.Fatalf("native plugin installer = %q, want %q", got, genericPluginInstaller)
+	}
+
+	for category, want := range map[string]string{
+		"wallpapers":   genericWallpaperInstaller,
+		"screensavers": genericScreensaverInstaller,
+	} {
+		entry := &repo.CatalogEntry{Category: category, Platforms: []string{"koreader"}}
+		if got := manager.nativeKOReaderInstaller(entry, ""); got != want {
+			t.Fatalf("native %s installer = %q, want %q", category, got, want)
+		}
 	}
 
 	kindle := &repo.CatalogEntry{
@@ -777,6 +1128,19 @@ func zipContents(t *testing.T, files map[string]string) []byte {
 		t.Fatal(err)
 	}
 	return out.Bytes()
+}
+
+func assetFile(t *testing.T, data []byte) *os.File {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "asset-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { file.Close() })
+	if _, err := file.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	return file
 }
 
 func transitionalZenOSCatalogEntry(version, versionsURL string) state.CatalogEntry {
@@ -1333,7 +1697,7 @@ func TestInstallKOReaderPluginRejectsAliasArchiveRootMismatch(t *testing.T) {
 	_, _, err = (&Manager{st: st, plat: "host"}).installKOReaderPlugin(&repo.CatalogEntry{
 		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
 		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
-	}, filepath.Dir(plugins), "zenos.koplugin.zip", data)
+	}, filepath.Dir(plugins), "zenos.koplugin.zip", assetFile(t, data))
 	if err == nil || !strings.Contains(err.Error(), "does not match selected asset root") {
 		t.Fatalf("installKOReaderPlugin() error = %v", err)
 	}
@@ -1371,7 +1735,7 @@ func TestInstallKOReaderPluginKeepsAliasInAlternateConfiguredDir(t *testing.T) {
 	_, installedPath, err := (&Manager{st: st, plat: "host"}).installKOReaderPlugin(&repo.CatalogEntry{
 		ID: "zen-ui", PluginModule: "zenos", PluginModuleAliases: []string{"zen_ui"},
 		SourceAsset: "zenos.koplugin.zip", SourceAssetAliases: []string{"zen_ui.koplugin.zip"},
-	}, primaryRoot, "zen_ui.koplugin.zip", data)
+	}, primaryRoot, "zen_ui.koplugin.zip", assetFile(t, data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2158,6 +2522,21 @@ func TestManagerDeviceIncludesRuntime(t *testing.T) {
 	dev := (&Manager{plat: "host"}).device()
 	if dev.OS != runtime.GOOS || dev.Arch != runtime.GOARCH {
 		t.Fatalf("device runtime = %q/%q, want %q/%q", dev.OS, dev.Arch, runtime.GOOS, runtime.GOARCH)
+	}
+}
+
+func TestSelectAssetUsesPackageKOReaderCapability(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (&Manager{st: st, plat: platform.Kindle}).selectAssetWithError(&repo.CatalogEntry{
+		Platforms: []string{"kindle", "koreader"},
+		Assets:    `[{"arch":"any","asset":"ZenMTP.zip"},{"arch":"any","asset":"zen_mtp.koplugin.zip"}]`,
+	})
+	if err != nil || result.NeedsChoice || result.Auto != "zen_mtp.koplugin.zip" {
+		t.Fatalf("SelectAsset = %+v, %v; want KOReader plugin asset", result, err)
 	}
 }
 

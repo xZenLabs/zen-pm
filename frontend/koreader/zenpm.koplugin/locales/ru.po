@@ -336,6 +336,9 @@ msgstr "Загрузите этот ресурс: "
 msgid "Downloaded update checksum did not match."
 msgstr "Контрольная сумма загруженного обновления не совпадает."
 
+msgid "Downloads"
+msgstr "Загрузки"
+
 msgid "enable"
 msgstr "давать возможность"
 
@@ -529,7 +532,13 @@ msgid "Modify"
 msgstr "Изменить"
 
 msgid "Name"
-msgstr "Имя"
+msgstr "Название"
+
+msgid "Name (A-Z)"
+msgstr "Название (А-Я)"
+
+msgid "Name (Z-A)"
+msgstr "Название (Я-А)"
 
 msgid "network error"
 msgstr "сетевая ошибка"
@@ -768,6 +777,9 @@ msgstr "Сканировать установленные плагины"
 msgid "Scanning installed plugins..."
 msgstr "Сканирование установленных плагинов..."
 
+msgid "Screensavers"
+msgstr "Заставки"
+
 msgid "Search"
 msgstr "Поиск"
 
@@ -876,12 +888,6 @@ msgstr "Это будет установлено как «книга» на гл
 msgid "timeout"
 msgstr "тайм-аут"
 
-msgid "Title (A-Z)"
-msgstr "Название (А-Я)"
-
-msgid "Title (Z-A)"
-msgstr "Название (Я-А)"
-
 msgid "to"
 msgstr "к"
 
@@ -968,6 +974,9 @@ msgstr "Версия: "
 
 msgid "Versions"
 msgstr "Версии"
+
+msgid "Wallpapers"
+msgstr "Обои"
 
 msgid "Welcome"
 msgstr "Добро пожаловать"

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -258,6 +259,9 @@ func githubRequest(path, accept string) ([]byte, error) {
 	req.Header.Set("Accept", accept)
 	req.Header.Set("User-Agent", "ZenPackageManager")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if token := githubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	client := cabundle.Client(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -277,6 +281,27 @@ func githubRequest(path, accept string) ([]byte, error) {
 	return data, nil
 }
 
+func githubToken() string {
+	path := strings.TrimSpace(os.Getenv("ZENPM_GITHUB_TOKEN_FILE"))
+	if path == "" {
+		return ""
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, 4098))
+	if err != nil || len(data) > 4097 {
+		return ""
+	}
+	token := strings.TrimSpace(string(data))
+	if len(token) > 4096 || strings.IndexFunc(token, unicode.IsSpace) >= 0 {
+		return ""
+	}
+	return token
+}
+
 func NormalizeVersion(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.TrimPrefix(value, "refs/tags/")
@@ -294,6 +319,17 @@ func VersionGreater(a, b string) bool {
 		bPrerelease := strings.Contains(b, "-")
 		if aPrerelease != bPrerelease {
 			return !aPrerelease
+		}
+		if aPrerelease {
+			aLabel := strings.ToLower(strings.TrimRightFunc(strings.SplitN(a, "-", 2)[1], func(r rune) bool {
+				return !unicode.IsLetter(r)
+			}))
+			bLabel := strings.ToLower(strings.TrimRightFunc(strings.SplitN(b, "-", 2)[1], func(r rune) bool {
+				return !unicode.IsLetter(r)
+			}))
+			if aLabel != bLabel {
+				return aLabel > bLabel
+			}
 		}
 	}
 	an := versionNumbers(a)

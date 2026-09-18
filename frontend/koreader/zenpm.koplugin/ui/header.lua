@@ -39,23 +39,36 @@ function Header.page_title(view)
     local page = state.page
     if page == "home" then
         return _("Featured") .. " (" .. tostring(#(state.featured_packages or {})) .. ")"
-    elseif page == "changes" then
-        return _("Changes") .. " (" .. tostring(#(state.changes_packages or {})) .. ")"
     elseif page == "search" then
-        return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.packages, state.filters.search) .. ")"
+        return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.discover_packages, state.filters.search) .. ")"
     elseif page == "categories" then
         return _("Categories") .. " (" .. filtered_count(state.visible_categories, state.categories, state.filters.categories) .. ")"
     elseif page == "category_details" then
         local category = state.current_category or {}
+        local readerbackdrop = state.readerbackdrop or {}
+        if (category.id == "screensavers" or category.id == "wallpapers")
+                and readerbackdrop.enabled then
+            return I18n.dynamic_or(category.label, _("Category")) .. " ("
+                .. tostring(readerbackdrop.total or (category.id == "wallpapers" and 10 or 2085)) .. ")"
+        end
         return I18n.dynamic_or(category.label, _("Category")) .. " ("
             .. filtered_count(state.visible_packages, state.category_packages, state.filters.category) .. ")"
     elseif page == "installed" then
+        if state.installed_folder then
+            local category = Models.category_for_id(state.installed_folder)
+            return Models.category_label(category) .. " (" .. tostring(#(state.visible_packages or {})) .. ")"
+        end
         return _("Installed") .. " ("
-            .. filtered_count(state.visible_packages, state.installed_packages, state.filters.installed) .. ")"
+            .. (state.filters.installed ~= "" and filtered_count(state.visible_packages, state.installed_packages, state.filters.installed)
+                or tostring(#(state.installed_packages or {}))) .. ")"
     elseif page == "sources" then
         return _("Sources") .. " (" .. tostring(#(state.repos or {})) .. ")"
     elseif page == "source_details" then
         local repo = state.current_repo or {}
+        if repo.name == Constants.REPO_READERBACKDROP_NAME then
+            return Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))) .. " ("
+                .. tostring((state.readerbackdrop or {}).total or 2085) .. ")"
+        end
         return Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))) .. " ("
             .. tostring(#(state.visible_packages or {})) .. ")"
     elseif page == "package_details" then
@@ -64,6 +77,12 @@ function Header.page_title(view)
         return _("Queue") .. " (" .. tostring(view.app:queue_count()) .. ")"
     elseif page == "settings" then
         return _("Settings")
+    elseif page == "advanced_settings" then
+        return _("Advanced")
+    elseif page == "updates_settings" then
+        return _("Updates")
+    elseif page == "about_settings" then
+        return _("About")
     elseif page == "debug" then
         return _("Debug")
     end
@@ -130,8 +149,8 @@ function Header.draw_installed_category_button(view, bb, x, y)
     return w
 end
 
-function Header.draw_back(view, bb, x, y, callback)
-    local s = Theme.scale(46)
+function Header.draw_back(view, bb, x, y, callback, size)
+    local s = size or Theme.scale(46)
     P.box(bb, x, y, s, s, { border = false })
     if not P.image(bb, Images.asset("chevron.left.svg"), x + Theme.scale(8), y + Theme.scale(8), s - Theme.scale(16), s - Theme.scale(16), { is_icon = true }) then
         P.center_text(bb, "<", x, y + Theme.scale(13), s, "title", { bold = true })
@@ -142,7 +161,7 @@ function Header.draw_back(view, bb, x, y, callback)
 end
 
 function Header.draw_close(view, bb, x, y)
-    local s = Theme.scale(46)
+    local s = Theme.scale(44)
     P.box(bb, x, y, s, s, { border = false })
     if not P.image(bb, Images.asset("close.svg"), x + Theme.scale(6), y + Theme.scale(6), s - Theme.scale(12), s - Theme.scale(12), { is_icon = true }) then
         P.center_text(bb, "×", x, y + Theme.scale(10), s, "title", { bold = true })
@@ -193,7 +212,9 @@ local function draw_title_button(view, bb, x, y, label, callback, hit_id, enable
 end
 
 local function page_back_callback(view, page)
-    if page == "category_details" then
+    if page == "installed" and view.app.state.installed_folder then
+        return function() view.app:close_installed_folder() end
+    elseif page == "category_details" then
         return function() view.app:show_categories() end
     elseif page == "source_details" then
         return function() view.app:show_sources() end
@@ -201,6 +222,8 @@ local function page_back_callback(view, page)
         return function() view.app:go_back_from_details() end
     elseif page == "queue" then
         return function() view.app:close_queue() end
+    elseif page == "advanced_settings" or page == "updates_settings" or page == "about_settings" then
+        return function() view.app:show_settings() end
     end
 end
 
@@ -227,19 +250,34 @@ end
 
 local function draw_title_bar(view, bb, x, y, w)
     local m = Theme.metrics()
-    local h = m.titlebar_h
     local page = view.app.state.page
+    local settings_page = page == "settings" or page == "advanced_settings"
+        or page == "updates_settings" or page == "about_settings"
+    local h = settings_page and Theme.scale(58) or m.titlebar_h
     local pad = m.pad
     local title_x = x + pad
     local title_right = x + w - pad
     local top_right_control_x
+    local settings_left = Theme.scale(25)
+    local settings_leading_w = Theme.scale(62)
+    local settings_title_gap = Theme.scale(5)
+    if settings_page then title_x = x + settings_left end
     P.box(bb, x, y, w, h, { border = false, background = Theme.panel })
     local back_callback = page_back_callback(view, page)
     if back_callback then
-        title_x = title_x + Header.draw_back(view, bb, title_x, toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
+        if settings_page then
+            local back_size = Theme.scale(44)
+            Header.draw_back(view, bb,
+                title_x + math.floor((settings_leading_w - back_size) / 2),
+                toolbar_y(y, h, back_size), back_callback, back_size)
+            title_x = title_x + settings_leading_w + settings_title_gap
+        else
+            title_x = title_x + Header.draw_back(view, bb, title_x,
+                toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
+        end
     end
-    if page == "settings" then
-        local close_s = Theme.scale(46)
+    if settings_page then
+        local close_s = Theme.scale(44)
         local close_x = title_right - close_s
         Header.draw_close(view, bb, close_x, toolbar_y(y, h, close_s))
         top_right_control_x = close_x
@@ -251,7 +289,18 @@ local function draw_title_bar(view, bb, x, y, w)
         top_right_control_x = action_x
         title_right = action_x - Theme.scale(8)
     end
-    if page == "home" then
+    if page == "settings" then
+        local logo = Theme.scale(32)
+        local logo_x = title_x + math.floor((settings_leading_w - logo) / 2)
+        if not P.image(bb, Images.asset("zenpm.svg"), logo_x,
+                toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
+            P.center_text_box(bb, "Z", logo_x, toolbar_y(y, h, logo),
+                logo, logo, "title", { bold = true })
+        end
+        title_x = title_x + settings_leading_w + settings_title_gap
+        P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y,
+            math.max(0, title_right - title_x), h, "heading", { bold = true })
+    elseif page == "home" then
         local logo = Theme.scale(52)
         if not P.image(bb, Images.asset("zenpm.svg"), title_x, toolbar_y(y, h, logo), logo, logo, { is_icon = true }) then
             P.center_text_box(bb, "Z", title_x, toolbar_y(y, h, logo), logo, logo, "title", { bold = true })
@@ -259,7 +308,16 @@ local function draw_title_bar(view, bb, x, y, w)
         title_x = title_x + logo + Theme.scale(14)
         P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
     else
-        P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
+        local title_size = P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
+        if (page == "installed" and back_callback) or page == "category_details" or page == "package_details"
+                or page == "queue" or page == "advanced_settings" or page == "updates_settings"
+                or page == "about_settings" then
+            P.hit(view, title_x, y, title_size.w, h, back_callback, "back-title")
+        end
+    end
+    if settings_page then
+        local divider_h = math.max(1, Theme.scale(2))
+        P.rect(bb, x, y + h - divider_h, w, divider_h, Theme.soft)
     end
     view.koreader_menu_zone = { x = x, y = y, w = w, h = h }
     -- Taps near ZenPM's top-right control should not leak through to
@@ -287,16 +345,15 @@ function Header.draw(view, bb, x, y, w)
     })[page]
     local sort_kind = ({
         search = "search",
-        changes = "changes",
         category_details = "category",
-        installed = "installed",
+        installed = view.app.state.installed_folder and "installed_images" or "installed",
         sources = "sources",
         source_details = "source",
     })[page]
     if sort_kind then
         control_x = control_x + Header.draw_sort_button(view, bb, control_x, button_y, sort_kind) + gap
     end
-    if page == "installed" then
+    if page == "installed" and not view.app.state.installed_folder then
         control_x = control_x + Header.draw_installed_category_button(view, bb, control_x, button_y) + gap
     end
     local right_x = x + w - pad
@@ -306,7 +363,7 @@ function Header.draw(view, bb, x, y, w)
         draw_title_button(view, bb, right_x, button_y, label, function()
             view.app:prompt_add_source()
         end, "add-source", true)
-    elseif page == "installed" or page == "changes" then
+    elseif page == "installed" then
         local updates = view.app:installed_update_count()
         local label = _("Update All") .. " (" .. tostring(updates) .. ")"
         local enabled = updates > 0 and not view.app.state.queue_running
@@ -319,6 +376,15 @@ function Header.draw(view, bb, x, y, w)
         local search_w = icon_button_width(_("Search"), Theme.scale(24))
         right_x = right_x - search_w
         Header.draw_search_button(view, bb, right_x, button_y, filter_kind)
+    end
+    if page == "category_details" and view.app.state.current_category
+            and view.app.state.current_category.id == "screensavers" then
+        local label = _("Tags")
+        local button_w = title_button_width(label)
+        right_x = right_x - button_w - gap
+        draw_title_button(view, bb, right_x, button_y, label, function()
+            view.app:prompt_readerbackdrop_categories()
+        end, "readerbackdrop-categories", true)
     end
     if page == "queue" then
         local button_h = Theme.scale(42)

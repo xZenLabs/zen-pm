@@ -2,11 +2,25 @@ package releases
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"testing"
 )
+
+func resetVersionsCacheForTest(t *testing.T) {
+	t.Helper()
+	clear := func() {
+		versionsCache.Lock()
+		versionsCache.entries = make(map[string]versionsCacheEntry)
+		versionsCache.Unlock()
+	}
+	clear()
+	t.Cleanup(clear)
+}
 
 func TestFetchVersionsParsesRepositoryFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +49,126 @@ func TestFetchVersionsParsesRepositoryFormat(t *testing.T) {
 	asset := items[0].Assets[0]
 	if asset.Name != "rakuyomi-kindlehf.zip" || asset.Size != 13555927 || asset.Digest == "" {
 		t.Fatalf("asset = %#v", asset)
+	}
+}
+
+func TestFetchVersionsCachesSuccessfulResponse(t *testing.T) {
+	resetVersionsCacheForTest(t)
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		fmt.Fprint(w, `{
+			"releases": [{
+				"tag_name": "v1.0.0",
+				"assets": [{"name": "plugin.zip", "url": "https://example.test/plugin.zip"}]
+			}]
+		}`)
+	}))
+	defer srv.Close()
+
+	items, err := FetchVersions(srv.URL + "/versions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	items[0].Assets[0].Name = "mutated.zip"
+
+	_, asset, err := ResolveVersionsAsset(srv.URL+"/versions.json", "v1.0.0", "plugin.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asset.URL != "https://example.test/plugin.zip" {
+		t.Fatalf("asset = %#v", asset)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+}
+
+func TestFetchVersionsRetriesTransientHTTPFailure(t *testing.T) {
+	resetVersionsCacheForTest(t)
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			http.Error(w, "try again", http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, `{"releases":[{"tag_name":"v2.0.0","assets":[]}]}`)
+	}))
+	defer srv.Close()
+
+	items, err := FetchVersions(srv.URL + "/versions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].TagName != "v2.0.0" {
+		t.Fatalf("releases = %#v", items)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("requests = %d, want 2", got)
+	}
+}
+
+func TestFetchVersionsRetriesTruncatedBody(t *testing.T) {
+	resetVersionsCacheForTest(t)
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.Header().Set("Content-Length", "100")
+			fmt.Fprint(w, `{"releases":`)
+			return
+		}
+		fmt.Fprint(w, `{"releases":[{"tag_name":"v3.0.0","assets":[]}]}`)
+	}))
+	defer srv.Close()
+
+	items, err := FetchVersions(srv.URL + "/versions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].TagName != "v3.0.0" {
+		t.Fatalf("releases = %#v", items)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("requests = %d, want 2", got)
+	}
+}
+
+func TestFetchVersionsDoesNotRetryInvalidResponse(t *testing.T) {
+	resetVersionsCacheForTest(t)
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		fmt.Fprint(w, `{"releases":`)
+	}))
+	defer srv.Close()
+
+	_, err := FetchVersions(srv.URL + "/versions.json")
+	if err == nil || !strings.Contains(err.Error(), "decode versions response") {
+		t.Fatalf("FetchVersions() error = %v", err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+}
+
+func TestRetryableVersionsStatus(t *testing.T) {
+	for _, status := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, 500, 503, 599} {
+		if !retryableVersionsStatus(status) {
+			t.Errorf("status %d was not retryable", status)
+		}
+	}
+	for _, status := range []int{200, 400, 404, 409, 499, 600} {
+		if retryableVersionsStatus(status) {
+			t.Errorf("status %d was retryable", status)
+		}
+	}
+}
+
+func TestRetryableVersionsErrorIncludesDisconnectedNetwork(t *testing.T) {
+	for _, err := range []error{io.ErrUnexpectedEOF, syscall.ECONNRESET, syscall.ENETUNREACH, syscall.EHOSTUNREACH} {
+		if !retryableVersionsError(fmt.Errorf("request failed: %w", err)) {
+			t.Errorf("retryableVersionsError(%v) = false", err)
+		}
 	}
 }
 

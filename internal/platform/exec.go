@@ -1,8 +1,10 @@
 package platform
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,8 +64,24 @@ func ExecuteScriptWithEnvArgsAtDir(scriptPath string, env map[string]string, arg
 		defer cleanup()
 		cmd.Env = shimEnv
 	}
-	output, err := cmd.CombinedOutput()
-	logScriptOutput(scriptPath, output)
+	reader, writer := io.Pipe()
+	cmd.Stdout, cmd.Stderr = writer, writer
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer reader.Close()
+		buffer := bufio.NewReader(reader)
+		for {
+			line, err := buffer.ReadSlice('\n')
+			logScriptOutput(scriptPath, line)
+			if err != nil && err != bufio.ErrBufferFull {
+				return
+			}
+		}
+	}()
+	err := cmd.Run()
+	writer.Close()
+	<-done
 	return err
 }
 

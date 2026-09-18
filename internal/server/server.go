@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -53,11 +54,36 @@ type Server struct {
 	lastActivity   atomic.Int64
 	StartedAt      time.Time
 	readmeImages   readmeImagePreparer
+	catalogRefresh *catalogRefresh
+	previewJobs    map[string]*previewJob
+	packageOps     map[string]packageOperation
+	nextPackageOp  uint64
+}
+
+type catalogRefresh struct {
+	done chan struct{}
+	err  error // read only after done is closed
+}
+
+type previewJob struct {
+	done        chan struct{}
+	file        string
+	transparent bool
+	err         error
+}
+
+type packageOperation struct {
+	ID        string `json:"id"`
+	PackageID string `json:"package_id"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+	Error     string `json:"error,omitempty"`
 }
 
 type readmeImagePreparer interface {
 	References(markdown, baseURL string) map[string]string
 	Prepare(refs map[string]string) error
+	PrepareURL(rawURL string) (string, bool, error)
 }
 
 type pkgJSON struct {
@@ -101,6 +127,7 @@ type pkgJSON struct {
 	ReleaseNotesURL       string            `json:"release_notes_url,omitempty"`
 	PrereleaseNotesURL    string            `json:"prerelease_notes_url,omitempty"`
 	PrereleaseVersion     string            `json:"prerelease_version,omitempty"`
+	AlphaVersion          string            `json:"alpha_version,omitempty"`
 	PublishedAt           string            `json:"published_at,omitempty"`
 	Stars                 string            `json:"stars,omitempty"`
 	PluginModule          string            `json:"plugin_module,omitempty"`
@@ -157,35 +184,13 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	mux.HandleFunc("/packages", s.wrap(s.handlePackageList))
 	mux.HandleFunc("/packages/update", s.wrap(s.handlePackageUpdate))
 	mux.HandleFunc("/packages/", s.wrap(s.handlePackageAction))
+	mux.HandleFunc("/package-operations/", s.wrap(s.handlePackageOperation))
 	mux.HandleFunc("/log", s.wrap(s.handleLog))
 	mux.HandleFunc("/log/client", s.wrap(s.handleClientLog))
 	mux.HandleFunc("/dialog", s.wrap(s.handleDialog))
 	mux.HandleFunc("/foreground", s.wrap(s.handleForeground))
 	mux.HandleFunc("/update", s.wrap(s.handleUpdate))
 	mux.HandleFunc("/uninstall", s.wrap(s.handleUninstall))
-
-	// Auto-refresh catalog on first start so the WAF has packages without manual refresh.
-	state.StartupTrace("HTTP server: reading catalog state.")
-	catalog, needsRefresh := s.initialCatalogState()
-	state.StartupTrace("HTTP server: catalog state ready.")
-	if needsRefresh {
-		s.runBackground(func() {
-			if err := s.repos.Refresh(); err != nil {
-				log.Warnf("Initial refresh failed: %v", err)
-				return
-			}
-			s.autoScanKOReaderPlugins()
-		})
-	} else {
-		s.autoScanKOReaderPlugins()
-		s.runBackground(func() {
-			s.repos.CacheInstalledUninstallScripts(catalog)
-		})
-	}
-
-	// Keep the catalog fresh in the background so the client never has to fetch
-	// repo manifests itself: refresh once a day for long-running daemons.
-	go s.periodicRefresh()
 
 	state.StartupTrace("HTTP server: binding " + addr + ".")
 	httpServer := &http.Server{Handler: mux}
@@ -215,6 +220,18 @@ func (s *Server) listenAndServe(addr string, bind func() (net.Listener, error)) 
 	} else {
 		log.Infof("ZenPM server listening on %s", addr)
 	}
+	// Bind before starting work so a duplicate daemon cannot refresh the same DB.
+	// Disk scanning must also stay off the path to the first health response.
+	s.runBackground(func() {
+		catalog, needsRefresh := s.initialCatalogState()
+		if needsRefresh {
+			s.startCatalogRefresh()
+		} else {
+			s.autoScanKOReaderPlugins()
+			s.repos.CacheInstalledUninstallScripts(catalog)
+		}
+	})
+	go s.periodicRefresh()
 	if s.IdleTimeout > 0 {
 		go s.stopWhenIdle()
 	}
@@ -423,42 +440,62 @@ func (s *Server) initialCatalogState() ([]*repo.CatalogEntry, bool) {
 		log.Info("Catalog metadata needs refresh")
 		return catalog, true
 	}
-	if age := s.repos.CatalogAge(); age >= catalogMaxAge {
-		log.Infof("Catalog is %s old — running repo refresh", age.Round(time.Hour))
+	if s.repos.CatalogAge() >= catalogMaxAge {
+		log.Info("Catalog is stale or has no valid refresh timestamp — running repo refresh")
 		return catalog, true
 	}
 	return catalog, false
 }
 
-// periodicRefresh refreshes the catalog once per catalogMaxAge for the lifetime
-// of the daemon. Errors are logged and the loop continues.
+// Check the age regularly so a failed startup refresh retries, and a catalog
+// already nearly a day old at startup does not wait another full day.
 func (s *Server) periodicRefresh() {
-	ticker := time.NewTicker(catalogMaxAge)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-s.done:
 			return
 		case <-ticker.C:
-			log.Info("Periodic catalog refresh")
-			s.runBackground(func() {
-				if err := s.repos.Refresh(); err != nil {
-					log.Warnf("Periodic refresh failed: %v", err)
-				}
-			})
+			if s.repos.CatalogAge() >= catalogMaxAge {
+				s.startCatalogRefresh()
+			}
 		}
 	}
 }
 
+// Startup, manual and periodic requests share one refresh and its result.
+func (s *Server) startCatalogRefresh() *catalogRefresh {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if job := s.catalogRefresh; job != nil {
+		select {
+		case <-job.done:
+		default:
+			return job
+		}
+	}
+	job := &catalogRefresh{done: make(chan struct{})}
+	s.catalogRefresh = job
+	s.runBackground(func() {
+		defer close(job.done)
+		job.err = s.repos.Refresh()
+		if job.err != nil {
+			log.Warnf("Catalog refresh failed: %v", job.err)
+		}
+		// Partial refreshes still supply useful catalog entries for scanning.
+		s.autoScanKOReaderPlugins()
+	})
+	return job
+}
+
 func (s *Server) autoScanKOReaderPlugins() {
-	result, err := s.pkgs.ScanKOReaderPlugins(false)
+	result, err := s.pkgs.ScanKOReaderPlugins(nil)
 	if err != nil {
 		log.Infof("KOReader plugin auto-scan not completed: %v", err)
 		return
 	}
-	if !result.Skipped {
-		log.Infof("KOReader plugin scan: scanned=%d matched=%d added=%d updated=%d", result.Scanned, result.Matched, result.Added, result.Updated)
-	}
+	log.Infof("KOReader plugin scan: scanned=%d matched=%d added=%d updated=%d", result.Scanned, result.Matched, result.Added, result.Updated)
 }
 
 const accessErrorBodyLimit = 1024
@@ -568,6 +605,9 @@ func shouldLogAccess(r *http.Request, status int) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return true
 	}
+	if strings.HasPrefix(r.URL.Path, "/package-operations/") {
+		return false
+	}
 	switch r.URL.Path {
 	case "/health", "/log", "/packages", "/repos":
 		return false
@@ -628,6 +668,10 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" || body.URL == "" {
 			http.Error(w, "name and url required", http.StatusBadRequest)
+			return
+		}
+		if err := repo.ValidatePublicRepoURL(body.URL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -707,6 +751,10 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "url required", http.StatusBadRequest)
 			return
 		}
+		if err := repo.ValidatePublicRepoURL(body.URL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if body.Priority == 0 {
 			body.Priority = 100
 		}
@@ -738,11 +786,72 @@ func (s *Server) handleRepoByName(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.mu.Lock()
+		job := s.catalogRefresh
+		s.mu.Unlock()
+		result := map[string]interface{}{"refreshing": false, "ok": true}
+		if job != nil {
+			select {
+			case <-job.done:
+				if job.err != nil {
+					result["ok"], result["error"] = false, job.err.Error()
+				}
+			default:
+				result["refreshing"] = true
+			}
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-	err := s.repos.Refresh()
+	if r.URL.Query().Get("readerbackdrop") == "categories" {
+		tags, err := s.repos.ReaderBackdropTags()
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"tags": tags})
+		return
+	}
+	if r.URL.Query().Get("readerbackdrop") == "1" {
+		var request struct {
+			Page   int    `json:"page"`
+			Search string `json:"search"`
+			Tag    string `json:"tag"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048)).Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if request.Page < 1 || request.Page > 10000 || len(request.Search) > 200 || len(request.Tag) > 100 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ReaderBackdrop filters"})
+			return
+		}
+		totalPages, total, err := s.repos.LoadReaderBackdropPage(request.Page, request.Search, request.Tag)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok": true, "page": request.Page, "total": total, "total_pages": totalPages,
+		})
+		return
+	}
+	job := s.startCatalogRefresh()
+	if r.URL.Query().Get("async") == "1" {
+		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
+		return
+	}
+	select {
+	case <-r.Context().Done():
+		return
+	case <-job.done:
+	}
+	err := job.err
 	logTail, _ := tailLog(s.st.LogFile, 200)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -758,7 +867,14 @@ func (s *Server) handleKOReaderPluginScan(w http.ResponseWriter, r *http.Request
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return
 	}
-	result, err := s.pkgs.ScanKOReaderPlugins(true)
+	var request struct {
+		PluginDirs []string `json:"plugin_dirs"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	result, err := s.pkgs.ScanKOReaderPlugins(request.PluginDirs)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"ok": false, "error": err.Error()})
 		return
@@ -776,6 +892,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	}
 	plat := r.URL.Query().Get("platform")
 	allowPrerelease := r.URL.Query().Get("beta") == "1" || r.URL.Query().Get("beta") == "true"
+	allowAlpha := r.URL.Query().Get("alpha") == "1" || r.URL.Query().Get("alpha") == "true"
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
 		// Catalog doesn't exist yet — return empty list so WAF can show "no packages" instead of error.
@@ -827,6 +944,10 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	result := make([]pkgJSON, 0, len(filtered)+len(installed))
 	for _, e := range filtered {
 		seen[e.ID] = true
+		iconURL := e.IconURL
+		if repo.IsReaderBackdropRepo(e.Repo, "") && strings.TrimSpace(iconURL) != "" {
+			iconURL = "/packages/" + e.ID + "/preview"
+		}
 		item := pkgJSON{
 			ID: e.ID, Name: e.Name, Version: e.Version,
 			Description: e.Description, Author: e.Author,
@@ -835,7 +956,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			Platforms: e.Platforms, Repo: e.Repo, RepoTrust: repoTrust[e.Repo], RepoDefault: repoDefault[e.Repo], Installed: installedSet[e.ID] || len(installedAssets[e.ID]) > 0,
 			IncompatiblePlatforms: e.IncompatiblePlatforms,
 			Conflicts:             e.Conflicts,
-			IconURL:               e.IconURL,
+			IconURL:               iconURL,
 			RepoIconURL:           e.RepoIconURL,
 			ImageURL:              firstString(e.Images),
 			Images:                e.Images,
@@ -851,6 +972,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			ReleaseNotesURL:       e.ReleaseNotesURL,
 			PrereleaseNotesURL:    e.PrereleaseNotesURL,
 			PrereleaseVersion:     e.PrereleaseVersion,
+			AlphaVersion:          e.AlphaVersion,
 			PublishedAt:           e.PublishedAt,
 			Stars:                 e.Stars,
 			PluginModule:          e.PluginModule,
@@ -867,7 +989,7 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
-			applyUpdateInfo(&item, allowPrerelease)
+			applyUpdateInfo(&item, allowPrerelease, allowAlpha)
 			item.UpdateIgnored = updateIgnored[e.ID]
 			if item.UpdateAvail && updateIgnoredVersion[e.ID] == item.LatestVersion {
 				item.UpdateIgnored = true
@@ -923,12 +1045,15 @@ func platformValues(platform string) []string {
 	return out
 }
 
-func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
+func applyUpdateInfo(item *pkgJSON, allowPrerelease, allowAlpha bool) {
 	if item == nil {
 		return
 	}
+	alphaChannel := allowAlpha && item.ID == "zen-ui"
 	latest := item.Version
-	if allowPrerelease && prereleaseIsNewer(item.Version, item.PrereleaseVersion) {
+	if alphaChannel {
+		latest = item.AlphaVersion
+	} else if allowPrerelease && releases.VersionGreater(item.PrereleaseVersion, latest) {
 		latest = item.PrereleaseVersion
 	}
 	if latest == "" || !hasKnownVersion(item.InstalledVer) {
@@ -938,7 +1063,8 @@ func applyUpdateInfo(item *pkgJSON, allowPrerelease bool) {
 	if sameReleaseWithCommitSuffix(latest, item.InstalledVer) {
 		return
 	}
-	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer)
+	installedAlpha := strings.Contains(strings.ToLower(releases.NormalizeVersion(item.InstalledVer)), "-alpha")
+	item.UpdateAvail = releases.VersionGreater(latest, item.InstalledVer) || alphaChannel && !installedAlpha
 	if item.UpdateAvail {
 		item.LatestRelease = latest
 	}
@@ -963,18 +1089,6 @@ func sameReleaseWithCommitSuffix(latest, installed string) bool {
 	return true
 }
 
-func prereleaseIsNewer(stable, prerelease string) bool {
-	if strings.TrimSpace(prerelease) == "" {
-		return false
-	}
-	if strings.TrimSpace(stable) == "" {
-		return true
-	}
-	stableBase := strings.SplitN(releases.NormalizeVersion(stable), "-", 2)[0]
-	prereleaseBase := strings.SplitN(releases.NormalizeVersion(prerelease), "-", 2)[0]
-	return stableBase != prereleaseBase && releases.VersionGreater(prerelease, stable)
-}
-
 func hasKnownVersion(version string) bool {
 	version = releases.NormalizeVersion(version)
 	return version != "" && version != "0.0.0"
@@ -996,7 +1110,7 @@ func rawJSON(value string) json.RawMessage {
 }
 
 func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
-	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,readme,release-notes,releases}
+	// Expects: /packages/{id}/{install,reinstall,uninstall,assets,preview,readme,release-notes,releases}
 	path := strings.TrimPrefix(r.URL.Path, "/packages/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 2 || parts[0] == "" {
@@ -1004,6 +1118,10 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, action := parts[0], parts[1]
+	if action == "preview" {
+		s.handlePackagePreview(w, r, id)
+		return
+	}
 	if action == "assets" {
 		s.handlePackageAssets(w, r, id)
 		return
@@ -1035,6 +1153,7 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 
 	asset := r.URL.Query().Get("asset")
 	releaseTag := r.URL.Query().Get("release")
+	directGitHub := r.URL.Query().Get("github") == "1" || r.URL.Query().Get("github") == "true"
 
 	if action == "install" || action == "reinstall" {
 		if err := s.pkgs.CheckInstall(id); err != nil {
@@ -1044,21 +1163,14 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fire async; the WAF polls /log after a delay.
+	operationID := s.startPackageOperation(id, action)
+
+	// Fire async; current clients poll the operation endpoint while older clients
+	// can continue observing the package list and log.
 	log.Infof("Package %s: starting %s", id, action)
 	s.runBackground(func() {
-		var err error
-		if action == "install" {
-			if releaseTag != "" {
-				err = s.pkgs.InstallRelease(id, releaseTag, asset)
-			} else {
-				err = s.pkgs.InstallAsset(id, asset)
-			}
-		} else if action == "reinstall" {
-			err = s.pkgs.Reinstall(id, asset, releaseTag)
-		} else {
-			err = s.pkgs.Uninstall(id, asset)
-		}
+		err := s.performPackageAction(id, action, asset, releaseTag, directGitHub)
+		s.finishPackageOperation(operationID, err)
 		if err != nil {
 			log.Errorf("Package %s %s failed: %v", id, action, err)
 		} else {
@@ -1066,7 +1178,150 @@ func (s *Server) handlePackageAction(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"ok": true, "started": true, "operation_id": operationID,
+	})
+}
+
+func (s *Server) performPackageAction(id, action, asset, releaseTag string, directGitHub bool) error {
+	if action == "install" {
+		if directGitHub {
+			return s.pkgs.InstallGitHubRelease(id, releaseTag, asset)
+		}
+		if releaseTag != "" {
+			return s.pkgs.InstallRelease(id, releaseTag, asset)
+		}
+		return s.pkgs.InstallAsset(id, asset)
+	}
+	if action == "reinstall" {
+		if directGitHub {
+			return s.pkgs.ReinstallGitHubRelease(id, asset, releaseTag)
+		}
+		return s.pkgs.Reinstall(id, asset, releaseTag)
+	}
+	return s.pkgs.Uninstall(id, asset)
+}
+
+func (s *Server) startPackageOperation(packageID, action string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.packageOps == nil {
+		s.packageOps = make(map[string]packageOperation)
+	}
+	// Retain a small terminal history for clients retrying a lost response.
+	if len(s.packageOps) >= 64 {
+		for id, operation := range s.packageOps {
+			if operation.Status != "running" {
+				delete(s.packageOps, id)
+				if len(s.packageOps) < 64 {
+					break
+				}
+			}
+		}
+	}
+	s.nextPackageOp++
+	id := strconv.FormatUint(s.nextPackageOp, 10)
+	s.packageOps[id] = packageOperation{
+		ID: id, PackageID: packageID, Action: action, Status: "running",
+	}
+	return id
+}
+
+func (s *Server) finishPackageOperation(id string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	operation, ok := s.packageOps[id]
+	if !ok {
+		return
+	}
+	operation.Status = "succeeded"
+	if err != nil {
+		operation.Status = "failed"
+		operation.Error = err.Error()
+	}
+	s.packageOps[id] = operation
+}
+
+func (s *Server) handlePackageOperation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/package-operations/")
+	if id == "" || strings.Contains(id, "/") {
+		http.Error(w, "invalid operation id", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	operation, ok := s.packageOps[id]
+	s.mu.Unlock()
+	if !ok {
+		http.Error(w, "package operation not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, operation)
+}
+
+func (s *Server) handlePackagePreview(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	catalog, err := s.repos.ReadCatalog()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	for _, entry := range catalog {
+		if entry.ID != id || !repo.IsReaderBackdropRepo(entry.Repo, "") || strings.TrimSpace(entry.IconURL) == "" {
+			continue
+		}
+		if s.readmeImages == nil {
+			http.Error(w, "image cache unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		s.mu.Lock()
+		if s.previewJobs == nil {
+			s.previewJobs = make(map[string]*previewJob)
+		}
+		job := s.previewJobs[entry.IconURL]
+		if job == nil {
+			job = &previewJob{done: make(chan struct{})}
+			s.previewJobs[entry.IconURL] = job
+			s.runBackground(func() {
+				job.file, job.transparent, job.err = s.readmeImages.PrepareURL(entry.IconURL)
+				close(job.done)
+			})
+		}
+		s.mu.Unlock()
+		if r.URL.Query().Get("async") == "1" {
+			select {
+			case <-job.done:
+			default:
+				w.WriteHeader(http.StatusAccepted)
+				return
+			}
+		} else {
+			<-job.done
+		}
+		s.mu.Lock()
+		if s.previewJobs[entry.IconURL] == job {
+			delete(s.previewJobs, entry.IconURL)
+		}
+		s.mu.Unlock()
+		if job.err != nil {
+			http.Error(w, job.err.Error(), http.StatusBadGateway)
+			return
+		}
+		if job.transparent {
+			w.Header().Set("X-ZenPM-Transparent", "true")
+		}
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.ServeFile(w, r, job.file)
+		return
+	}
+	http.Error(w, "package preview not found", http.StatusNotFound)
 }
 
 func (s *Server) handlePackageUpdateIgnored(w http.ResponseWriter, r *http.Request, id string) {
@@ -1127,17 +1382,17 @@ func (s *Server) handlePackageUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "started": true})
 }
 
-func (s *Server) packageReleaseMetadata(id string) (string, string, string, []string, error) {
+func (s *Server) packageReleaseMetadata(id string) (string, string, string, string, []string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", "", "", nil, err
+		return "", "", "", "", nil, err
 	}
 	for _, entry := range catalog {
 		if entry.ID == id {
-			return strings.TrimSpace(entry.VersionsURL), strings.ToLower(strings.TrimSpace(entry.SourceType)), strings.TrimSpace(entry.SourceAsset), entry.SourceAssetAliases, nil
+			return strings.TrimSpace(entry.VersionsURL), strings.TrimSpace(entry.Source), strings.ToLower(strings.TrimSpace(entry.SourceType)), strings.TrimSpace(entry.SourceAsset), entry.SourceAssetAliases, nil
 		}
 	}
-	return "", "", "", nil, fmt.Errorf("package %q not found", id)
+	return "", "", "", "", nil, fmt.Errorf("package %q not found", id)
 }
 
 func (s *Server) packageReadmeMetadata(id string) (string, string, error) {
@@ -1254,13 +1509,16 @@ func (s *Server) handlePackageReleases(w http.ResponseWriter, r *http.Request, i
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
-	versionsURL, sourceType, sourceAsset, sourceAssetAliases, err := s.packageReleaseMetadata(id)
+	versionsURL, source, sourceType, sourceAsset, sourceAssetAliases, err := s.packageReleaseMetadata(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	items := []releases.Release{}
-	if versionsURL != "" {
+	directGitHub := r.URL.Query().Get("github") == "1" || r.URL.Query().Get("github") == "true"
+	if directGitHub {
+		items, err = releases.FetchGitHubReleases(source, 100)
+	} else if versionsURL != "" {
 		items, err = releases.FetchVersions(versionsURL)
 	}
 	if err != nil {
@@ -1387,19 +1645,36 @@ func shouldLogClientMessage(message string) bool {
 }
 
 func tailLog(path string, n int) (string, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
 	}
-	return strings.Join(lines, "\n"), nil
+	// Grow the window only when the requested lines do not fit. Status polling
+	// must not read and allocate the entire accumulated log every few seconds.
+	for window := int64(4096); ; window *= 2 {
+		window = min(window, info.Size(), log.MaxBytes)
+		start := info.Size() - window
+		data := make([]byte, window)
+		read, err := f.ReadAt(data, start)
+		if err != nil && err != io.EOF {
+			return "", err
+		}
+		lines := strings.Split(strings.TrimRight(string(data[:read]), "\n"), "\n")
+		if len(lines) > n {
+			return strings.Join(lines[len(lines)-n:], "\n"), nil
+		}
+		if start == 0 || window == log.MaxBytes {
+			return strings.Join(lines, "\n"), nil
+		}
+	}
 }
 
 // handleDialog shows a native Kindle UI alert dialog via LIPC pillowAlert.
-// Uses the same shell-based approach as KindleForge's KFPM.
 func (s *Server) handleDialog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -1416,20 +1691,20 @@ func (s *Server) handleDialog(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("Dialog requested: title=%q message=%q", body.Title, body.Message)
 
-	titleEsc := strings.ReplaceAll(body.Title, `"`, `\"`)
-	msgEsc := strings.ReplaceAll(body.Message, `\`, `\\`)
-	msgEsc = strings.ReplaceAll(msgEsc, "\n", `\n`)
-	msgEsc = strings.ReplaceAll(msgEsc, `"`, `\"`)
-
-	script := fmt.Sprintf(
-		`JSON='{"clientParams":{"alertId":"appAlert1","show":true,"customStrings":[{"matchStr":"alertTitle","replaceStr":"%s"},{"matchStr":"alertText","replaceStr":"%s"}]}}'
-lipc-set-prop com.lab126.pillow pillowAlert "$JSON"`,
-		titleEsc, msgEsc,
-	)
-
-	log.Infof("Running dialog script: %s", script)
-
-	cmd := exec.Command("/bin/sh", "-c", script)
+	payload, err := json.Marshal(map[string]interface{}{
+		"clientParams": map[string]interface{}{
+			"alertId": "appAlert1", "show": true,
+			"customStrings": []map[string]string{
+				{"matchStr": "alertTitle", "replaceStr": body.Title},
+				{"matchStr": "alertText", "replaceStr": body.Message},
+			},
+		},
+	})
+	if err != nil {
+		http.Error(w, "invalid dialog", http.StatusBadRequest)
+		return
+	}
+	cmd := exec.Command("lipc-set-prop", "com.lab126.pillow", "pillowAlert", string(payload))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Warnf("Native dialog failed: %v — output: %s", err, string(out))

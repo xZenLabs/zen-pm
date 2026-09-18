@@ -6,12 +6,14 @@ local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 
 local CACHE_MAX_BYTES = 32 * 1024 * 1024
 local CACHE_MAX_FILES = 256
+local CACHE_MAX_AGE = 24 * 60 * 60
 local CACHE_FILE_PREFIX = "image-"
 local CACHE_REF_PREFIX = "url-"
 
 local Images = {
     cached = {},
     failed = {},
+    transparent = {},
     refresh_required = false,
 }
 
@@ -28,7 +30,9 @@ local function platform_cache_dir(platform)
 end
 
 local function is_remote(value)
-    return tostring(value or ""):match("^https?://") ~= nil
+    value = tostring(value or "")
+    return value:match("^https?://") ~= nil
+        or value:match("^/packages/[^/]+/preview$") ~= nil
 end
 
 local function cache_key(value)
@@ -59,12 +63,14 @@ local function read_ref(dir, url_key)
     if not f then
         return nil
     end
-    local name = f:read("*l")
+    local value = f:read("*l")
     f:close()
+    local name, transparent = tostring(value or ""):match("^([^\t]+)\t([01])$")
+    name = name or value
     if not valid_cache_filename(name, url_key) then
         return nil
     end
-    return name
+    return name, transparent == "1", transparent ~= nil
 end
 
 local function write_atomic(path, data)
@@ -139,10 +145,19 @@ local function prune_cache(dir, keep_path)
     end
 end
 
-local function persistent_file(dir, value)
+local function persistent_file(dir, value, allow_stale)
     local url_key = cache_key(value)
-    local name = read_ref(dir, url_key)
+    if ok_lfs and not allow_stale then
+        local modified = lfs.attributes(cache_ref_path(dir, url_key), "modification")
+        if modified and (os.time() - modified >= CACHE_MAX_AGE or modified > os.time()) then
+            return nil
+        end
+    end
+    local name, transparent, transparency_known = read_ref(dir, url_key)
     if not name then
+        return nil
+    end
+    if value:match("^/packages/[^/]+/preview$") and not transparency_known then
         return nil
     end
     local path = dir .. "/" .. name
@@ -154,7 +169,17 @@ local function persistent_file(dir, value)
         pcall(lfs.touch, path)
     end
     Images.cached[value] = path
+    Images.transparent[value] = transparent
     return path
+end
+
+local function response_is_transparent(headers)
+    for key, value in pairs(headers or {}) do
+        if tostring(key):lower() == "x-zenpm-transparent" then
+            return tostring(value):lower() == "true"
+        end
+    end
+    return false
 end
 
 local function extension_from(url, headers)
@@ -295,10 +320,13 @@ function Images.file_for(client, platform, value)
         end
     end
 
-    local ok, data, _, headers = client:download(value)
+    local ok, data, status, headers = client:download(value)
+    if ok and tonumber(status) == 202 then
+        return nil
+    end
     if not ok or type(data) ~= "string" or data == "" then
         Images.failed[value] = true
-        return nil
+        return persistent_file(dir, value, true)
     end
     if #data > CACHE_MAX_BYTES then
         Images.failed[value] = true
@@ -313,12 +341,14 @@ function Images.file_for(client, platform, value)
     local url_key = cache_key(value)
     local old_name = read_ref(dir, url_key)
     local name = cache_filename(url_key, cache_key(data), extension_from(value, headers))
+    local transparent = response_is_transparent(headers)
     local path = dir .. "/" .. name
     if not Util.path_exists(path) and not write_atomic(path, data) then
         Images.failed[value] = true
         return nil
     end
-    if old_name ~= name and not write_atomic(cache_ref_path(dir, url_key), name .. "\n") then
+    if (old_name ~= name or Images.transparent[value] ~= transparent)
+            and not write_atomic(cache_ref_path(dir, url_key), name .. "\t" .. (transparent and "1" or "0") .. "\n") then
         os.remove(path)
         Images.failed[value] = true
         return nil
@@ -327,6 +357,10 @@ function Images.file_for(client, platform, value)
         os.remove(dir .. "/" .. old_name)
     end
     Images.cached[value] = path
+    Images.transparent[value] = transparent
+    if ok_lfs and lfs.touch then
+        pcall(lfs.touch, cache_ref_path(dir, url_key))
+    end
     prune_cache(dir, path)
     return path
 end
@@ -355,14 +389,19 @@ function Images.cached_file(platform, value)
     return nil
 end
 
-function Images.invalidate_cache()
+function Images.invalidate_cache(force)
     Images.cached = {}
     Images.failed = {}
-    Images.refresh_required = true
+    Images.transparent = {}
+    Images.refresh_required = force ~= false
 end
 
 function Images.is_failed(value)
     return Images.failed[tostring(value or "")] == true
+end
+
+function Images.is_transparent(value)
+    return Images.transparent[tostring(value or "")]
 end
 
 return Images

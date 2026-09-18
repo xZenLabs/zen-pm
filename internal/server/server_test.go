@@ -2,13 +2,18 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,13 +23,249 @@ import (
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
 
+func TestCatalogRefreshRunsInBackgroundAndSharesRequests(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}, 1), make(chan struct{})
+	var requests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-release
+		io.WriteString(w, `{"packages":[{"id":"fresh","name":"Fresh"}]}`)
+	}))
+	defer upstream.Close()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "test", URL: upstream.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	job := srv.startCatalogRefresh() // Same entry point used by daemon startup.
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("refresh did not start")
+	}
+	for range 3 {
+		rec := httptest.NewRecorder()
+		srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?async=1", nil))
+		if rec.Code != http.StatusAccepted || srv.startCatalogRefresh() != job {
+			t.Fatalf("refresh was not shared: HTTP %d", rec.Code)
+		}
+	}
+	status := httptest.NewRecorder()
+	srv.handleRepoRefresh(status, httptest.NewRequest(http.MethodGet, "/repo/refresh", nil))
+	if !strings.Contains(status.Body.String(), `"refreshing":true`) {
+		t.Fatalf("running status = %s", status.Body.String())
+	}
+	close(release)
+	select {
+	case <-job.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("refresh did not finish")
+	}
+	status = httptest.NewRecorder()
+	srv.handleRepoRefresh(status, httptest.NewRequest(http.MethodGet, "/repo/refresh", nil))
+	if requests.Load() != 1 || !strings.Contains(status.Body.String(), `"refreshing":false`) || job.err != nil {
+		t.Fatalf("requests=%d status=%s error=%v", requests.Load(), status.Body.String(), job.err)
+	}
+	catalog, err := repos.ReadCatalog()
+	if err != nil || len(catalog) != 1 || catalog[0].ID != "fresh" {
+		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
+	// The synchronous endpoint used by older clients still waits for completion.
+	rec := httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh", nil))
+	if rec.Code != http.StatusOK || requests.Load() != 2 {
+		t.Fatalf("synchronous refresh: status=%d requests=%d", rec.Code, requests.Load())
+	}
+}
+
+func TestDialogPassesUntrustedTextAsOneJSONArgument(t *testing.T) {
+	dir := t.TempDir()
+	argument := filepath.Join(dir, "argument.json")
+	marker := filepath.Join(dir, "injected")
+	t.Setenv("PATH", dir)
+	t.Setenv("ZENPM_DIALOG_ARGUMENT", argument)
+	if err := os.WriteFile(filepath.Join(dir, "lipc-set-prop"), []byte("#!/bin/sh\nprintf '%s' \"$3\" > \"$ZENPM_DIALOG_ARGUMENT\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	title := "ZenPM'; touch " + marker + "; #"
+	message := "quote \" and newline\nthen a slash \\"
+	body, err := json.Marshal(map[string]string{"title": title, "message": message})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	(&Server{}).handleDialog(rec, httptest.NewRequest(http.MethodPost, "/dialog", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("dialog response: %d %s", rec.Code, rec.Body.String())
+	}
+	data, err := os.ReadFile(argument)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		ClientParams struct {
+			CustomStrings []struct {
+				ReplaceStr string `json:"replaceStr"`
+			} `json:"customStrings"`
+		} `json:"clientParams"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil || len(payload.ClientParams.CustomStrings) != 2 ||
+		payload.ClientParams.CustomStrings[0].ReplaceStr != title || payload.ClientParams.CustomStrings[1].ReplaceStr != message {
+		t.Fatalf("dialog payload = %q, %v", data, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("injected command ran: %v", err)
+	}
+}
+
+func TestRepoAPIRejectsLocalURLsBeforeChangingRepos(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "custom", URL: "https://example.com/repo"}}); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(st, repo.New(st), nil, 0)
+	for _, req := range []struct{ method, path, body string }{
+		{http.MethodPost, "/repos", `{"name":"bad","url":"file:///etc"}`},
+		{http.MethodPut, "/repos/custom", `{"url":"http://127.0.0.1:8080"}`},
+	} {
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest(req.method, req.path, strings.NewReader(req.body))
+		if req.method == http.MethodPost {
+			srv.handleRepos(rec, r)
+		} else {
+			srv.handleRepoByName(rec, r)
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s %s: %d %s", req.method, req.path, rec.Code, rec.Body.String())
+		}
+	}
+	repos, err := st.ReadRepos()
+	if err != nil || len(repos) != 1 || repos[0].URL != "https://example.com/repo" {
+		t.Fatalf("repositories changed: %#v, %v", repos, err)
+	}
+}
+
+func TestReaderBackdropPageRefresh(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags/popular" {
+			_, _ = io.WriteString(w, `[{"name":"quote","count":12}]`)
+			return
+		}
+		if r.URL.Query().Get("search") != "forest" || r.URL.Query().Get("tag") != "quote" {
+			http.Error(w, "unexpected filters", http.StatusBadRequest)
+			return
+		}
+		if r.URL.Query().Get("page") != "2" {
+			http.Error(w, "unexpected page", http.StatusBadRequest)
+			return
+		}
+		_, _ = io.WriteString(w, `{"images":[],"total":192,"totalPages":4,"currentPage":2}`)
+	}))
+	defer upstream.Close()
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WriteRepos([]state.RepoEntry{{Name: "ReaderBackdrop", URL: upstream.URL}}); err != nil {
+		t.Fatal(err)
+	}
+	repositories := repo.New(st)
+	srv := New(st, repositories, pkg.New(st, repositories, "host"), 0)
+	req := httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"search":"forest","tag":"quote"}`))
+	rec := httptest.NewRecorder()
+
+	srv.handleRepoRefresh(rec, req)
+
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"page":2`) || !strings.Contains(rec.Body.String(), `"total":192`) || !strings.Contains(rec.Body.String(), `"total_pages":4`) {
+		t.Fatalf("response = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=categories", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"quote"`) {
+		t.Fatalf("categories response = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTailLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zenpm.log")
+	for _, content := range []string{"", "\n\n", "one", "one\n\n", "one\ntwo\nthree\n", strings.Repeat("long line", 2000) + "\nlast\n"} {
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range []int{1, 2, 200} {
+			lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+			if len(lines) > n {
+				lines = lines[len(lines)-n:]
+			}
+			want := strings.Join(lines, "\n")
+			if got, err := tailLog(path, n); err != nil || got != want {
+				t.Fatalf("tailLog(%d bytes, %d) = %q, %v; want %q", len(content), n, got, err, want)
+			}
+		}
+	}
+	// Polling a large log must not allocate space for its entire history.
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.Seek(8<<20, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(f, "\nprevious\nlast\n"); err != nil {
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	got, err := tailLog(path, 1)
+	runtime.ReadMemStats(&after)
+	if err != nil || got != "last" {
+		t.Fatalf("large log tail = %q, %v", got, err)
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
+		t.Fatalf("tailing one line allocated %d bytes", allocated)
+	}
+	// Even a huge line or an arbitrarily large tail request has a fixed ceiling.
+	got, err = tailLog(path, 1000000)
+	if err != nil || len(got) > log.MaxBytes || !strings.HasSuffix(got, "\nprevious\nlast") {
+		t.Fatalf("bounded tail: bytes=%d error=%v", len(got), err)
+	}
+}
+
 type fakeReadmeImagePreparer struct {
-	refs     map[string]string
-	markdown string
-	baseURL  string
-	started  chan struct{}
-	release  chan struct{}
-	finished chan struct{}
+	refs           map[string]string
+	markdown       string
+	baseURL        string
+	file           string
+	rawURL         string
+	started        chan struct{}
+	release        chan struct{}
+	finished       chan struct{}
+	previewStarted chan struct{}
+	previewRelease chan struct{}
+	previewCalls   atomic.Int32
+	transparent    bool
 }
 
 func (f *fakeReadmeImagePreparer) References(markdown, baseURL string) map[string]string {
@@ -38,6 +279,16 @@ func (f *fakeReadmeImagePreparer) Prepare(refs map[string]string) error {
 	<-f.release
 	close(f.finished)
 	return nil
+}
+
+func (f *fakeReadmeImagePreparer) PrepareURL(rawURL string) (string, bool, error) {
+	f.previewCalls.Add(1)
+	f.rawURL = rawURL
+	if f.previewStarted != nil {
+		close(f.previewStarted)
+		<-f.previewRelease
+	}
+	return f.file, f.transparent, nil
 }
 
 func TestListenUnixBindsSocket(t *testing.T) {
@@ -297,6 +548,13 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 	repos := repo.New(st)
 	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	if _, needsRefresh := srv.initialCatalogState(); !needsRefresh {
+		t.Fatal("catalog without a refresh timestamp was considered fresh")
+	}
+	marker := filepath.Join(st.CacheDir, "catalog.refreshed")
+	if err := os.WriteFile(marker, []byte("refreshed"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	catalog, needsRefresh := srv.initialCatalogState()
 	if needsRefresh {
@@ -304,6 +562,13 @@ func TestInitialCatalogStateUsesExistingCatalog(t *testing.T) {
 	}
 	if len(catalog) != 1 || catalog[0].ID != "pkg" {
 		t.Fatalf("catalog = %#v", catalog)
+	}
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(marker, future, future); err != nil {
+		t.Fatal(err)
+	}
+	if _, needsRefresh := srv.initialCatalogState(); !needsRefresh {
+		t.Fatal("catalog from before a clock correction was considered fresh")
 	}
 }
 
@@ -399,7 +664,7 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 		ID: "pkg", Name: "Package", Version: "1.0.0", Repo: "ZenLabs", InstallURL: "install.sh",
 		Platforms: []string{"host"}, Featured: true, FeaturedOrder: &featuredOrder,
 		ReadmeURL: "https://repo.zen-labs.org/packages/host/pkg/README.md", VersionsURL: "https://repo.zen-labs.org/packages/host/pkg/versions.json", ReleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md",
-		PrereleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md", PrereleaseVersion: "1.1.0-rc.1", PublishedAt: "2026-07-24T12:00:00Z",
+		PrereleaseNotesURL: "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md", PrereleaseVersion: "1.1.0-rc.1", AlphaVersion: "1.1.0-alpha1", PublishedAt: "2026-07-24T12:00:00Z",
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -422,11 +687,79 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	if packages[0].VersionsURL != "https://repo.zen-labs.org/packages/host/pkg/versions.json" {
 		t.Fatalf("VersionsURL = %q", packages[0].VersionsURL)
 	}
-	if packages[0].ReleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md" || packages[0].PrereleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md" || packages[0].PrereleaseVersion != "1.1.0-rc.1" {
+	if packages[0].ReleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/RELEASE_NOTES.md" || packages[0].PrereleaseNotesURL != "https://repo.zen-labs.org/packages/host/pkg/PRERELEASE_NOTES.md" || packages[0].PrereleaseVersion != "1.1.0-rc.1" || packages[0].AlphaVersion != "1.1.0-alpha1" {
 		t.Fatalf("release notes metadata = %#v", packages[0])
 	}
 	if packages[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", packages[0].PublishedAt)
+	}
+}
+
+func TestReaderBackdropUsesPreparedPreview(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := "https://cdn.example/wallpaper.png"
+	if err := st.WriteCatalog([]state.CatalogEntry{
+		{ID: "readerbackdrop-missing", Repo: "ReaderBackdrop", Platforms: []string{"koreader"}, IconURL: original},
+		{ID: "readerbackdrop-thumb", Repo: "ReaderBackdrop", Platforms: []string{"koreader"}, IconURL: "https://cdn.example/thumb.png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repositories := repo.New(st)
+	srv := New(st, repositories, pkg.New(st, repositories, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil))
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 2 || packages[0].IconURL != "/packages/readerbackdrop-missing/preview" || packages[1].IconURL != "/packages/readerbackdrop-thumb/preview" {
+		t.Fatalf("preview URLs = %#v", packages)
+	}
+
+	preview := filepath.Join(t.TempDir(), "preview.png")
+	if err := os.WriteFile(preview, []byte("prepared preview"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	preparer := &fakeReadmeImagePreparer{file: preview, transparent: true}
+	srv.readmeImages = preparer
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "prepared preview" || preparer.rawURL != original || rec.Header().Get("X-ZenPM-Transparent") != "true" {
+		t.Fatalf("preview response = %d %q, source=%q", rec.Code, rec.Body.String(), preparer.rawURL)
+	}
+
+	preparer = &fakeReadmeImagePreparer{
+		file: preview, previewStarted: make(chan struct{}), previewRelease: make(chan struct{}),
+	}
+	srv.readmeImages = preparer
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview?async=1", nil))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("async preview start = %d %q", rec.Code, rec.Body.String())
+	}
+	select {
+	case <-preparer.previewStarted:
+	case <-time.After(time.Second):
+		t.Fatal("async preview preparation did not start")
+	}
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview?async=1", nil))
+	if rec.Code != http.StatusAccepted || preparer.previewCalls.Load() != 1 {
+		t.Fatalf("shared async preview = %d calls=%d", rec.Code, preparer.previewCalls.Load())
+	}
+	close(preparer.previewRelease)
+	srv.mu.Lock()
+	job := srv.previewJobs[original]
+	srv.mu.Unlock()
+	<-job.done
+	rec = httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodGet, "/packages/readerbackdrop-missing/preview?async=1", nil))
+	if rec.Body.String() != "prepared preview" || preparer.previewCalls.Load() != 1 {
+		t.Fatalf("async preview body = %q calls=%d", rec.Body.String(), preparer.previewCalls.Load())
 	}
 }
 
@@ -614,14 +947,14 @@ func TestPackageListIncludesConflicts(t *testing.T) {
 func TestApplyUpdateInfoRequiresKnownInstalledVersion(t *testing.T) {
 	for _, installedVersion := range []string{"", "0.0.0", "v0.0.0"} {
 		item := pkgJSON{Version: "1.2.0", InstalledVer: installedVersion}
-		applyUpdateInfo(&item, false)
+		applyUpdateInfo(&item, false, false)
 		if item.UpdateAvail {
 			t.Errorf("installed version %q marked update available", installedVersion)
 		}
 	}
 
 	item := pkgJSON{Version: "1.2.0", InstalledVer: "1.1.0"}
-	applyUpdateInfo(&item, false)
+	applyUpdateInfo(&item, false, false)
 	if !item.UpdateAvail || item.LatestRelease != "1.2.0" {
 		t.Fatalf("update info = %#v", item)
 	}
@@ -632,7 +965,7 @@ func TestApplyUpdateInfoIgnoresTagCommitSuffixForSameRelease(t *testing.T) {
 		Version:      "v1.0.41-7779138817115c22c74fe1c0630436b1f0fb63ff",
 		InstalledVer: "1.0.41",
 	}
-	applyUpdateInfo(&item, false)
+	applyUpdateInfo(&item, false, false)
 	if item.UpdateAvail || item.LatestRelease != "" {
 		t.Fatalf("update info = %#v", item)
 	}
@@ -645,7 +978,7 @@ func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
 		{"1.0.0-rc2", "1.0.0-rc1"},
 	} {
 		item := pkgJSON{Version: versions[0], InstalledVer: versions[1]}
-		applyUpdateInfo(&item, false)
+		applyUpdateInfo(&item, false, false)
 		if !item.UpdateAvail || item.LatestRelease != versions[0] {
 			t.Errorf("latest %q, installed %q: update info = %#v", versions[0], versions[1], item)
 		}
@@ -654,7 +987,7 @@ func TestApplyUpdateInfoOffersNewerPrerelease(t *testing.T) {
 
 func TestApplyUpdateInfoDoesNotOfferSameVersionPrereleaseToStableInstall(t *testing.T) {
 	item := pkgJSON{Version: "2.5.4-beta2", InstalledVer: "2.5.4"}
-	applyUpdateInfo(&item, true)
+	applyUpdateInfo(&item, true, false)
 	if item.UpdateAvail {
 		t.Fatalf("update info = %#v, want no update", item)
 	}
@@ -662,9 +995,40 @@ func TestApplyUpdateInfoDoesNotOfferSameVersionPrereleaseToStableInstall(t *test
 
 func TestApplyUpdateInfoUsesNewerCatalogPrerelease(t *testing.T) {
 	item := pkgJSON{Version: "1.2.0", PrereleaseVersion: "1.3.0-beta.1", InstalledVer: "1.2.0"}
-	applyUpdateInfo(&item, true)
+	applyUpdateInfo(&item, true, false)
 	if !item.UpdateAvail || item.LatestVersion != "1.3.0-beta.1" || item.LatestRelease != "1.3.0-beta.1" {
 		t.Fatalf("update info = %#v", item)
+	}
+}
+
+func TestApplyUpdateInfoAlphaChannelExcludesBeta(t *testing.T) {
+	item := pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", AlphaVersion: "1.3.0-alpha9", InstalledVer: "1.2.0"}
+	applyUpdateInfo(&item, false, false)
+	if item.LatestVersion != "1.2.0" {
+		t.Fatalf("disabled prerelease update info = %#v", item)
+	}
+
+	applyUpdateInfo(&item, true, true)
+	if item.LatestVersion != "1.3.0-alpha9" || !item.UpdateAvail {
+		t.Fatalf("alpha update info = %#v", item)
+	}
+
+	item = pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", AlphaVersion: "1.3.0-alpha9", InstalledVer: "1.3.0-beta1"}
+	applyUpdateInfo(&item, true, true)
+	if item.LatestVersion != "1.3.0-alpha9" || !item.UpdateAvail || item.LatestRelease != "1.3.0-alpha9" {
+		t.Fatalf("alpha update from beta info = %#v", item)
+	}
+
+	item = pkgJSON{ID: "zen-ui", Version: "1.2.0", PrereleaseVersion: "1.3.0-beta1", InstalledVer: "1.2.0"}
+	applyUpdateInfo(&item, true, true)
+	if item.LatestVersion != "" || item.UpdateAvail {
+		t.Fatalf("alpha channel without alpha = %#v", item)
+	}
+
+	item.ID = "other"
+	applyUpdateInfo(&item, false, true)
+	if item.LatestVersion != "1.2.0" {
+		t.Fatalf("non-ZenOS alpha update info = %#v", item)
 	}
 }
 
@@ -757,6 +1121,72 @@ func TestKOReaderPluginScanEndpoint(t *testing.T) {
 	}
 }
 
+func TestKOReaderPluginAutoScanFindsStorefrontUpdates(t *testing.T) {
+	t.Setenv("ZENPM_HOME", filepath.Join(t.TempDir(), "ZenPM"))
+	plugins, extra := t.TempDir(), t.TempDir()
+	t.Setenv("ZENPM_KOREADER_PLUGIN_DIR", plugins)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := []state.CatalogEntry{
+		{ID: "bookends", Name: "Bookends", Version: "5.24.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "bookends"},
+		{ID: "bookshelf", Name: "Bookshelf", Version: "4.4.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "bookshelf"},
+		{ID: "simple-ui", Name: "Simple UI", Version: "2.7.0", Repo: "ZenLabs", Platforms: []string{"koreader"}, PluginModule: "simple_ui"},
+	}
+	if err := st.WriteCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	// Report extra paths even when they are still empty, then simulate Storefront.
+	body, err := json.Marshal(map[string]interface{}{"plugin_dirs": []string{extra}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	srv.handleKOReaderPluginScan(rec, httptest.NewRequest(http.MethodPost, "/koreader/plugins/scan", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("initial scan = %d: %s", rec.Code, rec.Body.String())
+	}
+	if err := st.WriteValue("koreader_plugins_scanned", "3"); err != nil {
+		t.Fatal(err)
+	}
+	versions := []string{"5.23.1", "4.3.5", "2.6.0"}
+	for i, entry := range catalog {
+		dir := filepath.Join(extra, entry.PluginModule+".koplugin")
+		if i == 0 {
+			dir = filepath.Join(plugins, entry.PluginModule+".koplugin")
+		}
+		if err := os.Mkdir(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "_meta.lua"), []byte(fmt.Sprintf(`return { version = %q }`, versions[i])), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv.autoScanKOReaderPlugins()
+	rec = httptest.NewRecorder()
+	srv.handlePackageList(rec, httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil))
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 3 {
+		t.Fatalf("packages = %#v", packages)
+	}
+	for _, item := range packages {
+		if !item.Installed || !item.UpdateAvail {
+			t.Fatalf("Storefront update missing: %#v", item)
+		}
+		for i, entry := range catalog {
+			if item.ID == entry.ID && (item.InstalledVer != versions[i] || item.LatestVersion != entry.Version) {
+				t.Fatalf("incorrect Storefront versions: %#v", item)
+			}
+		}
+	}
+}
+
 func TestInitialCatalogStateRefreshesStaleCatalog(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "ZenPM")
 	t.Setenv("ZENPM_HOME", home)
@@ -823,6 +1253,71 @@ func TestHandlePackageActionReturnsPreflightInstallErrors(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "unknown dependency") {
 		t.Fatalf("body = %q, want dependency error", body)
+	}
+}
+
+func TestPackageActionReportsDefinitiveOperationResult(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "ZenPM")
+	t.Setenv("ZENPM_HOME", home)
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+
+	rec := httptest.NewRecorder()
+	srv.handlePackageAction(rec, httptest.NewRequest(http.MethodPost, "/packages/missing/uninstall", nil))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var started struct {
+		OperationID string `json:"operation_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &started); err != nil || started.OperationID == "" {
+		t.Fatalf("response = %s, %v", rec.Body.String(), err)
+	}
+
+	for deadline := time.Now().Add(time.Second); srv.backgroundJobs.Load() != 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	status := httptest.NewRecorder()
+	srv.handlePackageOperation(status, httptest.NewRequest(http.MethodGet, "/package-operations/"+started.OperationID, nil))
+	if status.Code != http.StatusOK {
+		t.Fatalf("operation status = %d, body = %s", status.Code, status.Body.String())
+	}
+	var operation packageOperation
+	if err := json.Unmarshal(status.Body.Bytes(), &operation); err != nil {
+		t.Fatal(err)
+	}
+	if operation.PackageID != "missing" || operation.Action != "uninstall" || operation.Status != "failed" ||
+		!strings.Contains(operation.Error, "not installed") {
+		t.Fatalf("operation = %#v", operation)
+	}
+}
+
+func TestPackageOperationLifecycle(t *testing.T) {
+	srv := New(nil, nil, nil, 0)
+	id := srv.startPackageOperation("reader", "install")
+	srv.finishPackageOperation(id, nil)
+
+	rec := httptest.NewRecorder()
+	srv.handlePackageOperation(rec, httptest.NewRequest(http.MethodGet, "/package-operations/"+id, nil))
+	var operation packageOperation
+	if err := json.Unmarshal(rec.Body.Bytes(), &operation); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || operation.Status != "succeeded" || operation.PackageID != "reader" {
+		t.Fatalf("status = %d, operation = %#v", rec.Code, operation)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", rec.Header().Get("Cache-Control"))
+	}
+
+	missing := httptest.NewRecorder()
+	srv.handlePackageOperation(missing, httptest.NewRequest(http.MethodGet, "/package-operations/missing", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing status = %d, want 404", missing.Code)
 	}
 }
 
@@ -1211,6 +1706,7 @@ func TestShouldLogAccessSkipsRoutineSuccessfulPolling(t *testing.T) {
 		{http.MethodGet, "/packages?platform=kindle", http.StatusOK, false},
 		{http.MethodGet, "/log?tail=500", http.StatusOK, false},
 		{http.MethodGet, "/repos", http.StatusOK, false},
+		{http.MethodGet, "/package-operations/42", http.StatusOK, false},
 		{http.MethodGet, "/packages?platform=kindle", http.StatusInternalServerError, true},
 		{http.MethodPost, "/packages/reader/uninstall", http.StatusAccepted, true},
 		{http.MethodGet, "/packages/reader/assets", http.StatusOK, true},

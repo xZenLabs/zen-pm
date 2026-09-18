@@ -15,6 +15,8 @@ return {
     REPO_ZENLABS_URL = "https://repo.zen-labs.org",
     REPO_KINDLEFORGE_NAME = "KindleForge",
     REPO_KINDLEFORGE_URL = "https://kf.penguins184.xyz",
+    REPO_READERBACKDROP_NAME = "ReaderBackdrop",
+    REPO_READERBACKDROP_URL = "https://www.readerbackdrop.com",
 
     FEATURED_IDS = { "zen-reader", "kindle-browser", "zen-mtp" },
     PACKAGE_NOTICE_SECONDS = 3,
@@ -22,6 +24,7 @@ return {
     POLL_DELAY_SECONDS = 3.5,
     MAX_POLL_RETRIES = 20,
     PACKAGE_ACTION_MAX_POLL_RETRIES = 45,
+    PACKAGE_OPERATION_MAX_POLL_RETRIES = 360,
     CONNECT_RETRIES = 40,
     CONNECT_RETRY_DELAY_SECONDS = 0.5,
     CONNECT_INITIAL_DELAY_SECONDS = 0.2,
@@ -31,7 +34,6 @@ return {
 
     TABS = {
         { id = "home", label = N_("Featured") },
-        { id = "changes", label = N_("Changes") },
         { id = "categories", label = N_("Categories") },
         { id = "installed", label = N_("Installed") },
         -- { id = "debug", label = N_("Debug") },
@@ -44,8 +46,11 @@ return {
         { id = "media", label = N_("Media"), icon = "media.svg" },
         { id = "koreader-patches", label = N_("Patches"), icon = "patch.svg" },
         { id = "productivity", label = N_("Productivity"), icon = "productivity.svg" },
+        { id = "reference", label = N_("Reference"), icon = "reference.svg" },
+        { id = "screensavers", label = N_("Screensavers"), icon = "screensaver.svg" },
         { id = "theme", label = N_("Theme"), icon = "theme.svg" },
         { id = "utility", label = N_("Utility"), icon = "utility.svg" },
+        { id = "wallpapers", label = N_("Wallpapers"), icon = "wallpaper.svg" },
     },
     KINDLE_SCRIPTLETS_CATEGORY = {
         id = "kindle-scriptlets",

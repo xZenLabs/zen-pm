@@ -6,6 +6,8 @@ local has_keys = false
 local has_keyboard = false
 local has_dpad = false
 local scheduled
+local dirty
+local header_y
 package.preload["device"] = function()
     return {
         hasKeys = function() return has_keys end,
@@ -28,30 +30,113 @@ package.preload["ui/widget/container/inputcontainer"] = function()
 end
 package.preload["ui/uimanager"] = function()
     return {
+        setDirty = function(_, widget, mode, region)
+            dirty = { widget = widget, mode = mode, region = region }
+        end,
         scheduleIn = function(_, _, callback) scheduled = callback end,
         unschedule = function(_, callback)
             if scheduled == callback then scheduled = nil end
         end,
     }
 end
-package.preload["ui/header"] = function() return {} end
+package.preload["ui/header"] = function()
+    return { draw = function(_, _, _, y) header_y = y return y end }
+end
 package.preload["i18n"] = function() return {} end
-package.preload["ui/nav"] = function() return {} end
+package.preload["ui/nav"] = function() return { draw = function() end } end
 package.preload["ui/primitives"] = function()
     return {
+        rect = function() end,
         contains = function(box, x, y)
             return x >= box.x and x < box.x + box.w and y >= box.y and y < box.y + box.h
         end,
     }
 end
-package.preload["ui/pages"] = function() return {} end
-package.preload["ui/scroll"] = function() return {} end
-package.preload["ui/theme"] = function() return {} end
+local rendered_advanced_settings = false
+local rendered_updates_settings = false
+local rendered_about_settings = false
+package.preload["ui/pages"] = function()
+    return {
+        featured = function() return 0 end,
+        advanced_settings = function()
+            rendered_advanced_settings = true
+            return 0
+        end,
+        updates_settings = function()
+            rendered_updates_settings = true
+            return 0
+        end,
+        about_settings = function()
+            rendered_about_settings = true
+            return 0
+        end,
+    }
+end
+package.preload["ui/scroll"] = function() return { draw_scrollbar = function() end } end
+package.preload["ui/theme"] = function()
+    return {
+        metrics = function()
+            return { screen_w = 100, screen_h = 200, nav_h = 20, nav_bottom_margin = 0 }
+        end,
+    }
+end
 package.preload["gettext"] = function() return function(value) return value end end
 
 local AppView = require("ui/app_view")
+assert(AppView.covers_fullscreen == true)
 local closed = 0
 local view = { app = { close = function() closed = closed + 1 end } }
+
+local status_y
+local status_freed = false
+local content_y
+_G.__ZENOS_BUILD_STATUS_ROW = function(width)
+    assert(width == 100)
+    return {
+        getSize = function() return { h = 12 } end,
+        paintTo = function(_, _, _, y) status_y = y end,
+        free = function() status_freed = true end,
+    }
+end
+local paint_view = setmetatable({
+    app = { state = { page = "home" }, queue_count = function() return 0 end },
+    draw_content = function(_, _, _, y) content_y = y end,
+}, { __index = AppView })
+AppView.paintTo(paint_view, {}, 3, 5)
+assert(status_y == 5)
+assert(header_y == 17)
+assert(content_y == 17)
+assert(status_freed)
+assert(paint_view._zen_status_dimen.h == 12)
+assert(paint_view.koreader_menu_zone == paint_view._zen_status_dimen)
+AppView._zen_status_refresh(paint_view)
+assert(dirty.widget == paint_view and dirty.mode == "ui")
+assert(dirty.region == paint_view._zen_status_dimen)
+_G.__ZENOS_BUILD_STATUS_ROW = nil
+
+AppView.draw_content({
+    app = {
+        state = { page = "advanced_settings", scroll = {} },
+        scroll_key = function() return "advanced_settings" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_advanced_settings)
+
+AppView.draw_content({
+    app = {
+        state = { page = "updates_settings", scroll = {} },
+        scroll_key = function() return "updates_settings" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_updates_settings)
+
+AppView.draw_content({
+    app = {
+        state = { page = "about_settings", scroll = {} },
+        scroll_key = function() return "about_settings" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_about_settings)
 
 has_keys = true
 has_dpad = false
@@ -91,6 +176,9 @@ assert(hardware_actions == 1)
 _G.G_reader_settings = {
     readSetting = function() return "tap" end,
 }
+local status_gesture = { pos = { x = 50, y = 10 } }
+assert(AppView.tap_should_pass_to_koreader_menu(paint_view, status_gesture))
+assert(AppView.gesture_in_menu_zone(paint_view, status_gesture))
 local menu_tap_view = {
     koreader_menu_zone = { x = 0, y = 0, w = 100, h = 50 },
     koreader_menu_tap_guard = { x = 70, y = 0, w = 30, h = 50 },
@@ -122,6 +210,22 @@ assert(details_view.app.state.scroll["package:demo:readme"] == 0)
 assert(refreshes == 1)
 assert(AppView._scroll_list(details_view, 1) == true)
 assert(details_view.app.state.scroll["package:demo:readme"] == 40)
+
+local load_more_calls = 0
+local bottom_view = {
+    app = {
+        state = { scroll = { packages = 10 } },
+        scroll_key = function() return "packages" end,
+        load_more_readerbackdrop = function()
+            load_more_calls = load_more_calls + 1
+            return true
+        end,
+    },
+    scroll_step = 10,
+    max_scroll = 10,
+}
+assert(AppView._scroll_list(bottom_view, 1) == false)
+assert(load_more_calls == 0)
 
 local focus_refreshes = 0
 local focused = {}

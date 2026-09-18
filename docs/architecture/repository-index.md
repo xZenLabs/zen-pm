@@ -72,6 +72,9 @@ warn before installation but may allow the user to continue.
 `published_at` is an optional UTC ISO-8601 timestamp used to sort newly
 published packages on the Discover page.
 
+`prerelease_version` is the newest non-alpha prerelease. `alpha_version` is
+the newest ZenOS alpha prerelease and is ignored for other package IDs.
+
 ## Merge and precedence behavior
 
 Package `icon_url` is package-specific. When it is omitted, clients should fall

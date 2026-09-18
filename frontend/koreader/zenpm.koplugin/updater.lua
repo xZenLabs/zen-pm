@@ -164,7 +164,7 @@ local function sha256(path)
     return ok and type(digest) == "string" and digest:lower() or nil
 end
 
-local function request(url, sink, method)
+local function request(url, sink, method, token)
     local ok_https, https = pcall(require, "ssl.https")
     local ok_ltn12, ltn12 = pcall(require, "ltn12")
     if not ok_https or not ok_ltn12 then
@@ -178,10 +178,14 @@ local function request(url, sink, method)
     if manages_socket_timeout then
         socketutil:set_timeout(10, 30)
     end
-    local ok, code, headers, status = https.request{
+    local headers = { ["User-Agent"] = "zenpm.koplugin" }
+    if token and url:match("^https://api%.github%.com/") then
+        headers["Authorization"] = "Bearer " .. token
+    end
+    local ok, code, response_headers, status = https.request{
         url = url,
         method = method,
-        headers = { ["User-Agent"] = "zenpm.koplugin" },
+        headers = headers,
         sink = sink or ltn12.sink.table(response),
     }
     if manages_socket_timeout then
@@ -196,7 +200,7 @@ local function request(url, sink, method)
     log_info("GitHub request completed", method or "GET", "HTTP", code, "after", elapsed_ms .. "ms")
     return {
         code = tonumber(code),
-        headers = headers,
+        headers = response_headers,
         body = table.concat(response),
         status = status,
     }
@@ -339,10 +343,22 @@ local function select_standalone_release(releases, allow_prerelease)
     return nil
 end
 
-local function fetch_releases(force_refresh)
+local function github_token(daemon)
+    if not daemon or type(daemon.state_home) ~= "function" then return nil end
+    local ok, home = pcall(daemon.state_home, daemon)
+    if not ok or type(home) ~= "string" or home == "" then return nil end
+    local file = io.open(home .. "/github_token.txt", "rb")
+    if not file then return nil end
+    local token = Util.trim(file:read(4098) or "")
+    file:close()
+    if token == "" or #token > 4096 or token:find("%s") then return nil end
+    return token
+end
+
+local function fetch_releases(daemon, force_refresh)
     local url = RELEASES_URL
     if force_refresh then url = url .. "&cache_bust=" .. tostring(os.time()) end
-    local response, err = request(url)
+    local response, err = request(url, nil, nil, github_token(daemon))
     if not response then
         log_warn("release request failed", err)
         return nil, err
@@ -478,7 +494,7 @@ end
 
 local function latest_release(daemon, allow_prerelease, force_refresh)
     log_info("checking for updates", "platform=", daemon:detect_platform(), "prereleases=", allow_prerelease == true)
-    local releases, err = fetch_releases(force_refresh)
+    local releases, err = fetch_releases(daemon, force_refresh)
     if not releases then return false, err end
     local release, expected_asset = select_release(releases, daemon, allow_prerelease)
     if not release then
@@ -585,7 +601,7 @@ function Updater:update(daemon, allow_prerelease, force_refresh)
 end
 
 function Updater:reinstall(daemon, tag, allow_prerelease, force_refresh)
-    local releases, err = fetch_releases(force_refresh)
+    local releases, err = fetch_releases(daemon, force_refresh)
     if not releases then return false, err end
     local wanted = tostring(tag or "")
     for _, release in ipairs(releases) do
@@ -602,7 +618,7 @@ function Updater:install_kindle_standalone(daemon, allow_prerelease, force_refre
             or not daemon:kindle_homepage_install_supported() then
         return standalone_failure(daemon, _("Kindle standalone is not supported on this device."))
     end
-    local releases, releases_err = fetch_releases(force_refresh)
+    local releases, releases_err = fetch_releases(daemon, force_refresh)
     if not releases then return standalone_failure(daemon, releases_err) end
     local release = select_standalone_release(releases, allow_prerelease)
     if not release then

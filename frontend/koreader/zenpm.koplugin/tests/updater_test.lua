@@ -30,6 +30,12 @@ local releases = {
 }
 
 local requested_url
+local requested_headers
+local token_home = "/tmp/zenpm-updater-token-test"
+os.execute("mkdir -p " .. token_home)
+local token_file = assert(io.open(token_home .. "/github_token.txt", "wb"))
+token_file:write("developer-token\n")
+token_file:close()
 
 package.preload["ffi/archiver"] = function() return {} end
 package.preload["json"] = function() return { decode = function() return releases end } end
@@ -38,11 +44,17 @@ package.preload["socket"] = function() return { gettime = function() return 0 en
 package.preload["socketutil"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["zenpm_constants"] = function() return {} end
-package.preload["zenpm_util"] = function() return { path_exists = function() return false end } end
+package.preload["zenpm_util"] = function()
+    return {
+        path_exists = function() return false end,
+        trim = function(value) return tostring(value or ""):match("^%s*(.-)%s*$") end,
+    }
+end
 package.preload["ssl.https"] = function()
     return {
         request = function(options)
             requested_url = options.url
+            requested_headers = options.headers
             options.sink("[]")
             return 1, 200, {}, "OK"
         end,
@@ -58,11 +70,13 @@ local daemon = {
     host_backend_platform = function() return "linux" end,
     is_android = function() return false end,
     plugin_version = function() return "1.0.0" end,
+    state_home = function() return token_home end,
 }
 
 local ok, version = Updater:check(daemon, true, true)
 assert(ok and version == "1.0.1-beta1")
 assert(requested_url:match("&cache_bust=%d+$"))
+assert(requested_headers.Authorization == "Bearer developer-token")
 
 ok, version = Updater:check(daemon, false)
 assert(ok and version == "up_to_date")
@@ -84,5 +98,8 @@ local standalone_ok, standalone_err = Updater:install_kindle_standalone({
 }, false, true)
 assert(not standalone_ok)
 assert(standalone_err == "Kindle standalone is not supported on this device.")
+
+os.remove(token_home .. "/github_token.txt")
+os.execute("rmdir " .. token_home)
 
 print("updater tests passed")

@@ -11,18 +11,22 @@ import (
 )
 
 const (
-	defaultKindleHome            = "/mnt/us/ZenPM"
-	defaultKoboHome              = "/mnt/onboard/.adds/ZenPM"
-	kindlePersistDir             = "/mnt/us/.ZenPM"
-	koboPersistDir               = "/mnt/onboard/.adds/.ZenPM"
-	DefaultZenLabsRepoName       = "ZenLabs"
-	DefaultKindleForgeRepoName   = "KindleForge"
-	DefaultKindleForgeRepoURL    = "https://kf.penguins184.xyz"
-	CatalogPublishedAtRefreshKey = "catalog_published_at_refresh_required"
+	defaultKindleHome             = "/mnt/us/ZenPM"
+	defaultKoboHome               = "/mnt/onboard/.adds/ZenPM"
+	kindlePersistDir              = "/mnt/us/.ZenPM"
+	koboPersistDir                = "/mnt/onboard/.adds/.ZenPM"
+	DefaultZenLabsRepoName        = "ZenLabs"
+	DefaultReaderBackdropRepoName = "ReaderBackdrop"
+	DefaultReaderBackdropRepoURL  = "https://www.readerbackdrop.com"
+	DefaultKindleForgeRepoName    = "KindleForge"
+	DefaultKindleForgeRepoURL     = "https://kf.penguins184.xyz"
+	CatalogPublishedAtRefreshKey  = "catalog_published_at_refresh_required"
 )
 
 // DefaultZenLabsRepoURL may be overridden at link time by development builds.
 var DefaultZenLabsRepoURL = "https://repo.zen-labs.org"
+
+var chmodGitHubToken = os.Chmod
 
 // State holds all resolved paths for ZenPM's working directories.
 type State struct {
@@ -35,12 +39,14 @@ type State struct {
 	CABundle         string
 	RSACABundle      string
 	LogFile          string
+	GitHubTokenFile  string
 	SeededRepoURL    string // non-empty only when the database was just created
 	kindleWAFAllowed bool
 	store            Store
 }
 
 type Store interface {
+	Close() error
 	ReadRepos() ([]RepoEntry, error)
 	WriteRepos([]RepoEntry) error
 	ReadInstalled() ([]InstalledEntry, error)
@@ -93,6 +99,7 @@ func Init(platformName string) (*State, error) {
 		CABundle:         filepath.Join(home, "cacert.pem"),
 		RSACABundle:      filepath.Join(home, "cacert-rsa.pem"),
 		LogFile:          filepath.Join(home, "ZenPM.log"),
+		GitHubTokenFile:  filepath.Join(home, "github_token.txt"),
 		kindleWAFAllowed: deviceplatform.KindleWAFAllowed(platformName),
 	}
 
@@ -110,6 +117,18 @@ func Init(platformName string) (*State, error) {
 	if err := cabundle.WriteRSAFile(s.RSACABundle); err != nil {
 		return nil, fmt.Errorf("write RSA CA bundle: %w", err)
 	}
+	token, err := os.OpenFile(s.GitHubTokenFile, os.O_CREATE, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("create GitHub token file: %w", err)
+	}
+	if err := token.Close(); err != nil {
+		return nil, fmt.Errorf("close GitHub token file: %w", err)
+	}
+	// PocketBook's storage mount does not support changing Unix mode bits.
+	if err := chmodGitHubToken(s.GitHubTokenFile, 0600); err != nil && !os.IsPermission(err) {
+		return nil, fmt.Errorf("restrict GitHub token file: %w", err)
+	}
+	_ = os.Setenv("ZENPM_GITHUB_TOKEN_FILE", s.GitHubTokenFile)
 	StartupTrace("State initialization: directories ready.")
 
 	store, err := newSQLiteStore(s)
@@ -120,9 +139,11 @@ func Init(platformName string) (*State, error) {
 	StartupTrace("State initialization: SQLite ready.")
 
 	if err := seedReposDB(s); err != nil {
+		store.Close()
 		return nil, err
 	}
 	if err := reconcileDefaultRepos(s); err != nil {
+		store.Close()
 		return nil, err
 	}
 	StartupTrace("State initialization: repositories ready.")
@@ -132,6 +153,9 @@ func Init(platformName string) (*State, error) {
 
 	return s, nil
 }
+
+// Close releases the database connection and its background goroutines.
+func (s *State) Close() error { return s.store.Close() }
 
 func cleanupLegacyJournal(home string) {
 	path := filepath.Join(home, "journal")
@@ -190,6 +214,7 @@ func seedReposDB(s *State) error {
 	// Default repos seeded on first run.
 	defaults := []RepoEntry{
 		{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true},
+		{Name: DefaultReaderBackdropRepoName, URL: DefaultReaderBackdropRepoURL, Priority: 20, Trust: "trusted", Default: true},
 	}
 
 	// Allow override via env var for custom setups.
@@ -210,6 +235,7 @@ func reconcileDefaultRepos(s *State) error {
 	}
 	changed := false
 	hasZenLabs := false
+	hasReaderBackdrop := false
 
 	filtered := repos[:0]
 	for i := range repos {
@@ -218,6 +244,17 @@ func reconcileDefaultRepos(s *State) error {
 			if repos[i].URL != DefaultZenLabsRepoURL || repos[i].Priority != 10 || repos[i].Trust != "trusted" || !repos[i].Default {
 				repos[i].URL = DefaultZenLabsRepoURL
 				repos[i].Priority = 10
+				repos[i].Trust = "trusted"
+				repos[i].Default = true
+				changed = true
+			}
+		}
+		if IsReaderBackdropRepo(repos[i].Name, repos[i].URL) {
+			hasReaderBackdrop = true
+			if repos[i].Name != DefaultReaderBackdropRepoName || repos[i].URL != DefaultReaderBackdropRepoURL || repos[i].Priority != 20 || repos[i].Trust != "trusted" || !repos[i].Default {
+				repos[i].Name = DefaultReaderBackdropRepoName
+				repos[i].URL = DefaultReaderBackdropRepoURL
+				repos[i].Priority = 20
 				repos[i].Trust = "trusted"
 				repos[i].Default = true
 				changed = true
@@ -237,6 +274,10 @@ func reconcileDefaultRepos(s *State) error {
 
 	if !hasZenLabs {
 		repos = append([]RepoEntry{{Name: DefaultZenLabsRepoName, URL: DefaultZenLabsRepoURL, Priority: 10, Trust: "trusted", Default: true}}, repos...)
+		changed = true
+	}
+	if !hasReaderBackdrop {
+		repos = append(repos, RepoEntry{Name: DefaultReaderBackdropRepoName, URL: DefaultReaderBackdropRepoURL, Priority: 20, Trust: "trusted", Default: true})
 		changed = true
 	}
 	if !changed {
@@ -261,6 +302,14 @@ func IsKindleForgeRepo(name, url string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
 	url = strings.ToLower(strings.TrimRight(strings.TrimSpace(url), "/"))
 	return name == strings.ToLower(DefaultKindleForgeRepoName) || url == strings.ToLower(DefaultKindleForgeRepoURL)
+}
+
+// IsReaderBackdropRepo reports whether a name or URL identifies ReaderBackdrop.
+func IsReaderBackdropRepo(name, url string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	url = strings.ToLower(strings.TrimRight(strings.TrimSpace(url), "/"))
+	return name == strings.ToLower(DefaultReaderBackdropRepoName) ||
+		url == strings.ToLower(DefaultReaderBackdropRepoURL) || url == "https://readerbackdrop.com"
 }
 
 // LockAcquire grabs a named lock via mkdir (atomic on Linux/macOS).

@@ -4,8 +4,10 @@
 
 local Cards = require("ui/cards")
 local Constants = require("zenpm_constants")
+local Font = require("ui/font")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
 local Images = require("ui/images")
+local InlineIcons = require("ui/inline_icon_map")
 local Markdown = require("ui/markdown")
 local MarkdownRenderer = require("ui/markdown_renderer")
 local Models = require("models")
@@ -31,6 +33,61 @@ end
 
 local function package_card_height(list_h, gap)
     return math.max(1, math.floor((list_h - gap * (PACKAGE_ROWS_PER_SCREEN - 1)) / PACKAGE_ROWS_PER_SCREEN))
+end
+
+local function readerbackdrop_rows(view, visible)
+    local state = view.app.state
+    local readerbackdrop = state.readerbackdrop or {}
+    local category = state.current_category or {}
+    local source = state.current_repo or {}
+    local active = state.page == "category_details"
+            and (category.id == "screensavers" or category.id == "wallpapers")
+        or state.page == "source_details" and source.name == Constants.REPO_READERBACKDROP_NAME
+    local page = tonumber(readerbackdrop.page) or 1
+    local total_pages = tonumber(readerbackdrop.total_pages)
+    if not active then return visible end
+    local total = readerbackdrop.total
+        or (state.page == "category_details" and category.id == "wallpapers" and 10 or 2085)
+    local rows = {}
+    local loaded = 0
+    for _, pkg in ipairs(visible or {}) do
+        if pkg.repo ~= Constants.REPO_READERBACKDROP_NAME or loaded < page * 24 then
+            table.insert(rows, pkg)
+            if pkg.repo == Constants.REPO_READERBACKDROP_NAME then loaded = loaded + 1 end
+        end
+    end
+    if not total_pages or page < total_pages then
+        table.insert(rows, {
+            readerbackdrop_load_more = true,
+            subtitle = string.format(_("%d of %s loaded"), loaded, tostring(total)),
+        })
+    end
+    return rows
+end
+
+local function draw_readerbackdrop_load_more(view, bb, item, x, y, w, h, group, index, count)
+    local callback = function() view.app:load_more_readerbackdrop() end
+    Cards.compact(view, bb, x, y, w, {
+        height = h,
+        icon = Images.asset("downloads.svg"),
+        icon_fallback = "+",
+        title = view.app.state.page == "category_details" and view.app.state.current_category
+            and view.app.state.current_category.id == "wallpapers"
+            and _("Load more wallpapers") or _("Load more screensavers"),
+        subtitle = item.subtitle,
+        callback = callback,
+        hit_id = "readerbackdrop-load-more",
+        focus = {
+            id = "readerbackdrop-load-more",
+            focus_type = "package",
+            focus_column = "main",
+            focus_content = true,
+            focus_primary = true,
+            list_group = group,
+            list_index = index,
+            list_count = count,
+        },
+    })
 end
 
 local function patch_row_height(list_h, gap)
@@ -124,10 +181,25 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     local list_y = cy
     local list_h = h - (list_y - y) - Theme.scale(8)
     local card_h = package_card_height(list_h, m.card_gap)
-    if #(visible or {}) == 0 then
+    local rows = readerbackdrop_rows(view, visible)
+    if kind == "installed" and not view.app.state.installed_folder and (not query or query == "") then
+        local installed_rows = {}
+        for _, pkg in ipairs(rows) do table.insert(installed_rows, pkg) end
+        for _, id in ipairs({ "screensavers", "wallpapers" }) do
+            local category = Models.category_for_id(id)
+            table.insert(installed_rows, {
+                installed_folder = category,
+                count = #Models.filter_packages_by_category(total, id),
+            })
+        end
+        rows = installed_rows
+    end
+    if #rows == 0 then
         local msg = _("No packages found. Try Refresh.")
         if kind == "installed" then
-            msg = query and query ~= "" and _("No installed packages match the filter.") or _("No packages installed. Browse Search to find packages.")
+            msg = view.app.state.installed_folder and _("No packages found for this category.")
+                or query and query ~= "" and _("No installed packages match the filter.")
+                or _("No packages installed. Browse Search to find packages.")
         elseif kind == "category" then
             msg = query and query ~= "" and _("No packages match the filter.") or _("No packages found for this category.")
         elseif query and query ~= "" then
@@ -137,11 +209,43 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
+    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.installed_folder then
+            local category = pkg.installed_folder
+            local callback = function() view.app:show_installed(category.id) end
+            Cards.compact(view, bb, x + pad, row_y, w - pad * 2 - gutter, {
+                height = card_h,
+                icon = Images.asset(category.icon),
+                title = Models.category_label(category),
+                subtitle = tostring(pkg.count) .. " " .. _("packages"),
+                right_icon = Images.asset("chevron.right.svg"),
+                callback = callback,
+                hit_id = "installed-folder:" .. category.id,
+                focus = {
+                    id = "installed-folder:" .. category.id,
+                    focus_type = "package",
+                    focus_column = "main",
+                    focus_content = true,
+                    focus_primary = true,
+                    list_group = kind,
+                    list_index = index,
+                    list_count = count,
+                },
+            })
+            return
+        end
+        if pkg.readerbackdrop_load_more then
+            draw_readerbackdrop_load_more(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, card_h, kind, index, count)
+            return
+        end
+        local image_kind = kind == "installed" and (pkg.category == "screensavers" and _("Screensaver")
+            or pkg.category == "wallpapers" and _("Wallpaper")) or nil
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
-            meta_suffix = kind == "changes" and Models.friendly_published_at(pkg) or nil,
+            meta_suffix = image_kind or (kind == "search"
+                or (kind == "installed" and pkg.update_available and not pkg.update_ignored))
+                and Models.friendly_published_at(pkg) or nil,
             focus_group = kind,
             focus_index = index,
             focus_count = count,
@@ -174,6 +278,9 @@ end
 
 local function queue_version_line(entry)
     local pkg = entry.pkg or {}
+    if pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        return string.format(_("%s screensaver"), queue_action_text(entry.action))
+    end
     local current = pkg.installed and (pkg.installed_version or pkg.version) or nil
     if entry.is_patch then
         current = pkg.installed_version or pkg.version
@@ -252,6 +359,7 @@ end
 function Pages.categories(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
     local pad = m.pad
+    local gap = 0
     local categories = view.app.state.visible_categories or {}
     local query = view.app.state.filters.categories
     local cy = y + Theme.scale(8)
@@ -266,11 +374,12 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
     -- The list renderer omits partially clipped rows, so fit the complete
     -- category set whenever the device has enough room above touch_min.
     local row_h = compact_row_height(
-        list_h, m.card_gap, math.max(COMPACT_ROWS_PER_SCREEN, #categories))
-    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, m.card_gap, function(category, row_y, scrollable, index, count)
+        list_h, gap, math.max(COMPACT_ROWS_PER_SCREEN, #categories))
+    return Scroll.scrolled_list(view, bb, categories, x, list_y, w, list_h, scroll, row_h, gap, function(category, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        Cards.category(view, bb, category, x + pad, row_y, w - pad * 2 - gutter, {
+        Cards.category(view, bb, category, x, row_y, w - gutter, {
             height = row_h,
+            top_divider = index == 1,
             focus = {
                 id = "category:" .. tostring(category.id),
                 focus_type = "category",
@@ -285,13 +394,19 @@ function Pages.categories(view, bb, x, y, w, h, scroll)
     end)
 end
 
-function Pages.settings(view, bb, x, y, w, h, scroll)
-    local m = Theme.metrics()
-    local pad = m.pad
-    local gap = m.card_gap
-    local row_h = math.max(m.touch_min, Theme.scale(58))
+local function advanced_settings_rows(view)
+    local function toggle(callback)
+        return function()
+            callback(view.app)
+            view:refresh()
+        end
+    end
+    local function token_status()
+        local value = view.app:github_token()
+        if value == "" then return _("Not set") end
+        return #value <= 4 and "••••" or "••••" .. value:sub(-4)
+    end
     local rows = {
-        { text = _("Scan installed plugins"), callback = function() view.app:scan_installed_plugins() end },
         {
             text = _("Only show installable packages"),
             toggle = true,
@@ -299,106 +414,221 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
             callback = function() view.app:toggle_filter_installable() end,
         },
         {
-            text = _("Advanced"),
+            text = _("Queue mode"),
             toggle = true,
             value = function() return view.app.state.advanced end,
-            callback = function()
-                view.app:toggle_advanced()
-                view:refresh()
-            end,
-        },
-        {
-            text = _("Font size"),
-            value = function() return tostring(view.app.state.base_font_size) end,
-            callback = function() view.app:prompt_base_font_size() end,
-        },
-        {
-            text = _("Show README images"),
-            toggle = true,
-            value = function() return view.app.state.show_readme_images end,
-            callback = function() view.app:toggle_readme_images() end,
+            callback = toggle(view.app.toggle_advanced),
         },
         {
             text = _("Always manually pick version"),
             toggle = true,
             value = function() return view.app.state.manual_version_picker end,
-            callback = function()
-                view.app:toggle_manual_version_picker()
-                view:refresh()
-            end,
+            callback = toggle(view.app.toggle_manual_version_picker),
         },
         {
             text = _("Show all builds"),
             toggle = true,
             value = function() return view.app.state.show_all_builds end,
-            callback = function()
-                view.app:toggle_show_all_builds()
-                view:refresh()
-            end,
+            callback = toggle(view.app.toggle_show_all_builds),
         },
+        {
+            text = _("Fetch releases directly from GitHub"),
+            toggle = true,
+            value = function() return view.app.state.direct_github end,
+            callback = toggle(view.app.toggle_direct_github),
+        },
+        {
+            text = _("GitHub token"),
+            value = token_status,
+            callback = function() view.app:prompt_github_token() end,
+        },
+    }
+    if view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
+        rows[#rows + 1] = {
+            text = _("Install to Kindle homepage"),
+            icon = "download",
+            callback = function() view.app:install_to_kindle_homepage() end,
+        }
+    end
+    if not view.app.daemon:is_android() and not view.app.daemon:is_pocketbook() then
+        rows[#rows + 1] = {
+            text = _("Install command-line interface"),
+            callback = function() view.app:install_cli() end,
+        }
+    end
+    return rows
+end
+
+local function updates_settings_rows(view)
+    local function toggle(callback)
+        return function()
+            callback(view.app)
+            view:refresh()
+        end
+    end
+    local rows = {
         {
             text = _("Beta updates"),
             toggle = true,
             value = function() return view.app.state.beta_updates end,
-            callback = function()
-                view.app:toggle_beta_updates()
-                view:refresh()
-            end,
+            callback = toggle(view.app.toggle_beta_updates),
         },
     }
-    if view.app:kindle_scriptlets_available() then
+    if view.app.state.alpha_updates_unlocked then
+        rows[#rows + 1] = {
+            text = _("Alpha updates"),
+            toggle = true,
+            value = function() return view.app.state.alpha_updates end,
+            callback = toggle(view.app.toggle_alpha_updates),
+        }
+    end
+    rows[#rows + 1] = {
+        text = _("Current version"),
+        value = function() return "v" .. view.app:current_version() end,
+        callback = function()
+            if view.app:tap_update_version() then view:refresh() end
+        end,
+    }
+    rows[#rows + 1] = {
+        text = _("Update ZenPM"),
+        callback = function() view.app:start_update() end,
+    }
+    return rows
+end
+
+local function about_settings_rows(view)
+    local rows = {
+        { text = _("ZenPM") },
+        { text = _("Version: ") .. view.app:current_version() },
+        { text = _("Platform: ") .. tostring(view.app:package_platforms()) },
+    }
+    local platform = view.app.daemon:detect_platform()
+    if platform == "kindle" or platform == "kobo" or platform == "ereader" then
+        rows[#rows + 1] = { text = _("ABI: ") .. tostring(view.app.daemon:ereader_backend_suffix()) }
+    end
+    rows[#rows + 1] = { text = _("Author: Anthony Gress (ZenLabs)") }
+    return rows
+end
+
+function Pages.settings(view, bb, x, y, w, h, scroll)
+    local m = Theme.metrics()
+    local gap = 0
+    local row_h = math.max(m.touch_min, Theme.scale(69))
+    local page = view.app.state.page
+    local advanced = page == "advanced_settings"
+    local updates = page == "updates_settings"
+    local about = page == "about_settings"
+    local rows = advanced and advanced_settings_rows(view)
+        or updates and updates_settings_rows(view)
+        or about and about_settings_rows(view) or {
+        { text = _("Scan installed plugins"), icon = "scan_plugins", callback = function() view.app:scan_installed_plugins() end },
+        {
+            text = _("Font size"),
+            icon = "title",
+            value = function() return tostring(view.app.state.base_font_size) end,
+            callback = function() view.app:prompt_base_font_size() end,
+        },
+        {
+            text = _("Show README images"),
+            icon = "wallpaper",
+            toggle = true,
+            value = function() return view.app.state.show_readme_images end,
+            callback = function() view.app:toggle_readme_images() end,
+        },
+        {
+            text = _("Advanced"),
+            icon = "settings_advanced",
+            submenu = true,
+            callback = function() view.app:show_advanced_settings() end,
+        },
+        {
+            text = _("Updates"),
+            icon = "upgrade",
+            submenu = true,
+            callback = function() view.app:show_updates_settings() end,
+        },
+        {
+            text = _("About"),
+            icon = "details",
+            submenu = true,
+            callback = function() view.app:show_about() end,
+        },
+    }
+    if not advanced and not updates and not about and view.app:kindle_scriptlets_available() then
         table.insert(rows, 3, {
             text = _("Show Kindle Scriptlets"),
+            icon = "plugin",
             toggle = true,
             value = function() return view.app.state.show_kindle_scriptlets end,
             callback = function() view.app:toggle_kindle_scriptlets() end,
         })
     end
-    if view.app.daemon:detect_platform() == "kindle" and view.app.daemon:kindle_homepage_install_supported() then
-        table.insert(rows, 2, {
-            text = _("Install to Kindle homepage"),
-            callback = function() view.app:install_to_kindle_homepage() end,
-        })
-    end
-    if not view.app.daemon:is_android() and not view.app.daemon:is_pocketbook() then
-        table.insert(rows, 2, {
-            text = _("Install command-line interface"),
-            callback = function() view.app:install_cli() end,
-        })
-    end
-    local list_y = y + Theme.scale(8)
-    local list_h = h - Theme.scale(16)
+    local list_y = y
+    local list_h = h
+    local divider_h = math.max(1, Theme.scale(1))
+    local settings_left = Theme.scale(25)
+    local settings_icon_w = Theme.scale(62)
+    local settings_icon_gap = Theme.scale(5)
+    local text_inset = settings_left + settings_icon_w + settings_icon_gap
+    local settings_face = Theme.face("small")
+    local settings_icon_face = Font:getFace(settings_face.orig_font or "smallinfofont",
+        math.floor(settings_face.orig_size * 1.25 + 0.5)) or settings_face
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, row_h, gap, function(row, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
-        local row_x = x + pad
-        local row_w = w - pad * 2 - gutter
-        P.box(bb, row_x, row_y, row_w, row_h)
+        local row_x = x
+        local row_w = w - gutter
+        P.box(bb, row_x, row_y, row_w, row_h, { border = false, radius = false })
+        P.rect(bb, row_x, row_y + row_h - divider_h, row_w, divider_h, Theme.soft)
+        local icon = row.icon and InlineIcons.icon(row.icon)
+        if icon then
+            P.center_text_box(bb, icon, row_x + settings_left, row_y,
+                settings_icon_w, row_h, "small", { face = settings_icon_face })
+        end
         local value = row.value and row.value() or nil
         local checkbox = row.toggle
-        local right = checkbox and nil or (value == nil and "›" or value)
-        local toggle_w = Theme.scale(56)
-        local toggle_h = Theme.scale(28)
-        local right_size = checkbox and { w = toggle_w } or P.text_size(right, Theme.scale(96), "small", { bold = true })
-        local text_w = row_w - pad * 2 - right_size.w - Theme.scale(12)
-        P.vcenter_text(bb, row.text, row_x + pad, row_y, text_w, row_h, "small", { bold = true })
-        local right_x = row_x + row_w - pad - right_size.w
+        local has_caret = row.submenu == true
+        local toggle_w = Theme.scale(51)
+        local toggle_h = Theme.scale(25)
+        local caret_size = Theme.scale(25)
+        local right_padding = Theme.scale(5)
+        local value_w = value ~= nil and math.min(
+            math.max(1, row_w - text_inset - right_padding - Theme.scale(5)),
+            math.max(toggle_w + Theme.scale(10) + caret_size, P.text_size(value, row_w, "small").w)) or 0
+        local right_size = has_caret and { w = caret_size }
+            or checkbox and { w = toggle_w + Theme.scale(10) + caret_size }
+            or value ~= nil and { w = value_w }
+            or { w = 0 }
+        local text_w = math.max(1,
+            row_w - text_inset - right_padding - right_size.w - Theme.scale(5))
+        P.vcenter_text(bb, row.text, row_x + text_inset, row_y, text_w, row_h, "small")
+        local right_x = row_x + row_w - right_padding - right_size.w
         if checkbox then
             P.zen_toggle(bb, right_x, row_y + math.floor((row_h - toggle_h) / 2), toggle_w, toggle_h, value == true)
-        else
-            P.vcenter_text(bb, right, right_x, row_y, right_size.w, row_h, "small", { bold = true, color = Theme.ink })
+        elseif has_caret then
+            P.image(bb, Images.asset("chevron.right.svg"), right_x,
+                row_y + math.floor((row_h - caret_size) / 2), caret_size, caret_size,
+                { is_icon = true })
+        elseif value ~= nil then
+            P.vcenter_text(bb, value, right_x, row_y, right_size.w, row_h, "small", { color = Theme.ink })
         end
-        P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
-        P.focus_control(view, bb, "setting:" .. row.text, row_x, row_y, row_w, row_h, row.callback, {
-            focus_type = "setting",
-            focus_column = "main",
-            focus_content = true,
-            focus_primary = true,
-            list_group = "settings",
-            list_index = index,
-            list_count = count,
-        })
+        if row.callback then
+            P.hit(view, row_x, row_y, row_w, row_h, row.callback, "setting:" .. row.text)
+            P.focus_control(view, bb, "setting:" .. row.text, row_x, row_y, row_w, row_h, row.callback, {
+                focus_type = "setting",
+                focus_column = "main",
+                focus_content = true,
+                focus_primary = true,
+                list_group = "settings",
+                list_index = index,
+                list_count = count,
+            })
+        end
     end)
 end
+
+Pages.advanced_settings = Pages.settings
+Pages.updates_settings = Pages.settings
+Pages.about_settings = Pages.settings
 
 function Pages.source_details(view, bb, x, y, w, h, scroll)
     local m = Theme.metrics()
@@ -413,8 +643,13 @@ function Pages.source_details(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, x, list_y, w, list_h, card_h + m.card_gap)
         return 0
     end
-    return Scroll.scrolled_list(view, bb, visible, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
+    local rows = readerbackdrop_rows(view, visible)
+    return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.readerbackdrop_load_more then
+            draw_readerbackdrop_load_more(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, card_h, "source", index, count)
+            return
+        end
         Cards.package(view, bb, pkg, x + pad, row_y, w - pad * 2 - gutter, {
             height = card_h,
             focus_group = "source",
@@ -436,8 +671,10 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local inner_x = x + pad + Theme.scale(12)
     local inner_w = w - pad * 2 - Theme.scale(24)
     local iy = cy + Theme.scale(12)
+    local is_image_asset = Models.is_image_asset_package(pkg)
     local show_featured_at_top = pkg.featured_image
         and not Models.is_font_package(pkg)
+        and not is_image_asset
         and not view.app.state.details_featured_expanded
         and (tonumber(scroll) or 0) <= 0
     view.package_details_featured_visible = show_featured_at_top
@@ -459,7 +696,9 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     Cards.package(view, bb, pkg, inner_x, iy, inner_w, {
         height = summary_h,
         show_title = false,
-        second_line = _("By ") .. I18n.dynamic_or(pkg.author, "?"),
+        second_line = pkg.github_latest_version and (_("Latest on GitHub: ") .. pkg.github_latest_version
+            .. " · " .. _("By ") .. I18n.dynamic_or(pkg.author, "?"))
+            or (_("By ") .. I18n.dynamic_or(pkg.author, "?")),
         text_gap = Theme.scale(6),
         border = false,
         focus_group = "package_details",
@@ -471,14 +710,17 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local divider_y = card_bottom + math.floor((description_y - card_bottom) / 2)
     P.rect(bb, panel_x + Theme.scale(2), divider_y, panel_w - Theme.scale(4), Theme.scale(1), Theme.soft)
     iy = description_y
-    local description = I18n.dynamic_or(pkg.description, _("No description available."))
     local is_font = Models.is_font_package(pkg)
-    local description_heading = _("Description")
-    local readme_blocks = {
-        { kind = "heading", level = 2, text = description_heading, plain = true },
-        { kind = "paragraph", text = description, plain = true },
-    }
-    if not is_font then
+    local readme_blocks = {}
+    if not is_image_asset or Util.trim(tostring(pkg.description or "")) ~= "" then
+        table.insert(readme_blocks, { kind = "heading", level = 2, text = _("Description"), plain = true })
+        table.insert(readme_blocks, {
+            kind = "paragraph",
+            text = I18n.dynamic_or(pkg.description, _("No description available.")),
+            plain = true,
+        })
+    end
+    if not is_font and not is_image_asset then
         local readme = tostring(pkg.readme or "")
         if readme == "" then
             readme = _("No README available.")
@@ -496,6 +738,14 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
             kind = "image",
             alt = I18n.dynamic_or(pkg.name, _("Font preview")),
             url = pkg.featured_image,
+        })
+    elseif is_image_asset and view.app.state.show_readme_images ~= false
+            and pkg.icon_url and pkg.icon_url ~= "" then
+        table.insert(readme_blocks, {
+            kind = "image",
+            alt = I18n.dynamic_or(pkg.name, ""),
+            url = pkg.icon_url,
+            max_height = Theme.scale(480),
         })
     end
     local assets = Models.package_assets(pkg)

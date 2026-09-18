@@ -47,11 +47,9 @@ local function package_stars(pkg)
     return stars
 end
 
-local function should_show_stars(view, pkg)
+local function should_show_stars(pkg)
     return package_stars(pkg) ~= nil
         and package_has_platform(pkg, "koreader")
-        and not pkg.installed
-        and view.app.state.active_tab ~= "installed"
 end
 
 local function package_author_text(pkg)
@@ -89,14 +87,25 @@ end
 local function package_version_repo_text(pkg, meta_suffix)
     local parts = {}
     local version = pkg and pkg.version
-    if pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
+    if pkg and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        version = nil
+    elseif pkg and pkg.installed and pkg.installed_version and pkg.installed_version ~= "" then
         version = pkg.installed_version
     end
     if version and version ~= "" and version ~= "0.0.0" then
         local v = tostring(version):gsub("^[vV]", "")
         table.insert(parts, v:lower() == "source" and v or "v" .. v)
     end
-    table.insert(parts, meta_suffix or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
+    table.insert(parts, meta_suffix and meta_suffix ~= "" and meta_suffix
+        or pkg and pkg.category == "screensavers" and _("Screensaver")
+        or pkg and pkg.category == "wallpapers" and _("Wallpaper")
+        or Models.repo_display_name(I18n.dynamic_or(pkg and pkg.repo, "?")))
+    if pkg and pkg.repo == Constants.REPO_READERBACKDROP_NAME then
+        local transparent = Images.is_transparent(Images.package_icon(pkg))
+        if transparent ~= nil then
+            table.insert(parts, transparent and _("Transparent") or _("Opaque"))
+        end
+    end
     return table.concat(parts, " • ")
 end
 
@@ -140,7 +149,13 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local h = opts.height or m.card_h
     P.box(bb, x, y, w, h, { border = opts.border })
     local pad = opts.pad or Theme.scale(10)
-    local icon_w = opts.compact and 0 or math.min(opts.icon_w or Theme.scale(64), h - pad * 2)
+    local is_image_asset = Models.is_image_asset_package(pkg)
+    local icon_file, icon_is_icon, icon_value, icon_source
+    if not opts.compact then
+        icon_file, icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
+    end
+    local icon_w = opts.compact and 0 or math.min(opts.icon_w
+        or (is_image_asset and icon_source == "package" and h - pad * 2 or Theme.scale(64)), h - pad * 2)
     local text_x = x + pad + icon_w + (icon_w > 0 and Theme.scale(14) or 0)
     local queued = queued_action(view, pkg)
     local action_text = queued and _("Queued") or Models.package_action_label(pkg)
@@ -159,7 +174,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     end
     local action_x = x + w - action_w - pad
     local action_y = y + math.floor((h - action_h) / 2)
-    local status_icon_size = (pkg.installed or should_show_stars(view, pkg)) and Theme.font_scale(28) or 0
+    local status_icon_size = (pkg.installed or should_show_stars(pkg)) and Theme.font_scale(28) or 0
     if status_icon_size > 0 then
         action_y = math.min(
             y + h - action_h - pad,
@@ -174,17 +189,17 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local focus_key = "package:" .. id .. ":" .. asset
     local action_focus_key = "package-action:" .. id .. ":" .. asset
     local function show_details()
-        local details_tab = view.app.state.page == "changes" and "release_notes" or nil
+        local details_tab = (view.app.state.page == "installed" or view.app.state.page == "search")
+            and pkg.installed and pkg.update_available and not pkg.update_ignored and "release_notes" or nil
         view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, details_tab, pkg.patch_asset)
     end
 
     if icon_w > 0 then
         local ix = x + pad
         local iy = y + math.floor((h - icon_w) / 2)
-        local icon_file, _icon_is_icon, icon_value, icon_source = view.app:package_icon_file(pkg)
-        local zoom = package_icon_zoom(icon_value, icon_source)
-        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = true })
-            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = true })
+        local zoom = is_image_asset and icon_source == "package" and 1.1 or package_icon_zoom(icon_value, icon_source)
+        local painted = zoom > 1 and P.image_zoomed(bb, icon_file, ix, iy, icon_w, icon_w, zoom, { is_icon = icon_is_icon })
+            or P.image(bb, icon_file, ix, iy, icon_w, icon_w, { is_icon = icon_is_icon })
         if not painted then
             P.center_text_box(bb, pkg.repo == "KindleForge" and "KF" or "Z", ix, iy, icon_w, icon_w, "small", { bold = true, color = ink })
         end
@@ -204,10 +219,11 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local vpad = opts.vpad or Theme.scale(5)
     local title_y = y + vpad
     local max_bottom = y + h - vpad
-    -- Meta row reserves room for the verification icon, so wrap it tighter.
+    -- Reserve meta-row room only when it includes the verification badge.
     local verify_size = Theme.font_scale(20)
     local verify_gap = Theme.font_scale(5)
-    local meta_w = text_w - verify_size - verify_gap
+    local show_verification = not is_image_asset
+    local meta_w = show_verification and text_w - verify_size - verify_gap or text_w
 
     local rows = {}
     if opts.show_title ~= false then
@@ -263,18 +279,22 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         P.text(bb, row.text, text_x, row.y, row.w, row.role, { bold = row.bold, color = ink })
     end
     local meta_row = rows[#rows]
-    local verify_x = text_x + math.min(meta_row.size.w + verify_gap, text_w - verify_size)
-    local verify_y = meta_row.y + math.floor((meta_row.size.h - verify_size) / 2)
-    draw_verification_icon(bb, Models.package_verified(pkg), verify_x, verify_y, verify_size)
-    if disabled then
-        P.dim(bb, verify_x, verify_y, verify_size, verify_size)
+    if show_verification then
+        local verify_x = text_x + math.min(meta_row.size.w + verify_gap, text_w - verify_size)
+        local verify_y = meta_row.y + math.floor((meta_row.size.h - verify_size) / 2)
+        draw_verification_icon(bb, Models.package_verified(pkg), verify_x, verify_y, verify_size)
+        if disabled then
+            P.dim(bb, verify_x, verify_y, verify_size, verify_size)
+        end
     end
 
+    local metric_right_x = x + w - Theme.scale(6)
     if pkg.installed then
         local check = Theme.font_scale(20)
         local gap = Theme.scale(12)
         local status_w = check + (pkg.update_ignored and check + gap or 0)
         local status_x = x + w - status_w - Theme.scale(6)
+        metric_right_x = status_x - gap
         local status_y = y + Theme.scale(5)
         local check_x = status_x + status_w - check
         if pkg.update_ignored then
@@ -289,16 +309,21 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
                 P.dim(bb, status_x, status_y, check, check)
             end
         end
-    elseif should_show_stars(view, pkg) then
+    end
+    if should_show_stars(pkg) then
         local star = Theme.font_scale(20)
-        local sx = x + w - star - Theme.scale(6)
+        local sx = metric_right_x - star
         local sy = y + Theme.scale(5)
         local stars = package_stars(pkg)
         local gap = Theme.font_scale(4)
         local number_size = P.text_size(stars, Theme.scale(72), "small", { bold = true })
-        P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true })
-        if not P.image(bb, Images.asset("star.filled.svg"), sx, sy, star, star, { is_icon = true }) then
-            P.center_text(bb, "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
+        P.text(bb, stars, sx - number_size.w - gap, sy + math.floor((star - number_size.h) / 2), Theme.scale(72), "small", { bold = true, color = ink })
+        local readerbackdrop = pkg.repo == Constants.REPO_READERBACKDROP_NAME
+        if not P.image(bb, Images.asset(readerbackdrop and "downloads.svg" or "star.filled.svg"), sx, sy, star, star, { is_icon = true }) then
+            P.center_text(bb, readerbackdrop and "↓" or "*", sx, sy + Theme.scale(2), star, "small", { bold = true })
+        end
+        if disabled then
+            P.dim(bb, sx, sy, star, star)
         end
     end
 
@@ -387,8 +412,12 @@ function Cards.source(view, bb, repo, x, y, w, opts)
     local url_y = y + Theme.scale(66)
     local verify_size = Theme.font_scale(18)
     local verify_gap = Theme.font_scale(5)
-    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, text_w - verify_size - verify_gap, "heading", { bold = true })
-    draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + verify_gap, text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
+    local show_verification = repo.name ~= Constants.REPO_READERBACKDROP_NAME
+    local title_w = show_verification and text_w - verify_size - verify_gap or text_w
+    local title_size = P.text(bb, ellipsize(Models.repo_display_name(I18n.dynamic_or(repo.name, _("Source"))), 60), text_x, title_y, title_w, "heading", { bold = true })
+    if show_verification then
+        draw_verification_icon(bb, Models.repo_verified(repo), text_x + math.min(title_size.w + verify_gap, text_w - verify_size), title_y + math.floor((title_size.h - verify_size) / 2), verify_size)
+    end
     P.text(bb, ellipsize(repo.url or "", 54), text_x, url_y, text_w, "small")
 
     local id = tostring(repo.name or "")
@@ -427,7 +456,12 @@ function Cards.compact(view, bb, x, y, w, opts)
     opts = opts or {}
     local m = Theme.metrics()
     local h = opts.height or m.category_h
-    P.box(bb, x, y, w, h)
+    P.box(bb, x, y, w, h, { border = opts.border, radius = opts.radius })
+    if opts.divider or opts.top_divider then
+        local divider_h = math.max(1, Theme.scale(1))
+        if opts.top_divider then P.rect(bb, x, y, w, divider_h, Theme.soft) end
+        if opts.divider then P.rect(bb, x, y + h - divider_h, w, divider_h, Theme.soft) end
+    end
     local pad = Theme.scale(10)
     local icon = math.min(Theme.scale(52), math.max(Theme.scale(32), h - Theme.scale(16)))
     local ix = x + pad
@@ -464,12 +498,20 @@ end
 
 function Cards.category(view, bb, category, x, y, w, opts)
     opts = opts or {}
+    local empty_image_category = category.count == 0
+        and (category.id == "screensavers" or category.id == "wallpapers")
     return Cards.compact(view, bb, x, y, w, {
         height = opts.height,
         icon = Images.asset(category.icon or "packages.svg"),
         icon_fallback = tostring(category.label or "?"):sub(1, 1),
         title = I18n.dynamic_or(category.label, _("Category")),
-        subtitle = tostring(category.count or 0) .. " " .. _("packages"),
+        subtitle = empty_image_category and ""
+            or tostring(category.count_label or category.count or 0) .. " " .. _("packages"),
+        subtitle_gap = 0,
+        border = false,
+        radius = false,
+        divider = true,
+        top_divider = opts.top_divider,
         callback = function() view.app:show_category_details(category.id) end,
         hit_id = "category:" .. tostring(category.id),
         focus = opts.focus,

@@ -2,6 +2,7 @@ package repo
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/hex"
@@ -19,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/xZenLabs/zen-pm/internal/cabundle"
@@ -28,13 +30,16 @@ import (
 )
 
 const (
-	packageFetchTimeout  = time.Minute
-	packageFetchAttempts = 2
+	repositoryFetchTimeout = time.Minute
+	// ponytail: use a generous total bound; add an idle-body timeout only if valid downloads exceed it.
+	packageFetchTimeout    = 10 * time.Minute
+	packageFetchAttempts   = 2
+	packageFetchRetryDelay = 250 * time.Millisecond
 )
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
-// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url|plugin_module_aliases|source_asset_aliases
+// repo|priority|id|name|version|platforms|deps|install_url|uninstall_url|size|description|author|tags|icon_url|repo_icon_url|images|featured|featured_image|category|source|source_asset|source_type|source_url|stars|assets|constraints|conflicts|incompatible_platforms|plugin_module|featured_order|readme_url|published_at|release_notes_url|prerelease_notes_url|prerelease_version|versions_url|plugin_module_aliases|source_asset_aliases|alpha_version
 type CatalogEntry struct {
 	Repo                  string
 	Priority              int
@@ -74,6 +79,7 @@ type CatalogEntry struct {
 	ReleaseNotesURL       string
 	PrereleaseNotesURL    string
 	PrereleaseVersion     string
+	AlphaVersion          string
 }
 
 func (e *CatalogEntry) CompatibleWith(platforms map[string]bool) bool {
@@ -133,6 +139,7 @@ func (e *CatalogEntry) serialize() string {
 		e.VersionsURL,
 		strings.Join(e.PluginModuleAliases, ","),
 		strings.Join(e.SourceAssetAliases, ","),
+		e.AlphaVersion,
 	}, "|")
 }
 
@@ -261,6 +268,9 @@ func parseModernCatalogLine(parts []string) (*CatalogEntry, error) {
 	if len(parts) >= 38 && parts[37] != "" {
 		e.SourceAssetAliases = strings.Split(parts[37], ",")
 	}
+	if len(parts) >= 39 {
+		e.AlphaVersion = parts[38]
+	}
 	e.ensurePluginModule()
 	return e, nil
 }
@@ -277,7 +287,13 @@ func (e *CatalogEntry) ensurePluginModule() {
 		asset = filepath.Base(asset)
 		asset = strings.TrimSuffix(asset, ".zip")
 		if strings.HasSuffix(asset, ".koplugin") {
-			e.PluginModule = strings.TrimSuffix(asset, ".koplugin")
+			module := strings.TrimSuffix(asset, ".koplugin")
+			version := strings.TrimPrefix(strings.TrimSpace(e.Version), "v")
+			if version != "" {
+				module = strings.TrimSuffix(module, "-v"+version)
+				module = strings.TrimSuffix(module, "-"+version)
+			}
+			e.PluginModule = module
 			return
 		}
 	}
@@ -394,6 +410,7 @@ type manifestJSON struct {
 		ReleaseNotesURL       string          `json:"release_notes_url,omitempty"`
 		PrereleaseNotesURL    string          `json:"prerelease_notes_url,omitempty"`
 		PrereleaseVersion     string          `json:"prerelease_version,omitempty"`
+		AlphaVersion          string          `json:"alpha_version,omitempty"`
 		PublishedAt           string          `json:"published_at,omitempty"`
 		Stars                 string          `json:"stars,omitempty"`
 		Assets                json.RawMessage `json:"assets,omitempty"`
@@ -420,9 +437,42 @@ type kfRegistryEntry struct {
 	Tags         []string `json:"tags"`
 }
 
+type readerBackdropImage struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Device       string `json:"device"`
+	ImageURL     string `json:"imageUrl"`
+	ThumbnailURL string `json:"thumbnailUrl"`
+	FileSize     int64  `json:"fileSize"`
+	Downloads    int    `json:"downloads"`
+	CreatedAt    string `json:"createdAt"`
+	IsNSFW       bool   `json:"isNSFW"`
+	Tags         []struct {
+		Name string `json:"name"`
+	} `json:"tags"`
+	User struct {
+		Name string `json:"name"`
+	} `json:"user"`
+}
+
+type readerBackdropResponse struct {
+	Images     []readerBackdropImage `json:"images"`
+	Total      int                   `json:"total"`
+	TotalPages int                   `json:"totalPages"`
+}
+
+type ReaderBackdropTag struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
 // FetchCatalog downloads the repo catalog, auto-detecting between ZenPM manifest.json
 // and KindleForge registry.json formats.
 func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	if IsReaderBackdropRepo(repoName, repoURL) {
+		return fetchReaderBackdropCatalog(repoName, repoURL, priority, cacheDir)
+	}
 	if IsKindleForgeRepo(repoName, repoURL) {
 		return fetchKindleForgeCatalog(repoName, repoURL, priority, cacheDir)
 	}
@@ -445,13 +495,13 @@ func FetchCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*C
 
 	// Try ZenPM format first (object with "packages" key).
 	var manifest manifestJSON
-	if err := json.Unmarshal(data, &manifest); err == nil && len(manifest.Packages) > 0 {
+	if err := json.Unmarshal(data, &manifest); err == nil && manifest.Packages != nil {
 		return parseZenPMCatalog(repoName, repoURL, priority, manifest), nil
 	}
 
 	// Try KindleForge format (top-level array).
 	var kfEntries []kfRegistryEntry
-	if err := json.Unmarshal(data, &kfEntries); err == nil && len(kfEntries) > 0 {
+	if err := json.Unmarshal(data, &kfEntries); err == nil && kfEntries != nil {
 		return parseKindleForgeCatalog(repoName, repoURL, priority, kfEntries), nil
 	}
 
@@ -466,6 +516,110 @@ func shouldTryRegistryFallback(err error) bool {
 // IsKindleForgeRepo reports whether a repo is the known KindleForge registry.
 func IsKindleForgeRepo(repoName, repoURL string) bool {
 	return state.IsKindleForgeRepo(repoName, repoURL)
+}
+
+// IsReaderBackdropRepo reports whether a source should use ReaderBackdrop's public API.
+func IsReaderBackdropRepo(repoName, repoURL string) bool {
+	return state.IsReaderBackdropRepo(repoName, repoURL)
+}
+
+func fetchReaderBackdropCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
+	entries, _, _, err := fetchReaderBackdropPage(repoName, repoURL, priority, cacheDir, 1, "", "")
+	return entries, err
+}
+
+func fetchReaderBackdropPage(repoName, repoURL string, priority int, cacheDir string, page int, search, tag string) ([]*CatalogEntry, int, int, error) {
+	if page < 1 {
+		return nil, 0, 0, fmt.Errorf("invalid ReaderBackdrop page %d", page)
+	}
+	query := "sortBy=downloads&limit=24&page=" + strconv.Itoa(page)
+	if search = strings.TrimSpace(search); search != "" {
+		query += "&search=" + url.QueryEscape(search)
+	}
+	if tag = strings.TrimSpace(tag); tag != "" {
+		query += "&tag=" + url.QueryEscape(tag)
+	}
+	apiURL := joinURL(repoURL, "api/images")
+	data, err := fetchBytesWithTimeout(apiURL, repositoryFetchTimeout, query)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("fetch %s?%s: %w", apiURL, query, err)
+	}
+	_ = os.WriteFile(filepath.Join(cacheDir, "manifest-"+repoName+".json"), data, 0644)
+
+	var response readerBackdropResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, 0, 0, fmt.Errorf("parse ReaderBackdrop images from %s: %w", repoName, err)
+	}
+	return parseReaderBackdropCatalog(repoName, repoURL, priority, response.Images), response.TotalPages, response.Total, nil
+}
+
+func fetchReaderBackdropTags(repoURL string) ([]ReaderBackdropTag, error) {
+	data, err := fetchBytes(joinURL(repoURL, "api/tags/popular"))
+	if err != nil {
+		return nil, err
+	}
+	var tags []ReaderBackdropTag
+	if err := json.Unmarshal(data, &tags); err != nil {
+		return nil, fmt.Errorf("parse ReaderBackdrop tags: %w", err)
+	}
+	return tags, nil
+}
+
+func parseReaderBackdropCatalog(repoName, repoURL string, priority int, images []readerBackdropImage) []*CatalogEntry {
+	entries := make([]*CatalogEntry, 0, len(images))
+	for _, image := range images {
+		image.ID = strings.TrimSpace(image.ID)
+		if image.ID == "" || strings.ContainsAny(image.ID, "/\\") || image.IsNSFW {
+			continue
+		}
+		packageID := "readerbackdrop-" + image.ID
+		name := strings.TrimSpace(image.Title)
+		assetName := strings.NewReplacer("/", "-", "\\", "-").Replace(name)
+		if assetName == "" || assetName == "." || assetName == ".." || strings.ContainsRune(assetName, 0) {
+			assetName = packageID
+		}
+		downloadURL := joinURL(repoURL, "api/images/"+url.PathEscape(image.ID)+"/download")
+		size := ""
+		if image.FileSize > 0 {
+			size = strconv.FormatInt(image.FileSize, 10)
+		}
+		assetsJSON, _ := json.Marshal([]map[string]string{{
+			"arch": "any", "asset": assetName, "url": downloadURL, "size": size,
+		}})
+		tags := make([]string, 0, len(image.Tags)+1)
+		category := "screensavers"
+		for _, tag := range image.Tags {
+			if name := strings.TrimSpace(tag.Name); name != "" {
+				tags = append(tags, name)
+				if strings.EqualFold(name, "zen-wallpaper") {
+					category = "wallpapers"
+				}
+			}
+		}
+		if device := strings.TrimSpace(image.Device); device != "" {
+			tags = append(tags, device)
+		}
+		stars := ""
+		if image.Downloads > 0 {
+			stars = strconv.Itoa(image.Downloads)
+		}
+		iconURL := strings.TrimSpace(image.ThumbnailURL)
+		if iconURL == "" {
+			iconURL = strings.TrimSpace(image.ImageURL)
+		}
+		entries = append(entries, &CatalogEntry{
+			Repo: repoName, Priority: priority,
+			ID: packageID, Name: name,
+			Description: strings.TrimSpace(image.Description), Author: strings.TrimSpace(image.User.Name),
+			Platforms: []string{"koreader"}, Category: category, Tags: tags,
+			IconURL: iconURL, Images: []string{strings.TrimSpace(image.ImageURL)},
+			RepoIconURL: joinURL(repoURL, "images/logosvg.svg"),
+			Source:      joinURL(repoURL, "backgrounds/"+url.PathEscape(image.ID)),
+			SourceAsset: packageID, Assets: string(assetsJSON), Size: size,
+			Stars: stars, PublishedAt: strings.TrimSpace(image.CreatedAt),
+		})
+	}
+	return entries
 }
 
 // parseZenPMCatalog converts the ZenPM manifest.json format to CatalogEntry list.
@@ -521,6 +675,7 @@ func parseZenPMCatalog(repoName, repoURL string, priority int, manifest manifest
 			ReleaseNotesURL:       resolveURL(repoURL, p.ReleaseNotesURL),
 			PrereleaseNotesURL:    resolveURL(repoURL, p.PrereleaseNotesURL),
 			PrereleaseVersion:     strings.TrimSpace(p.PrereleaseVersion),
+			AlphaVersion:          strings.TrimSpace(p.AlphaVersion),
 			PublishedAt:           strings.TrimSpace(p.PublishedAt),
 			Stars:                 strings.TrimSpace(p.Stars),
 			Assets:                resolveAssetURLs(repoURL, p.Assets),
@@ -781,20 +936,152 @@ func normalizePlatform(platform string) string {
 
 // FetchBytes downloads or reads (file://) a URL and returns raw bytes.
 func FetchBytes(url string) ([]byte, error) {
-	return fetchBytes(url)
+	return fetchBytesWithTimeout(url, packageFetchTimeout)
+}
+
+// FetchToFile streams a package asset into file without holding it in memory.
+func FetchToFile(rawURL string, file *os.File) error {
+	if strings.HasPrefix(rawURL, "file://") {
+		source, err := os.Open(strings.TrimPrefix(rawURL, "file://"))
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		_, err = io.Copy(file, source)
+		return err
+	}
+	client, err := fetchClient(rawURL, packageFetchTimeout)
+	if err != nil {
+		return err
+	}
+	for attempt := 1; attempt <= packageFetchAttempts; attempt++ {
+		if err := file.Truncate(0); err != nil {
+			return err
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		retry, err := fetchHTTPOnce(rawURL, client, file)
+		if err == nil {
+			return nil
+		}
+		err = addTLSClockHint(err, time.Now())
+		if !retry || attempt == packageFetchAttempts {
+			return err
+		}
+		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, packageFetchAttempts, err)
+		time.Sleep(time.Duration(attempt) * packageFetchRetryDelay)
+	}
+	return nil
 }
 
 func fetchBytes(url string) ([]byte, error) {
-	if strings.HasPrefix(url, "file://") {
-		return os.ReadFile(strings.TrimPrefix(url, "file://"))
-	}
-	return fetchHTTPBytes(url, cabundle.Client(packageFetchTimeout), packageFetchAttempts)
+	return fetchBytesWithTimeout(url, repositoryFetchTimeout)
 }
 
-func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, error) {
+func fetchBytesWithTimeout(rawURL string, timeout time.Duration, query ...string) ([]byte, error) {
+	if strings.HasPrefix(rawURL, "file://") {
+		return os.ReadFile(strings.TrimPrefix(rawURL, "file://"))
+	}
+	client, err := fetchClient(rawURL, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return fetchHTTPBytes(rawURL, client, packageFetchAttempts, query...)
+}
+
+func fetchClient(rawURL string, timeout time.Duration) (*http.Client, error) {
+	client := cabundle.Client(timeout)
+	if target, err := url.Parse(rawURL); err == nil && publicRepoHost(target.Hostname()) {
+		if err := ValidatePublicRepoURL(rawURL); err != nil {
+			return nil, err
+		}
+		client.Transport = publicFetchTransport()
+		client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if via[0].URL.Scheme == "https" && request.URL.Scheme != "https" {
+				return fmt.Errorf("refusing HTTPS downgrade")
+			}
+			return ValidatePublicRepoURL(request.URL.String())
+		}
+	}
+	return client, nil
+}
+
+var (
+	publicTransportOnce sync.Once
+	publicTransport     *http.Transport
+)
+
+func publicFetchTransport() *http.Transport {
+	publicTransportOnce.Do(func() {
+		publicTransport = cabundle.Client(repositoryFetchTimeout).Transport.(*http.Transport).Clone()
+		// ponytail: bypass proxies for public fetches; add proxy-aware target checks if proxy support is needed.
+		publicTransport.Proxy = nil
+		publicTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			var dialErr error
+			for _, ip := range ips {
+				if publicRepoIP(ip.IP) {
+					connection, err := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.IP.String(), port))
+					if err == nil {
+						return connection, nil
+					}
+					dialErr = err
+				}
+			}
+			if dialErr != nil {
+				return nil, dialErr
+			}
+			return nil, fmt.Errorf("refusing private network address for %s", host)
+		}
+	})
+	return publicTransport
+}
+
+// ValidatePublicRepoURL guards the browser-facing repository API. Local file
+// and loopback repositories are still available to explicit on-device setups.
+func ValidatePublicRepoURL(rawURL string) error {
+	target, err := url.Parse(rawURL)
+	if err != nil || target == nil || (target.Scheme != "http" && target.Scheme != "https") ||
+		target.User != nil || target.Fragment != "" || !publicRepoHost(target.Hostname()) {
+		return fmt.Errorf("repository URL must be a public HTTP(S) address")
+	}
+	return nil
+}
+
+func publicRepoHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") ||
+		strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return publicRepoIP(ip)
+	}
+	return true
+}
+
+func publicRepoIP(ip net.IP) bool {
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
+		return false // Carrier-grade NAT addresses can reach device-local services.
+	}
+	return ip.IsGlobalUnicast() && !ip.IsPrivate()
+}
+
+func fetchHTTPBytes(url string, client *http.Client, attempts int, query ...string) ([]byte, error) {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		data, retry, err := fetchHTTPBytesOnce(url, client)
+		data, retry, err := fetchHTTPBytesOnce(url, client, query...)
 		if err == nil {
 			return data, nil
 		}
@@ -803,38 +1090,52 @@ func fetchHTTPBytes(url string, client *http.Client, attempts int) ([]byte, erro
 			return nil, lastErr
 		}
 		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, attempts, lastErr)
+		time.Sleep(time.Duration(attempt) * packageFetchRetryDelay)
 	}
 	return nil, lastErr
 }
 
-func fetchHTTPBytesOnce(url string, client *http.Client) ([]byte, bool, error) {
+func fetchHTTPBytesOnce(url string, client *http.Client, query ...string) ([]byte, bool, error) {
+	var data bytes.Buffer
+	retry, err := fetchHTTPOnce(url, client, &data, query...)
+	return data.Bytes(), retry, err
+}
+
+func fetchHTTPOnce(url string, client *http.Client, dst io.Writer, query ...string) (bool, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, false, err
+		return false, err
+	}
+	if len(query) != 0 {
+		req.URL.RawQuery = query[0]
 	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("User-Agent", "ZenPM/1.0 (+https://github.com/xZenLabs/ZenPackageManager)")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, retryableFetchError(err), err
+		return retryableFetchError(err), err
 	}
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		err := httpdiag.ResponseError(resp)
 		resp.Body.Close()
 		log.Warn(err.Error())
-		return nil, false, err
+		retry := resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests ||
+			(resp.StatusCode >= 500 && resp.StatusCode < 600)
+		return retry, err
 	}
-	data, err := io.ReadAll(resp.Body)
+	_, err = io.Copy(dst, resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return nil, retryableFetchError(err), err
+		return retryableFetchError(err), err
 	}
-	return data, false, nil
+	return false, nil
 }
 
 func retryableFetchError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) ||
 		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 

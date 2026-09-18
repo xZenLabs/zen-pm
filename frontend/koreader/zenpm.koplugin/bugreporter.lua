@@ -140,6 +140,22 @@ local function check_network()
 end
 
 function Reporter:show(app)
+    if not (G_reader_settings:isTrue("debug") and G_reader_settings:isTrue("debug_verbose")) then
+        return Modals.confirm(
+            _("Debug logging must be enabled to submit bug reports.") .. "\n\n"
+                .. _("Enabling debug logging requires a restart. Please reproduce the issue, then submit the report."),
+            _("Restart now"),
+            function()
+                local dbg = require("dbg")
+                G_reader_settings:saveSetting("debug", true)
+                G_reader_settings:saveSetting("debug_verbose", true)
+                dbg:turnOn()
+                dbg:setVerbose(true)
+                G_reader_settings:flush()
+                app:restart_koreader()
+            end
+        )
+    end
     if not check_network() then
         return Modals.info(_("No network connection. Please connect to Wi-Fi and try again."))
     end

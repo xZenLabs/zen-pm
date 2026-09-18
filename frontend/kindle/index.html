@@ -444,6 +444,7 @@
                 }, false);
                 fetchJSON("GET", "/health", null).then(function () {
                     state.connected = true;
+                    ZenUtils.refreshSources(loadFeatured);
                     return loadFeatured();
                 }).catch(function () {
                     state.connected = false;

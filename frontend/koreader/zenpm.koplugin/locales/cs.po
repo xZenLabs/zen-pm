@@ -336,6 +336,9 @@ msgstr "Stáhnout toto dílo: "
 msgid "Downloaded update checksum did not match."
 msgstr "Kontrolní součet stažené aktualizace se neshodoval."
 
+msgid "Downloads"
+msgstr "Počet stažení"
+
 msgid "enable"
 msgstr "umožnit"
 
@@ -529,7 +532,13 @@ msgid "Modify"
 msgstr "Upravit"
 
 msgid "Name"
-msgstr "Jméno"
+msgstr "Název"
+
+msgid "Name (A-Z)"
+msgstr "Název (A-Z)"
+
+msgid "Name (Z-A)"
+msgstr "Název (Z-A)"
 
 msgid "network error"
 msgstr "chyba sítě"
@@ -768,6 +777,9 @@ msgstr "Prohledejte nainstalované pluginy"
 msgid "Scanning installed plugins..."
 msgstr "Skenování nainstalovaných pluginů..."
 
+msgid "Screensavers"
+msgstr "Spořiče obrazovky"
+
 msgid "Search"
 msgstr "Hledat"
 
@@ -876,12 +888,6 @@ msgstr "To se nainstaluje jako \"kniha\" na domovskou obrazovku Kindle."
 msgid "timeout"
 msgstr "časový limit"
 
-msgid "Title (A-Z)"
-msgstr "Název (A–Z)"
-
-msgid "Title (Z-A)"
-msgstr "Název (Z-A)"
-
 msgid "to"
 msgstr "na"
 
@@ -968,6 +974,9 @@ msgstr "Verze: "
 
 msgid "Versions"
 msgstr "Verze"
+
+msgid "Wallpapers"
+msgstr "Tapety"
 
 msgid "Welcome"
 msgstr "Vítejte"

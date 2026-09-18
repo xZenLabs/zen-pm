@@ -80,6 +80,30 @@ Images = load_images()
 assert(Images.file_for(client, "android", url) == first)
 assert(downloads == 1)
 
+local preview_path = "/packages/readerbackdrop-test/preview"
+local requested_preview
+local preview_file = assert(Images.file_for({
+    download = function(_, value)
+        requested_preview = value
+        return true, "preview image", 200, {
+            ["content-type"] = "image/png",
+            ["X-ZenPM-Transparent"] = "true",
+        }
+    end,
+}, "android", preview_path))
+assert(requested_preview == preview_path and preview_file ~= preview_path and path_exists(preview_file))
+assert(Images.is_transparent(preview_path))
+Images = load_images()
+assert(Images.cached_file("android", preview_path) == preview_file)
+assert(Images.is_transparent(preview_path))
+
+local pending_path = "/packages/readerbackdrop-pending/preview"
+assert(Images.file_for({
+    download = function() return true, nil, 202 end,
+}, "android", pending_path) == nil)
+assert(not Images.is_failed(pending_path))
+assert(Images.is_transparent(pending_path) == nil)
+
 Images.invalidate_cache()
 assert(Images.cached_file("android", url) == nil)
 payload = "updated image"
@@ -101,6 +125,24 @@ Images = load_images()
 assert(Images.cached_file("android", url) == nil)
 assert(Images.file_for(client, "android", url) == updated)
 assert(downloads == 4)
+
+Images.invalidate_cache(false)
+assert(Images.file_for(client, "android", url) == updated)
+assert(downloads == 4)
+local ref_path = cache_root .. "/ZenPM/cache/koreader-images/url-" .. hashes[url] .. ".ref"
+local yesterday = os.time() - 86401
+assert(lfs.touch(ref_path, yesterday, yesterday))
+Images.invalidate_cache(false)
+assert(Images.cached_file("android", url) == nil)
+assert(Images.file_for(client, "android", url) == updated)
+assert(downloads == 5)
+Images.invalidate_cache(false)
+assert(Images.file_for(client, "android", url) == updated)
+assert(downloads == 5, "unchanged images must renew their freshness timestamp")
+assert(lfs.touch(ref_path, yesterday, yesterday))
+Images.invalidate_cache(false)
+assert(Images.file_for({ download = function() return false end }, "android", url) == updated)
+assert(lfs.attributes(ref_path, "modification") == yesterday, "failed downloads must not renew freshness")
 
 for i = 1, 256 do
     payload = "image " .. i

@@ -19,6 +19,7 @@ type Device struct {
 	Platform string // "kindle", "kobo", "ereader", "android", "host", ...
 	OS       string // host OS, for example "darwin" (only meaningful on host)
 	Arch     string // Go CPU architecture, for example "arm" or "arm64"
+	KOReader bool   // KOReader is available on the device
 	KindleHF bool   // hard-float linker present (only meaningful on kindle)
 	CortexA9 bool   // ARM Cortex-A9 CPU (needs A9-optimized build)
 }
@@ -108,6 +109,21 @@ func Select(raw string, dev Device) Result {
 	}
 	if len(cands) == 1 {
 		return Result{Auto: cands[0].Asset}
+	}
+	if dev.KOReader {
+		plugin := ""
+		for _, a := range cands {
+			if strings.HasSuffix(name(a), ".koplugin.zip") {
+				if plugin != "" {
+					plugin = ""
+					break
+				}
+				plugin = a.Asset
+			}
+		}
+		if plugin != "" {
+			return Result{Auto: plugin}
+		}
 	}
 
 	find := func(pred func(string) bool) string {
