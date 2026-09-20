@@ -2,7 +2,6 @@ package repo
 
 import (
 	"bytes"
-	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/hex"
@@ -996,7 +995,6 @@ func fetchClient(rawURL string, timeout time.Duration) (*http.Client, error) {
 		if err := ValidatePublicRepoURL(rawURL); err != nil {
 			return nil, err
 		}
-		client.Transport = publicFetchTransport()
 		client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("stopped after 10 redirects")
@@ -1008,44 +1006,6 @@ func fetchClient(rawURL string, timeout time.Duration) (*http.Client, error) {
 		}
 	}
 	return client, nil
-}
-
-var (
-	publicTransportOnce sync.Once
-	publicTransport     *http.Transport
-)
-
-func publicFetchTransport() *http.Transport {
-	publicTransportOnce.Do(func() {
-		publicTransport = cabundle.Client(repositoryFetchTimeout).Transport.(*http.Transport).Clone()
-		// ponytail: bypass proxies for public fetches; add proxy-aware target checks if proxy support is needed.
-		publicTransport.Proxy = nil
-		publicTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(address)
-			if err != nil {
-				return nil, err
-			}
-			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-			if err != nil {
-				return nil, err
-			}
-			var dialErr error
-			for _, ip := range ips {
-				if publicRepoIP(ip.IP) {
-					connection, err := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.IP.String(), port))
-					if err == nil {
-						return connection, nil
-					}
-					dialErr = err
-				}
-			}
-			if dialErr != nil {
-				return nil, dialErr
-			}
-			return nil, fmt.Errorf("refusing private network address for %s", host)
-		}
-	})
-	return publicTransport
 }
 
 // ValidatePublicRepoURL guards the browser-facing repository API. Local file

@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"context"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xZenLabs/zen-pm/internal/cabundle"
 	"github.com/xZenLabs/zen-pm/internal/log"
 	"github.com/xZenLabs/zen-pm/internal/state"
 )
@@ -78,8 +78,23 @@ func TestPublicRepoURLRejectsLocalTargets(t *testing.T) {
 			t.Errorf("rejected public URL %q: %v", value, err)
 		}
 	}
-	if _, err := publicFetchTransport().DialContext(context.Background(), "tcp", "127.0.0.1:80"); err == nil || !strings.Contains(err.Error(), "refusing private") {
-		t.Fatalf("public fetch dialed a loopback address: %v", err)
+}
+
+func TestPublicFetchUsesStandardTransport(t *testing.T) {
+	client, err := fetchClient("https://repo.zen-labs.org/manifest.json", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Transport != cabundle.Client(time.Second).Transport {
+		t.Fatal("public fetch replaced the standard HTTP transport")
+	}
+	if client.CheckRedirect == nil {
+		t.Fatal("public fetch redirect validation is disabled")
+	}
+	redirect, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1/private", nil)
+	original, _ := http.NewRequest(http.MethodGet, "https://repo.zen-labs.org/manifest.json", nil)
+	if err := client.CheckRedirect(redirect, []*http.Request{original}); err == nil {
+		t.Fatal("public fetch allowed a redirect to a local address")
 	}
 }
 
