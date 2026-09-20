@@ -170,40 +170,41 @@ local function request(url, sink, method, token)
     if not ok_https or not ok_ltn12 then
         return nil, _("Could not connect to GitHub: HTTPS support is unavailable in this KOReader build.")
     end
-    local response = {}
-    local started_at = socket.gettime()
-    log_info("GitHub request started", method or "GET", url)
     local manages_socket_timeout = ok_socketutil and type(socketutil) == "table"
         and type(socketutil.set_timeout) == "function" and type(socketutil.reset_timeout) == "function"
-    if manages_socket_timeout then
-        socketutil:set_timeout(10, 30)
-    end
     local headers = { ["User-Agent"] = "zenpm.koplugin" }
     if token and url:match("^https://api%.github%.com/") then
         headers["Authorization"] = "Bearer " .. token
     end
-    local ok, code, response_headers, status = https.request{
-        url = url,
-        method = method,
-        headers = headers,
-        sink = sink or ltn12.sink.table(response),
-    }
-    if manages_socket_timeout then
-        socketutil:reset_timeout()
+    local attempts = sink and 1 or 2
+    local code, status
+    for attempt = 1, attempts do
+        local response = {}
+        local started_at = socket.gettime()
+        log_info("GitHub request started", method or "GET", url)
+        if manages_socket_timeout then socketutil:set_timeout(10, 30) end
+        local ok, response_headers
+        ok, code, response_headers, status = https.request{
+            url = url,
+            method = method,
+            headers = headers,
+            sink = sink or ltn12.sink.table(response),
+        }
+        if manages_socket_timeout then socketutil:reset_timeout() end
+        local elapsed_ms = math.floor((socket.gettime() - started_at) * 1000)
+        if ok and tonumber(code) then
+            log_info("GitHub request completed", method or "GET", "HTTP", code, "after", elapsed_ms .. "ms")
+            return {
+                code = tonumber(code),
+                headers = response_headers,
+                body = table.concat(response),
+                status = status,
+            }
+        end
+        log_warn("GitHub request failed after", elapsed_ms .. "ms", code or status or "request failed")
+        if attempt < attempts and socket.sleep then socket.sleep(0.1) end
     end
-    local elapsed_ms = math.floor((socket.gettime() - started_at) * 1000)
-    if not ok or not tonumber(code) then
-        local err = _("Could not connect to GitHub: ") .. tostring(code or status or _("request failed"))
-        log_warn("GitHub request failed after", elapsed_ms .. "ms", err)
-        return nil, err
-    end
-    log_info("GitHub request completed", method or "GET", "HTTP", code, "after", elapsed_ms .. "ms")
-    return {
-        code = tonumber(code),
-        headers = response_headers,
-        body = table.concat(response),
-        status = status,
-    }
+    return nil, _("Could not connect to GitHub: ") .. tostring(code or status or _("request failed"))
 end
 
 local function resolve_redirect(base_url, location)

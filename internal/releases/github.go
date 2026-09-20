@@ -199,7 +199,7 @@ func ResolveGitHubReleaseAsset(source, tag, asset string) (Release, ReleaseAsset
 		return Release{}, ReleaseAsset{}, err
 	}
 	for _, release := range releases {
-		if tag != "" && release.TagName != tag {
+		if tag != "" && release.TagName != tag && NormalizeVersion(release.TagName) != NormalizeVersion(tag) {
 			continue
 		}
 		if tag == "" && release.Prerelease {
@@ -252,9 +252,25 @@ func LatestGitHubRelease(source, asset string, allowPrerelease bool) (Release, R
 }
 
 func githubRequest(path, accept string) ([]byte, error) {
+	var lastErr error
+	for attempt := 1; attempt <= releaseRequestAttempts; attempt++ {
+		data, retry, err := githubRequestOnce(path, accept)
+		if err == nil {
+			return data, nil
+		}
+		lastErr = err
+		if !retry || attempt == releaseRequestAttempts {
+			return nil, err
+		}
+		time.Sleep(releaseRetryDelay * time.Duration(attempt))
+	}
+	return nil, lastErr
+}
+
+func githubRequestOnce(path, accept string) ([]byte, bool, error) {
 	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(githubAPIBaseURL, "/")+path, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("Accept", accept)
 	req.Header.Set("User-Agent", "ZenPackageManager")
@@ -265,20 +281,20 @@ func githubRequest(path, accept string) ([]byte, error) {
 	client := cabundle.Client(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("GitHub request: %w", err)
+		return nil, retryableVersionsError(err), fmt.Errorf("GitHub request: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GitHub request: %w", httpdiag.ResponseError(resp))
+		return nil, retryableVersionsStatus(resp.StatusCode), fmt.Errorf("GitHub request: %w", httpdiag.ResponseError(resp))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
 	if err != nil {
-		return nil, err
+		return nil, retryableVersionsError(err), err
 	}
 	if len(data) > githubResponseLimit {
-		return nil, fmt.Errorf("GitHub response is too large")
+		return nil, false, fmt.Errorf("GitHub response is too large")
 	}
-	return data, nil
+	return data, false, nil
 }
 
 func githubToken() string {
