@@ -168,7 +168,7 @@ function Renderer.inline_text(value, base_url, plain)
 end
 
 local function add_text(layout, block, base_url, width)
-    local role = "small"
+    local role = block.role or "small"
     local opts = {}
     local pad = 0
     local source = block.text

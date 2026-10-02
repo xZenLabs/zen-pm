@@ -9,6 +9,7 @@ local measured_image_max_height
 local painted_image
 local image_tap_callback
 local shown_image_viewer
+local painted_paragraphs = {}
 local scheduled_callbacks = {}
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ui/widget/imageviewer"] = function()
@@ -32,6 +33,10 @@ package.preload["ui/primitives"] = function()
         end,
         hit = function(_, _, _, _, _, callback) image_tap_callback = callback end,
         paragraph = function() end,
+        paragraph_metrics = function(_, _, role) return 1, role == "heading" and 26 or 20 end,
+        scrollable_paragraph = function(_, text, _, y, _, _, role, _, opts)
+            table.insert(painted_paragraphs, { text = text, y = y, role = role, bold = opts.bold })
+        end,
     }
 end
 package.preload["ui/theme"] = function()
@@ -46,6 +51,15 @@ package.preload["ui/uimanager"] = function()
     }
 end
 local Renderer = require("ui/markdown_renderer")
+
+Renderer.render({ app = { state = {} } }, {}, {
+    { kind = "heading", level = 1, text = "v1.2.0-beta2" },
+    { kind = "paragraph", role = "tiny", plain = true, text = "9/21/2026 (11 days ago)" },
+}, "", "", 0, 0, 300, 100, 0)
+assert(painted_paragraphs[1].role == "heading" and painted_paragraphs[1].bold)
+assert(painted_paragraphs[2].role == "tiny" and not painted_paragraphs[2].bold)
+assert(painted_paragraphs[2].text == "9/21/2026 (11 days ago)")
+assert(painted_paragraphs[2].y > painted_paragraphs[1].y)
 
 local function kinds(blocks)
     local out = {}

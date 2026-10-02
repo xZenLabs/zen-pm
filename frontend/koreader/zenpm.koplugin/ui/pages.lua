@@ -864,14 +864,6 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     if details_tab == "release_notes" then
         content_blocks = {}
         local release_notes = tostring(pkg.release_notes or "")
-        local release_tag = tostring(pkg.release_notes_tag or "")
-        if release_tag ~= "" then
-            local notes_tag, date = release_notes:match("^# ([^\r\n]+) · (%d%d%d%d%-%d%d%-%d%d)")
-            if notes_tag and notes_tag:gsub("^[vV]", "") == release_tag:gsub("^[vV]", "") then
-                release_tag = release_tag .. " · " .. date
-            end
-            table.insert(content_blocks, { kind = "heading", level = 2, text = _("Version: ") .. release_tag, plain = true })
-        end
         if release_notes == "" then
             local message = _("No release notes available.")
             if pkg.release_notes_error_code then
@@ -880,7 +872,19 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
             table.insert(content_blocks, { kind = "paragraph", text = message, plain = true })
         else
             for _, block in ipairs(Markdown.parse(release_notes)) do
+                local tag, date
+                if block.kind == "heading" then
+                    tag, date = block.text:match("^(.+) · (%d%d%d%d%-%d%d%-%d%d)%s*$")
+                    if date then block.text = tag end
+                end
                 table.insert(content_blocks, block)
+                if date then
+                    local relative = Models.friendly_published_at({ published_at = date .. "T00:00:00Z" })
+                    table.insert(content_blocks, {
+                        kind = "paragraph", role = "tiny", plain = true,
+                        text = Models.localized_date(date) .. (relative ~= "" and " (" .. relative .. ")" or ""),
+                    })
+                end
             end
         end
         content_link_base_url = tostring(pkg.release_notes_base_url or "")

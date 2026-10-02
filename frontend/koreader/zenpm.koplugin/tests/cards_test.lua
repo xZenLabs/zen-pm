@@ -17,7 +17,10 @@ package.preload["i18n"] = function()
     return { dynamic_or = function(value, fallback) return value or fallback end }
 end
 package.preload["models"] = function()
+    local date_models = dofile(root .. "/models.lua")
     return {
+        localized_date = date_models.localized_date,
+        friendly_published_at = date_models.friendly_published_at,
         is_patch_package = function() return false end,
         package_action_label = function() return "Update" end,
         package_display_name = function(pkg, fallback) return pkg.name or fallback end,
@@ -106,7 +109,10 @@ package.preload["zenpm_util"] = function()
         fixUtf8 = function(value) return value end,
     }
 end
-package.preload["gettext"] = function() return function(value) return value end end
+local gettext = setmetatable({ translation = {}, context = {} }, {
+    __call = function(self, value) return self.translation[value] or value end,
+})
+package.preload["gettext"] = function() return gettext end
 
 local Cards = require("ui/cards")
 Cards.package({
@@ -459,18 +465,51 @@ assert(table.concat(painted_text, "\n"):find("Latest on GitHub: v2.0.0", 1, true
 local notes_package = screensaver_details_view.app.state.current_package
 screensaver_details_view.app.state.details_tab = "release_notes"
 notes_package.release_notes_tag = "2.0.0"
-for _, case in ipairs({
-    { notes = "# v2.0.0 · 2026-10-02\n\nNew\n\n# v1.0.0 · 2026-09-01\n\nOld", heading = "Version: 2.0.0 · 2026-10-02" },
-    { notes = "# v2.0.0\n\nLegacy notes", heading = "Version: 2.0.0" },
-    { notes = "# v1.0.0 · 2026-09-01\n\nOther release", heading = "Version: 2.0.0" },
-}) do
-    notes_package.release_notes = case.notes
-    Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
-    assert(rendered_detail_blocks[1].text == case.heading)
-    if case.notes:find("Old", 1, true) then
-        assert(rendered_detail_blocks[4].text == "v1.0.0 · 2026-09-01")
+local real_time = os.time
+os.time = function() return 1790942400 end -- 2026-10-02 12:00 UTC
+for _, locale in ipairs({ "en_US", "es_ES" }) do
+    G_reader_settings = { readSetting = function() return locale end }
+    gettext.translation = {}
+    dofile(root .. "/i18n.lua").install()
+    local date = locale == "en_US" and "10/2/2026" or "02/10/2026"
+    local old_date = locale == "en_US" and "9/1/2026" or "01/09/2026"
+    local today = locale == "en_US" and "Today" or "Hoy"
+    local old_relative = locale == "en_US" and "31 days ago" or "31 días atrás"
+    for _, case in ipairs({
+        { notes = "# v2.0.0 · 2026-10-02\n\nNew\n\n# v1.0.0 · 2026-09-01\n\nOld",
+            heading = "v2.0.0", date = date .. " (" .. today .. ")" },
+        { notes = "# v2.0.0\n\nLegacy notes", heading = "v2.0.0" },
+        { notes = "# v1.0.0 · 2026-09-01\n\nOther release", heading = "v1.0.0",
+            date = old_date .. " (" .. old_relative .. ")" },
+        { notes = "# v1.2.0-beta2 · 2026-09-21\n\nWhat's Changed\n\n- New feature",
+            heading = "v1.2.0-beta2", date = locale == "en_US" and "9/21/2026 (11 days ago)"
+                or "21/09/2026 (11 días atrás)" },
+    }) do
+        notes_package.release_notes = case.notes
+        Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
+        assert(rendered_detail_blocks[1].text == case.heading)
+        if case.date then
+            assert(rendered_detail_blocks[2].text == case.date)
+            assert(rendered_detail_blocks[2].kind == "paragraph" and rendered_detail_blocks[2].role == "tiny")
+        else
+            assert(#rendered_detail_blocks == 2 and rendered_detail_blocks[2].text == "Legacy notes")
+        end
+        if case.notes:find("Old", 1, true) then
+            assert(rendered_detail_blocks[3].text == "New")
+            assert(rendered_detail_blocks[4].text == "v1.0.0")
+            assert(rendered_detail_blocks[5].text == old_date .. " (" .. old_relative .. ")")
+            assert(rendered_detail_blocks[5].role == "tiny")
+            assert(rendered_detail_blocks[6].text == "Old")
+        end
+        for _, block in ipairs(rendered_detail_blocks) do
+            assert(not tostring(block.text):find("Version: ", 1, true))
+        end
+        assert(notes_package.release_notes == case.notes)
     end
 end
+os.time = real_time
+G_reader_settings = nil
+gettext.translation = {}
 
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local Header = require("ui/header")
