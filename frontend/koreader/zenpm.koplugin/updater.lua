@@ -179,6 +179,13 @@ local function request(url, sink, method, token)
     local attempts = sink and 1 or 2
     local code, status
     for attempt = 1, attempts do
+        -- Legacy libc keeps old DNS servers after Wi-Fi reconnects, including
+        -- in forked update workers. Reload the current resolver configuration.
+        pcall(function()
+            local ffi = require("ffi")
+            ffi.cdef[[int res_init(void); int __res_init(void);]]
+            if not pcall(function() ffi.C.res_init() end) then ffi.C.__res_init() end
+        end)
         local response = {}
         local started_at = socket.gettime()
         log_info("GitHub request started", method or "GET", url)

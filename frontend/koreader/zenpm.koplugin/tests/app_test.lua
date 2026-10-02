@@ -1399,6 +1399,53 @@ assert(update_result[4] == "1.3.0")
 assert(trap_widget.dismiss_callback == nil)
 assert(forced_subprocess_runs == 0)
 
+do
+    local old_schedule, old_unschedule = UIManager.scheduleIn, UIManager.unschedule
+    local old_trapper = package.loaded["ui/trapper"]
+    local deadline, removed, dismissed
+    UIManager.scheduleIn = function(_, delay, callback)
+        assert(delay == 30)
+        deadline = callback
+    end
+    UIManager.unschedule = function(_, callback) removed = callback end
+    for _, outcome in ipairs({ "timeout", "success", "cancel" }) do
+        deadline, removed, dismissed = nil, nil, false
+        package.loaded["ui/trapper"] = {
+            wrap = function(_, callback) callback() end,
+            dismissableRunInSubprocess = function(_, task, widget)
+                widget.dismiss_callback = function() dismissed = true end
+                if outcome == "timeout" then
+                    assert(deadline, "update checks need a deadline even when DNS hangs")
+                    deadline()
+                    return false
+                end
+                if outcome == "cancel" then return false end
+                return true, task()
+            end,
+        }
+        App.run_update_task({
+            daemon = {
+                is_android = function() return false end,
+                detect_platform = function() return "kindle" end,
+            },
+        }, function() return true, true, "1.3.0" end, trap_widget, function(...)
+            update_result = { ... }
+        end, false, 30)
+        assert(deadline and removed == deadline)
+        assert(trap_widget.dismiss_callback == nil)
+        if outcome == "timeout" then
+            assert(dismissed and update_result[1] and update_result[2] and not update_result[3])
+            assert(update_result[4]:find("timed out", 1, true))
+        elseif outcome == "success" then
+            assert(not dismissed and update_result[1] and update_result[4] == "1.3.0")
+        else
+            assert(not dismissed and update_result[1] == false)
+        end
+    end
+    UIManager.scheduleIn, UIManager.unschedule = old_schedule, old_unschedule
+    package.loaded["ui/trapper"] = old_trapper
+end
+
 local homepage_forced_in_process = false
 modal_message = nil
 App.apply_kindle_homepage_install({
@@ -1439,10 +1486,12 @@ local scriptlet = {
     platforms = { "kindle" },
     versions_url = "https://repo.example/packages/kindle/browser/versions.json",
 }
-App.start_package_action(scriptlet_app, scriptlet, "install")
-assert(scriptlet_asset_requests == 0)
-assert(scriptlet_action.action == "install")
-assert(scriptlet_action.asset == nil)
+for _, action in ipairs({ "install", "reinstall", "uninstall" }) do
+    App.start_package_action(scriptlet_app, scriptlet, action)
+    assert(scriptlet_asset_requests == 0)
+    assert(scriptlet_action.action == action)
+    assert(scriptlet_action.asset == nil)
+end
 
 local selected_update_build
 modal_rows = nil
@@ -1545,6 +1594,18 @@ assert(App.queue_package_action(simple_queue_app, {
 }, "update", nil, {}))
 assert(advanced_queue_refreshed == 1)
 assert(modal_message == "Added to Queue")
+
+simple_queue_app.state.queue = {}
+for _, action in ipairs({ "uninstall", "install", "uninstall", "reinstall", "uninstall" }) do
+    assert(App.queue_package_action(simple_queue_app, scriptlet, action))
+    assert(#simple_queue_app.state.queue == 1)
+    assert(simple_queue_app.state.queue[1].action == action)
+    if action == "uninstall" then
+        assert(modal_message == "Added to Queue")
+    else
+        assert(modal_message:find('This will install as a "book" on the Kindle homescreen.', 1, true))
+    end
+end
 
 local companion_update_requests = 0
 local companion_update_prerelease
@@ -1654,6 +1715,30 @@ App.perform_package_action({
 }, scriptlet)
 assert(scriptlet_install_action == "install")
 
+do
+    local selected_action
+    local app = {
+        state = { page = "installed", advanced = true },
+        package_icon_file = function() return nil end,
+        confirm_package_action = function(_, _, action) selected_action = action end,
+    }
+    for _, platform in ipairs({ "kindle", "kindleforge" }) do
+        local pkg = { id = "scriptlet", installed = true, platforms = { platform } }
+        App.perform_package_action(app, pkg)
+        assert(package_modify_callbacks.reinstall)
+        assert(not package_modify_callbacks.downgrade)
+        package_modify_callbacks.reinstall()
+        assert(selected_action == "reinstall")
+        App.show_queue_entry_modify(app, { pkg = pkg, action = "uninstall" })
+        assert(package_modify_callbacks.reinstall)
+        selected_action = nil
+        package_modify_callbacks.reinstall()
+        assert(selected_action == "reinstall")
+        App.show_queue_entry_modify(app, { pkg = pkg, action = "reinstall" })
+        assert(not package_modify_callbacks.reinstall)
+    end
+end
+
 local wallpaper_install_action
 App.perform_package_action({
     state = { direct_github = true },
@@ -1704,6 +1789,7 @@ App.perform_package_action({
 })
 assert(package_modify_callbacks.info)
 assert(package_modify_callbacks.update)
+assert(not package_modify_callbacks.reinstall)
 assert(package_modify_callbacks.toggle_updates)
 assert(not package_modify_callbacks.updates_ignored)
 assert(package_modify_callbacks.enable_disable)
@@ -2469,9 +2555,51 @@ assert(not recovery_app.busy)
 assert(not App.package_action_succeeded({}, {
     action = "update", target_version = "3.3.0-beta1",
 }, { installed = true, installed_version = "3.3.0-alpha9" }))
-assert(App.package_action_succeeded({}, {
+assert(not App.package_action_succeeded({}, {
     action = "update", target_version = "3.3.0-alpha9",
 }, { installed = true, installed_version = "3.3.0-beta1" }))
+
+-- Older backends must not count an existing stable build as a completed alpha install.
+do
+    for _, action in ipairs({ "install", "update", "downgrade", "reinstall" }) do
+        local op = { action = action, target_version = "4.0.0-alpha16" }
+        assert(not App.package_action_succeeded({}, op, {
+            installed = true, installed_version = "4.0.0",
+        }))
+        assert(App.package_action_succeeded({}, op, {
+            installed = true, installed_version = "v4.0.0-alpha16",
+        }))
+    end
+    for _, outcome in ipairs({ "success", "timeout" }) do
+        local finished, next_poll, result
+        local failure = "versions request: context deadline exceeded"
+        local polling_app = setmetatable({
+            busy = true,
+            client = {
+                get_log = function()
+                    return true, finished and outcome == "timeout"
+                        and ("ERR Package zen-ui install failed: " .. failure) or ""
+                end,
+            },
+            load_packages = function()
+                return true, {{ id = "zen-ui", installed = true,
+                    installed_version = finished and outcome == "success" and "4.0.0-alpha16" or "4.0.0" }}
+            end,
+        }, { __index = App })
+        polling_app.poll_package_action = function(_, op, attempt)
+            next_poll = function() App.poll_package_action(polling_app, op, attempt) end
+        end
+        App.poll_package_action(polling_app, {
+            id = "zen-ui", name = "ZenOS", action = "update", target_version = "4.0.0-alpha16",
+            on_result = function(ok, detail) result = { ok, detail } end,
+        }, 1)
+        assert(polling_app.busy and next_poll and not result)
+        finished = true
+        next_poll()
+        assert(not polling_app.busy and result[1] == (outcome == "success"))
+        assert(result[2] == (outcome == "timeout" and failure or nil))
+    end
+end
 
 local zenfm_companion_updates = 0
 table.insert(pluginloader.loaded_plugins, {

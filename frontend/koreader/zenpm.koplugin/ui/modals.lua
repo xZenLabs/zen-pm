@@ -268,6 +268,9 @@ function Modals.package_modify(pkg, callbacks)
     if callbacks.update then
         add_button("update", _("Update") .. (pkg.latest_version and pkg.latest_version ~= "" and " " .. pkg.latest_version or ""), callbacks.update)
     end
+    if callbacks.reinstall then
+        add_button("refresh", _("Reinstall"), callbacks.reinstall)
+    end
     if callbacks.toggle_updates then
         add_button(
             callbacks.updates_ignored and "allow_updates" or "ignore_updates",

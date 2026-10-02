@@ -175,27 +175,49 @@ assert(hardware_backs == 1)
 assert(hardware_actions == 1)
 
 local status_gesture = { pos = { x = 50, y = 10 } }
-assert(AppView.tap_in_koreader_menu_zone(paint_view, status_gesture))
+assert(AppView.in_koreader_menu_zone(paint_view, status_gesture))
 local menu_taps, menu_swipes = 0, 0
 paint_view.app.plugin = { ui = { menu = {
     onTapShowMenu = function() menu_taps = menu_taps + 1 end,
-    onSwipeShowMenu = function() menu_swipes = menu_swipes + 1 end,
+    onSwipeShowMenu = function(_, ges)
+        assert(ges.ges == "swipe" and ges.direction == "south")
+        menu_swipes = menu_swipes + 1
+    end,
 } } }
 assert(AppView.onTapZenPM(paint_view, nil, { pos = { x = 50, y = 18 } }))
 assert(AppView.onTapZenPM(paint_view, nil, { pos = { x = 50, y = 19 } }))
 assert(menu_taps == 1)
 paint_view.list_bounds = { x = 0, y = 40, w = 100, h = 100 }
-assert(AppView.onSwipeZenPM(paint_view, nil, { direction = "south", pos = status_gesture.pos }))
+local swipe_steps = 0
+paint_view._scroll_list = function(_, steps) swipe_steps = swipe_steps + steps end
+for _, y in ipairs({ 5, 10, 18 }) do
+    assert(AppView.onSwipeZenPM(paint_view, nil, { ges = "swipe", direction = "south", pos = { x = 50, y = y } }))
+end
+assert(menu_swipes == 3 and menu_taps == 1 and swipe_steps == 0)
+for _, y in ipairs({ 4, 19 }) do
+    assert(AppView.onSwipeZenPM(paint_view, nil, { ges = "swipe", direction = "south", pos = { x = 50, y = y } }))
+end
+for _, direction in ipairs({ "north", "east", "west" }) do
+    assert(AppView.onSwipeZenPM(paint_view, nil, { ges = "swipe", direction = direction, pos = status_gesture.pos }))
+end
+assert(menu_swipes == 3 and swipe_steps == 0)
+assert(AppView.onSwipeZenPM(paint_view, nil, { ges = "swipe", direction = "south", pos = { x = 50, y = 60 } }))
+assert(swipe_steps == -1)
+assert(AppView.onSwipeZenPM(paint_view, nil, { ges = "swipe", direction = "north", pos = { x = 50, y = 60 } }))
+assert(swipe_steps == 0)
 assert(AppView.onPanZenPM(paint_view, nil, status_gesture))
 assert(AppView.onPanReleaseZenPM(paint_view, nil, status_gesture))
-assert(menu_swipes == 0)
+paint_view._scroll_dragging = true
+assert(AppView.onSwipeZenPM(paint_view, nil, { ges = "swipe", direction = "south", pos = status_gesture.pos }))
+assert(paint_view._scroll_dragging == false)
+assert(menu_swipes == 3 and menu_taps == 1 and swipe_steps == 0)
 local menu_tap_view = {
     koreader_menu_zone = { x = 0, y = 0, w = 100, h = 50 },
     koreader_menu_tap_guard = { x = 70, y = 0, w = 30, h = 50 },
 }
 setmetatable(menu_tap_view, { __index = AppView })
-assert(AppView.tap_in_koreader_menu_zone(menu_tap_view, { pos = { x = 60, y = 20 } }))
-assert(not AppView.tap_in_koreader_menu_zone(menu_tap_view, { pos = { x = 80, y = 20 } }))
+assert(AppView.in_koreader_menu_zone(menu_tap_view, { pos = { x = 60, y = 20 } }))
+assert(not AppView.in_koreader_menu_zone(menu_tap_view, { pos = { x = 80, y = 20 } }))
 
 local refreshes = 0
 local details_view = {

@@ -384,13 +384,13 @@ function AppView:onTapZenPM(_, ges)
             return true
         end
     end
-    if self:tap_in_koreader_menu_zone(ges) then
-        return self:show_koreader_menu_from_tap(ges)
+    if self:in_koreader_menu_zone(ges) then
+        return self:show_koreader_menu(ges)
     end
     return true
 end
 
-function AppView:tap_in_koreader_menu_zone(ges)
+function AppView:in_koreader_menu_zone(ges)
     local pos = ges and ges.pos
     return pos and self.koreader_menu_zone
         and P.contains(self.koreader_menu_zone, pos.x, pos.y)
@@ -398,16 +398,17 @@ function AppView:tap_in_koreader_menu_zone(ges)
         and not (self.koreader_menu_tap_guard and P.contains(self.koreader_menu_tap_guard, pos.x, pos.y))
 end
 
-function AppView:show_koreader_menu_from_tap(ges)
+function AppView:show_koreader_menu(ges)
     local plugin = self.app and self.app.plugin
     local ui = plugin and plugin.ui
     local menu = ui and ui.menu
     if not menu then
         return false
     end
-    if menu.onTapShowMenu then
+    local handler = ges.ges == "swipe" and "onSwipeShowMenu" or "onTapShowMenu"
+    if menu[handler] then
         local ok = pcall(function()
-            menu:onTapShowMenu(ges)
+            menu[handler](menu, ges)
         end)
         return ok
     elseif menu.onShowMenu then
@@ -465,6 +466,9 @@ function AppView:onSwipeZenPM(_, ges)
         return true
     end
     local direction = ges.direction
+    if direction == "south" and self:in_koreader_menu_zone(ges) then
+        return self:show_koreader_menu(ges)
+    end
     if direction ~= "north" and direction ~= "south" then
         return true
     end

@@ -220,7 +220,8 @@ local function prepared_image_file(ref)
     if value == "failed" then
         return nil, true, false
     end
-    local path, width, height = value:match("^(.-)\t(%d+)\t(%d+)$")
+    -- Newer refs append a transparency flag after the dimensions.
+    local path, width, height = (value .. "\t"):match("^([^\t]+)\t(%d+)\t(%d+)\t")
     path = path or value
     if path ~= "" and Util.path_exists(path) then
         return path, false, false, tonumber(width), tonumber(height)
