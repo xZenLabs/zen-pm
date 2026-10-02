@@ -81,6 +81,7 @@ return {
         "Performance improvements"
     },
     ["1.6.1"] = {
-        "Fix a bug matching version to GH tag in direct to github fetch"
+        "Fix a bug matching version to GH tag in direct to github fetch",
+        "Update top menu tap zone"
     }
 }

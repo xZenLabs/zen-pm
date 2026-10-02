@@ -48,7 +48,7 @@ package.preload["ui/primitives"] = function()
     return {
         rect = function() end,
         contains = function(box, x, y)
-            return x >= box.x and x < box.x + box.w and y >= box.y and y < box.y + box.h
+            return x >= box.x and x <= box.x + box.w and y >= box.y and y <= box.y + box.h
         end,
     }
 end
@@ -108,7 +108,8 @@ assert(header_y == 17)
 assert(content_y == 17)
 assert(status_freed)
 assert(paint_view._zen_status_dimen.h == 12)
-assert(paint_view.koreader_menu_zone == paint_view._zen_status_dimen)
+assert(paint_view.koreader_menu_zone.y == 5)
+assert(paint_view.koreader_menu_zone.h == 14)
 AppView._zen_status_refresh(paint_view)
 assert(dirty.widget == paint_view and dirty.mode == "ui")
 assert(dirty.region == paint_view._zen_status_dimen)
@@ -173,20 +174,28 @@ assert(AppView.onZenPMShowActions(hardware_view) == true)
 assert(hardware_backs == 1)
 assert(hardware_actions == 1)
 
-_G.G_reader_settings = {
-    readSetting = function() return "tap" end,
-}
 local status_gesture = { pos = { x = 50, y = 10 } }
-assert(AppView.tap_should_pass_to_koreader_menu(paint_view, status_gesture))
-assert(AppView.gesture_in_menu_zone(paint_view, status_gesture))
+assert(AppView.tap_in_koreader_menu_zone(paint_view, status_gesture))
+local menu_taps, menu_swipes = 0, 0
+paint_view.app.plugin = { ui = { menu = {
+    onTapShowMenu = function() menu_taps = menu_taps + 1 end,
+    onSwipeShowMenu = function() menu_swipes = menu_swipes + 1 end,
+} } }
+assert(AppView.onTapZenPM(paint_view, nil, { pos = { x = 50, y = 18 } }))
+assert(AppView.onTapZenPM(paint_view, nil, { pos = { x = 50, y = 19 } }))
+assert(menu_taps == 1)
+paint_view.list_bounds = { x = 0, y = 40, w = 100, h = 100 }
+assert(AppView.onSwipeZenPM(paint_view, nil, { direction = "south", pos = status_gesture.pos }))
+assert(AppView.onPanZenPM(paint_view, nil, status_gesture))
+assert(AppView.onPanReleaseZenPM(paint_view, nil, status_gesture))
+assert(menu_swipes == 0)
 local menu_tap_view = {
     koreader_menu_zone = { x = 0, y = 0, w = 100, h = 50 },
     koreader_menu_tap_guard = { x = 70, y = 0, w = 30, h = 50 },
 }
 setmetatable(menu_tap_view, { __index = AppView })
-assert(AppView.tap_should_pass_to_koreader_menu(menu_tap_view, { pos = { x = 60, y = 20 } }))
-assert(not AppView.tap_should_pass_to_koreader_menu(menu_tap_view, { pos = { x = 80, y = 20 } }))
-_G.G_reader_settings = nil
+assert(AppView.tap_in_koreader_menu_zone(menu_tap_view, { pos = { x = 60, y = 20 } }))
+assert(not AppView.tap_in_koreader_menu_zone(menu_tap_view, { pos = { x = 80, y = 20 } }))
 
 local refreshes = 0
 local details_view = {

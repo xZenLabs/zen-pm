@@ -319,7 +319,6 @@ local function draw_title_bar(view, bb, x, y, w)
         local divider_h = math.max(1, Theme.scale(2))
         P.rect(bb, x, y + h - divider_h, w, divider_h, Theme.soft)
     end
-    view.koreader_menu_zone = { x = x, y = y, w = w, h = h }
     -- Taps near ZenPM's top-right control should not leak through to
     -- KOReader's title-bar menu gesture. Keep a generous guard on its left
     -- and extend it to the screen edge on its right.
