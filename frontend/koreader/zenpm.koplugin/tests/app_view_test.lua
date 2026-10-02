@@ -6,6 +6,7 @@ local has_keys = false
 local has_keyboard = false
 local has_dpad = false
 local scheduled
+local next_tick
 local dirty
 local header_y
 package.preload["device"] = function()
@@ -30,10 +31,14 @@ package.preload["ui/widget/container/inputcontainer"] = function()
 end
 package.preload["ui/uimanager"] = function()
     return {
-        setDirty = function(_, widget, mode, region)
-            dirty = { widget = widget, mode = mode, region = region }
+        setDirty = function(_, widget, mode, region, dither)
+            dirty = { widget = widget, mode = mode, region = region, dither = dither }
         end,
         scheduleIn = function(_, _, callback) scheduled = callback end,
+        nextTick = function(_, callback)
+            assert(next_tick == nil)
+            next_tick = callback
+        end,
         unschedule = function(_, callback)
             if scheduled == callback then scheduled = nil end
         end,
@@ -114,6 +119,53 @@ AppView._zen_status_refresh(paint_view)
 assert(dirty.widget == paint_view and dirty.mode == "ui")
 assert(dirty.region == paint_view._zen_status_dimen)
 _G.__ZENOS_BUILD_STATUS_ROW = nil
+
+local description_images
+local description_bounds = { x = 10, y = 40, w = 80, h = 100 }
+local description_view = setmetatable({
+    app = { state = { page = "package_details" }, queue_count = function() return 0 end },
+    dimen = { x = 0, y = 0, w = 100, h = 200 },
+    draw_content = function(self)
+        self._readme_visible_images = description_images
+        self.list_bounds = description_bounds
+    end,
+}, { __index = AppView })
+for _, case in ipairs({
+    { images = {}, flash = false },
+    { images = { first = true }, flash = true },
+    { images = { first = true }, flash = true },
+    { images = { first = true, second = true }, flash = true },
+    { images = { second = true }, flash = true },
+    { images = {}, flash = false },
+    { images = { first = true }, flash = true },
+    { images = {}, flash = false },
+}) do
+    description_images = case.images
+    AppView.refresh(description_view)
+    local regular_refresh = dirty
+    AppView.paintTo(description_view, {}, 0, 0)
+    assert(description_view.dithered == (next(case.images) ~= nil))
+    assert(dirty == regular_refresh and dirty.mode == "ui")
+    if case.flash then
+        assert(next_tick, "every description frame with a visible image must queue a flash")
+        next_tick()
+        next_tick = nil
+        assert(dirty.widget == nil and dirty.mode == "flashui")
+        assert(dirty.region == description_bounds and dirty.dither == true)
+    else
+        assert(next_tick == nil, "description frames without visible images must not flash")
+    end
+end
+
+description_images = { delayed = true }
+AppView.paintTo(description_view, {}, 0, 0)
+local delayed_flash = assert(next_tick)
+next_tick = nil
+description_images = {}
+dirty = nil
+AppView.paintTo(description_view, {}, 0, 0)
+delayed_flash()
+assert(dirty == nil, "an image leaving before its queued flash must not flash")
 
 AppView.draw_content({
     app = {

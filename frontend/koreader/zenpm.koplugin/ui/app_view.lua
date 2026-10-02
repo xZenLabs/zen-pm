@@ -600,6 +600,8 @@ function AppView:onClose()
 end
 
 function AppView:paintTo(bb, x, y)
+    self._readme_visible_images = {}
+    self.dithered = false
     self.hitboxes = {}
     self.focus_targets = {}
     self.list_bounds = nil
@@ -644,6 +646,16 @@ function AppView:paintTo(bb, x, y)
         Nav.draw_queue_banner(self, bb, x, nav_top - banner_h, m.screen_w, banner_h)
     end
     Nav.draw(self, bb, x, nav_top, m.screen_w, m.nav_h)
+    self.dithered = next(self._readme_visible_images) ~= nil
+    if self.dithered and self.list_bounds then
+        local region = Geom:new(self.list_bounds)
+        -- Flash every frame containing an image after the regular refresh.
+        UIManager:nextTick(function()
+            if self.dithered then
+                UIManager:setDirty(nil, "flashui", region, true)
+            end
+        end)
+    end
 end
 
 -- Routes to the active page's content renderer, then draws the scrollbar and

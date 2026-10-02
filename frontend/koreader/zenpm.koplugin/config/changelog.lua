@@ -82,6 +82,8 @@ return {
     },
     ["1.6.1"] = {
         "Fix a bug matching version to GH tag in direct to github fetch",
-        "Update top menu tap zone"
+        "Update top menu tap zone",
+        "Better wifi edge case handling (no IP/no DNS)",
+        "Bug fixes"
     }
 }

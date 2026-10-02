@@ -237,14 +237,31 @@ for _, metadata in ipairs({ "\t1200\t600\tfalse", "\t1200\t600\ttrue", "\t1200\t
     assert(#scheduled_callbacks == 0)
 end
 
+local image_id = "1:" .. prepared_file
+assert(managed_view._readme_visible_images[image_id])
+for _, case in ipairs({
+    { scroll = 0, visible = true },
+    { scroll = 10, visible = true },
+    { scroll = 10, visible = true },
+    { scroll = 50, visible = false },
+}) do
+    Renderer.render(managed_view, {}, {
+        { kind = "image", alt = "Managed", url = "managed.png" },
+    }, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, case.scroll, {
+        [managed_url] = prepared_ref,
+    })
+    assert((managed_view._readme_visible_images[image_id] == true) == case.visible)
+end
+
 local pending_ref = os.tmpname()
 assert(os.remove(pending_ref))
 Renderer.render(managed_view, {}, {
     { kind = "image", alt = "Pending", url = "pending.png" },
-}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0, {
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, 0, {
     ["https://repo.example/packages/demo/pending.png"] = pending_ref,
 })
 assert(#scheduled_callbacks == 1)
+assert(next(managed_view._readme_visible_images) == nil, "pending images must not request a flash")
 
 local pending_ref_2 = os.tmpname()
 assert(os.remove(pending_ref_2))

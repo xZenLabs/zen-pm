@@ -23,7 +23,7 @@ package.preload["models"] = function()
         package_display_name = function(pkg, fallback) return pkg.name or fallback end,
         package_verified = function() return true end,
         package_assets = function() return {} end,
-        has_release_notes = function() return false end,
+        has_release_notes = function(pkg) return pkg.release_notes ~= nil end,
         is_font_package = function() return false end,
         is_image_asset_package = function(pkg)
             return pkg.category == "wallpapers" or pkg.category == "screensavers"
@@ -330,6 +330,7 @@ package.preload["ui/font"] = function() return {} end
 package.preload["ui/inline_icon_map"] = function() return { icon = function() return "" end } end
 package.preload["ui/markdown"] = function()
     return {
+        parse = dofile(root .. "/ui/markdown.lua").parse,
         base_url = function() return "" end,
         source_base_url = function() return "" end,
         public_image_base_url = function() return "" end,
@@ -454,6 +455,22 @@ screensaver_details_view.app.state.current_package.github_latest_version = "v2.0
 painted_text = {}
 Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
 assert(table.concat(painted_text, "\n"):find("Latest on GitHub: v2.0.0", 1, true))
+
+local notes_package = screensaver_details_view.app.state.current_package
+screensaver_details_view.app.state.details_tab = "release_notes"
+notes_package.release_notes_tag = "2.0.0"
+for _, case in ipairs({
+    { notes = "# v2.0.0 · 2026-10-02\n\nNew\n\n# v1.0.0 · 2026-09-01\n\nOld", heading = "Version: 2.0.0 · 2026-10-02" },
+    { notes = "# v2.0.0\n\nLegacy notes", heading = "Version: 2.0.0" },
+    { notes = "# v1.0.0 · 2026-09-01\n\nOther release", heading = "Version: 2.0.0" },
+}) do
+    notes_package.release_notes = case.notes
+    Pages.package_details(screensaver_details_view, {}, 0, 0, 300, 600, 0)
+    assert(rendered_detail_blocks[1].text == case.heading)
+    if case.notes:find("Old", 1, true) then
+        assert(rendered_detail_blocks[4].text == "v1.0.0 · 2026-09-01")
+    end
+end
 
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local Header = require("ui/header")

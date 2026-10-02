@@ -863,11 +863,15 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     end
     if details_tab == "release_notes" then
         content_blocks = {}
+        local release_notes = tostring(pkg.release_notes or "")
         local release_tag = tostring(pkg.release_notes_tag or "")
         if release_tag ~= "" then
+            local notes_tag, date = release_notes:match("^# ([^\r\n]+) · (%d%d%d%d%-%d%d%-%d%d)")
+            if notes_tag and notes_tag:gsub("^[vV]", "") == release_tag:gsub("^[vV]", "") then
+                release_tag = release_tag .. " · " .. date
+            end
             table.insert(content_blocks, { kind = "heading", level = 2, text = _("Version: ") .. release_tag, plain = true })
         end
-        local release_notes = tostring(pkg.release_notes or "")
         if release_notes == "" then
             local message = _("No release notes available.")
             if pkg.release_notes_error_code then
