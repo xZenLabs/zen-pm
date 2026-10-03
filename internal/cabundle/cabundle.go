@@ -14,10 +14,12 @@ import (
 	"time"
 )
 
-// pemData contains the public root certificates required by the legacy Kindle
-// CA store. Source: Mozilla CA bundle at https://curl.se/ca/cacert.pem,
+// pemData contains the public root certificates required by legacy e-readers.
+// Source: Mozilla CA bundle at https://curl.se/ca/cacert.pem,
 // retrieved 2026-07-14. It contains USERTrust ECC and Sectigo Public Server
 // Authentication Root E46 (GitHub), plus ISRG Root X1 (repo.zen-labs.org).
+// GTS Root R4 (ReaderBackdrop previews and shields.io) was retrieved from
+// https://pki.goog/roots.pem on 2026-10-02.
 const pemData = `-----BEGIN CERTIFICATE-----
 MIICOjCCAcGgAwIBAgIQQvLM2htpN0RfFf51KBC49DAKBggqhkjOPQQDAzBfMQsw
 CQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1T
@@ -79,6 +81,19 @@ zVcoyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ
 11TPAmRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEz
 wxA57demyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iI
 treGCc=
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIICCTCCAY6gAwIBAgINAgPlwGjvYxqccpBQUjAKBggqhkjOPQQDAzBHMQswCQYD
+VQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEUMBIG
+A1UEAxMLR1RTIFJvb3QgUjQwHhcNMTYwNjIyMDAwMDAwWhcNMzYwNjIyMDAwMDAw
+WjBHMQswCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2Vz
+IExMQzEUMBIGA1UEAxMLR1RTIFJvb3QgUjQwdjAQBgcqhkjOPQIBBgUrgQQAIgNi
+AATzdHOnaItgrkO4NcWBMHtLSZ37wWHO5t5GvWvVYRg1rkDdc/eJkTBa6zzuhXyi
+QHY7qca4R9gq55KRanPpsXI5nymfopjTX15YhmUPoYRlBtHci8nHc8iMai/lxKvR
+HYqjQjBAMA4GA1UdDwEB/wQEAwIBhjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQW
+BBSATNbrdP9JNqPV2Py1PsVq8JQdjDAKBggqhkjOPQQDAwNpADBmAjEA6ED/g94D
+9J+uHXqnLrmvT/aDHQ4thQEd0dlq7A/Cr8deVl5c1RxYIigL9zC2L7F8AjEA8GE8
+p/SgguMh1YQdc4acLa/KNJvxn7kjNuK8YAOdgLOaVsjh4rsUecrNIdSUtUlD
 -----END CERTIFICATE-----
 `
 
@@ -270,7 +285,7 @@ var (
 )
 
 // Client returns an HTTP client that trusts the system roots plus the bundled
-// roots required by the legacy Kindle CA store.
+// roots required by legacy e-readers.
 func Client(timeout time.Duration) *http.Client {
 	clientTransportOnce.Do(func() {
 		roots, err := x509.SystemCertPool()
