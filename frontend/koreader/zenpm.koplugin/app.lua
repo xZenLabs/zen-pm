@@ -231,7 +231,7 @@ local function is_sdl_wayland_desktop()
     return device_bool("isSDL") or device_bool("isDesktop")
 end
 
-function App:run_update_task(task, trap_widget, on_done, force_in_process)
+function App:run_update_task(task, trap_widget, on_done, force_in_process, timeout)
     local function finish(...)
         -- Trapper attaches this callback to let a tap cancel the subprocess.
         -- Once it returns, closing the progress modal must not resume the
@@ -272,7 +272,22 @@ function App:run_update_task(task, trap_widget, on_done, force_in_process)
         return
     end
     Trapper:wrap(function()
+        local timed_out = false
+        local function expire()
+            if trap_widget and trap_widget.dismiss_callback then
+                timed_out = true
+                trap_widget.dismiss_callback()
+            end
+        end
+        -- Socket timeouts do not cover libc DNS lookups. Only read-only checks
+        -- supply a deadline: interrupting an installation could leave it partial.
+        if timeout then UIManager:scheduleIn(timeout, expire) end
         local completed, called, ok, result = Trapper:dismissableRunInSubprocess(task, trap_widget)
+        if timeout then UIManager:unschedule(expire) end
+        if timed_out then
+            finish(true, true, false, _("Could not connect to GitHub: update check timed out. Check your internet connection and try again."))
+            return
+        end
         finish(completed, called, ok, result)
     end)
 end
@@ -387,9 +402,9 @@ local function package_is_kindle_only(pkg)
     return kindle
 end
 
-local function queue_notice(pkg)
+local function queue_notice(pkg, action)
     local text = _("Added to Queue")
-    if package_is_kindle_only(pkg) then
+    if action ~= "uninstall" and package_is_kindle_only(pkg) then
         text = text .. "\n" .. _([[This will install as a "book" on the Kindle homescreen.]])
     end
     return text
@@ -1025,7 +1040,7 @@ function App:queue_package_action(pkg, action, asset, opts)
         if queued.key == entry.key then
             self.state.queue[index] = entry
             if not opts.silent and not open_queue then
-                Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
+                Modals.info_for(queue_notice(pkg, action), Constants.PACKAGE_NOTICE_SECONDS)
             end
             refresh_after_queue_change(self, open_queue)
             return true
@@ -1033,7 +1048,7 @@ function App:queue_package_action(pkg, action, asset, opts)
     end
     table.insert(self.state.queue, entry)
     if not opts.silent and not open_queue then
-        Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
+        Modals.info_for(queue_notice(pkg, action), Constants.PACKAGE_NOTICE_SECONDS)
     end
     refresh_after_queue_change(self, open_queue)
     return true
@@ -1068,7 +1083,7 @@ function App:queue_self_update(pkg, opts)
     end
     table.insert(self.state.queue, entry)
     if not opts.silent and not open_queue then
-        Modals.info_for(queue_notice(pkg), Constants.PACKAGE_NOTICE_SECONDS)
+        Modals.info_for(queue_notice(pkg, entry.action), Constants.PACKAGE_NOTICE_SECONDS)
     end
     refresh_after_queue_change(self, open_queue)
     return true
@@ -1500,6 +1515,9 @@ function App:show_queue_entry_modify(entry)
         remove_queue = remove_queue,
         update = entry.action ~= "update" and pkg.update_available and function()
             self:confirm_package_action(pkg, "update")
+        end or nil,
+        reinstall = entry.action ~= "reinstall" and package_is_kindle_only(pkg) and function()
+            self:confirm_package_action(pkg, "reinstall")
         end or nil,
         updates_ignored = queued_update and pkg.update_ignored == true or nil,
         toggle_updates = queued_update and toggle_queued_update or nil,
@@ -3360,6 +3378,9 @@ function App:perform_package_action(pkg, on_done)
             update = pkg.update_available and function()
                 self:confirm_package_action(pkg, "update", on_done)
             end or nil,
+            reinstall = package_is_kindle_only(pkg) and function()
+                self:confirm_package_action(pkg, "reinstall", on_done)
+            end or nil,
             updates_ignored = pkg.update_ignored == true,
             toggle_updates = function()
                 self:prompt_package_updates(pkg)
@@ -3827,21 +3848,13 @@ function App:package_action_succeeded(op, pkg)
     if op.action == "uninstall" then
         return op.was_installed and (not pkg or not pkg.installed)
     end
-    if op.action == "update" then
-        if not pkg or not pkg.installed then
-            return false
-        end
-        if op.target_version and op.target_version ~= "" then
-            return not version_gt(op.target_version, pkg.installed_version or pkg.version)
-        end
-        return true
+    if op.target_version and op.target_version ~= "" then
+        return pkg and pkg.installed
+            and normalized_version(pkg.installed_version or pkg.version) == normalized_version(op.target_version)
     end
     if op.action == "downgrade" then
         return pkg and pkg.installed
             and normalized_version(pkg.installed_version or "") == normalized_version(op.target_version or "")
-    end
-    if op.action == "reinstall" then
-        return pkg and pkg.installed
     end
     return pkg and pkg.installed
 end
@@ -4463,7 +4476,7 @@ function App:start_update()
             function() self:apply_update() end,
             true
         )
-    end)
+    end, false, 30)
 end
 
 function App:apply_update(release_tag, on_result)

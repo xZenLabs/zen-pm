@@ -9,6 +9,30 @@ import (
 	"testing"
 )
 
+func TestFetchGitHubReleasesRetriesTransientFailure(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			http.Error(w, "try again", http.StatusBadGateway)
+			return
+		}
+		fmt.Fprint(w, `[{"tag_name":"v2.0","assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/plugin.zip"}]}]`)
+	}))
+	defer srv.Close()
+
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	if _, err := FetchGitHubReleases("https://github.com/owner/repo", 1); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
 func TestGitHubRepository(t *testing.T) {
 	tests := map[string]string{
 		"https://github.com/owner/repo":      "owner/repo",
@@ -169,7 +193,7 @@ func TestResolveGitHubReleaseAssetSpecificTag(t *testing.T) {
 	githubAPIBaseURL = srv.URL
 	t.Cleanup(func() { githubAPIBaseURL = oldBase })
 
-	release, asset, err := ResolveGitHubReleaseAsset("https://github.com/owner/repo", "v1.4.3", "localsend-koplugin-armv7.zip")
+	release, asset, err := ResolveGitHubReleaseAsset("https://github.com/owner/repo", "1.4.3", "localsend-koplugin-armv7.zip")
 	if err != nil {
 		t.Fatal(err)
 	}

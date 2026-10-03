@@ -168,7 +168,7 @@ function Renderer.inline_text(value, base_url, plain)
 end
 
 local function add_text(layout, block, base_url, width)
-    local role = "small"
+    local role = block.role or "small"
     local opts = {}
     local pad = 0
     local source = block.text
@@ -220,7 +220,8 @@ local function prepared_image_file(ref)
     if value == "failed" then
         return nil, true, false
     end
-    local path, width, height = value:match("^(.-)\t(%d+)\t(%d+)$")
+    -- Newer refs append a transparency flag after the dimensions.
+    local path, width, height = (value .. "\t"):match("^([^\t]+)\t(%d+)\t(%d+)\t")
     path = path or value
     if path ~= "" and Util.path_exists(path) then
         return path, false, false, tonumber(width), tonumber(height)
@@ -395,7 +396,8 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
     end
 
     scroll = scroll or 0
-    for _, entry in ipairs(layout) do
+    local visible_images = {}
+    for entry_index, entry in ipairs(layout) do
         local entry_y = y + entry.offset - scroll
         local visible_y = math.max(y, entry_y)
         local visible_bottom = math.min(y + height, entry_y + entry.h)
@@ -414,6 +416,7 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
             elseif entry.kind == "image" then
                 local source_y = visible_y - entry_y
                 if P.image_cropped(bb, entry.file, x, visible_y, entry.w, visible_h, entry.h, source_y, { is_icon = false }) then
+                    visible_images[entry_index .. ":" .. entry.file] = true
                     log_image(view, entry.file, "painted")
                     P.hit(view, x, visible_y, entry.w, visible_h, function()
                         local viewer = ImageViewer:new{
@@ -493,6 +496,7 @@ function Renderer.render(view, bb, blocks, base_url, image_base_url, x, y, width
         end
         ::next_entry::
     end
+    view._readme_visible_images = visible_images
     return math.max(0, total - height)
 end
 

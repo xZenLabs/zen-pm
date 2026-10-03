@@ -153,4 +153,34 @@ shown_dialog.cancel_callback()
 shown_dialog.ok_callback()
 assert(ignored_version and ignored_all)
 
+do
+    for _, name in ipairs({
+        "ui/geometry", "ui/widget/horizontalgroup", "ui/widget/horizontalspan",
+        "ui/widget/container/leftcontainer", "ui/widget/textwidget",
+    }) do
+        require(name).new = function(_, options) return options end
+    end
+    require("ui/font").getFace = function() end
+    require("ui/widget/buttondialog").new = function(_, options)
+        function options:addWidget() end
+        function options:getAddedWidgetAvailableWidth() return 300 end
+        function options:onCloseWidget() self.closed = true end
+        return options
+    end
+    local reinstalled = false
+    Modals.package_modify({ name = "Scriptlet" }, {
+        title_icon = "packages.svg",
+        reinstall = function()
+            assert(shown_dialog.closed)
+            reinstalled = true
+        end,
+    })
+    assert(#shown_dialog.buttons == 1)
+    assert(shown_dialog.buttons[1][1].text == "Reinstall")
+    shown_dialog.buttons[1][1].callback()
+    assert(reinstalled)
+    Modals.package_modify({ name = "Package" }, { title_icon = "packages.svg" })
+    assert(#shown_dialog.buttons == 0)
+end
+
 print("modals tests passed")

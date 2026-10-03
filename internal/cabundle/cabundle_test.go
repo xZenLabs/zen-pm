@@ -17,6 +17,28 @@ func TestBundledCertificatesAreValid(t *testing.T) {
 	}
 }
 
+func TestBundledCertificatesIncludeGTSRootR4(t *testing.T) {
+	data := []byte(pemData)
+	for len(data) > 0 {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			t.Fatal("CA bundle contains invalid PEM data")
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cert.Subject.CommonName == "GTS Root R4" {
+			if err := cert.CheckSignatureFrom(cert); err != nil {
+				t.Fatalf("GTS Root R4 is not a valid self-signed root: %v", err)
+			}
+			return
+		}
+		data = rest
+	}
+	t.Fatal("CA bundle missing GTS Root R4")
+}
+
 func TestClientsShareTransportWithKindleTLSHandshakeTimeout(t *testing.T) {
 	short := Client(time.Second)
 	long := Client(2 * time.Second)

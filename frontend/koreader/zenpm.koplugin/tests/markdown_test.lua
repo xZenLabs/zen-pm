@@ -6,8 +6,10 @@ local Markdown = require("ui/markdown")
 
 local measured_image
 local measured_image_max_height
+local painted_image
 local image_tap_callback
 local shown_image_viewer
+local painted_paragraphs = {}
 local scheduled_callbacks = {}
 package.preload["gettext"] = function() return function(value) return value end end
 package.preload["ui/widget/imageviewer"] = function()
@@ -25,9 +27,16 @@ package.preload["ui/primitives"] = function()
             measured_image_max_height = max_height
             return 80, 40
         end,
-        image_cropped = function() return true end,
+        image_cropped = function(_, file, _x, _y, w, h)
+            painted_image = { file = file, w = w, h = h }
+            return true
+        end,
         hit = function(_, _, _, _, _, callback) image_tap_callback = callback end,
         paragraph = function() end,
+        paragraph_metrics = function(_, _, role) return 1, role == "heading" and 26 or 20 end,
+        scrollable_paragraph = function(_, text, _, y, _, _, role, _, opts)
+            table.insert(painted_paragraphs, { text = text, y = y, role = role, bold = opts.bold })
+        end,
     }
 end
 package.preload["ui/theme"] = function()
@@ -42,6 +51,15 @@ package.preload["ui/uimanager"] = function()
     }
 end
 local Renderer = require("ui/markdown_renderer")
+
+Renderer.render({ app = { state = {} } }, {}, {
+    { kind = "heading", level = 1, text = "v1.2.0-beta2" },
+    { kind = "paragraph", role = "tiny", plain = true, text = "9/21/2026 (11 days ago)" },
+}, "", "", 0, 0, 300, 100, 0)
+assert(painted_paragraphs[1].role == "heading" and painted_paragraphs[1].bold)
+assert(painted_paragraphs[2].role == "tiny" and not painted_paragraphs[2].bold)
+assert(painted_paragraphs[2].text == "9/21/2026 (11 days ago)")
+assert(painted_paragraphs[2].y > painted_paragraphs[1].y)
 
 local function kinds(blocks)
     local out = {}
@@ -207,9 +225,6 @@ local prepared_handle = assert(io.open(prepared_file, "w"))
 prepared_handle:write("prepared image")
 prepared_handle:close()
 local prepared_ref = os.tmpname()
-local ref_handle = assert(io.open(prepared_ref, "w"))
-ref_handle:write(prepared_file .. "\t1200\t600\n")
-ref_handle:close()
 
 local managed_url = "https://repo.example/packages/demo/managed.png"
 local managed_view = {
@@ -220,22 +235,47 @@ local managed_view = {
         refresh = function() end,
     },
 }
-Renderer.render(managed_view, {}, {
-    { kind = "image", alt = "Managed", url = "managed.png" },
-}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0, {
-    [managed_url] = prepared_ref,
-})
-assert(measured_image == nil)
-assert(#scheduled_callbacks == 0)
+for _, metadata in ipairs({ "\t1200\t600\tfalse", "\t1200\t600\ttrue", "\t1200\t600" }) do
+    local ref_handle = assert(io.open(prepared_ref, "w"))
+    ref_handle:write(prepared_file .. metadata .. "\n")
+    ref_handle:close()
+    painted_image = nil
+    Renderer.render(managed_view, {}, {
+        { kind = "image", alt = "Managed", url = "managed.png" },
+    }, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, 0, {
+        [managed_url] = prepared_ref,
+    })
+    assert(painted_image and painted_image.file == prepared_file, "prepared image not rendered: " .. metadata)
+    assert(painted_image.w == 100 and painted_image.h == 50)
+    assert(measured_image == nil)
+    assert(#scheduled_callbacks == 0)
+end
+
+local image_id = "1:" .. prepared_file
+assert(managed_view._readme_visible_images[image_id])
+for _, case in ipairs({
+    { scroll = 0, visible = true },
+    { scroll = 10, visible = true },
+    { scroll = 10, visible = true },
+    { scroll = 50, visible = false },
+}) do
+    Renderer.render(managed_view, {}, {
+        { kind = "image", alt = "Managed", url = "managed.png" },
+    }, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, case.scroll, {
+        [managed_url] = prepared_ref,
+    })
+    assert((managed_view._readme_visible_images[image_id] == true) == case.visible)
+end
 
 local pending_ref = os.tmpname()
 assert(os.remove(pending_ref))
 Renderer.render(managed_view, {}, {
     { kind = "image", alt = "Pending", url = "pending.png" },
-}, "", "https://repo.example/packages/demo/", 0, 0, 100, 0, 0, {
+}, "", "https://repo.example/packages/demo/", 0, 0, 100, 100, 0, {
     ["https://repo.example/packages/demo/pending.png"] = pending_ref,
 })
 assert(#scheduled_callbacks == 1)
+assert(next(managed_view._readme_visible_images) == nil, "pending images must not request a flash")
 
 local pending_ref_2 = os.tmpname()
 assert(os.remove(pending_ref_2))
@@ -250,13 +290,13 @@ Renderer.render(managed_view, {}, {
 })
 assert(#scheduled_callbacks == 1)
 local first_ref = assert(io.open(pending_ref, "w"))
-first_ref:write(prepared_file .. "\t1200\t600\n")
+first_ref:write(prepared_file .. "\t1200\t600\tfalse\n")
 first_ref:close()
 table.remove(scheduled_callbacks, 1)()
 assert(prepared_refreshes == 0)
 assert(#scheduled_callbacks == 1)
 local second_ref = assert(io.open(pending_ref_2, "w"))
-second_ref:write(prepared_file .. "\t1200\t600\n")
+second_ref:write(prepared_file .. "\t1200\t600\ttrue\n")
 second_ref:close()
 table.remove(scheduled_callbacks, 1)()
 assert(prepared_refreshes == 1)

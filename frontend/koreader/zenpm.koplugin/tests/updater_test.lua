@@ -31,6 +31,10 @@ local releases = {
 
 local requested_url
 local requested_headers
+local request_count = 0
+local resolver_refreshes = 0
+local resolver_ready = false
+local resolver_symbol = "res_init"
 local token_home = "/tmp/zenpm-updater-token-test"
 os.execute("mkdir -p " .. token_home)
 local token_file = assert(io.open(token_home .. "/github_token.txt", "wb"))
@@ -40,6 +44,20 @@ token_file:close()
 package.preload["ffi/archiver"] = function() return {} end
 package.preload["json"] = function() return { decode = function() return releases end } end
 package.preload["socket"] = function() return { gettime = function() return 0 end } end
+package.preload["ffi"] = function()
+    local function refresh(symbol)
+        if symbol ~= resolver_symbol then error("symbol unavailable") end
+        resolver_refreshes = resolver_refreshes + 1
+        resolver_ready = true
+    end
+    return {
+        cdef = function() end,
+        C = {
+            res_init = function() refresh("res_init") end,
+            __res_init = function() refresh("__res_init") end,
+        },
+    }
+end
 -- Some KOReader builds expose socketutil without the timeout helpers.
 package.preload["socketutil"] = function() return {} end
 package.preload["gettext"] = function() return function(value) return value end end
@@ -53,8 +71,14 @@ end
 package.preload["ssl.https"] = function()
     return {
         request = function(options)
+            request_count = request_count + 1
             requested_url = options.url
             requested_headers = options.headers
+            if resolver_symbol and not resolver_ready then
+                return nil, "temporary failure in name resolution"
+            end
+            resolver_ready = false
+            if request_count == 1 then return nil, "wantread" end
             options.sink("[]")
             return 1, 200, {}, "OK"
         end,
@@ -75,12 +99,24 @@ local daemon = {
 
 local ok, version = Updater:check(daemon, true, true)
 assert(ok and version == "1.0.1-beta1")
+assert(request_count == 2)
+assert(resolver_refreshes == 2)
 assert(requested_url:match("&cache_bust=%d+$"))
 assert(requested_headers.Authorization == "Bearer developer-token")
 
 ok, version = Updater:check(daemon, false)
 assert(ok and version == "up_to_date")
 assert(not requested_url:find("cache_bust", 1, true))
+
+resolver_symbol = "__res_init"
+ok, version = Updater:check(daemon, true)
+assert(ok and version == "1.0.1-beta1")
+assert(resolver_refreshes == 4)
+
+-- Platforms without either resolver symbol still use their normal HTTPS stack.
+resolver_symbol = nil
+ok, version = Updater:check(daemon, true)
+assert(ok and version == "1.0.1-beta1")
 
 local ereader_daemon = {
     detect_platform = function() return "ereader" end,

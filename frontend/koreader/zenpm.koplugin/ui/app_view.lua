@@ -384,61 +384,31 @@ function AppView:onTapZenPM(_, ges)
             return true
         end
     end
-    if self:tap_should_pass_to_koreader_menu(ges) then
-        return self:show_koreader_menu_from_gesture(ges, "tap")
+    if self:in_koreader_menu_zone(ges) then
+        return self:show_koreader_menu(ges)
     end
     return true
 end
 
-function AppView:tap_menu_enabled()
-    local activation = G_reader_settings and G_reader_settings.readSetting and G_reader_settings:readSetting("activate_menu") or "swipe_tap"
-    return activation == "tap" or activation == "swipe_tap" or activation == "tap_swipe" or activation == "both"
-end
-
-function AppView:tap_in_koreader_menu_zone(ges)
+function AppView:in_koreader_menu_zone(ges)
     local pos = ges and ges.pos
     return pos and self.koreader_menu_zone
         and P.contains(self.koreader_menu_zone, pos.x, pos.y)
+        and pos.y < self.koreader_menu_zone.y + self.koreader_menu_zone.h
         and not (self.koreader_menu_tap_guard and P.contains(self.koreader_menu_tap_guard, pos.x, pos.y))
 end
 
-function AppView:tap_should_pass_to_koreader_menu(ges)
-    return self:tap_menu_enabled()
-        and self:tap_in_koreader_menu_zone(ges)
-end
-
-function AppView:gesture_in_menu_zone(ges)
-    local pos = ges and ges.pos
-    return pos and self.koreader_menu_zone and P.contains(self.koreader_menu_zone, pos.x, pos.y)
-end
-
-function AppView:show_koreader_menu_from_gesture(ges, kind)
-    if kind == "tap" then
-        if not self:tap_menu_enabled() or not self:tap_in_koreader_menu_zone(ges) then
-            return false
-        end
-    elseif not self:gesture_in_menu_zone(ges) then
-        return false
-    else
-        local activation = G_reader_settings and G_reader_settings.readSetting and G_reader_settings:readSetting("activate_menu") or "swipe_tap"
-        if activation ~= "swipe_tap" and activation ~= "tap_swipe" and activation ~= "both" and activation ~= kind then
-            return false
-        end
-    end
+function AppView:show_koreader_menu(ges)
     local plugin = self.app and self.app.plugin
     local ui = plugin and plugin.ui
     local menu = ui and ui.menu
     if not menu then
         return false
     end
-    if kind == "swipe" and menu.onSwipeShowMenu then
+    local handler = ges.ges == "swipe" and "onSwipeShowMenu" or "onTapShowMenu"
+    if menu[handler] then
         local ok = pcall(function()
-            menu:onSwipeShowMenu(ges)
-        end)
-        return ok
-    elseif kind == "tap" and menu.onTapShowMenu then
-        local ok = pcall(function()
-            menu:onTapShowMenu(ges)
+            menu[handler](menu, ges)
         end)
         return ok
     elseif menu.onShowMenu then
@@ -496,10 +466,10 @@ function AppView:onSwipeZenPM(_, ges)
         return true
     end
     local direction = ges.direction
-    if direction ~= "north" and direction ~= "south" then
-        return true
+    if direction == "south" and self:in_koreader_menu_zone(ges) then
+        return self:show_koreader_menu(ges)
     end
-    if direction == "south" and self:show_koreader_menu_from_gesture(ges, "swipe") then
+    if direction ~= "north" and direction ~= "south" then
         return true
     end
     if self.list_bounds and not P.contains(self.list_bounds, ges.pos.x, ges.pos.y) then
@@ -536,12 +506,12 @@ function AppView:onPanZenPM(_, ges)
         return true
     end
 
-    -- Only begin a drag when the gesture starts inside the scrollbar touch
-    -- zone; otherwise let the pan fall through (e.g. for menu gestures).
+    -- Only begin a drag inside the scrollbar touch zone. Consume other pans
+    -- so they cannot activate KOReader's menu.
     if not self._scroll_dragging then
         local sb = self.scrollbar
         if not sb or sb.travel <= 0 or not P.contains(sb.zone, ges.pos.x, ges.pos.y) then
-            return false
+            return true
         end
         self._scroll_dragging = true
     end
@@ -586,7 +556,7 @@ function AppView:onPanReleaseZenPM(_, ges)
         return true
     end
     if not self._scroll_dragging then
-        return false
+        return true
     end
     self:_end_scroll_drag(ges and ges.pos and ges.pos.y)
     return true
@@ -630,6 +600,8 @@ function AppView:onClose()
 end
 
 function AppView:paintTo(bb, x, y)
+    self._readme_visible_images = {}
+    self.dithered = false
     self.hitboxes = {}
     self.focus_targets = {}
     self.list_bounds = nil
@@ -661,9 +633,7 @@ function AppView:paintTo(bb, x, y)
         end
     end
     content_top = Header.draw(self, bb, x, content_top, m.screen_w)
-    if self._zen_status_dimen then
-        self.koreader_menu_zone = self._zen_status_dimen
-    end
+    self.koreader_menu_zone = Geom:new{ x = x, y = y, w = m.screen_w, h = math.floor(m.screen_h * 0.07) }
     if self.app.state.page == "queue" then
         self:draw_content(bb, x, content_top, m.screen_w, y + m.screen_h - content_top)
         return
@@ -676,6 +646,16 @@ function AppView:paintTo(bb, x, y)
         Nav.draw_queue_banner(self, bb, x, nav_top - banner_h, m.screen_w, banner_h)
     end
     Nav.draw(self, bb, x, nav_top, m.screen_w, m.nav_h)
+    self.dithered = next(self._readme_visible_images) ~= nil
+    if self.dithered and self.list_bounds then
+        local region = Geom:new(self.list_bounds)
+        -- Flash every frame containing an image after the regular refresh.
+        UIManager:nextTick(function()
+            if self.dithered then
+                UIManager:setDirty(nil, "flashui", region, true)
+            end
+        end)
+    end
 end
 
 -- Routes to the active page's content renderer, then draws the scrollbar and

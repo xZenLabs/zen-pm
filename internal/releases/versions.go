@@ -21,8 +21,8 @@ const (
 	versionsCacheTTL        = 2 * time.Minute
 	versionsCacheMaxEntries = 8
 	versionsCacheEntryLimit = 512 * 1024
-	versionsFetchAttempts   = 2
-	versionsRetryDelay      = 100 * time.Millisecond
+	releaseRequestAttempts  = 2
+	releaseRetryDelay       = 100 * time.Millisecond
 )
 
 type versionsCacheEntry struct {
@@ -48,7 +48,7 @@ func FetchVersions(versionsURL string) ([]Release, error) {
 
 	client := cabundle.Client(15 * time.Second)
 	var lastErr error
-	for attempt := 1; attempt <= versionsFetchAttempts; attempt++ {
+	for attempt := 1; attempt <= releaseRequestAttempts; attempt++ {
 		data, items, retry, err := fetchVersionsOnce(client, cacheKey)
 		if err == nil {
 			if data != nil && len(data) <= versionsCacheEntryLimit {
@@ -57,10 +57,10 @@ func FetchVersions(versionsURL string) ([]Release, error) {
 			return items, nil
 		}
 		lastErr = err
-		if !retry || attempt == versionsFetchAttempts {
+		if !retry || attempt == releaseRequestAttempts {
 			return nil, err
 		}
-		time.Sleep(versionsRetryDelay * time.Duration(attempt))
+		time.Sleep(releaseRetryDelay * time.Duration(attempt))
 	}
 	return nil, lastErr
 }

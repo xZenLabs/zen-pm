@@ -125,6 +125,20 @@ assert(Models.friendly_published_at({ published_at = "2026-07-30T12:00:00Z" }, 1
 assert(Models.friendly_published_at({ published_at = "2026-07-99T12:00:00Z" }, 1785672000) == "")
 assert(Models.friendly_published_at({ installed = true, update_available = true }, 1785672000) == "Update available")
 
+for locale, expected in pairs({
+    en = "10/2/2026", en_US = "10/2/2026", ["en-US.UTF-8"] = "10/2/2026",
+    C = "10/2/2026", POSIX = "10/2/2026", es = "02/10/2026",
+    es_ES = "02/10/2026", ["es-ES.UTF-8"] = "02/10/2026", en_GB = "02/10/2026",
+}) do
+    G_reader_settings = { readSetting = function() return locale end }
+    assert(Models.localized_date("2026-10-02") == expected, locale)
+end
+G_reader_settings = nil
+assert(Models.localized_date("") == "")
+assert(Models.localized_date("not a date") == "not a date")
+assert(Models.localized_date("2026-13-02") == "2026-13-02")
+assert(Models.localized_date("2026-07-99") == "2026-07-99")
+
 local searchable = {
     { id = "title", name = "Title match", author = "Other", description = "No match" },
     { id = "author", name = "Other", author = "Author match", description = "No match" },

@@ -347,6 +347,20 @@ local function date_ordinal(year, month, day)
     return previous_year * 365 + leap_days + days_before_month[month] + day + leap_day
 end
 
+function Models.localized_date(value)
+    value = tostring(value or "")
+    local published_at = normalized_published_at({ published_at = value .. "T00:00:00Z" })
+    if not published_at then return value end
+    local year, month, day = published_at:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)")
+    local locale = I18n.get_lang():match("^[^%.@]+") or "en"
+    locale = locale:gsub("-", "_"):lower()
+    -- Use the same date order as the ZenOS datetime widget.
+    if locale == "en" or locale == "en_us" or locale == "c" or locale == "posix" then
+        return string.format("%d/%d/%04d", tonumber(month), tonumber(day), tonumber(year))
+    end
+    return string.format("%02d/%02d/%04d", tonumber(day), tonumber(month), tonumber(year))
+end
+
 function Models.friendly_published_at(pkg, now)
     local published_at = normalized_published_at(pkg)
     if not published_at then
