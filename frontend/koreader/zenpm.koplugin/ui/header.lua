@@ -383,8 +383,7 @@ function Header.draw(view, bb, x, y, w)
         Header.draw_search_button(view, bb, right_x, button_y, filter_kind)
     end
     if page == "category_details" and view.app.state.current_category
-            and (view.app.state.current_category.id == "screensavers"
-                or view.app.state.current_category.id == "wallpapers") then
+            and view.app.state.current_category.id == "screensavers" then
         local label = _("Collections")
         right_x = right_x - title_button_width(label) - gap
         draw_title_button(view, bb, right_x, button_y, label, function()

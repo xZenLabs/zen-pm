@@ -643,9 +643,11 @@ assert(tags_box.x + tags_box.w <= collections_box.x
     and hit_boxes["sort:category"].x + hit_boxes["sort:category"].w <= tags_box.x
     and collections_box.x + collections_box.w <= hit_boxes["search:category"].x)
 image_browser_view.app.state.current_category.id = "wallpapers"
+hit_callbacks, hit_boxes, focus_boxes = {}, {}, {}
 Header.draw(image_browser_view, {}, 0, 0, 600)
-hit_callbacks["readerbackdrop-collections"]()
-assert(opened_collections == 2)
+assert(not hit_callbacks["readerbackdrop-collections"] and not focus_boxes["readerbackdrop-collections"])
+assert(not hit_callbacks["readerbackdrop-categories"])
+assert(hit_callbacks["sort:category"] and hit_callbacks["search:category"])
 
 local selected_group
 local group_list_view = { app = {

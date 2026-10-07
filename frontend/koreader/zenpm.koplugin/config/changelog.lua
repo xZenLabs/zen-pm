@@ -85,5 +85,10 @@ return {
         "Update top menu tap zone",
         "Better wifi edge case handling (no IP/no DNS)",
         "Bug fixes"
-    }
+    },
+    ["1.6.2"] = {
+        "Update screensaver tags and categories sections",
+        "Add sort by date to screensavers",
+        "Add ZenOS button feedback"
+    },
 }

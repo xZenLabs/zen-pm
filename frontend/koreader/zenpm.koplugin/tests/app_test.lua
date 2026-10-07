@@ -2999,7 +2999,11 @@ collection_browser.set_loading = function() end
 collection_browser.clear_status = function() end
 collection_browser.refresh = function() end
 collection_browser.load_packages = function() return true, collection_packages end
-collection_browser.client = { load_readerbackdrop = function(_, _, _, _, _, collection)
+collection_browser.client = { load_readerbackdrop = function(_, _, _, tag, _, collection)
+    if tag == "zen-wallpaper" then
+        assert(collection == "")
+        return true, { page = 1, total = 1, total_pages = 1, package_ids = { "wallpaper" } }
+    end
     assert(collection == "library")
     return true, { page = 1, total = 3, total_pages = 1, package_ids = { "old", "new", "wallpaper" } }
 end }
@@ -3013,19 +3017,19 @@ assert(collection_browser.state.visible_packages[1].id == "old")
 collection_browser:set_filter("category", "New")
 assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "new")
 collection_browser.state.filters.category = ""
-collection_browser:show_category_details("wallpapers")
-assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "wallpaper")
-assert(not collection_browser:load_more_readerbackdrop())
 collection_browser.client.readerbackdrop_collections = function()
     return true, { collections = { { id = "library", name = "Library", imageCount = 3 } }, total_pages = 1 }
 end
 collection_browser:show_readerbackdrop_groups("collections")
 assert(collection_browser.state.page == "readerbackdrop_groups")
 collection_browser:set_readerbackdrop_collection(collection_browser.state.visible_packages[2])
-assert(collection_browser.state.page == "category_details" and #collection_browser.state.visible_packages == 1
-    and collection_browser.state.visible_packages[1].id == "wallpaper")
+assert(collection_browser.state.page == "category_details" and #collection_browser.state.visible_packages == 2)
 collection_browser:go_back()
 assert(collection_browser.state.page == "readerbackdrop_groups" and #collection_browser.state.visible_packages == 2)
+collection_browser:show_category_details("wallpapers")
+assert(collection_browser.state.readerbackdrop.collection == "" and collection_browser.state.readerbackdrop.collection_name == nil)
+assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "wallpaper")
+assert(not collection_browser:load_more_readerbackdrop())
 do
     local requests = {}
     collection_browser.client.load_readerbackdrop = function(_, page, query, tag, sort_by, collection)

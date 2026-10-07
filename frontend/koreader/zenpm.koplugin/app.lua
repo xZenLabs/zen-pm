@@ -2894,6 +2894,9 @@ function App:show_category_details(category_id)
     self.state.current_category = category
     if (category.id == "screensavers" or category.id == "wallpapers") and self:has_readerbackdrop() then
         local readerbackdrop = self.state.readerbackdrop
+        if category.id == "wallpapers" then
+            readerbackdrop.collection, readerbackdrop.collection_name = "", nil
+        end
         local query = self.state.filters.category or ""
         if readerbackdrop.total == nil or not readerbackdrop_loaded(self.state, query) then
             if self:load_readerbackdrop_page(1, query) then
