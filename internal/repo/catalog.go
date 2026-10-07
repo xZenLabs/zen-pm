@@ -456,14 +456,23 @@ type readerBackdropImage struct {
 }
 
 type readerBackdropResponse struct {
-	Images     []readerBackdropImage `json:"images"`
-	Total      int                   `json:"total"`
-	TotalPages int                   `json:"totalPages"`
+	Images           []readerBackdropImage `json:"images"`
+	Total            int                   `json:"total"`
+	TotalPages       int                   `json:"totalPages"`
+	ImagesTotalPages int                   `json:"imagesTotalPages"`
+	ImagesTotal      int                   `json:"imagesTotal"`
 }
 
 type ReaderBackdropTag struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+}
+
+type ReaderBackdropCollection struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	ImageCount int    `json:"imageCount"`
+	IsNSFW     bool   `json:"isNSFW"`
 }
 
 // FetchCatalog downloads the repo catalog, auto-detecting between ZenPM manifest.json
@@ -523,15 +532,29 @@ func IsReaderBackdropRepo(repoName, repoURL string) bool {
 }
 
 func fetchReaderBackdropCatalog(repoName, repoURL string, priority int, cacheDir string) ([]*CatalogEntry, error) {
-	entries, _, _, err := fetchReaderBackdropPage(repoName, repoURL, priority, cacheDir, 1, "", "")
+	entries, _, _, err := fetchReaderBackdropPage(repoName, repoURL, priority, cacheDir, 1, "", "", "downloads", "")
 	return entries, err
 }
 
-func fetchReaderBackdropPage(repoName, repoURL string, priority int, cacheDir string, page int, search, tag string) ([]*CatalogEntry, int, int, error) {
+func fetchReaderBackdropPage(repoName, repoURL string, priority int, cacheDir string, page int, search, tag, sortBy, collection string) ([]*CatalogEntry, int, int, error) {
 	if page < 1 {
 		return nil, 0, 0, fmt.Errorf("invalid ReaderBackdrop page %d", page)
 	}
-	query := "sortBy=downloads&limit=24&page=" + strconv.Itoa(page)
+	if collection != "" {
+		return fetchReaderBackdropCollection(repoName, repoURL, priority, collection, page)
+	}
+	if sortBy == "oldest" {
+		_, totalPages, total, err := fetchReaderBackdropPage(repoName, repoURL, priority, cacheDir, 1, search, tag, "createdAt", "")
+		if err != nil || page > totalPages {
+			return nil, totalPages, total, err
+		}
+		page = totalPages - page + 1
+		sortBy = "createdAt"
+	}
+	if sortBy == "" {
+		sortBy = "downloads"
+	}
+	query := "sortBy=" + url.QueryEscape(sortBy) + "&limit=24&page=" + strconv.Itoa(page)
 	if search = strings.TrimSpace(search); search != "" {
 		query += "&search=" + url.QueryEscape(search)
 	}
@@ -552,8 +575,42 @@ func fetchReaderBackdropPage(repoName, repoURL string, priority int, cacheDir st
 	return parseReaderBackdropCatalog(repoName, repoURL, priority, response.Images), response.TotalPages, response.Total, nil
 }
 
+func fetchReaderBackdropCollection(repoName, repoURL string, priority int, collection string, page int) ([]*CatalogEntry, int, int, error) {
+	apiURL := joinURL(repoURL, "api/collections/"+url.PathEscape(collection))
+	data, err := fetchBytesWithTimeout(apiURL, repositoryFetchTimeout, "limit=24&page="+strconv.Itoa(page))
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	var response readerBackdropResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, 0, 0, fmt.Errorf("parse ReaderBackdrop collection: %w", err)
+	}
+	return parseReaderBackdropCatalog(repoName, repoURL, priority, response.Images), max(1, response.ImagesTotalPages), response.ImagesTotal, nil
+}
+
+func fetchReaderBackdropCollections(repoURL string, page int) ([]ReaderBackdropCollection, int, error) {
+	data, err := fetchBytesWithTimeout(joinURL(repoURL, "api/collections"), repositoryFetchTimeout, "limit=12&page="+strconv.Itoa(page))
+	if err != nil {
+		return nil, 0, err
+	}
+	var response struct {
+		Collections []ReaderBackdropCollection `json:"collections"`
+		TotalPages  int                        `json:"totalPages"`
+	}
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, 0, fmt.Errorf("parse ReaderBackdrop collections: %w", err)
+	}
+	collections := make([]ReaderBackdropCollection, 0, len(response.Collections))
+	for _, collection := range response.Collections {
+		if collection.ID != "" && !strings.ContainsAny(collection.ID, "/\\") && !collection.IsNSFW {
+			collections = append(collections, collection)
+		}
+	}
+	return collections, response.TotalPages, nil
+}
+
 func fetchReaderBackdropTags(repoURL string) ([]ReaderBackdropTag, error) {
-	data, err := fetchBytes(joinURL(repoURL, "api/tags/popular"))
+	data, err := fetchBytesWithTimeout(joinURL(repoURL, "api/tags/popular"), repositoryFetchTimeout, "limit=50")
 	if err != nil {
 		return nil, err
 	}

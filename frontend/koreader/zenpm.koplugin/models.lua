@@ -296,6 +296,10 @@ function Models.sort_packages(packages, sort_key, kind, now)
             return compare_text(a, b)
         elseif sort_key == "name_desc" then
             return compare_text(b, a)
+        elseif sort_key == "count" then
+            local ac, bc = tonumber(a.count) or 0, tonumber(b.count) or 0
+            if ac ~= bc then return ac > bc end
+            return compare_text(a, b)
         elseif sort_key == "repo" then
             local ar, br = package_repo(a), package_repo(b)
             if ar ~= br then

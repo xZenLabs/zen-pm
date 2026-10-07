@@ -168,7 +168,24 @@ func TestRepoAPIRejectsLocalURLsBeforeChangingRepos(t *testing.T) {
 func TestReaderBackdropPageRefresh(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/tags/popular" {
+			if r.URL.Query().Get("limit") != "50" {
+				t.Errorf("tags query = %s", r.URL.RawQuery)
+			}
 			_, _ = io.WriteString(w, `[{"name":"quote","count":12}]`)
+			return
+		}
+		if r.URL.Path == "/api/collections" {
+			if r.URL.Query().Get("page") != "2" {
+				t.Errorf("collections query = %s", r.URL.RawQuery)
+			}
+			_, _ = io.WriteString(w, `{"collections":[{"id":"books","name":"Books","imageCount":1}],"totalPages":3}`)
+			return
+		}
+		if r.URL.Path == "/api/collections/books" {
+			if r.URL.Query().Get("limit") != "24" || r.URL.Query().Get("page") != "2" {
+				t.Errorf("collection images query = %s", r.URL.RawQuery)
+			}
+			_, _ = io.WriteString(w, `{"images":[{"id":"book","title":"Book"}],"imagesTotal":25,"imagesTotalPages":2}`)
 			return
 		}
 		if r.URL.Query().Get("search") != "forest" || r.URL.Query().Get("tag") != "quote" {
@@ -178,6 +195,9 @@ func TestReaderBackdropPageRefresh(t *testing.T) {
 		if r.URL.Query().Get("page") != "2" {
 			http.Error(w, "unexpected page", http.StatusBadRequest)
 			return
+		}
+		if r.URL.Query().Get("sortBy") != "createdAt" {
+			t.Errorf("sort query = %s", r.URL.RawQuery)
 		}
 		_, _ = io.WriteString(w, `{"images":[],"total":192,"totalPages":4,"currentPage":2}`)
 	}))
@@ -192,7 +212,7 @@ func TestReaderBackdropPageRefresh(t *testing.T) {
 	}
 	repositories := repo.New(st)
 	srv := New(st, repositories, pkg.New(st, repositories, "host"), 0)
-	req := httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"search":"forest","tag":"quote"}`))
+	req := httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"search":"forest","tag":"quote","sort_by":"createdAt"}`))
 	rec := httptest.NewRecorder()
 
 	srv.handleRepoRefresh(rec, req)
@@ -204,6 +224,29 @@ func TestReaderBackdropPageRefresh(t *testing.T) {
 	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=categories", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"quote"`) {
 		t.Fatalf("categories response = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=collections&page=2", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"Books"`) || !strings.Contains(rec.Body.String(), `"total_pages":3`) {
+		t.Fatalf("collections response = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"collection":"books"}`)))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"package_ids":["readerbackdrop-book"]`) ||
+		!strings.Contains(rec.Body.String(), `"total":25`) || !strings.Contains(rec.Body.String(), `"total_pages":2`) {
+		t.Fatalf("collection response = %d %s", rec.Code, rec.Body.String())
+	}
+	for _, body := range []string{`{"page":1,"sort_by":"invalid"}`, `{"page":1,"collection":"../books"}`, `{"page":1,"collection":".."}`} {
+		rec = httptest.NewRecorder()
+		srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(body)))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("invalid filters: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=collections&page=0", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid page: %d %s", rec.Code, rec.Body.String())
 	}
 }
 

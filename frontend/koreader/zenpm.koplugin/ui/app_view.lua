@@ -352,6 +352,7 @@ function AppView:onZenPMFocusConfirm()
     if not target or type(target.callback) ~= "function" then
         return false
     end
+    P.flash(target)
     target.callback()
     return true
 end
@@ -380,6 +381,7 @@ function AppView:onTapZenPM(_, ges)
     for i = #self.hitboxes, 1, -1 do
         local box = self.hitboxes[i]
         if P.contains(box, x, y) then
+            P.flash(box)
             box.callback(x, y)
             return true
         end
@@ -701,6 +703,8 @@ function AppView:draw_content(bb, x, y, w, h)
     elseif page == "category_details" then
         local category = state.current_category or {}
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)
+    elseif page == "readerbackdrop_groups" then
+        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, "", "readerbackdrop", state.visible_packages, state.readerbackdrop.groups.items, state.filters.readerbackdrop)
     elseif page == "installed" then
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
     elseif page == "queue" then

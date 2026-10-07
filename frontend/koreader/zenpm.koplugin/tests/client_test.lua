@@ -211,10 +211,11 @@ client.request = function(_, method, path, body, timeout)
     assert(path == "/repo/refresh?readerbackdrop=1")
     assert(body.page == 2 and body.search == "moon light")
     assert(body.tag == "minimalist")
+    assert(body.sort_by == "createdAt" and body.collection == "library")
     assert(timeout.total == 60)
     return true, {}
 end
-assert(client:load_readerbackdrop(2, "moon light", "minimalist"))
+assert(client:load_readerbackdrop(2, "moon light", "minimalist", "createdAt", "library"))
 
 client.request = function(_, method, path, body, timeout)
     assert(method == "POST" and path == "/repo/refresh?readerbackdrop=categories")
@@ -222,6 +223,13 @@ client.request = function(_, method, path, body, timeout)
     return true, {}
 end
 assert(client:readerbackdrop_categories())
+
+client.request = function(_, method, path, body, timeout)
+    assert(method == "POST" and path == "/repo/refresh?readerbackdrop=collections&page=2")
+    assert(body == nil and timeout.total == 60)
+    return true, {}
+end
+assert(client:readerbackdrop_collections(2))
 
 local refresh_requests = {}
 client.request = function(_, method, path, _, timeout)

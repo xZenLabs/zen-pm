@@ -817,27 +817,49 @@ func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tags": tags})
 		return
 	}
+	if r.URL.Query().Get("readerbackdrop") == "collections" {
+		page := 1
+		if value := r.URL.Query().Get("page"); value != "" {
+			var err error
+			page, err = strconv.Atoi(value)
+			if err != nil || page < 1 || page > 10000 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ReaderBackdrop page"})
+				return
+			}
+		}
+		collections, totalPages, err := s.repos.ReaderBackdropCollections(page)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"collections": collections, "page": page, "total_pages": totalPages})
+		return
+	}
 	if r.URL.Query().Get("readerbackdrop") == "1" {
 		var request struct {
-			Page   int    `json:"page"`
-			Search string `json:"search"`
-			Tag    string `json:"tag"`
+			Page       int    `json:"page"`
+			Search     string `json:"search"`
+			Tag        string `json:"tag"`
+			SortBy     string `json:"sort_by"`
+			Collection string `json:"collection"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048)).Decode(&request); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		if request.Page < 1 || request.Page > 10000 || len(request.Search) > 200 || len(request.Tag) > 100 {
+		if request.Page < 1 || request.Page > 10000 || len(request.Search) > 200 || len(request.Tag) > 100 ||
+			len(request.Collection) > 100 || strings.ContainsAny(request.Collection, "/\\") || request.Collection == "." || request.Collection == ".." ||
+			(request.SortBy != "" && request.SortBy != "downloads" && request.SortBy != "createdAt" && request.SortBy != "oldest") {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ReaderBackdrop filters"})
 			return
 		}
-		totalPages, total, err := s.repos.LoadReaderBackdropPage(request.Page, request.Search, request.Tag)
+		totalPages, total, ids, err := s.repos.LoadReaderBackdropPage(request.Page, request.Search, request.Tag, request.SortBy, request.Collection)
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"ok": true, "page": request.Page, "total": total, "total_pages": totalPages,
+			"ok": true, "page": request.Page, "total": total, "total_pages": totalPages, "package_ids": ids,
 		})
 		return
 	}

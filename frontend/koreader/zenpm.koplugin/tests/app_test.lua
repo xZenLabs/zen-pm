@@ -152,6 +152,8 @@ package.preload["models"] = function()
         installed_packages = models.installed_packages,
         visible_installed_packages = models.visible_installed_packages,
         filter_packages_by_category = models.filter_packages_by_category,
+        packages_in_category = models.packages_in_category,
+        filter_packages_by_tag = models.filter_packages_by_tag,
         has_release_notes = function(pkg, allow_prerelease)
             if allow_prerelease and pkg.prerelease_notes_url then return true end
             return pkg.release_notes_url ~= nil
@@ -1171,6 +1173,8 @@ do
         list_app.state.current_category = { id = category }
         list_app:prompt_sort("category")
         assert(modal_rows[1].text == "Downloads" and modal_rows[1].icon == "download")
+        assert(#modal_rows == 4 and modal_rows[3].text == "Date added (newest first)"
+            and modal_rows[4].text == "Date added (oldest first)")
     end
     list_app.state.current_repo = { name = "ReaderBackdrop" }
     list_app:prompt_sort("source")
@@ -2803,11 +2807,11 @@ local readerbackdrop_app = {
         packages = {},
     },
     client = {
-        load_readerbackdrop = function(_, page, query, tag)
+        load_readerbackdrop = function(_, page, query, tag, sort_by, collection)
             assert(#restart_actions == readerbackdrop_repaints + 1
                 and restart_actions[#restart_actions] == "paint")
-            table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag })
-            return true, { page = page, total = 2083, total_pages = 3 }
+            table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag, sort_by = sort_by, collection = collection })
+            return true, { page = page, total = 2083, total_pages = 3, package_ids = { "readerbackdrop-page" .. page } }
         end,
     },
     has_readerbackdrop = App.has_readerbackdrop,
@@ -2830,6 +2834,20 @@ assert(App.load_more_readerbackdrop(readerbackdrop_app))
 assert(readerbackdrop_requests[2].page == 1 and readerbackdrop_requests[2].query == ""
     and readerbackdrop_requests[2].tag == "zen-wallpaper")
 assert(readerbackdrop_app.state.readerbackdrop.wallpaper_total == 2083)
+readerbackdrop_app.state.sorts = { category = "published_at_desc" }
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[3].page == 1 and readerbackdrop_requests[3].sort_by == "createdAt")
+assert(readerbackdrop_app.state.readerbackdrop.package_ids["readerbackdrop-page1"]
+    and not readerbackdrop_app.state.readerbackdrop.package_ids["readerbackdrop-page2"])
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[4].page == 2 and readerbackdrop_app.state.readerbackdrop.package_ids["readerbackdrop-page2"])
+assert(not App.load_readerbackdrop_page(readerbackdrop_app, 4, ""))
+readerbackdrop_app.state.sorts.category = "published_at_asc"
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[5].page == 1 and readerbackdrop_requests[5].sort_by == "oldest")
 
 local selected_readerbackdrop
 local readerbackdrop_category_app = {
@@ -2837,6 +2855,7 @@ local readerbackdrop_category_app = {
         page = "category_details",
         current_category = { id = "screensavers" },
         filters = { category = "" },
+        sorts = { readerbackdrop = "count" },
         readerbackdrop = { tag = "" },
     },
     client = {
@@ -2845,6 +2864,11 @@ local readerbackdrop_category_app = {
                 tags = { { name = "quote", count = 12 }, { name = "zen-wallpaper", count = 10 },
                     { name = "black and white", count = 8 } },
             }
+        end,
+        readerbackdrop_collections = function(_, page)
+            local items = { { id = "library", name = "Library", imageCount = 30 } }
+            if page == 2 then table.insert(items, { id = "art", name = "Art", imageCount = 5 }) end
+            return true, { collections = items, total_pages = 2, page = page }
         end,
     },
     reset_scroll = function() end,
@@ -2855,13 +2879,179 @@ local readerbackdrop_category_app = {
     end,
     show_category_details = function() end,
     set_readerbackdrop_category = App.set_readerbackdrop_category,
+    set_readerbackdrop_collection = App.set_readerbackdrop_collection,
+    show_readerbackdrop_groups = App.show_readerbackdrop_groups,
+    show_readerbackdrop_group_list = App.show_readerbackdrop_group_list,
+    set_sort = App.set_sort,
+    scroll_key = App.scroll_key,
+    clear_status = function() end,
+    refresh = function() end,
 }
-App.prompt_readerbackdrop_categories(readerbackdrop_category_app)
-assert(modal_title == "Tags" and #modal_rows == 3)
-assert(modal_rows[1].checked_func() and modal_rows[2].text == "quote (12)")
-modal_rows[3].callback()
+modal_title = "unchanged"
+App.show_readerbackdrop_groups(readerbackdrop_category_app, "tags")
+assert(modal_title == "unchanged" and readerbackdrop_category_app.state.page == "readerbackdrop_groups")
+assert(#readerbackdrop_category_app.state.visible_packages == 3
+    and readerbackdrop_category_app.state.visible_packages[2].name == "quote"
+    and readerbackdrop_category_app.state.visible_packages[2].count == 12)
+assert(App.scroll_key(readerbackdrop_category_app) == "readerbackdrop:tags")
+App.set_readerbackdrop_category(readerbackdrop_category_app, readerbackdrop_category_app.state.visible_packages[3].id)
 assert(readerbackdrop_category_app.state.readerbackdrop.tag == "black and white")
 assert(selected_readerbackdrop.page == 1 and selected_readerbackdrop.query == "")
+assert(readerbackdrop_category_app.state.page == "category_details")
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.page == "readerbackdrop_groups")
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.page == "category_details" and readerbackdrop_category_app.state.readerbackdrop.tag == "")
+
+App.show_readerbackdrop_groups(readerbackdrop_category_app, "collections")
+assert(modal_title == "unchanged" and #readerbackdrop_category_app.state.visible_packages == 3)
+assert(readerbackdrop_category_app.state.visible_packages[2].name == "Library"
+    and readerbackdrop_category_app.state.visible_packages[2].count == 30)
+App.set_readerbackdrop_collection(readerbackdrop_category_app, readerbackdrop_category_app.state.visible_packages[2])
+assert(readerbackdrop_category_app.state.readerbackdrop.collection == "library"
+    and readerbackdrop_category_app.state.readerbackdrop.tag == "")
+assert(selected_readerbackdrop.page == 1 and selected_readerbackdrop.query == "")
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.page == "readerbackdrop_groups")
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "Library")
+assert(#readerbackdrop_category_app.state.visible_packages == 2
+    and readerbackdrop_category_app.state.visible_packages[1].id == "library")
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "")
+assert(#readerbackdrop_category_app.state.visible_packages == 3 and #readerbackdrop_category_app.state.readerbackdrop.groups.items == 2)
+assert(readerbackdrop_category_app.state.visible_packages[3].readerbackdrop_load_more)
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "Library")
+do
+    local fetch = readerbackdrop_category_app.client.readerbackdrop_collections
+    readerbackdrop_category_app.client.readerbackdrop_collections = function() return false, "offline" end
+    assert(not App.load_more_readerbackdrop(readerbackdrop_category_app))
+    assert(readerbackdrop_category_app.state.readerbackdrop.groups.page == 1
+        and #readerbackdrop_category_app.state.readerbackdrop.groups.items == 2)
+    readerbackdrop_category_app.client.readerbackdrop_collections = fetch
+end
+assert(App.load_more_readerbackdrop(readerbackdrop_category_app))
+assert(readerbackdrop_category_app.state.filters.readerbackdrop == "Library"
+    and #readerbackdrop_category_app.state.visible_packages == 1)
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "")
+assert(readerbackdrop_category_app.state.visible_packages[3].id == "art"
+    and readerbackdrop_category_app.state.readerbackdrop.groups.page == 2)
+assert(#readerbackdrop_category_app.state.readerbackdrop.groups.items == 3)
+assert(not App.load_more_readerbackdrop(readerbackdrop_category_app))
+App.prompt_sort(readerbackdrop_category_app, "readerbackdrop")
+assert(modal_title == "Sort collections" and #modal_rows == 3 and modal_rows[3].checked_func())
+modal_rows[1].callback()
+assert(readerbackdrop_category_app.state.visible_packages[1].id == ""
+    and readerbackdrop_category_app.state.visible_packages[2].id == "art")
+modal_rows[2].callback()
+assert(readerbackdrop_category_app.state.visible_packages[1].id == ""
+    and readerbackdrop_category_app.state.visible_packages[2].id == "library")
+App.reload_current_page(readerbackdrop_category_app)
+assert(#readerbackdrop_category_app.state.visible_packages == 3 and readerbackdrop_category_app.state.readerbackdrop.groups.page == 2)
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.readerbackdrop.collection == "")
+readerbackdrop_category_app.state.readerbackdrop.collection = "library"
+App.set_readerbackdrop_category(readerbackdrop_category_app, "quote")
+assert(readerbackdrop_category_app.state.readerbackdrop.collection == "")
+readerbackdrop_category_app.client.readerbackdrop_categories = function() return false, "offline" end
+App.show_readerbackdrop_groups(readerbackdrop_category_app, "tags")
+assert(readerbackdrop_category_app.state.page == "category_details" and modal_message == "Could not load tags: offline")
+
+do
+    local browser = App:new({})
+    local requests = 0
+    browser.state.sorts.readerbackdrop = "count"
+    browser.clear_status = function() end
+    browser.refresh = function() end
+    browser.client.readerbackdrop_categories = function()
+        requests = requests + 1
+        local tags = { { name = "zen-wallpaper", count = 100 } }
+        for index = 1, 50 do table.insert(tags, { name = "Tag " .. index, count = index }) end
+        return true, { tags = tags }
+    end
+    browser:show_readerbackdrop_groups("tags")
+    assert(#browser.state.visible_packages == 26 and browser.state.visible_packages[2].count == 50)
+    assert(browser.state.visible_packages[26].name == "Load more tags")
+    browser:prompt_sort("readerbackdrop")
+    assert(modal_title == "Sort tags" and modal_rows[3].text == "Most images")
+    browser.state.scroll[browser:scroll_key()] = 400
+    assert(browser:load_more_readerbackdrop())
+    assert(#browser.state.visible_packages == 50 and browser.state.scroll[browser:scroll_key()] == 400)
+    assert(browser:load_more_readerbackdrop())
+    assert(#browser.state.visible_packages == 51 and not browser:load_more_readerbackdrop() and requests == 1)
+    browser:set_sort("readerbackdrop", "name_asc")
+    assert(browser.state.visible_packages[1].id == "" and browser.state.visible_packages[2].name == "Tag 1")
+    assert(App:new({}).state.sorts.readerbackdrop == "name_asc")
+    browser:set_filter("readerbackdrop", "Tag 50")
+    assert(#browser.state.visible_packages == 1 and browser.state.visible_packages[1].name == "Tag 50")
+    settings.sorts = nil
+end
+
+local collection_browser = App:new({})
+local collection_packages = {
+    { id = "old", name = "Old", category = "screensavers", repo = "ReaderBackdrop", tags = { "quote" }, published_at = "2026-09-01T00:00:00Z" },
+    { id = "new", name = "New", category = "screensavers", repo = "ReaderBackdrop", tags = { "quote" }, published_at = "2026-10-01T00:00:00Z" },
+    { id = "unrelated", name = "Unrelated", category = "screensavers", repo = "ReaderBackdrop" },
+    { id = "wallpaper", name = "Wallpaper", category = "wallpapers", repo = "ReaderBackdrop" },
+}
+collection_browser.state.readerbackdrop.enabled = true
+collection_browser.state.page = "category_details"
+collection_browser.ensure_backend = function() return true end
+collection_browser.set_loading = function() end
+collection_browser.clear_status = function() end
+collection_browser.refresh = function() end
+collection_browser.load_packages = function() return true, collection_packages end
+collection_browser.client = { load_readerbackdrop = function(_, _, _, _, _, collection)
+    assert(collection == "library")
+    return true, { page = 1, total = 3, total_pages = 1, package_ids = { "old", "new", "wallpaper" } }
+end }
+collection_browser.state.current_category = { id = "screensavers" }
+collection_browser:set_readerbackdrop_collection({ id = "library", name = "Library" })
+assert(#collection_browser.state.visible_packages == 2)
+collection_browser:set_sort("category", "published_at_desc")
+assert(collection_browser.state.visible_packages[1].id == "new")
+collection_browser:set_sort("category", "published_at_asc")
+assert(collection_browser.state.visible_packages[1].id == "old")
+collection_browser:set_filter("category", "New")
+assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "new")
+collection_browser.state.filters.category = ""
+collection_browser:show_category_details("wallpapers")
+assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "wallpaper")
+assert(not collection_browser:load_more_readerbackdrop())
+collection_browser.client.readerbackdrop_collections = function()
+    return true, { collections = { { id = "library", name = "Library", imageCount = 3 } }, total_pages = 1 }
+end
+collection_browser:show_readerbackdrop_groups("collections")
+assert(collection_browser.state.page == "readerbackdrop_groups")
+collection_browser:set_readerbackdrop_collection(collection_browser.state.visible_packages[2])
+assert(collection_browser.state.page == "category_details" and #collection_browser.state.visible_packages == 1
+    and collection_browser.state.visible_packages[1].id == "wallpaper")
+collection_browser:go_back()
+assert(collection_browser.state.page == "readerbackdrop_groups" and #collection_browser.state.visible_packages == 2)
+do
+    local requests = {}
+    collection_browser.client.load_readerbackdrop = function(_, page, query, tag, sort_by, collection)
+        table.insert(requests, { page = page, query = query, tag = tag, sort_by = sort_by, collection = collection })
+        return true, { page = page, total = 3, total_pages = 2,
+            package_ids = page == 1 and { "old" } or { "new", "wallpaper" } }
+    end
+    collection_browser.state.current_category = { id = "screensavers" }
+    collection_browser:set_readerbackdrop_collection({ id = "library", name = "Library" })
+    assert(#collection_browser.state.visible_packages == 1)
+    collection_browser:set_sort("category", "published_at_desc")
+    assert(#requests == 1)
+    assert(collection_browser:load_more_readerbackdrop())
+    assert(#requests == 2 and requests[2].page == 2 and requests[2].collection == "library")
+    assert(#collection_browser.state.visible_packages == 2 and collection_browser.state.visible_packages[1].id == "new")
+    collection_browser:set_filter("category", "New")
+    assert(#requests == 2 and #collection_browser.state.visible_packages == 1)
+    assert(not collection_browser:load_more_readerbackdrop())
+    collection_browser.state.filters.category = ""
+    collection_browser:set_readerbackdrop_category("quote")
+    assert(requests[3].page == 1 and requests[3].tag == "quote" and requests[3].collection == "")
+    assert(collection_browser:load_more_readerbackdrop())
+    assert(requests[4].page == 2 and requests[4].tag == "quote" and requests[4].sort_by == "createdAt")
+    assert(#collection_browser.state.visible_packages == 2 and collection_browser.state.visible_packages[1].id == "new")
+    assert(not collection_browser:load_more_readerbackdrop())
+end
 
 local searched_page, searched_query
 local readerbackdrop_search_app = {

@@ -1,7 +1,9 @@
 local Geom = require("ui/geometry")
+local Screen = require("device").screen
 local ImageWidget = require("ui/widget/imagewidget")
 local TextWidget = require("ui/widget/textwidget")
 local TextBoxWidget = require("ui/widget/textboxwidget")
+local UIManager = require("ui/uimanager")
 
 local Theme = require("ui/theme")
 
@@ -63,7 +65,7 @@ function P.stroke(bb, x, y, w, h, size, color)
     if w <= 0 or h <= 0 then
         return
     end
-    bb:paintBorder(x, y, w, h, size or 2, color or Theme.border, nil, true)
+    bb:paintBorder(x, y, w, h, size or 2, color or Theme.border, Theme.metrics().radius, true)
 end
 
 function P.box(bb, x, y, w, h, opts)
@@ -520,11 +522,43 @@ function P.dim(bb, x, y, w, h, by)
     end)
 end
 
-function P.hit(app, x, y, w, h, callback, label)
+function P.flash(box)
+    if box.allow_flash == false or G_reader_settings:isFalse("flash_ui") then
+        return
+    end
+    local region = P.geom(box.x, box.y, box.w, box.h)
+    local feedback = package.loaded["common/ui/button_feedback"]
+    if feedback then
+        return feedback.flash(region)
+    end
+
+    -- Match ZenOS's rounded feedback when it is not loaded.
+    local x, y, w, h = region.x, region.y, region.w, region.h
+    local radius = math.min(Theme.metrics().radius, math.floor(math.min(w, h) / 2))
+    local function invert()
+        Screen.bb:invertRect(x, y + radius, w, h - 2 * radius)
+        for row = 0, radius - 1 do
+            local dy = radius - row - 0.5
+            local inset = math.ceil(radius - math.sqrt(radius * radius - dy * dy))
+            Screen.bb:invertRect(x + inset, y + row, w - 2 * inset, 1)
+            Screen.bb:invertRect(x + inset, y + h - row - 1, w - 2 * inset, 1)
+        end
+    end
+    local mode = Screen:isColorScreen() and "ui" or "fast"
+    invert()
+    UIManager:setDirty(nil, mode, region)
+    UIManager:forceRePaint()
+    UIManager:yieldToEPDC()
+    invert()
+    UIManager:setDirty(nil, mode, region)
+end
+
+function P.hit(app, x, y, w, h, callback, label, allow_flash)
     table.insert(app.hitboxes, {
         x = x, y = y, w = w, h = h,
         callback = callback,
         label = label,
+        allow_flash = allow_flash,
     })
 end
 

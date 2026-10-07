@@ -9,6 +9,8 @@ local painted_images = {}
 local painted_boxes = {}
 local painted_rects = {}
 local hit_callbacks = {}
+local hit_boxes = {}
+local focus_boxes = {}
 
 package.preload["zenpm_constants"] = function()
     return { PLUGIN_DIR = root, REPO_READERBACKDROP_NAME = "ReaderBackdrop" }
@@ -81,8 +83,13 @@ package.preload["ui/primitives"] = function()
         end,
         center_text_box = function() end,
         dim = function() end,
-        hit = function(_, _, _, _, _, callback, id) hit_callbacks[id] = callback end,
-        focus_control = function() end,
+        hit = function(_, x, y, w, h, callback, id)
+            hit_callbacks[id] = callback
+            hit_boxes[id] = { x = x, y = y, w = w, h = h }
+        end,
+        focus_control = function(_, _, id, x, y, w, h, callback)
+            focus_boxes[id] = { x = x, y = y, w = w, h = h, callback = callback }
+        end,
         focus_target = function() return false end,
         focus_outline = function() end,
     }
@@ -370,7 +377,7 @@ for index = 1, 50 do
         category = "wallpapers",
     })
 end
-Pages.packages_page({
+local screensaver_view = {
     app = {
         state = {
             page = "category_details",
@@ -385,12 +392,18 @@ Pages.packages_page({
         show_package_details = function() end,
         load_more_readerbackdrop = function() load_more_calls = load_more_calls + 1 end,
     },
-}, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
+}
+Pages.packages_page(screensaver_view, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
 assert(table.concat(painted_text, "\n"):find("Load more wallpapers", 1, true))
 assert(table.concat(painted_text, "\n"):find("24 of 10 loaded", 1, true))
 assert(rendered_screensavers == 24)
 hit_callbacks["readerbackdrop-load-more"]()
 assert(load_more_calls == 1)
+screensaver_view.app.state.readerbackdrop = { page = 1, total_pages = 1, package_ids = {} }
+rendered_screensavers = 0
+painted_text = {}
+Pages.packages_page(screensaver_view, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
+assert(rendered_screensavers == 50 and not table.concat(painted_text, "\n"):find("Load more", 1, true))
 
 painted_text = {}
 local opened_folder
@@ -538,6 +551,47 @@ assert(Header.page_title({ app = { state = {
     readerbackdrop = {},
 } } }) == "ReaderBackdrop (2085)")
 
+for _, case in ipairs({
+    { page = "advanced_settings", title = "Advanced" },
+    { page = "updates_settings", title = "Updates" },
+    { page = "about_settings", title = "About" },
+    { page = "installed", title = "Wallpapers", state = { installed_folder = "wallpapers" }, callback = "close_installed_folder" },
+    { page = "category_details", title = "Category", callback = "go_back" },
+    { page = "readerbackdrop_groups", title = "Tags", state = { readerbackdrop = { groups = { kind = "tags" } } }, callback = "go_back" },
+    { page = "source_details", title = "Source", callback = "show_sources" },
+    { page = "package_details", title = "Package", state = { current_package = { name = string.rep("W", 60) } }, callback = "go_back_from_details" },
+    { page = "queue", title = "Queue", callback = "close_queue" },
+}) do
+    for _, width in ipairs({ 300, 160 }) do
+        hit_callbacks, hit_boxes, focus_boxes = {}, {}, {}
+        gettext.translation = { [case.title] = width == 300 and case.title or string.rep("W", 60) }
+        local backs = 0
+        local view = { app = {
+            state = { page = case.page, filters = { installed = "", category = "" } },
+            queue_count = function() return 0 end,
+            installed_update_count = function() return 0 end,
+            [case.callback or "show_settings"] = function() backs = backs + 1 end,
+        } }
+        for key, value in pairs(case.state or {}) do view.app.state[key] = value end
+        Header.draw(view, {}, 10, 20, width)
+        local title = Header.page_title(view)
+        local back = assert(hit_boxes.back)
+        local settings = case.callback == nil
+        assert(back.x == (settings and 44 or 18) and back.y == (settings and 27 or 26)
+            and back.h == (settings and 44 or 46))
+        assert(back.w == (settings and 58 or 52) + math.min(width - (settings and 152 or 118), #title + 8),
+            "back feedback must cover the arrow, gap, title and right padding")
+        assert(back.x + back.w <= hit_boxes[settings and "close-settings" or "actions"].x - 8)
+        assert(not hit_boxes["back-title"], "title bars must use one back hitbox")
+        local focus = assert(focus_boxes.back)
+        assert(focus.x == back.x and focus.y == back.y and focus.w == back.w and focus.h == back.h)
+        hit_callbacks.back()
+        focus.callback()
+        assert(backs == 2)
+    end
+end
+gettext.translation = {}
+
 local queue_closed = false
 Header.draw({ app = {
     state = { page = "queue", queue_running = false },
@@ -545,8 +599,8 @@ Header.draw({ app = {
     close_queue = function() queue_closed = true end,
     show_actions = function() end,
 } }, {}, 0, 0, 300)
-assert(type(hit_callbacks["back-title"]) == "function")
-hit_callbacks["back-title"]()
+assert(type(hit_callbacks.back) == "function")
+hit_callbacks.back()
 assert(queue_closed)
 
 local folder_closed = 0
@@ -559,14 +613,85 @@ local folder_view = { app = {
     close_installed_folder = function() folder_closed = folder_closed + 1 end,
 } }
 Header.draw(folder_view, {}, 0, 0, 300)
-assert(hit_callbacks.back and hit_callbacks["back-title"])
+assert(hit_callbacks.back and not hit_callbacks["back-title"])
 assert(hit_callbacks["sort:installed_images"])
 hit_callbacks["sort:installed_images"]()
 assert(folder_sort == "installed_images")
 assert(not hit_callbacks["filter-category:installed"])
 hit_callbacks.back()
-hit_callbacks["back-title"]()
+focus_boxes.back.callback()
 assert(folder_closed == 2)
+
+local opened_collections = 0
+local opened_tags = 0
+local image_browser_view = { app = {
+    state = { page = "category_details", current_category = { id = "screensavers", label = "Screensavers" },
+        readerbackdrop = { enabled = true, collection_name = "Library", total = 30 }, filters = { category = "" } },
+    show_readerbackdrop_groups = function(_, kind)
+        if kind == "collections" then opened_collections = opened_collections + 1
+        else opened_tags = opened_tags + 1 end
+    end,
+} }
+Header.draw(image_browser_view, {}, 0, 0, 600)
+assert(Header.page_title(image_browser_view) == "Screensavers: Library (30)")
+hit_callbacks["readerbackdrop-collections"]()
+hit_callbacks["readerbackdrop-categories"]()
+assert(opened_collections == 1 and opened_tags == 1)
+local tags_box = hit_boxes["readerbackdrop-categories"]
+local collections_box = hit_boxes["readerbackdrop-collections"]
+assert(tags_box.x + tags_box.w <= collections_box.x
+    and hit_boxes["sort:category"].x + hit_boxes["sort:category"].w <= tags_box.x
+    and collections_box.x + collections_box.w <= hit_boxes["search:category"].x)
+image_browser_view.app.state.current_category.id = "wallpapers"
+Header.draw(image_browser_view, {}, 0, 0, 600)
+hit_callbacks["readerbackdrop-collections"]()
+assert(opened_collections == 2)
+
+local selected_group
+local group_list_view = { app = {
+    state = { page = "readerbackdrop_groups", readerbackdrop = { groups = { kind = "tags" } }, filters = { readerbackdrop = "" } },
+    set_readerbackdrop_category = function(_, tag) selected_group = tag end,
+    set_readerbackdrop_collection = function(_, collection) selected_group = collection and collection.id or "all" end,
+    load_more_readerbackdrop = function() selected_group = "more" end,
+    prompt_sort = function(_, kind) selected_group = "sort:" .. kind end,
+    go_back = function() selected_group = "back" end,
+} }
+painted_text = {}
+Pages.packages_page(group_list_view, {}, 0, 0, 600, 800, 0, "", "readerbackdrop", {
+    { id = "", name = "All", readerbackdrop_group = "tags" },
+    { id = "quote", name = "quote", count = 12, readerbackdrop_group = "tags" },
+    { id = "library", name = "Library", count = 30, readerbackdrop_group = "collections" },
+    { name = "Load more tags", readerbackdrop_load_more = true },
+}, {}, "")
+assert(table.concat(painted_text, "\n"):find("12 images", 1, true))
+hit_callbacks["readerbackdrop-group:quote"]()
+assert(selected_group == "quote")
+hit_callbacks["readerbackdrop-group:"]()
+assert(selected_group == "")
+hit_callbacks["readerbackdrop-group:library"]()
+assert(selected_group == "library")
+assert(table.concat(painted_text, "\n"):find("Load more tags", 1, true))
+hit_callbacks["readerbackdrop-load-more"]()
+assert(selected_group == "more")
+Header.draw(group_list_view, {}, 0, 0, 600)
+assert(Header.page_title(group_list_view) == "Tags" and hit_callbacks["search:readerbackdrop"]
+    and hit_callbacks["sort:readerbackdrop"])
+hit_callbacks["sort:readerbackdrop"]()
+assert(selected_group == "sort:readerbackdrop")
+group_list_view.app.state.readerbackdrop.groups.kind = "collections"
+painted_text = {}
+Pages.packages_page(group_list_view, {}, 0, 0, 600, 800, 0, "", "readerbackdrop", {
+    { name = "Load more collections", readerbackdrop_load_more = true },
+}, {}, "")
+assert(painted_text[1] == "Load more collections")
+Header.draw(group_list_view, {}, 0, 0, 600)
+assert(Header.page_title(group_list_view) == "Collections" and hit_callbacks["sort:readerbackdrop"])
+group_list_view.app.state.readerbackdrop.groups.kind = "tags"
+hit_callbacks.back()
+assert(selected_group == "back")
+painted_text = {}
+Pages.packages_page(group_list_view, {}, 0, 0, 600, 800, 0, "", "readerbackdrop", {}, {}, "missing")
+assert(painted_text[1] == "No tags match the filter.")
 
 painted_text = {}
 Pages.queue({

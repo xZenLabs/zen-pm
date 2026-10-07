@@ -87,7 +87,7 @@ function Scroll.draw_scrollbar(view, bb, max_scroll, scroll)
         view.app.state.scroll[view.app:scroll_key()] =
             snap_scroll(max_scroll * ratio, view.scroll_step, max_scroll)
         view:refresh()
-    end, "scrollbar")
+    end, "scrollbar", false)
 end
 
 -- Map an absolute screen Y to a scroll offset using the captured scrollbar

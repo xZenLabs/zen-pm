@@ -51,7 +51,7 @@ local function readerbackdrop_rows(view, visible)
     local rows = {}
     local loaded = 0
     for _, pkg in ipairs(visible or {}) do
-        if pkg.repo ~= Constants.REPO_READERBACKDROP_NAME or loaded < page * 24 then
+        if pkg.repo ~= Constants.REPO_READERBACKDROP_NAME or readerbackdrop.package_ids or loaded < page * 24 then
             table.insert(rows, pkg)
             if pkg.repo == Constants.REPO_READERBACKDROP_NAME then loaded = loaded + 1 end
         end
@@ -71,7 +71,7 @@ local function draw_readerbackdrop_load_more(view, bb, item, x, y, w, h, group, 
         height = h,
         icon = Images.asset("downloads.svg"),
         icon_fallback = "+",
-        title = view.app.state.page == "category_details" and view.app.state.current_category
+        title = item.name or view.app.state.page == "category_details" and view.app.state.current_category
             and view.app.state.current_category.id == "wallpapers"
             and _("Load more wallpapers") or _("Load more screensavers"),
         subtitle = item.subtitle,
@@ -202,6 +202,9 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
                 or _("No packages installed. Browse Search to find packages.")
         elseif kind == "category" then
             msg = query and query ~= "" and _("No packages match the filter.") or _("No packages found for this category.")
+        elseif kind == "readerbackdrop" then
+            msg = view.app.state.readerbackdrop.groups.kind == "tags" and _("No tags match the filter.")
+                or _("No collections match the filter.")
         elseif query and query ~= "" then
             msg = _("No packages match the filter.")
         end
@@ -211,6 +214,36 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     end
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.readerbackdrop_group then
+            local callback = function()
+                if pkg.readerbackdrop_group == "tags" then
+                    view.app:set_readerbackdrop_category(pkg.id)
+                else
+                    view.app:set_readerbackdrop_collection(pkg.id ~= "" and pkg or nil)
+                end
+            end
+            local id = "readerbackdrop-group:" .. tostring(pkg.id)
+            Cards.compact(view, bb, x + pad, row_y, w - pad * 2 - gutter, {
+                height = card_h,
+                icon = Images.asset("packages.svg"),
+                title = pkg.name,
+                subtitle = tonumber(pkg.count) and tostring(pkg.count) .. " " .. _("images") or "",
+                right_icon = Images.asset("chevron.right.svg"),
+                callback = callback,
+                hit_id = id,
+                focus = {
+                    id = id,
+                    focus_type = "package",
+                    focus_column = "main",
+                    focus_content = true,
+                    focus_primary = true,
+                    list_group = kind,
+                    list_index = index,
+                    list_count = count,
+                },
+            })
+            return
+        end
         if pkg.installed_folder then
             local category = pkg.installed_folder
             local callback = function() view.app:show_installed(category.id) end
