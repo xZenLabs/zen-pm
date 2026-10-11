@@ -86,7 +86,8 @@ return {
         "Better wifi edge case handling (no IP/no DNS)",
         "Bug fixes"
     },
-    ["1.6.2"] = {
+    ["1.7.0"] = {
+        "Add support for Zen Icon Packs",
         "Update screensaver tags and categories sections",
         "Add sort by date to screensavers",
         "Add ZenOS button feedback"

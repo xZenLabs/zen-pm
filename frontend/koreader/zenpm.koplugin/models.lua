@@ -78,6 +78,9 @@ local function normalize_category(value)
             or value == "koreaderpatch" or value == "koreaderpatches" then
         return "koreaderpatches"
     end
+    if value == "iconpack" or value == "zeniconpack" or value == "zeniconpacks" then
+        return "iconpacks"
+    end
     return value
 end
 
@@ -420,6 +423,19 @@ function Models.installed_patch_item(pkg, asset)
     return item
 end
 
+function Models.installed_icon_pack_item(pkg, asset)
+    local item = Models.installed_patch_item(pkg, asset)
+    item.patch_asset = nil
+    item.icon_pack_asset = asset
+    if type(pkg.installed_asset_versions) == "table" then
+        item.installed_version = pkg.installed_asset_versions[asset]
+    end
+    if type(pkg.installed_asset_updates) == "table" then
+        item.update_available = pkg.installed_asset_updates[asset] == true
+    end
+    return item
+end
+
 function Models.installed_packages(packages)
     local out = {}
     for _, pkg in ipairs(packages or {}) do
@@ -427,6 +443,12 @@ function Models.installed_packages(packages)
             for _, asset in ipairs(pkg.installed_assets or {}) do
                 if type(asset) == "string" and asset ~= "" then
                     table.insert(out, Models.installed_patch_item(pkg, asset))
+                end
+            end
+        elseif Models.is_icon_pack_package(pkg) then
+            for _i, asset in ipairs(pkg.installed_assets or {}) do
+                if type(asset) == "string" and asset ~= "" then
+                    table.insert(out, Models.installed_icon_pack_item(pkg, asset))
                 end
             end
         elseif pkg.installed then
@@ -482,7 +504,7 @@ function Models.select_featured(packages)
 end
 
 function Models.package_action_label(pkg)
-    if Models.is_patch_package(pkg) and not Models.is_installed_patch_item(pkg) then
+    if Models.is_asset_collection_package(pkg) and not Models.is_installed_patch_item(pkg) and not pkg.icon_pack_asset then
         if type(pkg.installed_assets) == "table" and #pkg.installed_assets > 0 then
             return _("Modify")
         end
@@ -504,6 +526,19 @@ function Models.is_patch_package(pkg)
     return normalize_category(pkg.category) == "koreaderpatches"
 end
 
+function Models.is_icon_pack_package(pkg)
+    return pkg and normalize_category(pkg.category) == "iconpacks" or false
+end
+
+function Models.is_asset_collection_package(pkg)
+    return Models.is_patch_package(pkg) or Models.is_icon_pack_package(pkg)
+end
+
+function Models.asset_details_tab(pkg)
+    if Models.is_patch_package(pkg) then return "patches" end
+    if Models.is_icon_pack_package(pkg) then return "iconpacks" end
+end
+
 function Models.is_font_package(pkg)
     return pkg and normalize_category(pkg.category) == "fonts" or false
 end
@@ -516,7 +551,7 @@ end
 
 function Models.is_direct_asset_package(pkg)
     if not pkg then return false end
-    return Models.is_font_package(pkg) or Models.is_image_asset_package(pkg)
+    return Models.is_font_package(pkg) or Models.is_image_asset_package(pkg) or Models.is_icon_pack_package(pkg)
 end
 
 function Models.is_installed_patch_item(pkg)
@@ -536,6 +571,7 @@ local function github_repo_name(source)
 end
 
 function Models.package_display_name(pkg, fallback)
+    if pkg and pkg.icon_pack_asset then return pkg.icon_pack_asset end
     if Models.is_installed_patch_item(pkg) then
         return pkg.patch_asset
     end

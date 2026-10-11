@@ -782,14 +782,15 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         })
     end
     local assets = Models.package_assets(pkg)
-    local show_patch_tab = Models.is_patch_package(pkg) and #assets > 0
+    local asset_tab = Models.asset_details_tab(pkg)
+    local show_patch_tab = asset_tab ~= nil and #assets > 0
     local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates)
     local details_tab = view.app.state.details_tab or "readme"
     if details_tab == "release_notes" and not show_release_notes_tab then
         details_tab = "readme"
-    elseif details_tab == "patches" and not show_patch_tab then
+    elseif details_tab == asset_tab and not show_patch_tab then
         details_tab = "readme"
-    elseif details_tab ~= "release_notes" and details_tab ~= "patches" then
+    elseif details_tab ~= "release_notes" and details_tab ~= asset_tab then
         details_tab = "readme"
     end
     local tabs = {
@@ -799,7 +800,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         table.insert(tabs, { id = "release_notes", label = _("Release Notes") })
     end
     if show_patch_tab then
-        table.insert(tabs, { id = "patches", label = _("Patches") })
+        table.insert(tabs, { id = asset_tab, label = Models.is_icon_pack_package(pkg) and _("Icon Packs") or _("Patches") })
     end
     if #tabs > 1 then
         local tab_h = Theme.scale(38)
@@ -839,7 +840,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, panel_x, cy, panel_w, panel_h, panel_h)
         return 0
     end
-    if details_tab == "patches" then
+    if details_tab == asset_tab and show_patch_tab then
         local gap = Theme.scale(8)
         local row_h = patch_row_height(content_h, gap)
         local list_w = inner_w
@@ -864,7 +865,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
                     view.app:reload_current_page()
                 end)
             end
-            local focus_id = "patch:" .. tostring(asset.asset or "")
+            local focus_id = asset_tab .. ":" .. tostring(asset.asset or "")
             P.hit(view, inner_x, row_y, row_w, row_h, callback, focus_id)
             P.focus_control(view, bb, focus_id, inner_x, row_y, row_w, row_h, callback, {
                 focus_type = "patch",

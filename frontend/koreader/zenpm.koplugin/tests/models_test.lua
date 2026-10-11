@@ -209,4 +209,26 @@ local patch = Models.installed_patch_item({
 }, "patch.lua")
 assert(patch.installed_at == "2026-07-23T10:00:00Z")
 
+local icon_pack = {
+    id = "solar", category = "icon-packs", installed = true,
+    version = "2.0.0", installed_version = "1.0.0", update_available = true,
+    assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
+    installed_assets = { "colour.zip", "mono.zip", "", false },
+    installed_asset_dates = { ["mono.zip"] = "2026-10-07T12:00:00Z" },
+    installed_asset_versions = { ["colour.zip"] = "1.0.0", ["mono.zip"] = "2.0.0" },
+    installed_asset_updates = { ["colour.zip"] = true, ["mono.zip"] = false },
+}
+assert(Models.is_icon_pack_package(icon_pack) and Models.is_direct_asset_package(icon_pack))
+assert(not Models.is_patch_package(icon_pack) and Models.asset_details_tab(icon_pack) == "iconpacks")
+assert(Models.package_action_label(icon_pack) == "Modify")
+local installed_packs = Models.installed_packages({ icon_pack })
+assert(#installed_packs == 2 and installed_packs[1].icon_pack_asset == "colour.zip")
+assert(installed_packs[2].installed_at == "2026-10-07T12:00:00Z")
+assert(installed_packs[1].installed_version == "1.0.0" and installed_packs[1].update_available)
+assert(installed_packs[2].installed_version == "2.0.0" and not installed_packs[2].update_available)
+assert(installed_packs[1].patch_asset == nil and installed_packs[1].assets == nil)
+assert(Models.package_display_name(installed_packs[2]) == "mono.zip")
+table.insert(require("zenpm_constants").CATEGORIES, { id = "iconpacks", label = "Icon Packs" })
+assert(Models.category_cards({ icon_pack }, false)[4].count == 1)
+
 print("models tests passed")

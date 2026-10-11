@@ -889,7 +889,7 @@ function App:queue_all_updates()
     for _, entry in ipairs(self.state.queue) do
         queued[entry.key] = true
     end
-    local packages = self.state.packages or {}
+    local packages = Models.installed_packages(self.state.packages)
     local function finish()
         if added > 0 and self.state.advanced then
             local notice = _("Added to Queue")
@@ -908,7 +908,7 @@ function App:queue_all_updates()
             return
         end
         if pkg.installed and pkg.update_available and not pkg.update_ignored then
-            local key = queue_key(pkg.id or pkg.name, nil)
+            local key = queue_key(pkg.id or pkg.name, pkg.icon_pack_asset)
             if not queued[key] then
                 if is_zenpm_package(pkg) then
                     if self:queue_self_update(pkg, { silent = true }) then
@@ -919,7 +919,7 @@ function App:queue_all_updates()
                     return
                 end
                 if Models.is_direct_asset_package(pkg) then
-                    if self:queue_package_action(pkg, "update", nil, { silent = true }) then
+                    if self:queue_package_action(pkg, "update", pkg.icon_pack_asset, { silent = true }) then
                         added = added + 1
                         kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
                     end
@@ -969,12 +969,13 @@ function App:queue_entry_for(pkg, action, asset, opts)
     if not id then return nil end
     opts = opts or {}
     local is_patch = Models.is_patch_package(pkg)
+    local is_icon_pack = Models.is_icon_pack_package(pkg)
     local is_direct_asset = Models.is_direct_asset_package(pkg)
-    local display_name = is_patch and asset and asset ~= ""
-        and (_("patch") .. " " .. tostring(asset))
+    local display_name = (is_patch or is_icon_pack) and asset and asset ~= ""
+        and ((is_patch and (_("patch") .. " ") or "") .. tostring(asset))
         or package_title(pkg, id)
     return {
-        key = queue_key(id, is_patch and asset or nil),
+        key = queue_key(id, (is_patch or is_icon_pack) and asset or nil),
         id = id,
         pkg = pkg,
         name = display_name,
@@ -984,7 +985,8 @@ function App:queue_entry_for(pkg, action, asset, opts)
         -- incorrectly force GitHub release resolution.
         release = not package_is_kindle_only(pkg) and opts.release or nil,
         is_patch = is_patch,
-        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
+        is_icon_pack = is_icon_pack,
+        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch or is_icon_pack)
             and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = action == "uninstall" and not is_patch and not is_direct_asset
             and resolve_plugin_settings_deleter(pkg) or nil,
@@ -1395,6 +1397,50 @@ function App:prompt_installed_images(ids, on_done)
     prompt(1)
 end
 
+function App:prompt_installed_icon_packs(on_done)
+    local zen_pkg = Models.find_package(self.state.packages, "zen-ui")
+    local zen = zen_pkg and not self:package_disabled(zen_pkg)
+        and koreader_plugin_instance(zen_pkg) or nil
+    local IconPacks = package.loaded["common/icon_packs"]
+    if not (zen and type(zen.config) == "table" and type(zen.saveConfig) == "function"
+        and type(IconPacks) == "table" and type(IconPacks.scan) == "function") then
+        return false
+    end
+    local packs = IconPacks.scan().packs or {}
+    if #packs == 0 then return false end
+    on_done = on_done or function() end
+    local rows = {}
+    for _i, pack in ipairs(packs) do
+        local choice = pack
+        table.insert(rows, {
+            text = #packs == 1 and _("Use icon pack") or choice.name,
+            callback = function()
+                local previous_features, previous_custom = zen.config.features, zen.config.custom_icons
+                local features = type(previous_features) == "table" and previous_features or {}
+                local custom = type(previous_custom) == "table" and previous_custom or {}
+                local enabled, active_pack = features.custom_icons_enabled, custom.active_pack
+                features.custom_icons_enabled = true
+                custom.active_pack = choice.id
+                zen.config.features, zen.config.custom_icons = features, custom
+                local ok, err = pcall(zen.saveConfig, zen)
+                if not ok then
+                    features.custom_icons_enabled, custom.active_pack = enabled, active_pack
+                    zen.config.features, zen.config.custom_icons = previous_features, previous_custom
+                    Modals.actions(_("Could not activate icon pack: ") .. tostring(err), {
+                        { text = _("Continue"), callback = on_done },
+                    }, { show_cancel = false })
+                    return
+                end
+                on_done()
+            end,
+        })
+    end
+    Modals.close_status()
+    Modals.actions(#packs == 1 and string.format(_("Do you want to use %s now?"), packs[1].name)
+        or _("Choose an icon pack to use now:"), rows, { cancel_callback = on_done })
+    return true
+end
+
 function App:clear_queue()
     if self.state.queue_running then return end
     self.state.queue = {}
@@ -1482,7 +1528,7 @@ function App:show_queue_entry_modify(entry)
         })
         return
     end
-    if entry.is_patch then
+    if entry.is_patch or entry.is_icon_pack then
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             remove_queue = remove_queue,
@@ -1600,7 +1646,9 @@ function App:finish_queue_batch(batch)
             end)
             return
         end
-        self:prompt_installed_images(batch.image_installs, finish)
+        self:prompt_installed_images(batch.image_installs, function()
+            if not batch.icon_pack_installed or not self:prompt_installed_icon_packs(finish) then finish() end
+        end)
     end
     finish_prompts(1)
 end
@@ -1661,6 +1709,9 @@ function App:run_next_queue_operation(batch)
                 if entry.action == "install" and Models.is_image_asset_package(entry.pkg) then
                     batch.image_installs = batch.image_installs or {}
                     table.insert(batch.image_installs, entry.id)
+                end
+                if action_installs_package(entry.action) and Models.is_icon_pack_package(entry.pkg) then
+                    batch.icon_pack_installed = true
                 end
             else
                 table.insert(batch.failed, { entry = entry, detail = detail })
@@ -2362,7 +2413,7 @@ function App:reload_current_page()
         local groups = self.state.readerbackdrop.groups
         self:show_readerbackdrop_groups(groups.kind, groups.page)
     elseif self.state.page == "package_details" and self.state.current_package then
-        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset)
+        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset or self.state.current_package.icon_pack_asset)
     elseif self.state.page == "installed" and self.state.installed_folder then
         self:show_installed()
     elseif self.state.page == "category_details" and self.state.current_category then
@@ -3004,7 +3055,7 @@ function App:show_source_details(name)
     self:refresh()
 end
 
-function App:show_package_details(requested_id, from_tab, force_reload, details_tab, patch_asset)
+function App:show_package_details(requested_id, from_tab, force_reload, details_tab, package_asset)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -3063,8 +3114,12 @@ function App:show_package_details(requested_id, from_tab, force_reload, details_
     end
     -- For an installed patch item, show the patch itself (not its parent package):
     -- rebuild the single-asset item so the title, card and modify menu act on the patch.
-    if type(patch_asset) == "string" and patch_asset ~= "" and Models.is_patch_package(pkg) then
-        pkg = Models.installed_patch_item(pkg, patch_asset)
+    if type(package_asset) == "string" and package_asset ~= "" then
+        if Models.is_patch_package(pkg) then
+            pkg = Models.installed_patch_item(pkg, package_asset)
+        elseif Models.is_icon_pack_package(pkg) then
+            pkg = Models.installed_icon_pack_item(pkg, package_asset)
+        end
     end
     self.state.packages = packages
     local cache_key = tostring(pkg.id or pkg.name or "")
@@ -3100,8 +3155,8 @@ function App:show_package_details(requested_id, from_tab, force_reload, details_
     if details_tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
         selected_tab = "release_notes"
         self:load_package_release_notes(pkg)
-    elseif details_tab == "patches" and Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 then
-        selected_tab = "patches"
+    elseif details_tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
+        selected_tab = details_tab
     end
     self.state.current_package = pkg
     self.state.details_tab = selected_tab
@@ -3115,8 +3170,8 @@ function App:set_package_details_tab(tab)
     local pkg = self.state.current_package or {}
     if tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
         self:load_package_release_notes(pkg)
-    elseif tab == "patches" and Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 then
-        -- Keep the requested patch tab.
+    elseif tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
+        -- Keep the requested asset tab.
     else
         tab = "readme"
     end
@@ -3528,6 +3583,25 @@ function App:perform_package_action(pkg, on_done)
         self:show_patch_modify(pkg, on_done)
         return
     end
+    if Models.is_icon_pack_package(pkg) then
+        if pkg.icon_pack_asset then
+            Modals.package_modify(pkg, {
+                title_icon = self:package_icon_file(pkg),
+                update = pkg.update_available and function()
+                    self:queue_package_action(pkg, "update", pkg.icon_pack_asset, nil)
+                end or nil,
+                reinstall = function()
+                    self:queue_package_action(pkg, "reinstall", pkg.icon_pack_asset, nil)
+                end,
+                uninstall = function()
+                    self:queue_package_action(pkg, "uninstall", pkg.icon_pack_asset, nil)
+                end,
+            })
+        else
+            self:show_package_details(pkg.id or pkg.name, self.state.active_tab, false, "iconpacks")
+        end
+        return
+    end
     if Models.is_patch_package(pkg) then
         -- Patch packages manage individual files; the details page lists each
         -- patch with a per-file install/uninstall toggle.
@@ -3923,7 +3997,7 @@ function App:confirm_package_asset_action(pkg, asset, on_done)
         return
     end
     if not asset or not asset.asset or asset.asset == "" then
-        Modals.info(_("Patch has no file name."))
+        Modals.info(_("Package asset has no file name."))
         return
     end
     local patch_name = tostring(asset.asset)
@@ -3942,6 +4016,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         action = action,
     })
     local is_patch = Models.is_patch_package(pkg)
+    local is_icon_pack = Models.is_icon_pack_package(pkg)
     local font_reset = action == "uninstall" and Models.is_font_package(pkg)
         and reset_active_font_before_uninstall(pkg)
     if font_reset then
@@ -3979,11 +4054,12 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         action = action,
         asset = asset,
         is_patch = is_patch,
-        patch_was_installed = is_patch and Models.patch_file_installed(pkg, asset) or false,
+        is_icon_pack = is_icon_pack,
+        patch_was_installed = (is_patch or is_icon_pack) and Models.patch_file_installed(pkg, asset) or false,
         was_installed = pkg.installed and true or false,
         is_plugin = package_is_koreader_plugin(pkg),
         target_version = opts and opts.release or pkg.latest_version,
-        prompt_restart = font_reset or (package_is_koreader_plugin(pkg) or is_patch)
+        prompt_restart = font_reset or (package_is_koreader_plugin(pkg) or is_patch or is_icon_pack)
             and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
@@ -4021,7 +4097,7 @@ function App:package_action_failure_detail(op)
 end
 
 function App:package_action_succeeded(op, pkg)
-    if op.is_patch and op.asset and op.asset ~= "" then
+    if (op.is_patch or op.is_icon_pack) and op.asset and op.asset ~= "" then
         local now_installed = Models.patch_file_installed(pkg, op.asset)
         if op.action == "uninstall" then
             return op.patch_was_installed and not now_installed
@@ -4058,7 +4134,7 @@ function App:update_zenfm_android_companion(op, pkg)
 end
 
 function App:patch_action_succeeded_from_db(op)
-    if not (op.is_patch and op.asset and op.asset ~= "") then
+    if not ((op.is_patch or op.is_icon_pack) and op.asset and op.asset ~= "") then
         return false
     end
     local ok, data = self.client:list_packages(nil, false, nil, nil, PACKAGE_POLL_TIMEOUT)
@@ -4184,7 +4260,7 @@ function App:poll_package_action(op, attempt)
             local finish = function()
                 if op.prompt_restart then
                     local tail = _(" successfully.\n\nRestart KOReader to load the plugin.")
-                    if op.is_patch or op.action == "uninstall" then
+                    if op.is_patch or op.is_icon_pack or op.action == "uninstall" then
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
                     if companion_warning then
@@ -4210,6 +4286,8 @@ function App:poll_package_action(op, attempt)
                 end)
                 return
             end
+            if op.is_icon_pack and action_installs_package(op.action)
+                and self:prompt_installed_icon_packs(finish) then return end
             finish()
         elseif attempt >= max_retries then
             self.busy = false

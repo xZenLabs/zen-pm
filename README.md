@@ -30,6 +30,12 @@ On Kindle, ZenPM has a native WAF interface. In KOReader, ZenPM appears in the
 KOReader menu and keeps its managed backend and state in KOReader's settings
 directory.
 
+The KOReader **Icon Packs** category lists ZenOS packs. Open a package's
+**Icon Packs** tab to install or remove each release ZIP independently. After
+installation, ZenPM offers to use an installed pack, enables Custom Icons,
+saves your selection, and prompts you to restart KOReader. Packs install under
+`koreader/icons/zen/<pack-id>/`.
+
 ## ZenPM in action
 
 <p align="center">

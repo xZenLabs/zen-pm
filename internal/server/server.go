@@ -107,6 +107,8 @@ type pkgJSON struct {
 	UpdateIgnored         bool              `json:"update_ignored,omitempty"`
 	InstalledAssets       []string          `json:"installed_assets,omitempty"`
 	InstalledAssetDates   map[string]string `json:"installed_asset_dates,omitempty"`
+	InstalledAssetVers    map[string]string `json:"installed_asset_versions,omitempty"`
+	InstalledAssetUpdates map[string]bool   `json:"installed_asset_updates,omitempty"`
 	UnmanagedPatch        bool              `json:"unmanaged_patch,omitempty"`
 	LatestVersion         string            `json:"latest_version,omitempty"`
 	LatestRelease         string            `json:"latest_release,omitempty"`
@@ -945,12 +947,15 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
 	installedAssets := make(map[string][]string)
 	installedAssetDates := make(map[string]map[string]string)
+	installedAssetVersions := make(map[string]map[string]string)
 	for _, f := range patchFiles {
 		installedAssets[f.PackageID] = append(installedAssets[f.PackageID], f.Asset)
 		if installedAssetDates[f.PackageID] == nil {
 			installedAssetDates[f.PackageID] = make(map[string]string)
+			installedAssetVersions[f.PackageID] = make(map[string]string)
 		}
 		installedAssetDates[f.PackageID][f.Asset] = f.InstalledAt
+		installedAssetVersions[f.PackageID][f.Asset] = f.Version
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
@@ -1006,11 +1011,22 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		if files := installedAssets[e.ID]; len(files) > 0 {
 			item.InstalledAssets = files
 			item.InstalledAssetDates = installedAssetDates[e.ID]
+			item.InstalledAssetVers = installedAssetVersions[e.ID]
+			item.InstalledAssetUpdates = make(map[string]bool)
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
+			for asset, version := range item.InstalledAssetVers {
+				assetItem := item
+				assetItem.InstalledVer = version
+				applyUpdateInfo(&assetItem, allowPrerelease, allowAlpha)
+				item.InstalledAssetUpdates[asset] = assetItem.UpdateAvail
+				if pkg.IsIconPackPackage(e) && (item.InstalledVer == "" || releases.VersionGreater(item.InstalledVer, version)) {
+					item.InstalledVer = version
+				}
+			}
 			applyUpdateInfo(&item, allowPrerelease, allowAlpha)
 			item.UpdateIgnored = updateIgnored[e.ID]
 			if item.UpdateAvail && updateIgnoredVersion[e.ID] == item.LatestVersion {

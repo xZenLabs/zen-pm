@@ -436,6 +436,7 @@ function AppView:_scroll_list(steps, page_sized)
     local delta = self.scroll_page_step or self.scroll_step or math.floor(Screen:getHeight() * 0.45)
     local details_paged = self.app.state.page == "package_details"
         and self.app.state.details_tab ~= "patches"
+        and self.app.state.details_tab ~= "iconpacks"
     if details_paged and self.list_bounds then
         delta = math.floor(self.list_bounds.h * 0.9)
     elseif page_sized and not self.scroll_page_step and self.list_bounds then

@@ -738,6 +738,43 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 }
 
+func TestPackageListReportsInstalledIconPackVersions(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "solariconpack-zen", Name: "Solar", Category: "iconpacks", Version: "2.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	for asset, version := range map[string]string{"colour.zip": "1.0.0", "mono.zip": "2.0.0"} {
+		if err := st.AppendInstalledPatchFile(state.PatchFileEntry{
+			PackageID: "solariconpack-zen", Asset: asset, Version: version, Repo: "ZenLabs",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil))
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 1 || packages[0].InstalledVer != "1.0.0" || !packages[0].UpdateAvail || packages[0].LatestVersion != "2.0.0" {
+		t.Fatalf("installed pack versions were lost: %s", rec.Body.String())
+	}
+	item := packages[0]
+	if item.InstalledAssetVers["colour.zip"] != "1.0.0" || item.InstalledAssetVers["mono.zip"] != "2.0.0" ||
+		!item.InstalledAssetUpdates["colour.zip"] || item.InstalledAssetUpdates["mono.zip"] {
+		t.Fatalf("per-pack update information = %+v", item)
+	}
+}
+
 func TestReaderBackdropUsesPreparedPreview(t *testing.T) {
 	t.Setenv("ZENPM_HOME", t.TempDir())
 	st, err := state.Init("host")

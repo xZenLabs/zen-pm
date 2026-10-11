@@ -150,6 +150,7 @@ package.preload["models"] = function()
         filter_packages = models.filter_packages,
         filter_categories = models.filter_categories,
         installed_packages = models.installed_packages,
+        installed_icon_pack_item = models.installed_icon_pack_item,
         visible_installed_packages = models.visible_installed_packages,
         filter_packages_by_category = models.filter_packages_by_category,
         packages_in_category = models.packages_in_category,
@@ -164,6 +165,9 @@ package.preload["models"] = function()
             return pkg.release_notes_url
         end,
         is_patch_package = function(pkg) return pkg and pkg.is_patch == true end,
+        is_icon_pack_package = models.is_icon_pack_package,
+        asset_details_tab = models.asset_details_tab,
+        patch_file_installed = models.patch_file_installed,
         is_installed_patch_item = function() return false end,
         is_unmanaged_patch = function() return false end,
         is_font_package = function(pkg) return pkg and pkg.category == "fonts" end,
@@ -1912,6 +1916,10 @@ local bulk_app = {
             { id = "ignored", installed = true, update_available = true, update_ignored = true },
             { id = "active", installed = true, update_available = true },
             { id = "wallpaper", category = "wallpapers", installed = true, update_available = true },
+            { id = "solar", category = "iconpacks", installed = true, update_available = true,
+                installed_assets = { "colour.zip", "mono.zip" },
+                installed_asset_versions = { ["colour.zip"] = "1.0.0", ["mono.zip"] = "2.0.0" },
+                installed_asset_updates = { ["colour.zip"] = true, ["mono.zip"] = false } },
         },
     },
     client = {
@@ -1920,19 +1928,20 @@ local bulk_app = {
             return true, {}
         end,
     },
-    queue_package_action = function(_, pkg, action)
-        table.insert(bulk_queued, pkg.id .. ":" .. action)
+    queue_package_action = function(_, pkg, action, asset)
+        table.insert(bulk_queued, pkg.id .. ":" .. action .. (asset and ":" .. asset or ""))
         return true
     end,
     show_queue = function() bulk_queue_opened = bulk_queue_opened + 1 end,
     refresh = function() end,
 }
-assert(App.installed_update_count(bulk_app) == 2)
+assert(App.installed_update_count(bulk_app) == 3)
 modal_message = nil
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 2)
+assert(#bulk_queued == 3)
 assert(bulk_queued[1] == "active:update")
 assert(bulk_queued[2] == "wallpaper:update")
+assert(bulk_queued[3] == "solar:update:colour.zip")
 assert(bulk_asset_requests == 1)
 assert(bulk_queue_opened == 1)
 assert(modal_message == nil)
@@ -1941,7 +1950,7 @@ bulk_app.state.advanced = true
 bulk_queue_opened = 0
 bulk_queued = {}
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 2)
+assert(#bulk_queued == 3)
 assert(bulk_asset_requests == 2)
 assert(bulk_queue_opened == 0)
 assert(modal_message == "Added to Queue")
@@ -3081,5 +3090,159 @@ local detection_app = {
 assert(App.detect_repo_name(detection_app, "https://www.readerbackdrop.com/") == "ReaderBackdrop")
 assert(App.detect_repo_name(detection_app, "https://readerbackdrop.com") == "ReaderBackdrop")
 assert(detection_requests == 0)
+
+local icon_pack = {
+    id = "solar", category = "iconpacks", platforms = { "koreader" },
+    assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
+    installed_assets = { "colour.zip" },
+}
+local colour_entry = App.queue_entry_for({ state = {} }, icon_pack, "uninstall", "colour.zip")
+local mono_entry = App.queue_entry_for({ state = {} }, icon_pack, "install", "mono.zip")
+assert(colour_entry.key ~= mono_entry.key and mono_entry.is_icon_pack and mono_entry.prompt_restart)
+assert(not mono_entry.is_patch and not colour_entry.settings_deleter)
+local icon_tab
+App.perform_package_action({
+    state = { active_tab = "category" },
+    show_package_details = function(_app, id, from_tab, force_reload, tab)
+        assert(id == "solar" and from_tab == "category" and not force_reload)
+        icon_tab = tab
+    end,
+}, icon_pack)
+assert(icon_tab == "iconpacks")
+do
+    (function()
+        local actions = {}
+        local pack = require("models").installed_icon_pack_item(icon_pack, "colour.zip")
+        pack.update_available = true
+        App.perform_package_action({
+            state = {},
+            package_icon_file = function() return nil end,
+            queue_package_action = function(_, pkg, action, asset)
+                assert(pkg == pack and asset == "colour.zip")
+                table.insert(actions, action)
+            end,
+        }, pack)
+        assert(package_modify_callbacks.update and package_modify_callbacks.reinstall)
+        package_modify_callbacks.update()
+        package_modify_callbacks.reinstall()
+        assert(actions[1] == "update" and actions[2] == "reinstall")
+    end)()
+end
+assert(App.package_action_succeeded({}, {
+    is_icon_pack = true, action = "install", asset = "colour.zip",
+}, icon_pack))
+assert(not App.package_action_succeeded({}, {
+    is_icon_pack = true, action = "install", asset = "mono.zip",
+}, icon_pack))
+
+do
+    (function()
+        local loader = require("pluginloader")
+        local previous_plugins, previous_packs = loader.loaded_plugins, package.loaded["common/icon_packs"]
+        local packs = {
+            { id = "zen-solar-colour", name = "Solar Colour" },
+            { id = "zen-solar-mono", name = "Solar Mono" },
+        }
+        package.loaded["common/icon_packs"] = { scan = function() return { packs = packs } end }
+        local saved, saves = nil, 0
+        local zen = {
+            path = "/tmp/zenos.koplugin",
+            config = { features = { custom_icons_enabled = false, keep = true },
+                custom_icons = { active_pack = "previous", keep = true } },
+            saveConfig = function(self)
+                saves = saves + 1
+                saved = { enabled = self.config.features.custom_icons_enabled, id = self.config.custom_icons.active_pack }
+            end,
+        }
+        loader.loaded_plugins = { zen }
+        local app = setmetatable({
+            state = { packages = { { id = "zen-ui", plugin_module = "zenos", installed = true }, icon_pack } },
+            package_disabled = function() return false end,
+            refresh_queue_package_state = function() end,
+            refresh = function() end,
+            close_queue = function() end,
+            reload_current_page = function() end,
+        }, { __index = App })
+        local operations = {
+            { id = "solar", action = "install", asset = "colour.zip", pkg = icon_pack, prompt_restart = true },
+            { id = "solar", action = "install", asset = "mono.zip", pkg = icon_pack, prompt_restart = true },
+        }
+        local batch = { operations = operations, index = 1, succeeded = {}, failed = {}, settings_cleanup = {} }
+        local finished
+        app.run_package_action = function(_app, _pkg, _action, _asset, _done, options) options.on_result(true) end
+        app.remove_queue_entry = function() end
+        app.finish_queue_batch = function() finished = true end
+        App.run_next_queue_operation(app, batch)
+        assert(finished and batch.icon_pack_installed and #batch.succeeded == 2)
+        app.finish_queue_batch = nil
+        restart_message = nil
+        App.finish_queue_batch(app, batch)
+        assert(modal_title == "Choose an icon pack to use now:" and #modal_rows == 2)
+        assert(modal_rows[1].text == "Solar Colour" and modal_rows[2].text == "Solar Mono")
+        assert(restart_message == nil and saves == 0)
+        modal_rows[2].callback()
+        assert(saved.enabled and saved.id == "zen-solar-mono")
+        assert(zen.config.features.keep and zen.config.custom_icons.keep)
+        assert(restart_message:find("Restart KOReader to apply the changes.", 1, true))
+
+        local continued = 0
+        local continue = function() continued = continued + 1 end
+        packs = { packs[1] }
+        assert(app:prompt_installed_icon_packs(continue))
+        assert(modal_title == "Do you want to use Solar Colour now?" and modal_rows[1].text == "Use icon pack")
+        modal_options.cancel_callback()
+        assert(continued == 1 and saves == 1 and saved.id == "zen-solar-mono")
+        assert(app:prompt_installed_icon_packs(continue))
+        modal_rows[1].callback()
+        assert(continued == 2 and saved.enabled and saved.id == "zen-solar-colour")
+
+        zen.config.features.custom_icons_enabled = false
+        zen.saveConfig = function() error("settings write failed") end
+        packs = { { id = "different", name = "Different" } }
+        assert(app:prompt_installed_icon_packs(continue))
+        modal_rows[1].callback()
+        assert(modal_title:find("Could not activate icon pack: ", 1, true))
+        assert(zen.config.custom_icons.active_pack == "zen-solar-colour" and saves == 2)
+        assert(zen.config.features.custom_icons_enabled == false)
+        assert(continued == 2)
+        modal_rows[1].callback()
+        assert(continued == 3)
+
+        -- Single operations use the same selection-before-restart flow.
+        app.load_packages = function() return true, app.state.packages end
+        app.package_action_succeeded = function() return true end
+        app.package_action_failure_detail = function() return nil end
+        app.client = {}
+        restart_message = nil
+        App.poll_package_action(app, {
+            id = "solar", name = "Solar", action = "install", is_icon_pack = true, prompt_restart = true,
+        }, 1)
+        assert(modal_title == "Do you want to use Different now?" and restart_message == nil)
+        modal_options.cancel_callback()
+        assert(restart_message:find("Restart KOReader to apply the change.", 1, true))
+
+        for _i, action in ipairs({ "install", "uninstall" }) do
+            batch = { operations = { { id = "solar", action = action, pkg = icon_pack } },
+                index = 1, succeeded = {}, failed = {}, settings_cleanup = {} }
+            app.run_package_action = function(_app, _pkg, _action, _asset, _done, options)
+                options.on_result(action == "uninstall")
+            end
+            app.finish_queue_batch = function() end
+            App.run_next_queue_operation(app, batch)
+            assert(not batch.icon_pack_installed, "failed installs and removals must not offer activation")
+        end
+        app.package_disabled = function() return true end
+        assert(not app:prompt_installed_icon_packs(continue))
+        app.package_disabled = function() return false end
+        loader.loaded_plugins = {}
+        assert(not app:prompt_installed_icon_packs(continue))
+        loader.loaded_plugins = { zen }
+        packs = {}
+        assert(not app:prompt_installed_icon_packs(continue))
+        package.loaded["common/icon_packs"] = nil
+        assert(not app:prompt_installed_icon_packs(continue))
+        loader.loaded_plugins, package.loaded["common/icon_packs"] = previous_plugins, previous_packs
+    end)()
+end
 
 print("app tests passed")

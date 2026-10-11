@@ -24,10 +24,13 @@ package.preload["models"] = function()
         localized_date = date_models.localized_date,
         friendly_published_at = date_models.friendly_published_at,
         is_patch_package = function() return false end,
+        is_icon_pack_package = date_models.is_icon_pack_package,
+        asset_details_tab = date_models.asset_details_tab,
+        patch_file_installed = date_models.patch_file_installed,
         package_action_label = function() return "Update" end,
         package_display_name = function(pkg, fallback) return pkg.name or fallback end,
         package_verified = function() return true end,
-        package_assets = function() return {} end,
+        package_assets = date_models.package_assets,
         has_release_notes = function(pkg) return pkg.release_notes ~= nil end,
         is_font_package = function() return false end,
         is_image_asset_package = function(pkg)
@@ -710,4 +713,35 @@ Pages.queue({
 assert(painted_text[2] == "Install screensaver")
 assert(painted_text[4] == "Uninstall screensaver")
 assert(painted_text[6] == "Install v1.2.3")
+local pack_selected
+local icon_view = { app = {
+    state = { queue = { { key = "solar\0colour.zip", action = "uninstall" } },
+        details_tab = "iconpacks", current_package = {
+            id = "solar", category = "iconpacks",
+            assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
+            installed_assets = { "colour.zip" },
+        },
+    },
+    package_disabled = function() return false end,
+    package_icon_file = function() return "theme.svg", true end,
+    show_package_details = function() end,
+    confirm_package_asset_action = function(_app, _pkg, asset) pack_selected = asset.asset end,
+} }
+painted_text = {}
+Pages.package_details(icon_view, {}, 0, 0, 300, 600, 0)
+assert(hit_callbacks["details-tab:iconpacks"] and hit_callbacks["iconpacks:colour.zip"])
+assert(table.concat(painted_text, "\n"):find("colour.zip  (installed)", 1, true))
+hit_callbacks["iconpacks:mono.zip"]()
+assert(pack_selected == "mono.zip")
+painted_text = {}
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", installed = true, icon_pack_asset = "colour.zip",
+}, 0, 0, 300, { compact = true })
+assert(painted_text[#painted_text] == "Queued")
+assert(hit_callbacks["package:solar:colour.zip"])
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", installed = true, icon_pack_asset = "mono.zip",
+}, 0, 0, 300, { compact = true })
+assert(hit_callbacks["package:solar:mono.zip"])
+
 print("cards tests passed")
