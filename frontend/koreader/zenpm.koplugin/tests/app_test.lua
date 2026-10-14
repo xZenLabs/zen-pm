@@ -3234,8 +3234,12 @@ do
         local loader = require("pluginloader")
         local previous_plugins, previous_packs = loader.loaded_plugins, package.loaded["common/icon_packs"]
         local packs = {
+            { id = "previous", name = "Previously Installed" },
             { id = "zen-solar-colour", name = "Solar Colour" },
             { id = "zen-solar-mono", name = "Solar Mono" },
+        }
+        icon_pack.installed_icon_pack_ids = {
+            ["colour.zip"] = "zen-solar-colour", ["mono.zip"] = "zen-solar-mono",
         }
         package.loaded["common/icon_packs"] = { scan = function() return { packs = packs } end }
         local saved, saves = nil, 0
@@ -3271,70 +3275,87 @@ do
         app.finish_queue_batch = nil
         restart_message = nil
         App.finish_queue_batch(app, batch)
-        assert(modal_title == "Choose an icon pack to use now:" and #modal_rows == 2)
-        assert(modal_rows[1].text == "Solar Colour" and modal_rows[2].text == "Solar Mono")
+        assert(modal_title == "Do you want to use Solar Colour now?" and #modal_rows == 1)
+        assert(modal_rows[1].text == "Use icon pack")
         assert(restart_message == nil and saves == 0)
-        modal_rows[2].callback()
+        modal_options.cancel_callback()
+        assert(modal_title == "Do you want to use Solar Mono now?" and #modal_rows == 1)
+        assert(restart_message == nil and saves == 0 and zen.config.custom_icons.active_pack == "previous")
+        modal_rows[1].callback()
         assert(saved.enabled and saved.id == "zen-solar-mono")
         assert(zen.config.features.keep and zen.config.custom_icons.keep)
         assert(restart_message:find("Restart KOReader to apply the changes.", 1, true))
 
         local continued = 0
         local continue = function() continued = continued + 1 end
-        packs = { packs[1] }
-        assert(app:prompt_installed_icon_packs(continue))
+        local colour_install = { operations[1] }
+        assert(app:prompt_installed_icon_packs(colour_install, continue))
         assert(modal_title == "Do you want to use Solar Colour now?" and modal_rows[1].text == "Use icon pack")
         modal_options.cancel_callback()
         assert(continued == 1 and saves == 1 and saved.id == "zen-solar-mono")
-        assert(app:prompt_installed_icon_packs(continue))
+        assert(app:prompt_installed_icon_packs(colour_install, continue))
         modal_rows[1].callback()
         assert(continued == 2 and saved.enabled and saved.id == "zen-solar-colour")
 
+        packs = { packs[2] }
+        assert(app:prompt_installed_icon_packs(colour_install, continue))
+        assert(modal_title == "Do you want to use Solar Colour now?" and #modal_rows == 1)
+        modal_options.cancel_callback()
+        assert(continued == 3 and saves == 2)
+
         zen.config.features.custom_icons_enabled = false
         zen.saveConfig = function() error("settings write failed") end
-        packs = { { id = "different", name = "Different" } }
-        assert(app:prompt_installed_icon_packs(continue))
+        packs = { { id = "zen-solar-mono", name = "Different" } }
+        assert(app:prompt_installed_icon_packs({ operations[2] }, continue))
         modal_rows[1].callback()
         assert(modal_title:find("Could not activate icon pack: ", 1, true))
         assert(zen.config.custom_icons.active_pack == "zen-solar-colour" and saves == 2)
         assert(zen.config.features.custom_icons_enabled == false)
-        assert(continued == 2)
-        modal_rows[1].callback()
         assert(continued == 3)
+        modal_rows[1].callback()
+        assert(continued == 4)
 
-        -- Single operations use the same selection-before-restart flow.
+        -- Single operations use the same confirmation-before-restart flow.
         app.load_packages = function() return true, app.state.packages end
         app.package_action_succeeded = function() return true end
         app.package_action_failure_detail = function() return nil end
         app.client = {}
-        restart_message = nil
-        App.poll_package_action(app, {
-            id = "solar", name = "Solar", action = "install", is_icon_pack = true, prompt_restart = true,
-        }, 1)
-        assert(modal_title == "Do you want to use Different now?" and restart_message == nil)
-        modal_options.cancel_callback()
-        assert(restart_message:find("Restart KOReader to apply the change.", 1, true))
+        for _, action in ipairs({ "install", "update", "reinstall" }) do
+            restart_message = nil
+            App.poll_package_action(app, {
+                id = "solar", name = "Solar", action = action, asset = "mono.zip",
+                is_icon_pack = true, prompt_restart = true,
+            }, 1)
+            assert(modal_title == "Do you want to use Different now?" and restart_message == nil)
+            modal_options.cancel_callback()
+            assert(restart_message:find("Restart KOReader to apply the change.", 1, true))
+        end
 
         for _i, action in ipairs({ "install", "uninstall" }) do
             batch = { operations = { { id = "solar", action = action, pkg = icon_pack } },
                 index = 1, succeeded = {}, failed = {}, settings_cleanup = {} }
             app.run_package_action = function(_app, _pkg, _action, _asset, _done, options)
-                options.on_result(action == "uninstall")
+                options.on_result(action == "uninstall", action == "install" and "download failed" or nil)
             end
             app.finish_queue_batch = function() end
             App.run_next_queue_operation(app, batch)
             assert(not batch.icon_pack_installed, "failed installs and removals must not offer activation")
+            modal_title = nil
+            App.finish_queue_batch(app, batch)
+            assert(modal_title == nil, "failed installs and removals must not offer activation")
         end
         app.package_disabled = function() return true end
-        assert(not app:prompt_installed_icon_packs(continue))
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
         app.package_disabled = function() return false end
         loader.loaded_plugins = {}
-        assert(not app:prompt_installed_icon_packs(continue))
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
         loader.loaded_plugins = { zen }
+        assert(not app:prompt_installed_icon_packs(colour_install, continue), "unrelated packs must not be offered")
+        assert(not app:prompt_installed_icon_packs({ { id = "solar", action = "install", asset = "missing.zip" } }, continue))
         packs = {}
-        assert(not app:prompt_installed_icon_packs(continue))
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
         package.loaded["common/icon_packs"] = nil
-        assert(not app:prompt_installed_icon_packs(continue))
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
         loader.loaded_plugins, package.loaded["common/icon_packs"] = previous_plugins, previous_packs
     end)()
 end

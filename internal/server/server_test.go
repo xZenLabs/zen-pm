@@ -738,7 +738,7 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 }
 
-func TestPackageListReportsInstalledIconPackVersions(t *testing.T) {
+func TestPackageListReportsInstalledIconPackMetadata(t *testing.T) {
 	t.Setenv("ZENPM_HOME", t.TempDir())
 	st, err := state.Init("host")
 	if err != nil {
@@ -753,6 +753,7 @@ func TestPackageListReportsInstalledIconPackVersions(t *testing.T) {
 	for asset, version := range map[string]string{"colour.zip": "1.0.0", "mono.zip": "2.0.0"} {
 		if err := st.AppendInstalledPatchFile(state.PatchFileEntry{
 			PackageID: "solariconpack-zen", Asset: asset, Version: version, Repo: "ZenLabs",
+			InstallPath: filepath.Join("icons", "zen", "zen-solar-"+strings.TrimSuffix(asset, ".zip")),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -772,6 +773,9 @@ func TestPackageListReportsInstalledIconPackVersions(t *testing.T) {
 	if item.InstalledAssetVers["colour.zip"] != "1.0.0" || item.InstalledAssetVers["mono.zip"] != "2.0.0" ||
 		!item.InstalledAssetUpdates["colour.zip"] || item.InstalledAssetUpdates["mono.zip"] {
 		t.Fatalf("per-pack update information = %+v", item)
+	}
+	if item.InstalledIconPackIDs["colour.zip"] != "zen-solar-colour" || item.InstalledIconPackIDs["mono.zip"] != "zen-solar-mono" {
+		t.Fatalf("per-asset icon pack IDs = %+v", item.InstalledIconPackIDs)
 	}
 }
 

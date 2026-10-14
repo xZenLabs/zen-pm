@@ -109,6 +109,7 @@ type pkgJSON struct {
 	InstalledAssetDates   map[string]string `json:"installed_asset_dates,omitempty"`
 	InstalledAssetVers    map[string]string `json:"installed_asset_versions,omitempty"`
 	InstalledAssetUpdates map[string]bool   `json:"installed_asset_updates,omitempty"`
+	InstalledIconPackIDs  map[string]string `json:"installed_icon_pack_ids,omitempty"`
 	UnmanagedPatch        bool              `json:"unmanaged_patch,omitempty"`
 	LatestVersion         string            `json:"latest_version,omitempty"`
 	LatestRelease         string            `json:"latest_release,omitempty"`
@@ -948,14 +949,19 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	installedAssets := make(map[string][]string)
 	installedAssetDates := make(map[string]map[string]string)
 	installedAssetVersions := make(map[string]map[string]string)
+	installedIconPackIDs := make(map[string]map[string]string)
 	for _, f := range patchFiles {
 		installedAssets[f.PackageID] = append(installedAssets[f.PackageID], f.Asset)
 		if installedAssetDates[f.PackageID] == nil {
 			installedAssetDates[f.PackageID] = make(map[string]string)
 			installedAssetVersions[f.PackageID] = make(map[string]string)
+			installedIconPackIDs[f.PackageID] = make(map[string]string)
 		}
 		installedAssetDates[f.PackageID][f.Asset] = f.InstalledAt
 		installedAssetVersions[f.PackageID][f.Asset] = f.Version
+		if f.InstallPath != "" {
+			installedIconPackIDs[f.PackageID][f.Asset] = filepath.Base(f.InstallPath)
+		}
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
@@ -1013,6 +1019,9 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 			item.InstalledAssetDates = installedAssetDates[e.ID]
 			item.InstalledAssetVers = installedAssetVersions[e.ID]
 			item.InstalledAssetUpdates = make(map[string]bool)
+			if pkg.IsIconPackPackage(e) {
+				item.InstalledIconPackIDs = installedIconPackIDs[e.ID]
+			}
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]

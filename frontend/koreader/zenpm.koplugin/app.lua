@@ -1397,7 +1397,7 @@ function App:prompt_installed_images(ids, on_done)
     prompt(1)
 end
 
-function App:prompt_installed_icon_packs(on_done)
+function App:prompt_installed_icon_packs(operations, on_done)
     local zen_pkg = Models.find_package(self.state.packages, "zen-ui")
     local zen = zen_pkg and not self:package_disabled(zen_pkg)
         and koreader_plugin_instance(zen_pkg) or nil
@@ -1406,14 +1406,30 @@ function App:prompt_installed_icon_packs(on_done)
         and type(IconPacks) == "table" and type(IconPacks.scan) == "function") then
         return false
     end
-    local packs = IconPacks.scan().packs or {}
+    local installed_packs = {}
+    for _, pack in ipairs(IconPacks.scan().packs or {}) do
+        installed_packs[pack.id] = pack
+    end
+    local packs = {}
+    for _, op in ipairs(operations or {}) do
+        local pkg = Models.find_package(self.state.packages, op.id)
+        if action_installs_package(op.action) and Models.is_icon_pack_package(pkg) then
+            local id = pkg.installed_icon_pack_ids and pkg.installed_icon_pack_ids[op.asset]
+            if installed_packs[id] then table.insert(packs, installed_packs[id]) end
+        end
+    end
     if #packs == 0 then return false end
     on_done = on_done or function() end
-    local rows = {}
-    for _i, pack in ipairs(packs) do
-        local choice = pack
-        table.insert(rows, {
-            text = #packs == 1 and _("Use icon pack") or choice.name,
+    local function prompt(index)
+        local choice = packs[index]
+        if not choice then
+            on_done()
+            return
+        end
+        local continue = function() prompt(index + 1) end
+        Modals.close_status()
+        Modals.actions(string.format(_("Do you want to use %s now?"), choice.name), { {
+            text = _("Use icon pack"),
             callback = function()
                 local previous_features, previous_custom = zen.config.features, zen.config.custom_icons
                 local features = type(previous_features) == "table" and previous_features or {}
@@ -1427,17 +1443,15 @@ function App:prompt_installed_icon_packs(on_done)
                     features.custom_icons_enabled, custom.active_pack = enabled, active_pack
                     zen.config.features, zen.config.custom_icons = previous_features, previous_custom
                     Modals.actions(_("Could not activate icon pack: ") .. tostring(err), {
-                        { text = _("Continue"), callback = on_done },
+                        { text = _("Continue"), callback = continue },
                     }, { show_cancel = false })
                     return
                 end
-                on_done()
+                continue()
             end,
-        })
+        } }, { cancel_callback = continue })
     end
-    Modals.close_status()
-    Modals.actions(#packs == 1 and string.format(_("Do you want to use %s now?"), packs[1].name)
-        or _("Choose an icon pack to use now:"), rows, { cancel_callback = on_done })
+    prompt(1)
     return true
 end
 
@@ -1647,7 +1661,7 @@ function App:finish_queue_batch(batch)
             return
         end
         self:prompt_installed_images(batch.image_installs, function()
-            if not batch.icon_pack_installed or not self:prompt_installed_icon_packs(finish) then finish() end
+            if not batch.icon_pack_installed or not self:prompt_installed_icon_packs(batch.succeeded, finish) then finish() end
         end)
     end
     finish_prompts(1)
@@ -4290,7 +4304,7 @@ function App:poll_package_action(op, attempt)
                 return
             end
             if op.is_icon_pack and action_installs_package(op.action)
-                and self:prompt_installed_icon_packs(finish) then return end
+                and self:prompt_installed_icon_packs({ op }, finish) then return end
             finish()
         elseif attempt >= max_retries then
             self.busy = false
