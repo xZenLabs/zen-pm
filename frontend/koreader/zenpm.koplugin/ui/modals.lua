@@ -61,6 +61,13 @@ function ClearableInputText:onCloseWidget()
 end
 
 local function show_input_dialog(dialog)
+    local init = dialog.init
+    function dialog:init(...)
+        local result = init(self, ...)
+        InlineIcons.apply_dialog(self)
+        return result
+    end
+    InlineIcons.apply_dialog(dialog)
     UIManager:show(dialog)
     if not ok_android then
         dialog:onShowKeyboard()
@@ -207,6 +214,7 @@ function Modals.search(title, input, hint, callback)
             {
                 {
                     text = InlineIcons.label("search", _("Search")),
+                    zenpm_icon = "search",
                     is_enter_default = true,
                     callback = function()
                         local text = dialog:getInputText()
@@ -248,6 +256,7 @@ function Modals.package_modify(pkg, callbacks)
         table.insert(buttons, {
             {
                 text = InlineIcons.label(icon, text),
+                zenpm_icon = icon,
                 align = "left",
                 callback = function()
                     UIManager:close(dialog)
@@ -317,6 +326,7 @@ function Modals.package_modify(pkg, callbacks)
             },
         },
     })
+    InlineIcons.apply_dialog(dialog)
     UIManager:show(dialog)
 end
 
@@ -342,6 +352,7 @@ function Modals.actions(title, rows, options)
         table.insert(buttons, {
             {
                 text = row.icon and InlineIcons.label(row.icon, row.text) or row.text,
+                zenpm_icon = row.icon,
                 align = row.align or options.align,
                 checked_func = row.checked_func,
                 callback = function()
@@ -399,6 +410,7 @@ function Modals.actions(title, rows, options)
             },
         })
     end
+    InlineIcons.apply_dialog(dialog)
     UIManager:show(dialog)
 end
 

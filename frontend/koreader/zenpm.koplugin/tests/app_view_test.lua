@@ -10,6 +10,8 @@ local next_tick
 local dirty
 local header_y
 local flashed
+local accent_updates = 0
+local color_screen = false
 package.preload["device"] = function()
     return {
         hasKeys = function() return has_keys end,
@@ -85,9 +87,17 @@ package.preload["ui/pages"] = function()
         end,
     }
 end
-package.preload["ui/scroll"] = function() return { draw_scrollbar = function() end } end
+package.preload["ui/scroll"] = function()
+    return {
+        draw_scrollbar = function() end,
+        paint_drag_thumb = function() return { { x = 80, y = 40, w = 10, h = 20 } } end,
+        apply_y = function() return false end,
+    }
+end
 package.preload["ui/theme"] = function()
     return {
+        update_accent = function() accent_updates = accent_updates + 1 end,
+        has_color = function() return color_screen end,
         metrics = function()
             return { screen_w = 100, screen_h = 200, nav_h = 20, nav_bottom_margin = 0 }
         end,
@@ -116,6 +126,7 @@ local paint_view = setmetatable({
     draw_content = function(_, _, _, y) content_y = y end,
 }, { __index = AppView })
 AppView.paintTo(paint_view, {}, 3, 5)
+assert(accent_updates == 1)
 assert(status_y == 5)
 assert(header_y == 17)
 assert(content_y == 17)
@@ -127,6 +138,17 @@ AppView._zen_status_refresh(paint_view)
 assert(dirty.widget == paint_view and dirty.mode == "ui")
 assert(dirty.region == paint_view._zen_status_dimen)
 _G.__ZENOS_BUILD_STATUS_ROW = nil
+
+do
+    local drag_view = { _scroll_dragging = true }
+    for _i, has_color in ipairs({ false, true }) do
+        color_screen = has_color
+        assert(AppView.onPanZenPM(drag_view, nil, { pos = { x = 80, y = 60 } }))
+        assert(dirty.widget == nil and dirty.mode == (has_color and "ui" or "fast"))
+        assert(dirty.region.x == 80 and dirty.region.h == 20)
+    end
+    color_screen = false
+end
 
 local description_images
 local description_bounds = { x = 10, y = 40, w = 80, h = 100 }

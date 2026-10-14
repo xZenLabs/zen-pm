@@ -520,14 +520,14 @@ function AppView:onPanZenPM(_, ges)
     end
 
     -- 1. Thumb follows the finger smoothly: paint just the track strip directly
-    --    to Screen.bb and push an A2 refresh over each changed thumb footprint
+    --    to Screen.bb and refresh each changed thumb footprint
     --    via setDirty(nil) — nil means "repaint no widgets", so the list items
     --    are left untouched. paint_drag_thumb returns only the small old/new
     --    thumb rects, never the span between, so no tall bar is refreshed.
     local rects = Scroll.paint_drag_thumb(self, ges.pos.y)
     if rects then
         for _i = 1, #rects do
-            UIManager:setDirty(nil, "fast", Geom:new(rects[_i]))
+            UIManager:setDirty(nil, Theme.has_color() and "ui" or "fast", Geom:new(rects[_i]))
         end
     end
 
@@ -603,6 +603,7 @@ function AppView:onClose()
 end
 
 function AppView:paintTo(bb, x, y)
+    Theme.update_accent()
     self._readme_visible_images = {}
     self.dithered = false
     self.hitboxes = {}

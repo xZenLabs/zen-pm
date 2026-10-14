@@ -3096,6 +3096,18 @@ local icon_pack = {
     assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
     installed_assets = { "colour.zip" },
 }
+do
+    (function()
+        local Images = require("ui/images")
+        local package_icon = Images.package_icon
+        Images.package_icon = function() return "/custom/fonts.png", true end
+        local file, is_icon = App.package_icon_file({
+            image_file_for = function(_, value) return value end,
+        }, { id = "fonts", category = "fonts" })
+        assert(file == "/custom/fonts.png" and is_icon)
+        Images.package_icon = package_icon
+    end)()
+end
 local colour_entry = App.queue_entry_for({ state = {} }, icon_pack, "uninstall", "colour.zip")
 local mono_entry = App.queue_entry_for({ state = {} }, icon_pack, "install", "mono.zip")
 assert(colour_entry.key ~= mono_entry.key and mono_entry.is_icon_pack and mono_entry.prompt_restart)

@@ -2334,7 +2334,7 @@ function App:package_icon_file(pkg)
         local icon = Images.asset("zenpm.svg")
         return icon, true, icon, "zenpm"
     end
-    local icon_value = Images.package_icon(pkg)
+    local icon_value, is_category_icon = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
     local source = icon_value == fallback_value and "repo-fallback" or "package"
     if Models.is_image_asset_package(pkg) then
@@ -2350,7 +2350,7 @@ function App:package_icon_file(pkg)
     end
     local file = self:image_file_for(icon_value)
     if file then
-        return file, icon_value == fallback_value or tostring(file):lower():match("%.svg$") ~= nil, icon_value, source
+        return file, is_category_icon or icon_value == fallback_value or tostring(file):lower():match("%.svg$") ~= nil, icon_value, source
     end
     return self:image_file_for(fallback_value), true, fallback_value, "fallback"
 end

@@ -612,9 +612,8 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
         local row_w = w - gutter
         P.box(bb, row_x, row_y, row_w, row_h, { border = false, radius = false })
         P.rect(bb, row_x, row_y + row_h - divider_h, row_w, divider_h, Theme.soft)
-        local icon = row.icon and InlineIcons.icon(row.icon)
-        if icon then
-            P.center_text_box(bb, icon, row_x + settings_left, row_y,
+        if row.icon then
+            InlineIcons.paint(bb, row.icon, row_x + settings_left, row_y,
                 settings_icon_w, row_h, "small", { face = settings_icon_face })
         end
         local value = row.value and row.value() or nil
@@ -809,7 +808,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local function draw_tab(index, id, label, tx, tw)
             local selected = details_tab == id
             P.box(bb, tx, iy, tw, tab_h, {
-                background = selected and Theme.ink or Theme.panel,
+                background = selected and Theme.button_bg or Theme.panel,
                 border_color = Theme.border,
                 radius = math.floor(tab_h / 2),
             })

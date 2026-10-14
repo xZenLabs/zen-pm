@@ -54,6 +54,7 @@ end
 package.preload["ui/images"] = function()
     return {
         asset = function(name) return name end,
+        custom_icon = function() return nil end,
         package_icon = function(pkg) return pkg.icon_url end,
         is_transparent = function(value)
             if value == "/packages/readerbackdrop-moonlight/preview" then return true end
@@ -66,8 +67,8 @@ package.preload["ui/primitives"] = function()
         box = function(_, x, y, w, h, opts)
             table.insert(painted_boxes, { x = x, y = y, w = w, h = h, opts = opts })
         end,
-        rect = function(_, x, y, w, h)
-            table.insert(painted_rects, { x = x, y = y, w = w, h = h })
+        rect = function(_, x, y, w, h, color)
+            table.insert(painted_rects, { x = x, y = y, w = w, h = h, color = color })
         end,
         text = function(_, text, x, y)
             table.insert(painted_text, text)
@@ -77,6 +78,7 @@ package.preload["ui/primitives"] = function()
         text_size = function(text) return { w = #text, h = 1 } end,
         vcenter_text = function(_, text) return { w = #text, h = 1 } end,
         image = function(_, file, x, y, w, h, opts)
+            if not file then return false end
             painted_images[file] = { x = x, y = y, w = w, h = h, is_icon = opts and opts.is_icon }
             return true
         end,
@@ -343,7 +345,14 @@ Cards.source({
 assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
 
 package.preload["ui/font"] = function() return {} end
-package.preload["ui/inline_icon_map"] = function() return { icon = function() return "" end } end
+package.preload["ui/inline_icon_map"] = function()
+    return {
+        icon = function() return "" end,
+        paint = function(bb, _name, x, y, w, h, role, opts)
+            require("ui/primitives").center_text_box(bb, "", x, y, w, h, role, opts)
+        end,
+    }
+end
 package.preload["ui/markdown"] = function()
     return {
         parse = dofile(root .. "/ui/markdown.lua").parse,
@@ -756,5 +765,53 @@ Cards.package(icon_view, {}, {
     id = "solar", category = "iconpacks", assets = { { asset = "mono.zip" } },
 }, 0, 0, 300, { compact = true })
 assert(painted_text[#painted_text] ~= "Queued")
+
+do
+    (function()
+        local P, Theme = require("ui/primitives"), require("ui/theme")
+        local accent, foreground = {}, 1
+        Theme.button_bg, Theme.button_text = accent, foreground
+        local labels = {}
+        P.center_text_box = function(_, label, x, y, _w, _h, _role, opts)
+            labels[label] = { x = x, y = y, color = opts.color }
+        end
+        P.vcenter_text = function(_, label, _x, _y, _w, _h, _role, opts)
+            assert(opts.color == foreground)
+        end
+        Header.draw_sort_button(icon_view, {}, 0, 0, "category")
+        assert(painted_boxes[#painted_boxes].opts.background == accent)
+        Header.draw_search_button(icon_view, {}, 0, 0, "category")
+        assert(painted_boxes[#painted_boxes].opts.background == accent)
+        Header.draw_installed_category_button({ app = { state = { filters = { installed = "" } } } }, {}, 0, 0)
+        assert(painted_boxes[#painted_boxes].opts.background == accent)
+        assert(labels[""].color == foreground)
+
+        painted_boxes = {}
+        Pages.package_details(icon_view, {}, 0, 0, 300, 600, 0)
+        local selected = labels["Icon Packs"]
+        assert(selected.color == foreground)
+        local selected_background
+        for _i, box in ipairs(painted_boxes) do
+            if box.x == selected.x and box.y == selected.y then selected_background = box.opts.background end
+        end
+        assert(selected_background == accent)
+
+        require("zenpm_constants").TABS = { { id = "home" }, { id = "installed" } }
+        P.center_text = function(_, label) return { w = #label, h = 1 } end
+        painted_boxes, painted_rects = {}, {}
+        require("ui/nav").draw({ app = {
+            state = { active_tab = "home" },
+            installed_update_count = function() return 1 end,
+        } }, {}, 0, 0, 300, 78)
+        assert(painted_rects[#painted_rects].color == accent, "active tabs must use the accent")
+        assert(painted_boxes[#painted_boxes].opts.background == accent, "badges must use the accent")
+        assert(labels["1"].color == foreground)
+        require("ui/images").custom_icon = function(name)
+            return name == "more_vertical" and "/custom/more_vertical.svg" or nil
+        end
+        Header.draw_actions(icon_view, {}, 0, 0)
+        assert(painted_images["/custom/more_vertical.svg"].is_icon)
+    end)()
+end
 
 print("cards tests passed")

@@ -48,7 +48,7 @@ function Nav.draw(view, bb, x, y, w, h)
         local label_size = P.center_text(bb, label, tx, y + Theme.scale(44), tw, "nav")
         if view.app.state.active_tab == tab.id then
             local ux = tx + math.max(0, math.floor((tw - label_size.w) / 2))
-            P.rect(bb, ux, y + h - Theme.scale(5), label_size.w, Theme.scale(3), Theme.border)
+            P.rect(bb, ux, y + h - Theme.scale(5), label_size.w, Theme.scale(3), Theme.button_bg)
         end
         if tab.id == "installed" then
             local updates = view.app:installed_update_count()
@@ -58,11 +58,11 @@ function Nav.draw(view, bb, x, y, w, h)
                 local badge_y = y + Theme.scale(5)
                 P.box(bb, badge_x, badge_y, badge_s, badge_s, {
                     border = false,
-                    background = Theme.ink,
+                    background = Theme.button_bg,
                     radius = math.floor(badge_s / 2),
                 })
                 local badge_face = updates >= 10 and Font:getFace("smallinfofont", Theme.font_scale(12)) or nil
-                P.center_text_box(bb, tostring(updates), badge_x, badge_y - Theme.scale(3), badge_s, badge_s, "tiny", { bold = true, color = Theme.bg, face = badge_face })
+                P.center_text_box(bb, tostring(updates), badge_x, badge_y - Theme.scale(3), badge_s, badge_s, "tiny", { bold = true, color = Theme.button_text, face = badge_face })
             end
         end
         local callback = function() view.app:navigate(tab.id) end

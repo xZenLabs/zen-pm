@@ -97,15 +97,18 @@ end
 function Header.draw_actions(view, bb, x, y)
     local s = Theme.scale(42)
     P.box(bb, x, y, s, s, { border = false })
-    local dot = Theme.scale(6)
-    local cx = x + math.floor((s - dot) / 2)
-    local first_y = y + math.floor((s - Theme.scale(24)) / 2)
-    for i = 0, 2 do
-        P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, {
-            border = false,
-            background = Theme.ink,
-            radius = math.floor(dot / 2),
-        })
+    if not P.image(bb, Images.custom_icon("more_vertical"), x + Theme.scale(8), y + Theme.scale(8),
+            s - Theme.scale(16), s - Theme.scale(16), { is_icon = true }) then
+        local dot = Theme.scale(6)
+        local cx = x + math.floor((s - dot) / 2)
+        local first_y = y + math.floor((s - Theme.scale(24)) / 2)
+        for i = 0, 2 do
+            P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, {
+                border = false,
+                background = Theme.ink,
+                radius = math.floor(dot / 2),
+            })
+        end
     end
     local callback = function()
         view.app:show_actions(Geom:new{ x = x, y = y, w = s, h = s })
@@ -125,9 +128,9 @@ function Header.draw_sort_button(view, bb, x, y, kind)
     local icon = Theme.scale(24)
     local label = _("Sort")
     local w, label_size = icon_button_width(label, icon)
-    P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
-    P.center_text_box(bb, InlineIcons.icon("sort"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
-    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
+    P.box(bb, x, y, w, s, { border = false, background = Theme.button_bg, radius = math.floor(s / 2) })
+    InlineIcons.paint(bb, "sort", x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.button_text, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.button_text })
     local callback = function() view.app:prompt_sort(kind) end
     local id = "sort:" .. tostring(kind)
     P.hit(view, x, y, w, s, callback, id)
@@ -143,9 +146,9 @@ function Header.draw_installed_category_button(view, bb, x, y)
     local label = category and Models.category_label(category) or _("Filter")
     local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
     local w = Theme.scale(10) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
-    P.box(bb, x, y, w, h, { border = false, background = Theme.ink, radius = math.floor(h / 2) })
-    P.center_text_box(bb, InlineIcons.icon("filter"), x + Theme.scale(10), y, icon, h, "small", { bold = true, color = Theme.bg })
-    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = Theme.bg })
+    P.box(bb, x, y, w, h, { border = false, background = Theme.button_bg, radius = math.floor(h / 2) })
+    InlineIcons.paint(bb, "filter", x + Theme.scale(10), y, icon, h, "small", { bold = true, color = Theme.button_text, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = Theme.button_text })
     local callback = function()
         view.app:prompt_installed_category_filter()
     end
@@ -182,9 +185,9 @@ function Header.draw_search_button(view, bb, x, y, kind)
     local icon = Theme.scale(24)
     local label = _("Search")
     local w, label_size = icon_button_width(label, icon)
-    P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
-    P.center_text_box(bb, InlineIcons.icon("search"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
-    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
+    P.box(bb, x, y, w, s, { border = false, background = Theme.button_bg, radius = math.floor(s / 2) })
+    InlineIcons.paint(bb, "search", x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.button_text, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.button_text })
     local callback = function() view.app:prompt_filter(kind) end
     local id = "search:" .. kind
     P.hit(view, x, y, w, s, callback, id)
@@ -244,7 +247,7 @@ local function draw_queue_clear_button(view, bb, x, y)
         border_color = enabled and Theme.button_bg or Theme.soft,
         radius = math.floor(h / 2),
     })
-    P.center_text_box(bb, InlineIcons.icon("clear"), x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
+    InlineIcons.paint(bb, "clear", x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted, invert = enabled })
     P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
         local callback = function() view.app:confirm_clear_queue() end

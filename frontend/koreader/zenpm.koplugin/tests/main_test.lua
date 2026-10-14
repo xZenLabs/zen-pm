@@ -128,4 +128,21 @@ close_ok = false
 assert(not ZenPM:onUpdateAllZenPMPlugins())
 assert(table.concat(update_events, ",") == "close")
 
+do
+    local custom_icon
+    package.loaded["ui/images"] = {
+        custom_icon = function(name)
+            assert(name == "notice-question")
+            return custom_icon
+        end,
+        asset = function(name) return Constants.ASSET_DIR .. "/" .. name end,
+    }
+    local icon = { icon = "notice-question" }
+    require("ui/widget/iconwidget").init(icon)
+    assert(icon.file == Constants.ASSET_DIR .. "/zen.svg")
+    custom_icon = "/custom/notice-question.png"
+    require("ui/widget/iconwidget").init(icon)
+    assert(icon.file == custom_icon)
+end
+
 print("main tests passed")

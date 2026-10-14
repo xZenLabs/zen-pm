@@ -1,3 +1,4 @@
+local Blitbuffer = require("ffi/blitbuffer")
 local Geom = require("ui/geometry")
 local Screen = require("device").screen
 local ImageWidget = require("ui/widget/imagewidget")
@@ -19,7 +20,9 @@ function P.rect(bb, x, y, w, h, color)
     if w <= 0 or h <= 0 then
         return
     end
-    bb:paintRect(x, y, w, h, color or Theme.bg)
+    color = color or Theme.bg
+    local paint = Blitbuffer.isColor8(color) and bb.paintRect or bb.paintRectRGB32
+    paint(bb, x, y, w, h, color)
 end
 
 function P.rounded_rect(bb, x, y, w, h, color, radius)
@@ -27,15 +30,17 @@ function P.rounded_rect(bb, x, y, w, h, color, radius)
         return
     end
     radius = radius or Theme.metrics().radius
-    if bb.paintRoundedRect then
+    color = color or Theme.bg
+    local paint = Blitbuffer.isColor8(color) and bb.paintRoundedRect or bb.paintRoundedRectRGB32
+    if paint then
         local ok = pcall(function()
-            bb:paintRoundedRect(x, y, w, h, color or Theme.bg, radius)
+            paint(bb, x, y, w, h, color, radius)
         end)
         if ok then
             return
         end
         ok = pcall(function()
-            bb:paintRoundedRect(x, y, w, h, radius, color or Theme.bg)
+            paint(bb, x, y, w, h, radius, color)
         end)
         if ok then
             return
@@ -57,7 +62,8 @@ function P.border(bb, x, y, w, h, size, color, radius, background)
             P.rounded_rect(bb, x + size, y + size, w - size * 2, h - size * 2, background or Theme.panel, math.max(0, radius - size))
         end
     else
-        bb:paintBorder(x, y, w, h, size, color, nil, true)
+        local paint = Blitbuffer.isColor8(color) and bb.paintBorder or bb.paintBorderRGB32
+        paint(bb, x, y, w, h, size, color, nil, true)
     end
 end
 
@@ -65,7 +71,9 @@ function P.stroke(bb, x, y, w, h, size, color)
     if w <= 0 or h <= 0 then
         return
     end
-    bb:paintBorder(x, y, w, h, size or 2, color or Theme.border, Theme.metrics().radius, true)
+    color = color or Theme.border
+    local paint = Blitbuffer.isColor8(color) and bb.paintBorder or bb.paintBorderRGB32
+    paint(bb, x, y, w, h, size or 2, color, Theme.metrics().radius, true)
 end
 
 function P.box(bb, x, y, w, h, opts)
@@ -83,6 +91,7 @@ end
 
 local function paint_zen_pill(bb, x, y, w, h, color)
     local radius = math.min(w, h) / 2
+    local paint = Blitbuffer.isColor8(color) and bb.paintRect or bb.paintRectRGB32
     for row = 0, h - 1 do
         local offset = (row + 0.5) - h * 0.5
         local inset = 0
@@ -91,7 +100,7 @@ local function paint_zen_pill(bb, x, y, w, h, color)
         end
         local row_w = w - inset * 2
         if row_w > 0 then
-            bb:paintRect(x + inset, y + row, row_w, 1, color)
+            paint(bb, x + inset, y + row, row_w, 1, color)
         end
     end
 end
@@ -113,7 +122,8 @@ function P.zen_toggle(bb, x, y, w, h, enabled)
     local center_y = y + math.floor(h / 2)
     if enabled then
         paint_zen_pill(bb, x, y, w, h, Theme.ink)
-        paint_zen_circle(bb, x + w - pad - knob_radius, center_y, knob_radius, Theme.panel)
+        paint_zen_pill(bb, x + border, y + border, w - border * 2, h - border * 2, Theme.button_bg)
+        paint_zen_circle(bb, x + w - pad - knob_radius, center_y, knob_radius, Theme.button_text)
     else
         paint_zen_pill(bb, x, y, w, h, Theme.ink)
         paint_zen_pill(bb, x + border, y + border, w - border * 2, h - border * 2, Theme.panel)
@@ -160,7 +170,7 @@ local function paint_text_links(bb, widget, x, y, width, height, opts)
             if right > left and bottom > top then
                 local underline_y = rect.y + rect.h - thickness
                 if underline_y >= 0 and underline_y + thickness <= height then
-                    P.rect(bb, x + left, y + underline_y, right - left, thickness, Theme.ink)
+                    P.rect(bb, x + left, y + underline_y, right - left, thickness, Theme.button_bg)
                 end
                 P.hit(opts.link_view, x + left, y + top, right - left, bottom - top, function()
                     opts.link_callback(url)
@@ -318,16 +328,15 @@ function P.image(bb, file, x, y, w, h, opts)
         return false
     end
     opts = opts or {}
+    local Accent = opts.invert and package.loaded["common/ui/accent"]
     local ok, widget = pcall(function()
         local image_opts = {
             file = file,
             width = w,
             height = h,
-            -- ImageWidget's native inversion is reliable across display buffer
-            -- types, but icons must be flattened first so only their artwork
-            -- becomes white on a dark background.
-            alpha = not opts.invert and opts.alpha ~= false,
-            invert = opts.invert,
+            -- ZenOS keeps inverted artwork transparent on accent backgrounds.
+            alpha = (Accent or not opts.invert) and opts.alpha ~= false,
+            invert = not Accent and opts.invert or nil,
             is_icon = opts.is_icon,
             file_do_cache = true,
         }
@@ -340,6 +349,7 @@ function P.image(bb, file, x, y, w, h, opts)
         return false
     end
     local painted = pcall(function()
+        if Accent then Accent.styleIcon(widget, true) end
         widget:paintTo(bb, x, y)
     end)
     if widget.free then
@@ -600,13 +610,14 @@ function P.focus_control(view, bb, id, x, y, w, h, callback, opts)
 end
 
 function P.focus_outline(bb, x, y, w, h, inverse)
+    local color = Theme.button_text == Theme.ink and Theme.ink or Theme.button_bg
     if inverse then
         local size = Theme.scale(2)
         local gap = math.max(size + 1, Theme.scale(4))
-        P.stroke(bb, x - gap, y - gap, w + gap * 2, h + gap * 2, size, Theme.ink)
+        P.stroke(bb, x - gap, y - gap, w + gap * 2, h + gap * 2, size, color)
         return
     end
-    P.stroke(bb, x, y, w, h, Theme.scale(4), Theme.ink)
+    P.stroke(bb, x, y, w, h, Theme.scale(4), color)
 end
 
 function P.contains(box, x, y)

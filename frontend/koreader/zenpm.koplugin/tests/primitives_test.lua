@@ -6,6 +6,9 @@ local image_options
 local painted = false
 local underline
 
+package.preload["ffi/blitbuffer"] = function()
+    return { isColor8 = function(color) return type(color) == "number" end }
+end
 package.preload["ui/geometry"] = function() return { new = function(_, value) return value end } end
 local pixels = {}
 local color_screen = false
@@ -81,6 +84,11 @@ package.preload["ui/theme"] = function()
         scale = function(value) return value end,
         metrics = function() return { radius = 8 } end,
         ink = 1,
+        bg = 0,
+        panel = 0,
+        border = 1,
+        button_bg = 2,
+        button_text = 3,
     }
 end
 
@@ -93,6 +101,68 @@ assert(image_options.alpha == false)
 assert(P.image({}, "packages.svg", 0, 0, 24, 24, { is_icon = true }))
 assert(image_options.invert == nil)
 assert(image_options.alpha == true)
+
+local styled_icons = 0
+package.loaded["common/ui/accent"] = { styleIcon = function(_, active)
+    assert(active)
+    styled_icons = styled_icons + 1
+end }
+assert(P.image({}, "upgrade.svg", 0, 0, 24, 24, { is_icon = true, invert = true }))
+assert(image_options.alpha == true and not image_options.invert and styled_icons == 1)
+package.loaded["common/ui/accent"] = nil
+
+local drawn = {}
+local drawing_buffer = {}
+for _i, name in ipairs({ "paintRect", "paintRectRGB32", "paintRoundedRect", "paintRoundedRectRGB32",
+    "paintBorder", "paintBorderRGB32" }) do
+    drawing_buffer[name] = function(_bb, _x, _y, _w, _h, color_or_size, color)
+        drawn[#drawn + 1] = { name = name,
+            color = name:find("paintBorder", 1, true) and color or color_or_size }
+    end
+end
+local rgb = {}
+P.rect(drawing_buffer, 0, 0, 24, 16, rgb)
+assert(drawn[#drawn].name == "paintRectRGB32" and drawn[#drawn].color == rgb)
+P.rounded_rect(drawing_buffer, 0, 0, 24, 16, rgb, 8)
+assert(drawn[#drawn].name == "paintRoundedRectRGB32" and drawn[#drawn].color == rgb)
+P.stroke(drawing_buffer, 0, 0, 24, 16, 2, rgb)
+assert(drawn[#drawn].name == "paintBorderRGB32" and drawn[#drawn].color == rgb)
+P.rect(drawing_buffer, 0, 0, 24, 16, 1)
+assert(drawn[#drawn].name == "paintRect")
+
+local Theme = require("ui/theme")
+Theme.button_bg = rgb
+P.focus_outline(drawing_buffer, 0, 0, 24, 16)
+assert(drawn[#drawn].color == rgb)
+Theme.button_text = Theme.ink
+P.focus_outline(drawing_buffer, 0, 0, 24, 16, true)
+assert(drawn[#drawn].color == Theme.ink, "light accents must keep visible focus outlines")
+Theme.button_text = 3
+drawn = {}
+P.zen_toggle(drawing_buffer, 0, 0, 56, 28, true)
+local has_fill, has_knob = false, false
+for _i, drawing in ipairs(drawn) do
+    has_fill = has_fill or drawing.name == "paintRectRGB32" and drawing.color == rgb
+    has_knob = has_knob or drawing.color == Theme.button_text
+end
+assert(has_fill and has_knob, "enabled toggles need the accent and its contrasting knob")
+drawn = {}
+P.zen_toggle(drawing_buffer, 0, 0, 56, 28, false)
+for _i, drawing in ipairs(drawn) do
+    assert(drawing.name == "paintRect" and drawing.color ~= rgb, "off toggles must remain monochrome")
+end
+local Scroll = require("ui/scroll")
+local scroll_view = { hitboxes = {}, list_bounds = { x = 0, y = 0, w = 100, h = 200 } }
+drawn = {}
+Scroll.draw_scrollbar(scroll_view, drawing_buffer, 200, 0)
+assert(#drawn == 2 and drawn[1].color == rgb and drawn[2].color == rgb)
+local saved_buffer = screen.bb
+screen.bb = drawing_buffer
+drawn = {}
+assert(Scroll.paint_drag_thumb(scroll_view, 150))
+assert(drawn[#drawn - 1].color == rgb and drawn[#drawn].color == rgb)
+screen.bb = saved_buffer
+Theme.button_bg = 2
 
 local view = { hitboxes = {} }
 local opened

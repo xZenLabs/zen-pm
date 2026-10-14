@@ -204,8 +204,43 @@ local function extension_from(url, headers)
     return ".png"
 end
 
+local icon_aliases = {
+    categories = "grid_slide",
+    packages = "qa_plugin",
+    plugin = "qa_plugin",
+    search = "appbar.search",
+    discover = "compass",
+    debug = "appbar.tools",
+    utility = "appbar.tools",
+    fonts = "appbar.textsize",
+    star = "star.empty",
+    ["star.filled"] = "star.full",
+    checkmark = "check",
+    clear = "close",
+    settings = "appbar.settings",
+    settings_advanced = "appbar.tools",
+    date = "calendar_view",
+    details = "info",
+    zen = "zen_ui",
+    theme = "appbar.contrast",
+}
+
+function Images.custom_icon(name)
+    local IconPacks = package.loaded["common/icon_packs"]
+    if not IconPacks then return nil end
+    local dir = IconPacks.getActivePackDirectory()
+    if not dir and ok_datastorage and DataStorage.getFullDataDir then
+        dir = DataStorage:getFullDataDir() .. "/icons"
+    end
+    if not dir then return nil end
+    for _i, key in ipairs({ name, icon_aliases[name] }) do
+        local file = IconPacks.resolve(key, Constants.ASSET_DIR .. "/")
+        if file and file:sub(1, #dir + 1) == dir .. "/" then return file end
+    end
+end
+
 function Images.asset(name)
-    return Constants.ASSET_DIR .. "/" .. name
+    return Images.custom_icon(name:gsub("%.svg$", "")) or Constants.ASSET_DIR .. "/" .. name
 end
 
 local function is_favicon(value)
@@ -282,7 +317,7 @@ function Images.package_icon(pkg)
     if type(pkg.images) == "table" and pkg.images[1] then return pkg.images[1] end
     if pkg.image and pkg.image ~= "" then return pkg.image end
     local category_icon = Images.category_icon(pkg.category)
-    if category_icon then return category_icon end
+    if category_icon then return category_icon, true end
     return Images.package_fallback(pkg)
 end
 

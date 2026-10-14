@@ -56,7 +56,8 @@ local function use_zen_confirmation_icon()
     function IconWidget:init()
         init(self)
         if self.icon == "notice-question" then
-            self.file = Constants.ASSET_DIR .. "/zen.svg"
+            local Images = require("ui/images")
+            self.file = Images.custom_icon("notice-question") or Images.asset("zen.svg")
         end
     end
 end

@@ -40,10 +40,12 @@ end
 package.preload["ui/widget/infomessage"] = function() return {} end
 package.preload["ui/widget/inputdialog"] = function()
     return {
+        init = function(self) self.custom_icons_applied = false end,
         new = function(_, options)
             options.input_text = options.input
             function options:onShowKeyboard() end
             function options:getInputText() return self.input_text end
+            options.init = require("ui/widget/inputdialog").init
             return options
         end,
         onTap = function() end,
@@ -90,6 +92,7 @@ end
 package.preload["ui/inline_icon_map"] = function()
     return {
         label = function(_, text) return text end,
+        apply_dialog = function(dialog) dialog.custom_icons_applied = true end,
     }
 end
 package.preload["ui/images"] = function()
@@ -117,6 +120,9 @@ assert(restart_requested == true)
 Modals.search("Search packages", "needle", "Search...", function() end)
 assert(shown_dialog.title_bar_left_icon == nil)
 assert(shown_dialog.inputtext_class)
+assert(shown_dialog.buttons[1][1].zenpm_icon == "search" and shown_dialog.custom_icons_applied)
+shown_dialog:init()
+assert(shown_dialog.custom_icons_applied, "keyboard rebuilds must reapply custom icons")
 
 local input = setmetatable({
     text = "needle",
@@ -177,10 +183,13 @@ do
     })
     assert(#shown_dialog.buttons == 1)
     assert(shown_dialog.buttons[1][1].text == "Reinstall")
+    assert(shown_dialog.buttons[1][1].zenpm_icon == "refresh" and shown_dialog.custom_icons_applied)
     shown_dialog.buttons[1][1].callback()
     assert(reinstalled)
     Modals.package_modify({ name = "Package" }, { title_icon = "packages.svg" })
     assert(#shown_dialog.buttons == 0)
+    Modals.actions("Actions", { { icon = "settings", text = "Settings", callback = function() end } })
+    assert(shown_dialog.buttons[1][1].zenpm_icon == "settings" and shown_dialog.custom_icons_applied)
 end
 
 print("modals tests passed")

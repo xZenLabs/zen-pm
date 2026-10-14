@@ -20,6 +20,12 @@ local Theme = {
 Theme.MIN_BASE_FONT_SIZE = 8
 Theme.MAX_BASE_FONT_SIZE = 32
 
+function Theme.update_accent()
+    local Accent = package.loaded["common/ui/accent"]
+    Theme.button_bg = Accent and Accent.color() or Blitbuffer.COLOR_BLACK
+    Theme.button_text = Accent and Accent.foreground() or Blitbuffer.COLOR_WHITE
+end
+
 function Theme.normalize_base_font_size(value)
     local size = tonumber(value)
     if not size then
