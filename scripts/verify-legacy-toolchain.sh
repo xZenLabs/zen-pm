@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 LEGACY="$ROOT/toolchains/legacy"
-EXPECTED_VERSION=go1.26.6
+EXPECTED_VERSION=go1.26.9
 
 VERSION=$(sed -n '1p' "$LEGACY/VERSION")
 [ "$VERSION" = "$EXPECTED_VERSION" ] || {

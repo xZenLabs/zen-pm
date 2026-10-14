@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
 
       - name: Run Go tests
@@ -72,7 +72,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
 
       - uses: actions/setup-java@v4
