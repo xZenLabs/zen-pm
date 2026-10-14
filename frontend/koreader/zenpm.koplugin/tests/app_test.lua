@@ -870,6 +870,50 @@ assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 do
+for _, case in ipairs({
+    { category = "plugins", tab = "readme" },
+    { category = "koreaderpatches", tab = "patches" },
+    { category = "iconpacks", tab = "iconpacks" },
+}) do
+    local pkg = {
+        id = "zenfm", category = case.category,
+        readme_url = "https://repo.example/zenfm/README.md",
+        assets = { { asset = "package.zip" } },
+    }
+    local details_app = {
+        state = { page = "search", active_tab = "search", readme_cache = {} },
+        ensure_backend = function() return true end,
+        load_packages = function() return true, { pkg } end,
+        client = {
+            get_package_readme = function(_, id)
+                assert(id == "zenfm")
+                return true, { readme = "Package README" }, 200
+            end,
+        },
+        reset_scroll = function(self, key)
+            if key then assert(key == "package:zenfm:" .. self.state.details_tab) end
+        end,
+        clear_status = function() end,
+        refresh = function() end,
+    }
+    App.show_package_details(details_app, "zenfm")
+    assert(details_app.state.details_tab == "readme")
+    assert(details_app.state.current_package.readme == "Package README")
+    App.show_package_details(details_app, "zenfm", "search", false, case.tab)
+    assert(details_app.state.details_tab == case.tab)
+    App.set_package_details_tab(details_app)
+    assert(details_app.state.details_tab == "readme")
+    App.set_package_details_tab(details_app, case.tab)
+    assert(details_app.state.details_tab == case.tab)
+    pkg.assets = {}
+    App.show_package_details(details_app, "zenfm", "search", false, case.tab)
+    assert(details_app.state.details_tab == "readme")
+    App.set_package_details_tab(details_app, case.tab)
+    assert(details_app.state.details_tab == "readme")
+end
+end
+
+do
 local catalog_pkg = {
     id = "reader", source = "https://github.com/owner/reader", version = "v1.0.0",
     platforms = { "koreader" }, installed = true, installed_version = "v1.0.0", update_available = false,

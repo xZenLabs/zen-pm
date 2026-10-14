@@ -10,6 +10,7 @@ local painted_boxes = {}
 local painted_rects = {}
 local hit_callbacks = {}
 local hit_boxes = {}
+local hit_order = {}
 local focus_boxes = {}
 
 package.preload["zenpm_constants"] = function()
@@ -91,6 +92,7 @@ package.preload["ui/primitives"] = function()
         hit = function(_, x, y, w, h, callback, id)
             hit_callbacks[id] = callback
             hit_boxes[id] = { x = x, y = y, w = w, h = h }
+            table.insert(hit_order, id)
         end,
         focus_control = function(_, _, id, x, y, w, h, callback)
             focus_boxes[id] = { x = x, y = y, w = w, h = h, callback = callback }
@@ -151,6 +153,11 @@ Cards.package({
 }, 0, 0, 300, { compact = true })
 
 assert(painted_text[#painted_text] == "Queued")
+local package_hit = hit_boxes["package:zenpm-koreader:"]
+assert(package_hit.x == 0 and package_hit.y == 0 and package_hit.w == 300 and package_hit.h == 80,
+    "package feedback must cover the full row, including the action area")
+assert(hit_order[1] == "package:zenpm-koreader:" and hit_order[2] == "Queued",
+    "the action button must stay above the full-row hitbox")
 
 painted_text = {}
 Cards.package({

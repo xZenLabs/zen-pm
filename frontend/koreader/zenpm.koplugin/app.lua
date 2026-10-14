@@ -3155,7 +3155,7 @@ function App:show_package_details(requested_id, from_tab, force_reload, details_
     if details_tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
         selected_tab = "release_notes"
         self:load_package_release_notes(pkg)
-    elseif details_tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
+    elseif details_tab and details_tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
         selected_tab = details_tab
     end
     self.state.current_package = pkg
@@ -3170,7 +3170,7 @@ function App:set_package_details_tab(tab)
     local pkg = self.state.current_package or {}
     if tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
         self:load_package_release_notes(pkg)
-    elseif tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
+    elseif tab and tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
         -- Keep the requested asset tab.
     else
         tab = "readme"

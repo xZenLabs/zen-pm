@@ -331,6 +331,7 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
+    P.hit(view, x, y, w, h, show_details, focus_key)
     action_pill(view, bb, action_text, action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
@@ -344,8 +345,6 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         list_index = opts.focus_index,
         list_count = opts.focus_count,
     })
-    P.hit(view, x, y, action_x - x, h, show_details,
-        focus_key)
     local focus_box = opts.focus_box or { x = x, y = y, w = w, h = h }
     if P.focus_target(view, focus_key, focus_box.x, focus_box.y, focus_box.w, focus_box.h, show_details, {
         focus_type = "package",
