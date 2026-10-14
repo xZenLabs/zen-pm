@@ -4,7 +4,13 @@ local ok_logger, logger = pcall(require, "logger")
 local plugin_dir = (debug.getinfo(1, "S").source:match("^@(.+)/i18n%.lua$") or ".")
 local installed = false
 local gettext_ref = nil
+local change_methods = nil
 local original_change_lang = nil
+local patched_change_lang = nil
+local gettext_wrapper = nil
+local wrapped_gettext = nil
+local plugin_translations = {}
+local plugin_contexts = {}
 
 local function log_warn(...)
     if ok_logger and logger and logger.warn then
@@ -135,6 +141,8 @@ end
 
 local function apply_translations(gettext, lang)
     local translations, contexts = load_for_lang(lang)
+    plugin_translations = translations or {}
+    plugin_contexts = contexts or {}
     if not translations then
         log_warn("zenpm i18n: no custom translations for lang=" .. tostring(lang))
         return
@@ -158,43 +166,97 @@ local function apply_translations(gettext, lang)
     end
 end
 
+local function find_gettext_state(gettext)
+    local seen = {}
+    while type(gettext) == "table" and not seen[gettext] do
+        seen[gettext] = true
+        if type(rawget(gettext, "translation")) == "table"
+                and type(rawget(gettext, "context")) == "table" then
+            return gettext
+        end
+        local mt = getmetatable(gettext)
+        gettext = mt and type(mt.__index) == "table" and mt.__index or nil
+    end
+end
+
+local function install_wrapper(gettext, state)
+    gettext_wrapper = setmetatable({
+        pgettext = function(context, msgid)
+            local translated = plugin_contexts[context] and plugin_contexts[context][msgid]
+            if translated then return translated end
+            if type(gettext.pgettext) == "function" then
+                return gettext.pgettext(context, msgid)
+            end
+            return gettext(msgid)
+        end,
+    }, {
+        __call = function(_, msgid)
+            return plugin_translations[msgid] or gettext(msgid)
+        end,
+        __index = gettext,
+        -- Intermediate plugin proxies may forward reads only.
+        __newindex = state,
+    })
+    wrapped_gettext = gettext
+    package.loaded["gettext"] = gettext_wrapper
+end
+
 function I18n.install()
     if installed then
-        return
+        apply_translations(gettext_ref, detect_lang())
+        return true
     end
     local ok, gettext = pcall(require, "gettext")
     if not ok or not gettext then
         log_warn("zenpm i18n: gettext unavailable")
         return
     end
-    gettext_ref = gettext
-    apply_translations(gettext, detect_lang())
+    local state = find_gettext_state(gettext)
+    if not state then
+        log_warn("zenpm i18n: cannot find backing gettext tables")
+        return
+    end
+    gettext_ref = state
+    apply_translations(state, detect_lang())
+    install_wrapper(gettext, state)
 
-    local mt = getmetatable(gettext)
+    local mt = getmetatable(state)
     if mt and type(mt.__index) == "table" and type(mt.__index.changeLang) == "function" then
-        original_change_lang = mt.__index.changeLang
-        mt.__index.changeLang = function(new_lang)
-            local result = original_change_lang(new_lang)
-            apply_translations(gettext, new_lang)
+        change_methods = mt.__index
+        local change_lang = change_methods.changeLang
+        original_change_lang = change_lang
+        patched_change_lang = function(new_lang)
+            local result = change_lang(new_lang)
+            if installed then
+                apply_translations(state, new_lang)
+            end
             return result
         end
+        change_methods.changeLang = patched_change_lang
     end
     installed = true
+    return true
 end
 
 function I18n.uninstall()
     if not installed then
         return
     end
-    if gettext_ref and original_change_lang then
-        local mt = getmetatable(gettext_ref)
-        if mt and type(mt.__index) == "table" then
-            mt.__index.changeLang = original_change_lang
-            original_change_lang(gettext_ref.current_lang)
-        end
+    if package.loaded["gettext"] == gettext_wrapper then
+        package.loaded["gettext"] = wrapped_gettext
+    end
+    if change_methods and change_methods.changeLang == patched_change_lang then
+        change_methods.changeLang = original_change_lang
+        original_change_lang(gettext_ref.current_lang)
     end
     gettext_ref = nil
+    change_methods = nil
     original_change_lang = nil
+    patched_change_lang = nil
+    gettext_wrapper = nil
+    wrapped_gettext = nil
+    plugin_translations = {}
+    plugin_contexts = {}
     installed = false
 end
 

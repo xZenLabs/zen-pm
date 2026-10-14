@@ -15,7 +15,9 @@ local network_retry_callback
 
 package.preload["i18n"] = function()
     return {
-        install = function() end,
+        install = function()
+            package.loaded["gettext"] = function(value) return value end
+        end,
         uninstall = function() uninstalled = uninstalled + 1 end,
     }
 end
@@ -42,7 +44,9 @@ package.preload["ui/widget/container/widgetcontainer"] = function()
     return { extend = function(_, prototype) return prototype end }
 end
 package.preload["ui/widget/iconwidget"] = function() return { init = function() end } end
-package.preload["gettext"] = function() return function(value) return value end end
+package.preload["gettext"] = function()
+    return function() error("gettext captured before translations were installed") end
+end
 package.preload["json"] = function() return {} end
 package.preload["socket.http"] = function() return {} end
 package.preload["ltn12"] = function() return {} end
@@ -110,7 +114,7 @@ assert(reopened == ZenPM)
 ZenPM:onCloseWidget()
 
 assert(stopped == 1)
-assert(uninstalled == 1)
+assert(uninstalled == 0)
 assert(quit == 1)
 
 network_connected = false

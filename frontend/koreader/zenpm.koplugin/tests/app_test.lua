@@ -3111,6 +3111,44 @@ App.perform_package_action({
 assert(icon_tab == "iconpacks")
 do
     (function()
+        local pack = { id = "solar", category = "iconpacks", assets = { { asset = "colour.zip" } } }
+        for _, advanced in ipairs({ false, true }) do
+            local queue_opened, refreshed = false, false
+            local app = setmetatable({
+                state = { active_tab = "category", advanced = advanced, queue = {} },
+                conflicting_packages = function() return {} end,
+                show_queue = function() queue_opened = true end,
+                refresh = function() refreshed = true end,
+                show_package_details = function() error("single icon packs must queue directly") end,
+            }, { __index = App })
+            app:perform_package_action(pack)
+            assert(#app.state.queue == 1)
+            local entry = app.state.queue[1]
+            assert(entry.action == "install" and entry.asset == "colour.zip")
+            assert(entry.key == "solar\0colour.zip" and entry.is_icon_pack and entry.prompt_restart)
+            assert(queue_opened == not advanced and refreshed == advanced)
+            app:perform_package_action(pack)
+            assert(#app.state.queue == 1, "repeated Get must not duplicate the queued pack")
+        end
+        for _, pkg in ipairs({
+            { id = "solar", category = "iconpacks" },
+            { id = "solar", category = "iconpacks", assets = {} },
+            { id = "solar", category = "iconpacks", assets = icon_pack.assets },
+            { id = "solar", category = "iconpacks", assets = pack.assets,
+                installed = true, installed_assets = { "colour.zip" } },
+        }) do
+            local selected_tab
+            App.perform_package_action({
+                state = { active_tab = "category" },
+                queue_package_action = function() error("this pack must keep the selection screen") end,
+                show_package_details = function(_, _, _, _, tab) selected_tab = tab end,
+            }, pkg)
+            assert(selected_tab == "iconpacks")
+        end
+    end)()
+end
+do
+    (function()
         local actions = {}
         local pack = require("models").installed_icon_pack_item(icon_pack, "colour.zip")
         pack.update_available = true

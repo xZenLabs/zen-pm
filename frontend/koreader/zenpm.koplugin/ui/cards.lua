@@ -67,6 +67,10 @@ local function queued_action(view, pkg)
     local id = pkg and (pkg.id or pkg.name)
     if not id then return nil end
     local asset = pkg.patch_asset or pkg.icon_pack_asset
+    if not asset and Models.is_icon_pack_package(pkg) then
+        local assets = Models.package_assets(pkg)
+        if #assets == 1 then asset = assets[1].asset end
+    end
     local key = tostring(id) .. "\0" .. tostring(asset or "")
     for _, entry in ipairs(view.app.state.queue or {}) do
         local self_update = entry.self_update or entry.self_reinstall

@@ -486,7 +486,8 @@ os.time = function() return 1790942400 end -- 2026-10-02 12:00 UTC
 for _, locale in ipairs({ "en_US", "es_ES" }) do
     G_reader_settings = { readSetting = function() return locale end }
     gettext.translation = {}
-    dofile(root .. "/i18n.lua").install()
+    local i18n = dofile(root .. "/i18n.lua")
+    i18n.install()
     local date = locale == "en_US" and "10/2/2026" or "02/10/2026"
     local old_date = locale == "en_US" and "9/1/2026" or "01/09/2026"
     local today = locale == "en_US" and "Today" or "Hoy"
@@ -522,6 +523,7 @@ for _, locale in ipairs({ "en_US", "es_ES" }) do
         end
         assert(notes_package.release_notes == case.notes)
     end
+    i18n.uninstall()
 end
 os.time = real_time
 G_reader_settings = nil
@@ -743,5 +745,16 @@ Cards.package(icon_view, {}, {
     id = "solar", category = "iconpacks", installed = true, icon_pack_asset = "mono.zip",
 }, 0, 0, 300, { compact = true })
 assert(hit_callbacks["package:solar:mono.zip"])
+
+painted_text = {}
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", assets = { { asset = "colour.zip" } },
+}, 0, 0, 300, { compact = true })
+assert(painted_text[#painted_text] == "Queued")
+painted_text = {}
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", assets = { { asset = "mono.zip" } },
+}, 0, 0, 300, { compact = true })
+assert(painted_text[#painted_text] ~= "Queued")
 
 print("cards tests passed")

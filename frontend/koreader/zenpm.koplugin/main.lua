@@ -2,12 +2,13 @@ local Dispatcher = require("dispatcher")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local _ = require("gettext")
 
 local Launcher = require("launcher")
 local Constants = require("zenpm_constants")
 local I18n = dofile(Constants.PLUGIN_DIR .. "/i18n.lua")
+-- Translations are shared by reader and file-manager instances.
 I18n.install()
+local _ = require("gettext")
 local Daemon = require("daemon")
 local Client = dofile(Constants.PLUGIN_DIR .. "/client.lua")
 
@@ -154,7 +155,6 @@ function ZenPM:onCloseWidget()
     -- busy and block the handoff.
     Launcher.quit()
     Daemon:new():stop_standalone_backend()
-    I18n.uninstall()
 end
 
 -- KOReader calls this only after the user selects “Remove settings” while

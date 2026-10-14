@@ -3584,6 +3584,7 @@ function App:perform_package_action(pkg, on_done)
         return
     end
     if Models.is_icon_pack_package(pkg) then
+        local assets = Models.package_assets(pkg)
         if pkg.icon_pack_asset then
             Modals.package_modify(pkg, {
                 title_icon = self:package_icon_file(pkg),
@@ -3597,6 +3598,8 @@ function App:perform_package_action(pkg, on_done)
                     self:queue_package_action(pkg, "uninstall", pkg.icon_pack_asset, nil)
                 end,
             })
+        elseif #assets == 1 and not Models.patch_file_installed(pkg, assets[1].asset) then
+            self:confirm_package_asset_action(pkg, assets[1], on_done)
         else
             self:show_package_details(pkg.id or pkg.name, self.state.active_tab, false, "iconpacks")
         end
