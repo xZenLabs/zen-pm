@@ -476,14 +476,17 @@ function Cards.compact(view, bb, x, y, w, opts)
     local compact = h < m.category_h
     local title_role = opts.title_role or (compact and "card_title" or "heading")
     local subtitle_role = opts.subtitle_role or (compact and "tiny" or "small")
-    local title_size = P.text_size(opts.title or "", text_w, title_role, { bold = true })
-    local sub_size = P.text_size(opts.subtitle or "", text_w, subtitle_role)
+    local title_opts = { bold = true, padding = opts.text_padding }
+    local subtitle_opts = { color = opts.subtitle_color, padding = opts.text_padding }
+    local title_size = P.text_size(opts.title or "", text_w, title_role, title_opts)
+    local sub_size = P.text_size(opts.subtitle or "", text_w, subtitle_role, subtitle_opts)
     local gap = opts.subtitle_gap or Theme.scale(1)
-    local stack_h = title_size.h + sub_size.h + gap
-    local title_y = y + math.floor((h - stack_h) / 2) + (opts.text_offset_y or 0)
+    local has_subtitle = opts.subtitle and opts.subtitle ~= ""
+    local stack_h = title_size.h + (has_subtitle and sub_size.h + gap or 0)
+    local title_y = iy + math.floor((icon - stack_h) / 2) + (opts.text_offset_y or 0)
     local subtitle_y = title_y + title_size.h + gap
-    P.text(bb, opts.title or "", text_x, title_y, text_w, title_role, { bold = true })
-    P.text(bb, opts.subtitle or "", text_x, subtitle_y, text_w, subtitle_role, { color = opts.subtitle_color })
+    P.text(bb, opts.title or "", text_x, title_y, text_w, title_role, title_opts)
+    P.text(bb, opts.subtitle or "", text_x, subtitle_y, text_w, subtitle_role, subtitle_opts)
     if right_icon > 0 then
         local icon_x = x + w - pad - right_icon
         P.image(bb, opts.right_icon, icon_x, y + math.floor((h - right_icon) / 2), right_icon, right_icon, { is_icon = true })
@@ -508,6 +511,7 @@ function Cards.category(view, bb, category, x, y, w, opts)
         subtitle = empty_image_category and ""
             or tostring(category.count_label or category.count or 0) .. " " .. _("packages"),
         subtitle_gap = 0,
+        text_padding = 0,
         border = false,
         radius = false,
         divider = true,

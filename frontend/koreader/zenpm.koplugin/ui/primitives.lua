@@ -139,6 +139,7 @@ function P.text(bb, text, x, y, width, role, opts)
         bold = opts.bold,
         fgcolor = opts.color or Theme.ink,
         max_width = width,
+        padding = opts.padding,
     }
     widget:paintTo(bb, x, y)
     local size = widget:getSize()
@@ -268,6 +269,7 @@ function P.text_size(text, width, role, opts)
         bold = opts.bold,
         fgcolor = opts.color or Theme.ink,
         max_width = width,
+        padding = opts.padding,
     }
     local size = widget:getSize()
     widget:free()

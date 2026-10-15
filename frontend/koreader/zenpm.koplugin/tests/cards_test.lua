@@ -5,6 +5,7 @@ package.path = root .. "/?.lua;" .. root .. "/ui/?.lua;" .. package.path
 local painted_text = {}
 local painted_text_x = {}
 local painted_text_y = {}
+local painted_text_opts = {}
 local painted_images = {}
 local painted_boxes = {}
 local painted_rects = {}
@@ -71,10 +72,11 @@ package.preload["ui/primitives"] = function()
         rect = function(_, x, y, w, h, color)
             table.insert(painted_rects, { x = x, y = y, w = w, h = h, color = color })
         end,
-        text = function(_, text, x, y)
+        text = function(_, text, x, y, _width, _role, opts)
             table.insert(painted_text, text)
             painted_text_x[text] = x
             painted_text_y[text] = y
+            painted_text_opts[text] = opts
         end,
         text_size = function(text) return { w = #text, h = 1 } end,
         vcenter_text = function(_, text) return { w = #text, h = 1 } end,
@@ -247,6 +249,38 @@ Cards.category({
 assert(painted_boxes[1].opts.border == false and painted_boxes[1].opts.radius == false)
 assert(#painted_rects == 2 and painted_rects[1].y == 0 and painted_rects[2].y == 59)
 assert(painted_text_y["2085 packages"] == painted_text_y.Wallpapers + 1)
+
+do
+    local P = require("ui/primitives")
+    local text_size = P.text_size
+    local line_heights = { card_title = 24, tiny = 20, heading = 30, small = 26 }
+    P.text_size = function(text, _width, role, opts)
+        local padding = opts and opts.padding or 2
+        return { w = #text, h = line_heights[role] + padding * 2 }
+    end
+    for _, height in ipairs({ 44, 60, 84, 85 }) do
+        Cards.category({ app = { show_category_details = function() end } }, {}, {
+            id = "wallpapers", label = "Wallpapers", icon = "wallpaper.svg", count = 2,
+        }, 10, 20, 300, { height = height })
+        local title_h = line_heights[height < 84 and "card_title" or "heading"]
+        local subtitle_h = line_heights[height < 84 and "tiny" or "small"]
+        assert(painted_text_y["2 packages"] == painted_text_y.Wallpapers + title_h,
+            "category lines must be stacked at their natural line height")
+        local icon = painted_images["wallpaper.svg"]
+        local text_center = painted_text_y.Wallpapers + (title_h + subtitle_h) / 2
+        assert(math.abs(text_center - (icon.y + icon.h / 2)) <= 0.5,
+            "the category text block must be vertically centered with its icon")
+        assert(painted_text_opts.Wallpapers.padding == 0 and painted_text_opts["2 packages"].padding == 0,
+            "category text must be painted with the same padding used to measure it")
+    end
+    Cards.category({ app = { show_category_details = function() end } }, {}, {
+        id = "wallpapers", label = "Wallpapers", icon = "wallpaper.svg", count = 0,
+    }, 10, 20, 300, { height = 60 })
+    local icon = painted_images["wallpaper.svg"]
+    assert(painted_text_y.Wallpapers + line_heights.card_title / 2 == icon.y + icon.h / 2,
+        "a category without a count must center the title alone")
+    P.text_size = text_size
+end
 
 painted_text = {}
 Cards.category({

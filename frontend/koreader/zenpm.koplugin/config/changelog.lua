@@ -92,4 +92,7 @@ return {
         "Add sort by date to screensavers",
         "Add ZenOS button feedback + accent colors"
     },
+    ["1.7.1"] = {
+        "Fix categories centering"
+    },
 }
