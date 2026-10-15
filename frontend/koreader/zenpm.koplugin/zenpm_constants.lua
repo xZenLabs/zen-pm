@@ -43,6 +43,7 @@ return {
     CATEGORIES = {
         { id = "fonts", label = N_("Fonts"), icon = "fonts.svg" },
         { id = "games", label = N_("Games"), icon = "games.svg" },
+        { id = "iconpacks", label = N_("Icon Packs"), icon = "icon_packs.svg" },
         { id = "media", label = N_("Media"), icon = "media.svg" },
         { id = "koreader-patches", label = N_("Patches"), icon = "patch.svg" },
         { id = "productivity", label = N_("Productivity"), icon = "productivity.svg" },

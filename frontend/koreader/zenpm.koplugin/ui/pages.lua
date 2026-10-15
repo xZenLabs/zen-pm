@@ -51,7 +51,7 @@ local function readerbackdrop_rows(view, visible)
     local rows = {}
     local loaded = 0
     for _, pkg in ipairs(visible or {}) do
-        if pkg.repo ~= Constants.REPO_READERBACKDROP_NAME or loaded < page * 24 then
+        if pkg.repo ~= Constants.REPO_READERBACKDROP_NAME or readerbackdrop.package_ids or loaded < page * 24 then
             table.insert(rows, pkg)
             if pkg.repo == Constants.REPO_READERBACKDROP_NAME then loaded = loaded + 1 end
         end
@@ -71,7 +71,7 @@ local function draw_readerbackdrop_load_more(view, bb, item, x, y, w, h, group, 
         height = h,
         icon = Images.asset("downloads.svg"),
         icon_fallback = "+",
-        title = view.app.state.page == "category_details" and view.app.state.current_category
+        title = item.name or view.app.state.page == "category_details" and view.app.state.current_category
             and view.app.state.current_category.id == "wallpapers"
             and _("Load more wallpapers") or _("Load more screensavers"),
         subtitle = item.subtitle,
@@ -202,6 +202,9 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
                 or _("No packages installed. Browse Search to find packages.")
         elseif kind == "category" then
             msg = query and query ~= "" and _("No packages match the filter.") or _("No packages found for this category.")
+        elseif kind == "readerbackdrop" then
+            msg = view.app.state.readerbackdrop.groups.kind == "tags" and _("No tags match the filter.")
+                or _("No collections match the filter.")
         elseif query and query ~= "" then
             msg = _("No packages match the filter.")
         end
@@ -211,6 +214,36 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
     end
     return Scroll.scrolled_list(view, bb, rows, x, list_y, w, list_h, scroll, card_h, m.card_gap, function(pkg, row_y, scrollable, index, count)
         local gutter = scrollable and Theme.scale(14) or 0
+        if pkg.readerbackdrop_group then
+            local callback = function()
+                if pkg.readerbackdrop_group == "tags" then
+                    view.app:set_readerbackdrop_category(pkg.id)
+                else
+                    view.app:set_readerbackdrop_collection(pkg.id ~= "" and pkg or nil)
+                end
+            end
+            local id = "readerbackdrop-group:" .. tostring(pkg.id)
+            Cards.compact(view, bb, x + pad, row_y, w - pad * 2 - gutter, {
+                height = card_h,
+                icon = Images.asset("packages.svg"),
+                title = pkg.name,
+                subtitle = tonumber(pkg.count) and tostring(pkg.count) .. " " .. _("images") or "",
+                right_icon = Images.asset("chevron.right.svg"),
+                callback = callback,
+                hit_id = id,
+                focus = {
+                    id = id,
+                    focus_type = "package",
+                    focus_column = "main",
+                    focus_content = true,
+                    focus_primary = true,
+                    list_group = kind,
+                    list_index = index,
+                    list_count = count,
+                },
+            })
+            return
+        end
         if pkg.installed_folder then
             local category = pkg.installed_folder
             local callback = function() view.app:show_installed(category.id) end
@@ -579,9 +612,8 @@ function Pages.settings(view, bb, x, y, w, h, scroll)
         local row_w = w - gutter
         P.box(bb, row_x, row_y, row_w, row_h, { border = false, radius = false })
         P.rect(bb, row_x, row_y + row_h - divider_h, row_w, divider_h, Theme.soft)
-        local icon = row.icon and InlineIcons.icon(row.icon)
-        if icon then
-            P.center_text_box(bb, icon, row_x + settings_left, row_y,
+        if row.icon then
+            InlineIcons.paint(bb, row.icon, row_x + settings_left, row_y,
                 settings_icon_w, row_h, "small", { face = settings_icon_face })
         end
         local value = row.value and row.value() or nil
@@ -749,14 +781,15 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         })
     end
     local assets = Models.package_assets(pkg)
-    local show_patch_tab = Models.is_patch_package(pkg) and #assets > 0
+    local asset_tab = Models.asset_details_tab(pkg)
+    local show_patch_tab = asset_tab ~= nil and #assets > 0
     local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates)
     local details_tab = view.app.state.details_tab or "readme"
     if details_tab == "release_notes" and not show_release_notes_tab then
         details_tab = "readme"
-    elseif details_tab == "patches" and not show_patch_tab then
+    elseif details_tab == asset_tab and not show_patch_tab then
         details_tab = "readme"
-    elseif details_tab ~= "release_notes" and details_tab ~= "patches" then
+    elseif details_tab ~= "release_notes" and details_tab ~= asset_tab then
         details_tab = "readme"
     end
     local tabs = {
@@ -766,7 +799,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         table.insert(tabs, { id = "release_notes", label = _("Release Notes") })
     end
     if show_patch_tab then
-        table.insert(tabs, { id = "patches", label = _("Patches") })
+        table.insert(tabs, { id = asset_tab, label = Models.is_icon_pack_package(pkg) and _("Icon Packs") or _("Patches") })
     end
     if #tabs > 1 then
         local tab_h = Theme.scale(38)
@@ -775,7 +808,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         local function draw_tab(index, id, label, tx, tw)
             local selected = details_tab == id
             P.box(bb, tx, iy, tw, tab_h, {
-                background = selected and Theme.ink or Theme.panel,
+                background = selected and Theme.button_bg or Theme.panel,
                 border_color = Theme.border,
                 radius = math.floor(tab_h / 2),
             })
@@ -806,7 +839,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
         Scroll.set_list_bounds(view, panel_x, cy, panel_w, panel_h, panel_h)
         return 0
     end
-    if details_tab == "patches" then
+    if details_tab == asset_tab and show_patch_tab then
         local gap = Theme.scale(8)
         local row_h = patch_row_height(content_h, gap)
         local list_w = inner_w
@@ -831,7 +864,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
                     view.app:reload_current_page()
                 end)
             end
-            local focus_id = "patch:" .. tostring(asset.asset or "")
+            local focus_id = asset_tab .. ":" .. tostring(asset.asset or "")
             P.hit(view, inner_x, row_y, row_w, row_h, callback, focus_id)
             P.focus_control(view, bb, focus_id, inner_x, row_y, row_w, row_h, callback, {
                 focus_type = "patch",

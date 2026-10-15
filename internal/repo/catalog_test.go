@@ -211,7 +211,7 @@ func TestRefreshKeepsLoadedReaderBackdropEntries(t *testing.T) {
 	refreshDone := make(chan error, 1)
 	go func() { refreshDone <- m.Refresh() }()
 	<-refreshStarted
-	_, _, loadErr := m.LoadReaderBackdropPage(2, "", "")
+	_, _, _, loadErr := m.LoadReaderBackdropPage(2, "", "", "", "")
 	close(finishRefresh)
 	if loadErr != nil {
 		t.Fatal(loadErr)
@@ -468,7 +468,7 @@ func TestLoadReaderBackdropPageAddsSearchResults(t *testing.T) {
 	if err := st.WriteCatalog([]state.CatalogEntry{{ID: "existing", Name: "Existing", Repo: "ZenLabs"}}); err != nil {
 		t.Fatal(err)
 	}
-	totalPages, total, err := New(st).LoadReaderBackdropPage(2, "moon library#@127.0.0.1/?x=1&", "black and white#@127.0.0.1")
+	totalPages, total, ids, err := New(st).LoadReaderBackdropPage(2, "moon library#@127.0.0.1/?x=1&", "black and white#@127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,9 +481,76 @@ func TestLoadReaderBackdropPageAddsSearchResults(t *testing.T) {
 	if total != 123 {
 		t.Fatalf("total images = %d", total)
 	}
+	if len(ids) != 1 || ids[0] != "readerbackdrop-page2" {
+		t.Fatalf("package IDs = %v", ids)
+	}
 	catalog, err := st.ReadCatalog()
 	if err != nil || len(catalog) != 2 {
 		t.Fatalf("catalog = %#v, %v", catalog, err)
+	}
+}
+
+func TestReaderBackdropDateSort(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("sortBy") != "createdAt" || r.URL.Query().Get("tag") != "zen-wallpaper" {
+			t.Errorf("query = %s", r.URL.RawQuery)
+		}
+		fmt.Fprintf(w, `{"images":[{"id":"page%s"}],"total":25,"totalPages":2}`, r.URL.Query().Get("page"))
+	}))
+	defer srv.Close()
+	for _, tc := range []struct {
+		sort string
+		page int
+		want string
+	}{
+		{"createdAt", 1, "readerbackdrop-page1"},
+		{"oldest", 1, "readerbackdrop-page2"},
+		{"oldest", 2, "readerbackdrop-page1"},
+	} {
+		entries, pages, total, err := fetchReaderBackdropPage("ReaderBackdrop", srv.URL, 10, t.TempDir(), tc.page, "", "zen-wallpaper", tc.sort, "")
+		if err != nil || pages != 2 || total != 25 || len(entries) != 1 || entries[0].ID != tc.want {
+			t.Fatalf("%s page %d: entries=%v pages=%d total=%d err=%v", tc.sort, tc.page, entries, pages, total, err)
+		}
+	}
+}
+
+func TestReaderBackdropCollections(t *testing.T) {
+	var imageRequests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/collections":
+			if r.URL.Query().Get("page") != "2" {
+				t.Errorf("query = %s", r.URL.RawQuery)
+			}
+			io.WriteString(w, `{"collections":[{"id":"books","name":"Books","imageCount":101},{"id":"hidden","isNSFW":true}],"totalPages":2}`)
+		case "/api/collections/books":
+			imageRequests.Add(1)
+			if r.URL.Query().Get("limit") != "24" {
+				t.Errorf("collection images query = %s", r.URL.RawQuery)
+			}
+			fmt.Fprintf(w, `{"images":[{"id":"collection%s"},{"id":"hidden","isNSFW":true}],"imagesTotal":25,"imagesTotalPages":2}`, r.URL.Query().Get("page"))
+		case "/api/collections/empty":
+			io.WriteString(w, `{"images":[],"imagesTotalPages":1}`)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	collections, pages, err := fetchReaderBackdropCollections(srv.URL, 2)
+	if err != nil || pages != 2 || len(collections) != 1 || collections[0].ID != "books" || collections[0].ImageCount != 101 {
+		t.Fatalf("collections=%v pages=%d err=%v", collections, pages, err)
+	}
+	entries, pages, total, err := fetchReaderBackdropPage("ReaderBackdrop", srv.URL, 10, t.TempDir(), 1, "", "", "createdAt", "books")
+	if err != nil || pages != 2 || total != 25 || len(entries) != 1 || entries[0].ID != "readerbackdrop-collection1" || imageRequests.Load() != 1 {
+		t.Fatalf("entries=%v pages=%d total=%d err=%v", entries, pages, total, err)
+	}
+	entries, pages, total, err = fetchReaderBackdropPage("ReaderBackdrop", srv.URL, 10, t.TempDir(), 2, "", "", "createdAt", "books")
+	if err != nil || pages != 2 || total != 25 || len(entries) != 1 || entries[0].ID != "readerbackdrop-collection2" || imageRequests.Load() != 2 {
+		t.Fatalf("second page: entries=%v pages=%d total=%d err=%v", entries, pages, total, err)
+	}
+	entries, pages, total, err = fetchReaderBackdropCollection("ReaderBackdrop", srv.URL, 10, "empty", 1)
+	if err != nil || pages != 1 || total != 0 || len(entries) != 0 {
+		t.Fatalf("empty collection: entries=%v pages=%d total=%d err=%v", entries, pages, total, err)
 	}
 }
 

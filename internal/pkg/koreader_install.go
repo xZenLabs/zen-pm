@@ -23,6 +23,7 @@ const (
 	genericPluginInstaller      = "plugin"
 	genericPatchInstaller       = "patch"
 	genericFontInstaller        = "font"
+	genericIconPackInstaller    = "iconpack"
 	genericWallpaperInstaller   = "wallpapers"
 	genericScreensaverInstaller = "screensavers"
 	maxKOReaderImagePixels      = 12 * 1024 * 1024
@@ -59,6 +60,9 @@ func genericKOReaderInstaller(entry *repo.CatalogEntry) string {
 	}
 	if isPatchPackage(entry) {
 		return genericPatchInstaller
+	}
+	if IsIconPackPackage(entry) {
+		return genericIconPackInstaller
 	}
 	if isFontPackage(entry) {
 		return genericFontInstaller
@@ -104,6 +108,9 @@ func (m *Manager) installGenericKOReader(entry *repo.CatalogEntry, override, rel
 		return "", path, err
 	case genericFontInstaller:
 		path, err := m.installKOReaderFont(entry, root, assetName, asset)
+		return "", path, err
+	case genericIconPackInstaller:
+		path, err := m.installKOReaderIconPack(entry, root, assetName, asset)
 		return "", path, err
 	case genericWallpaperInstaller, genericScreensaverInstaller:
 		data, err := os.ReadFile(asset.Name())
@@ -493,6 +500,12 @@ func (m *Manager) uninstallGenericKOReader(entry *repo.CatalogEntry, asset, kind
 			return err
 		}
 		return removeKOReaderPatch(root, entry.ID, asset, path)
+	case genericIconPackInstaller:
+		path, err := m.installedPatchPath(entry.ID, asset)
+		if err != nil {
+			return err
+		}
+		return removeKOReaderIconPack(root, path)
 	case genericFontInstaller:
 		path, err := m.installedPackagePath(entry.ID)
 		if err != nil {

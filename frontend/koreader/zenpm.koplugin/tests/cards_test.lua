@@ -9,6 +9,9 @@ local painted_images = {}
 local painted_boxes = {}
 local painted_rects = {}
 local hit_callbacks = {}
+local hit_boxes = {}
+local hit_order = {}
+local focus_boxes = {}
 
 package.preload["zenpm_constants"] = function()
     return { PLUGIN_DIR = root, REPO_READERBACKDROP_NAME = "ReaderBackdrop" }
@@ -22,10 +25,13 @@ package.preload["models"] = function()
         localized_date = date_models.localized_date,
         friendly_published_at = date_models.friendly_published_at,
         is_patch_package = function() return false end,
+        is_icon_pack_package = date_models.is_icon_pack_package,
+        asset_details_tab = date_models.asset_details_tab,
+        patch_file_installed = date_models.patch_file_installed,
         package_action_label = function() return "Update" end,
         package_display_name = function(pkg, fallback) return pkg.name or fallback end,
         package_verified = function() return true end,
-        package_assets = function() return {} end,
+        package_assets = date_models.package_assets,
         has_release_notes = function(pkg) return pkg.release_notes ~= nil end,
         is_font_package = function() return false end,
         is_image_asset_package = function(pkg)
@@ -49,6 +55,7 @@ end
 package.preload["ui/images"] = function()
     return {
         asset = function(name) return name end,
+        custom_icon = function() return nil end,
         package_icon = function(pkg) return pkg.icon_url end,
         is_transparent = function(value)
             if value == "/packages/readerbackdrop-moonlight/preview" then return true end
@@ -61,8 +68,8 @@ package.preload["ui/primitives"] = function()
         box = function(_, x, y, w, h, opts)
             table.insert(painted_boxes, { x = x, y = y, w = w, h = h, opts = opts })
         end,
-        rect = function(_, x, y, w, h)
-            table.insert(painted_rects, { x = x, y = y, w = w, h = h })
+        rect = function(_, x, y, w, h, color)
+            table.insert(painted_rects, { x = x, y = y, w = w, h = h, color = color })
         end,
         text = function(_, text, x, y)
             table.insert(painted_text, text)
@@ -72,6 +79,7 @@ package.preload["ui/primitives"] = function()
         text_size = function(text) return { w = #text, h = 1 } end,
         vcenter_text = function(_, text) return { w = #text, h = 1 } end,
         image = function(_, file, x, y, w, h, opts)
+            if not file then return false end
             painted_images[file] = { x = x, y = y, w = w, h = h, is_icon = opts and opts.is_icon }
             return true
         end,
@@ -79,10 +87,17 @@ package.preload["ui/primitives"] = function()
             painted_images[file] = { w = w, h = h, zoom = zoom, is_icon = opts and opts.is_icon }
             return true
         end,
+        image_zoomed_masked = function() return true end,
         center_text_box = function() end,
         dim = function() end,
-        hit = function(_, _, _, _, _, callback, id) hit_callbacks[id] = callback end,
-        focus_control = function() end,
+        hit = function(_, x, y, w, h, callback, id)
+            hit_callbacks[id] = callback
+            hit_boxes[id] = { x = x, y = y, w = w, h = h }
+            table.insert(hit_order, id)
+        end,
+        focus_control = function(_, _, id, x, y, w, h, callback)
+            focus_boxes[id] = { x = x, y = y, w = w, h = h, callback = callback }
+        end,
         focus_target = function() return false end,
         focus_outline = function() end,
     }
@@ -139,6 +154,43 @@ Cards.package({
 }, 0, 0, 300, { compact = true })
 
 assert(painted_text[#painted_text] == "Queued")
+local package_hit = hit_boxes["package:zenpm-koreader:"]
+assert(package_hit.x == 0 and package_hit.y == 0 and package_hit.w == 300 and package_hit.h == 80,
+    "package feedback must cover the full row, including the action area")
+assert(hit_order[1] == "package:zenpm-koreader:" and hit_order[2] == "Queued",
+    "the action button must stay above the full-row hitbox")
+
+do
+    hit_order = {}
+    local opened_details, action_package, reloaded
+    local pkg = { id = "featured-reader", name = "Featured Reader" }
+    Cards.featured({
+        app = {
+            state = { page = "home", active_tab = "home", queue = {} },
+            package_featured_file = function() return "featured.jpg" end,
+            show_package_details = function(_, ...) opened_details = { ... } end,
+            perform_package_action = function(_, selected, callback)
+                action_package = selected
+                callback()
+            end,
+            reload_current_page = function() reloaded = true end,
+        },
+    }, {}, pkg, 10, 20, 300, { height = 304 })
+
+    local featured_hit = hit_boxes["package:featured-reader:"]
+    assert(featured_hit.x == 10 and featured_hit.y == 20 and featured_hit.w == 300 and featured_hit.h == 304,
+        "featured feedback must cover the artwork and full row, including the action area")
+    assert(#hit_order == 2 and hit_order[1] == "package:featured-reader:" and hit_order[2] == "Update",
+        "the action button must stay above a single full-card hitbox")
+    local action_hit = hit_boxes.Update
+    assert(action_hit.x > featured_hit.x and action_hit.y > featured_hit.y
+        and action_hit.x + action_hit.w < featured_hit.x + featured_hit.w
+        and action_hit.y + action_hit.h < featured_hit.y + featured_hit.h)
+    hit_callbacks["package:featured-reader:"]()
+    assert(opened_details[1] == pkg.id and opened_details[2] == "home" and opened_details[4] == nil)
+    hit_callbacks.Update()
+    assert(action_package == pkg and reloaded, "the featured action button must still perform its package action")
+end
 
 painted_text = {}
 Cards.package({
@@ -333,7 +385,14 @@ Cards.source({
 assert(not painted_images["unverified.svg"] and not painted_images["verified.svg"])
 
 package.preload["ui/font"] = function() return {} end
-package.preload["ui/inline_icon_map"] = function() return { icon = function() return "" end } end
+package.preload["ui/inline_icon_map"] = function()
+    return {
+        icon = function() return "" end,
+        paint = function(bb, _name, x, y, w, h, role, opts)
+            require("ui/primitives").center_text_box(bb, "", x, y, w, h, role, opts)
+        end,
+    }
+end
 package.preload["ui/markdown"] = function()
     return {
         parse = dofile(root .. "/ui/markdown.lua").parse,
@@ -370,7 +429,7 @@ for index = 1, 50 do
         category = "wallpapers",
     })
 end
-Pages.packages_page({
+local screensaver_view = {
     app = {
         state = {
             page = "category_details",
@@ -385,12 +444,18 @@ Pages.packages_page({
         show_package_details = function() end,
         load_more_readerbackdrop = function() load_more_calls = load_more_calls + 1 end,
     },
-}, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
+}
+Pages.packages_page(screensaver_view, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
 assert(table.concat(painted_text, "\n"):find("Load more wallpapers", 1, true))
 assert(table.concat(painted_text, "\n"):find("24 of 10 loaded", 1, true))
 assert(rendered_screensavers == 24)
 hit_callbacks["readerbackdrop-load-more"]()
 assert(load_more_calls == 1)
+screensaver_view.app.state.readerbackdrop = { page = 1, total_pages = 1, package_ids = {} }
+rendered_screensavers = 0
+painted_text = {}
+Pages.packages_page(screensaver_view, {}, 0, 0, 300, 300, 0, "Screensavers", "category", screensavers, {}, "")
+assert(rendered_screensavers == 50 and not table.concat(painted_text, "\n"):find("Load more", 1, true))
 
 painted_text = {}
 local opened_folder
@@ -470,7 +535,8 @@ os.time = function() return 1790942400 end -- 2026-10-02 12:00 UTC
 for _, locale in ipairs({ "en_US", "es_ES" }) do
     G_reader_settings = { readSetting = function() return locale end }
     gettext.translation = {}
-    dofile(root .. "/i18n.lua").install()
+    local i18n = dofile(root .. "/i18n.lua")
+    i18n.install()
     local date = locale == "en_US" and "10/2/2026" or "02/10/2026"
     local old_date = locale == "en_US" and "9/1/2026" or "01/09/2026"
     local today = locale == "en_US" and "Today" or "Hoy"
@@ -506,6 +572,7 @@ for _, locale in ipairs({ "en_US", "es_ES" }) do
         end
         assert(notes_package.release_notes == case.notes)
     end
+    i18n.uninstall()
 end
 os.time = real_time
 G_reader_settings = nil
@@ -538,6 +605,47 @@ assert(Header.page_title({ app = { state = {
     readerbackdrop = {},
 } } }) == "ReaderBackdrop (2085)")
 
+for _, case in ipairs({
+    { page = "advanced_settings", title = "Advanced" },
+    { page = "updates_settings", title = "Updates" },
+    { page = "about_settings", title = "About" },
+    { page = "installed", title = "Wallpapers", state = { installed_folder = "wallpapers" }, callback = "close_installed_folder" },
+    { page = "category_details", title = "Category", callback = "go_back" },
+    { page = "readerbackdrop_groups", title = "Tags", state = { readerbackdrop = { groups = { kind = "tags" } } }, callback = "go_back" },
+    { page = "source_details", title = "Source", callback = "show_sources" },
+    { page = "package_details", title = "Package", state = { current_package = { name = string.rep("W", 60) } }, callback = "go_back_from_details" },
+    { page = "queue", title = "Queue", callback = "close_queue" },
+}) do
+    for _, width in ipairs({ 300, 160 }) do
+        hit_callbacks, hit_boxes, focus_boxes = {}, {}, {}
+        gettext.translation = { [case.title] = width == 300 and case.title or string.rep("W", 60) }
+        local backs = 0
+        local view = { app = {
+            state = { page = case.page, filters = { installed = "", category = "" } },
+            queue_count = function() return 0 end,
+            installed_update_count = function() return 0 end,
+            [case.callback or "show_settings"] = function() backs = backs + 1 end,
+        } }
+        for key, value in pairs(case.state or {}) do view.app.state[key] = value end
+        Header.draw(view, {}, 10, 20, width)
+        local title = Header.page_title(view)
+        local back = assert(hit_boxes.back)
+        local settings = case.callback == nil
+        assert(back.x == (settings and 44 or 18) and back.y == (settings and 27 or 26)
+            and back.h == (settings and 44 or 46))
+        assert(back.w == (settings and 58 or 52) + math.min(width - (settings and 152 or 118), #title + 8),
+            "back feedback must cover the arrow, gap, title and right padding")
+        assert(back.x + back.w <= hit_boxes[settings and "close-settings" or "actions"].x - 8)
+        assert(not hit_boxes["back-title"], "title bars must use one back hitbox")
+        local focus = assert(focus_boxes.back)
+        assert(focus.x == back.x and focus.y == back.y and focus.w == back.w and focus.h == back.h)
+        hit_callbacks.back()
+        focus.callback()
+        assert(backs == 2)
+    end
+end
+gettext.translation = {}
+
 local queue_closed = false
 Header.draw({ app = {
     state = { page = "queue", queue_running = false },
@@ -545,8 +653,8 @@ Header.draw({ app = {
     close_queue = function() queue_closed = true end,
     show_actions = function() end,
 } }, {}, 0, 0, 300)
-assert(type(hit_callbacks["back-title"]) == "function")
-hit_callbacks["back-title"]()
+assert(type(hit_callbacks.back) == "function")
+hit_callbacks.back()
 assert(queue_closed)
 
 local folder_closed = 0
@@ -559,14 +667,87 @@ local folder_view = { app = {
     close_installed_folder = function() folder_closed = folder_closed + 1 end,
 } }
 Header.draw(folder_view, {}, 0, 0, 300)
-assert(hit_callbacks.back and hit_callbacks["back-title"])
+assert(hit_callbacks.back and not hit_callbacks["back-title"])
 assert(hit_callbacks["sort:installed_images"])
 hit_callbacks["sort:installed_images"]()
 assert(folder_sort == "installed_images")
 assert(not hit_callbacks["filter-category:installed"])
 hit_callbacks.back()
-hit_callbacks["back-title"]()
+focus_boxes.back.callback()
 assert(folder_closed == 2)
+
+local opened_collections = 0
+local opened_tags = 0
+local image_browser_view = { app = {
+    state = { page = "category_details", current_category = { id = "screensavers", label = "Screensavers" },
+        readerbackdrop = { enabled = true, collection_name = "Library", total = 30 }, filters = { category = "" } },
+    show_readerbackdrop_groups = function(_, kind)
+        if kind == "collections" then opened_collections = opened_collections + 1
+        else opened_tags = opened_tags + 1 end
+    end,
+} }
+Header.draw(image_browser_view, {}, 0, 0, 600)
+assert(Header.page_title(image_browser_view) == "Screensavers: Library (30)")
+hit_callbacks["readerbackdrop-collections"]()
+hit_callbacks["readerbackdrop-categories"]()
+assert(opened_collections == 1 and opened_tags == 1)
+local tags_box = hit_boxes["readerbackdrop-categories"]
+local collections_box = hit_boxes["readerbackdrop-collections"]
+assert(tags_box.x + tags_box.w <= collections_box.x
+    and hit_boxes["sort:category"].x + hit_boxes["sort:category"].w <= tags_box.x
+    and collections_box.x + collections_box.w <= hit_boxes["search:category"].x)
+image_browser_view.app.state.current_category.id = "wallpapers"
+hit_callbacks, hit_boxes, focus_boxes = {}, {}, {}
+Header.draw(image_browser_view, {}, 0, 0, 600)
+assert(not hit_callbacks["readerbackdrop-collections"] and not focus_boxes["readerbackdrop-collections"])
+assert(not hit_callbacks["readerbackdrop-categories"])
+assert(hit_callbacks["sort:category"] and hit_callbacks["search:category"])
+
+local selected_group
+local group_list_view = { app = {
+    state = { page = "readerbackdrop_groups", readerbackdrop = { groups = { kind = "tags" } }, filters = { readerbackdrop = "" } },
+    set_readerbackdrop_category = function(_, tag) selected_group = tag end,
+    set_readerbackdrop_collection = function(_, collection) selected_group = collection and collection.id or "all" end,
+    load_more_readerbackdrop = function() selected_group = "more" end,
+    prompt_sort = function(_, kind) selected_group = "sort:" .. kind end,
+    go_back = function() selected_group = "back" end,
+} }
+painted_text = {}
+Pages.packages_page(group_list_view, {}, 0, 0, 600, 800, 0, "", "readerbackdrop", {
+    { id = "", name = "All", readerbackdrop_group = "tags" },
+    { id = "quote", name = "quote", count = 12, readerbackdrop_group = "tags" },
+    { id = "library", name = "Library", count = 30, readerbackdrop_group = "collections" },
+    { name = "Load more tags", readerbackdrop_load_more = true },
+}, {}, "")
+assert(table.concat(painted_text, "\n"):find("12 images", 1, true))
+hit_callbacks["readerbackdrop-group:quote"]()
+assert(selected_group == "quote")
+hit_callbacks["readerbackdrop-group:"]()
+assert(selected_group == "")
+hit_callbacks["readerbackdrop-group:library"]()
+assert(selected_group == "library")
+assert(table.concat(painted_text, "\n"):find("Load more tags", 1, true))
+hit_callbacks["readerbackdrop-load-more"]()
+assert(selected_group == "more")
+Header.draw(group_list_view, {}, 0, 0, 600)
+assert(Header.page_title(group_list_view) == "Tags" and hit_callbacks["search:readerbackdrop"]
+    and hit_callbacks["sort:readerbackdrop"])
+hit_callbacks["sort:readerbackdrop"]()
+assert(selected_group == "sort:readerbackdrop")
+group_list_view.app.state.readerbackdrop.groups.kind = "collections"
+painted_text = {}
+Pages.packages_page(group_list_view, {}, 0, 0, 600, 800, 0, "", "readerbackdrop", {
+    { name = "Load more collections", readerbackdrop_load_more = true },
+}, {}, "")
+assert(painted_text[1] == "Load more collections")
+Header.draw(group_list_view, {}, 0, 0, 600)
+assert(Header.page_title(group_list_view) == "Collections" and hit_callbacks["sort:readerbackdrop"])
+group_list_view.app.state.readerbackdrop.groups.kind = "tags"
+hit_callbacks.back()
+assert(selected_group == "back")
+painted_text = {}
+Pages.packages_page(group_list_view, {}, 0, 0, 600, 800, 0, "", "readerbackdrop", {}, {}, "missing")
+assert(painted_text[1] == "No tags match the filter.")
 
 painted_text = {}
 Pages.queue({
@@ -583,4 +764,94 @@ Pages.queue({
 assert(painted_text[2] == "Install screensaver")
 assert(painted_text[4] == "Uninstall screensaver")
 assert(painted_text[6] == "Install v1.2.3")
+local pack_selected
+local icon_view = { app = {
+    state = { queue = { { key = "solar\0colour.zip", action = "uninstall" } },
+        details_tab = "iconpacks", current_package = {
+            id = "solar", category = "iconpacks",
+            assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
+            installed_assets = { "colour.zip" },
+        },
+    },
+    package_disabled = function() return false end,
+    package_icon_file = function() return "theme.svg", true end,
+    show_package_details = function() end,
+    confirm_package_asset_action = function(_app, _pkg, asset) pack_selected = asset.asset end,
+} }
+painted_text = {}
+Pages.package_details(icon_view, {}, 0, 0, 300, 600, 0)
+assert(hit_callbacks["details-tab:iconpacks"] and hit_callbacks["iconpacks:colour.zip"])
+assert(table.concat(painted_text, "\n"):find("colour.zip  (installed)", 1, true))
+hit_callbacks["iconpacks:mono.zip"]()
+assert(pack_selected == "mono.zip")
+painted_text = {}
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", installed = true, icon_pack_asset = "colour.zip",
+}, 0, 0, 300, { compact = true })
+assert(painted_text[#painted_text] == "Queued")
+assert(hit_callbacks["package:solar:colour.zip"])
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", installed = true, icon_pack_asset = "mono.zip",
+}, 0, 0, 300, { compact = true })
+assert(hit_callbacks["package:solar:mono.zip"])
+
+painted_text = {}
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", assets = { { asset = "colour.zip" } },
+}, 0, 0, 300, { compact = true })
+assert(painted_text[#painted_text] == "Queued")
+painted_text = {}
+Cards.package(icon_view, {}, {
+    id = "solar", category = "iconpacks", assets = { { asset = "mono.zip" } },
+}, 0, 0, 300, { compact = true })
+assert(painted_text[#painted_text] ~= "Queued")
+
+do
+    (function()
+        local P, Theme = require("ui/primitives"), require("ui/theme")
+        local accent, foreground = {}, 1
+        Theme.button_bg, Theme.button_text = accent, foreground
+        local labels = {}
+        P.center_text_box = function(_, label, x, y, _w, _h, _role, opts)
+            labels[label] = { x = x, y = y, color = opts.color }
+        end
+        P.vcenter_text = function(_, label, _x, _y, _w, _h, _role, opts)
+            assert(opts.color == foreground)
+        end
+        Header.draw_sort_button(icon_view, {}, 0, 0, "category")
+        assert(painted_boxes[#painted_boxes].opts.background == accent)
+        Header.draw_search_button(icon_view, {}, 0, 0, "category")
+        assert(painted_boxes[#painted_boxes].opts.background == accent)
+        Header.draw_installed_category_button({ app = { state = { filters = { installed = "" } } } }, {}, 0, 0)
+        assert(painted_boxes[#painted_boxes].opts.background == accent)
+        assert(labels[""].color == foreground)
+
+        painted_boxes = {}
+        Pages.package_details(icon_view, {}, 0, 0, 300, 600, 0)
+        local selected = labels["Icon Packs"]
+        assert(selected.color == foreground)
+        local selected_background
+        for _i, box in ipairs(painted_boxes) do
+            if box.x == selected.x and box.y == selected.y then selected_background = box.opts.background end
+        end
+        assert(selected_background == accent)
+
+        require("zenpm_constants").TABS = { { id = "home" }, { id = "installed" } }
+        P.center_text = function(_, label) return { w = #label, h = 1 } end
+        painted_boxes, painted_rects = {}, {}
+        require("ui/nav").draw({ app = {
+            state = { active_tab = "home" },
+            installed_update_count = function() return 1 end,
+        } }, {}, 0, 0, 300, 78)
+        assert(painted_rects[#painted_rects].color == accent, "active tabs must use the accent")
+        assert(painted_boxes[#painted_boxes].opts.background == accent, "badges must use the accent")
+        assert(labels["1"].color == foreground)
+        require("ui/images").custom_icon = function(name)
+            return name == "more_vertical" and "/custom/more_vertical.svg" or nil
+        end
+        Header.draw_actions(icon_view, {}, 0, 0)
+        assert(painted_images["/custom/more_vertical.svg"].is_icon)
+    end)()
+end
+
 print("cards tests passed")

@@ -107,6 +107,9 @@ type pkgJSON struct {
 	UpdateIgnored         bool              `json:"update_ignored,omitempty"`
 	InstalledAssets       []string          `json:"installed_assets,omitempty"`
 	InstalledAssetDates   map[string]string `json:"installed_asset_dates,omitempty"`
+	InstalledAssetVers    map[string]string `json:"installed_asset_versions,omitempty"`
+	InstalledAssetUpdates map[string]bool   `json:"installed_asset_updates,omitempty"`
+	InstalledIconPackIDs  map[string]string `json:"installed_icon_pack_ids,omitempty"`
 	UnmanagedPatch        bool              `json:"unmanaged_patch,omitempty"`
 	LatestVersion         string            `json:"latest_version,omitempty"`
 	LatestRelease         string            `json:"latest_release,omitempty"`
@@ -817,27 +820,49 @@ func (s *Server) handleRepoRefresh(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tags": tags})
 		return
 	}
+	if r.URL.Query().Get("readerbackdrop") == "collections" {
+		page := 1
+		if value := r.URL.Query().Get("page"); value != "" {
+			var err error
+			page, err = strconv.Atoi(value)
+			if err != nil || page < 1 || page > 10000 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ReaderBackdrop page"})
+				return
+			}
+		}
+		collections, totalPages, err := s.repos.ReaderBackdropCollections(page)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"collections": collections, "page": page, "total_pages": totalPages})
+		return
+	}
 	if r.URL.Query().Get("readerbackdrop") == "1" {
 		var request struct {
-			Page   int    `json:"page"`
-			Search string `json:"search"`
-			Tag    string `json:"tag"`
+			Page       int    `json:"page"`
+			Search     string `json:"search"`
+			Tag        string `json:"tag"`
+			SortBy     string `json:"sort_by"`
+			Collection string `json:"collection"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048)).Decode(&request); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		if request.Page < 1 || request.Page > 10000 || len(request.Search) > 200 || len(request.Tag) > 100 {
+		if request.Page < 1 || request.Page > 10000 || len(request.Search) > 200 || len(request.Tag) > 100 ||
+			len(request.Collection) > 100 || strings.ContainsAny(request.Collection, "/\\") || request.Collection == "." || request.Collection == ".." ||
+			(request.SortBy != "" && request.SortBy != "downloads" && request.SortBy != "createdAt" && request.SortBy != "oldest") {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ReaderBackdrop filters"})
 			return
 		}
-		totalPages, total, err := s.repos.LoadReaderBackdropPage(request.Page, request.Search, request.Tag)
+		totalPages, total, ids, err := s.repos.LoadReaderBackdropPage(request.Page, request.Search, request.Tag, request.SortBy, request.Collection)
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"ok": true, "page": request.Page, "total": total, "total_pages": totalPages,
+			"ok": true, "page": request.Page, "total": total, "total_pages": totalPages, "package_ids": ids,
 		})
 		return
 	}
@@ -923,12 +948,20 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	patchFiles, _ := s.st.ReadInstalledPatchFiles()
 	installedAssets := make(map[string][]string)
 	installedAssetDates := make(map[string]map[string]string)
+	installedAssetVersions := make(map[string]map[string]string)
+	installedIconPackIDs := make(map[string]map[string]string)
 	for _, f := range patchFiles {
 		installedAssets[f.PackageID] = append(installedAssets[f.PackageID], f.Asset)
 		if installedAssetDates[f.PackageID] == nil {
 			installedAssetDates[f.PackageID] = make(map[string]string)
+			installedAssetVersions[f.PackageID] = make(map[string]string)
+			installedIconPackIDs[f.PackageID] = make(map[string]string)
 		}
 		installedAssetDates[f.PackageID][f.Asset] = f.InstalledAt
+		installedAssetVersions[f.PackageID][f.Asset] = f.Version
+		if f.InstallPath != "" {
+			installedIconPackIDs[f.PackageID][f.Asset] = filepath.Base(f.InstallPath)
+		}
 	}
 
 	filtered := repo.FilterByPlatform(catalog, plat)
@@ -984,11 +1017,25 @@ func (s *Server) handlePackageList(w http.ResponseWriter, r *http.Request) {
 		if files := installedAssets[e.ID]; len(files) > 0 {
 			item.InstalledAssets = files
 			item.InstalledAssetDates = installedAssetDates[e.ID]
+			item.InstalledAssetVers = installedAssetVersions[e.ID]
+			item.InstalledAssetUpdates = make(map[string]bool)
+			if pkg.IsIconPackPackage(e) {
+				item.InstalledIconPackIDs = installedIconPackIDs[e.ID]
+			}
 		}
 		if item.Installed {
 			item.InstalledVer = installedVersion[e.ID]
 			item.InstalledAt = installedAt[e.ID]
 			item.InstalledAsset = installedAsset[e.ID]
+			for asset, version := range item.InstalledAssetVers {
+				assetItem := item
+				assetItem.InstalledVer = version
+				applyUpdateInfo(&assetItem, allowPrerelease, allowAlpha)
+				item.InstalledAssetUpdates[asset] = assetItem.UpdateAvail
+				if pkg.IsIconPackPackage(e) && (item.InstalledVer == "" || releases.VersionGreater(item.InstalledVer, version)) {
+					item.InstalledVer = version
+				}
+			}
 			applyUpdateInfo(&item, allowPrerelease, allowAlpha)
 			item.UpdateIgnored = updateIgnored[e.ID]
 			if item.UpdateAvail && updateIgnoredVersion[e.ID] == item.LatestVersion {

@@ -168,7 +168,24 @@ func TestRepoAPIRejectsLocalURLsBeforeChangingRepos(t *testing.T) {
 func TestReaderBackdropPageRefresh(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/tags/popular" {
+			if r.URL.Query().Get("limit") != "50" {
+				t.Errorf("tags query = %s", r.URL.RawQuery)
+			}
 			_, _ = io.WriteString(w, `[{"name":"quote","count":12}]`)
+			return
+		}
+		if r.URL.Path == "/api/collections" {
+			if r.URL.Query().Get("page") != "2" {
+				t.Errorf("collections query = %s", r.URL.RawQuery)
+			}
+			_, _ = io.WriteString(w, `{"collections":[{"id":"books","name":"Books","imageCount":1}],"totalPages":3}`)
+			return
+		}
+		if r.URL.Path == "/api/collections/books" {
+			if r.URL.Query().Get("limit") != "24" || r.URL.Query().Get("page") != "2" {
+				t.Errorf("collection images query = %s", r.URL.RawQuery)
+			}
+			_, _ = io.WriteString(w, `{"images":[{"id":"book","title":"Book"}],"imagesTotal":25,"imagesTotalPages":2}`)
 			return
 		}
 		if r.URL.Query().Get("search") != "forest" || r.URL.Query().Get("tag") != "quote" {
@@ -178,6 +195,9 @@ func TestReaderBackdropPageRefresh(t *testing.T) {
 		if r.URL.Query().Get("page") != "2" {
 			http.Error(w, "unexpected page", http.StatusBadRequest)
 			return
+		}
+		if r.URL.Query().Get("sortBy") != "createdAt" {
+			t.Errorf("sort query = %s", r.URL.RawQuery)
 		}
 		_, _ = io.WriteString(w, `{"images":[],"total":192,"totalPages":4,"currentPage":2}`)
 	}))
@@ -192,7 +212,7 @@ func TestReaderBackdropPageRefresh(t *testing.T) {
 	}
 	repositories := repo.New(st)
 	srv := New(st, repositories, pkg.New(st, repositories, "host"), 0)
-	req := httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"search":"forest","tag":"quote"}`))
+	req := httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"search":"forest","tag":"quote","sort_by":"createdAt"}`))
 	rec := httptest.NewRecorder()
 
 	srv.handleRepoRefresh(rec, req)
@@ -204,6 +224,29 @@ func TestReaderBackdropPageRefresh(t *testing.T) {
 	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=categories", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"quote"`) {
 		t.Fatalf("categories response = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=collections&page=2", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"Books"`) || !strings.Contains(rec.Body.String(), `"total_pages":3`) {
+		t.Fatalf("collections response = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(`{"page":2,"collection":"books"}`)))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"package_ids":["readerbackdrop-book"]`) ||
+		!strings.Contains(rec.Body.String(), `"total":25`) || !strings.Contains(rec.Body.String(), `"total_pages":2`) {
+		t.Fatalf("collection response = %d %s", rec.Code, rec.Body.String())
+	}
+	for _, body := range []string{`{"page":1,"sort_by":"invalid"}`, `{"page":1,"collection":"../books"}`, `{"page":1,"collection":".."}`} {
+		rec = httptest.NewRecorder()
+		srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=1", strings.NewReader(body)))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("invalid filters: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	rec = httptest.NewRecorder()
+	srv.handleRepoRefresh(rec, httptest.NewRequest(http.MethodPost, "/repo/refresh?readerbackdrop=collections&page=0", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid page: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -692,6 +735,47 @@ func TestPackageListIncludesFeaturedOrder(t *testing.T) {
 	}
 	if packages[0].PublishedAt != "2026-07-24T12:00:00Z" {
 		t.Fatalf("PublishedAt = %q", packages[0].PublishedAt)
+	}
+}
+
+func TestPackageListReportsInstalledIconPackMetadata(t *testing.T) {
+	t.Setenv("ZENPM_HOME", t.TempDir())
+	st, err := state.Init("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.WriteCatalog([]state.CatalogEntry{{
+		ID: "solariconpack-zen", Name: "Solar", Category: "iconpacks", Version: "2.0.0", Repo: "ZenLabs", Platforms: []string{"koreader"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	for asset, version := range map[string]string{"colour.zip": "1.0.0", "mono.zip": "2.0.0"} {
+		if err := st.AppendInstalledPatchFile(state.PatchFileEntry{
+			PackageID: "solariconpack-zen", Asset: asset, Version: version, Repo: "ZenLabs",
+			InstallPath: filepath.Join("icons", "zen", "zen-solar-"+strings.TrimSuffix(asset, ".zip")),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repos := repo.New(st)
+	srv := New(st, repos, pkg.New(st, repos, "host"), 0)
+	rec := httptest.NewRecorder()
+	srv.handlePackageList(rec, httptest.NewRequest(http.MethodGet, "/packages?platform=koreader", nil))
+	var packages []pkgJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &packages); err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 1 || packages[0].InstalledVer != "1.0.0" || !packages[0].UpdateAvail || packages[0].LatestVersion != "2.0.0" {
+		t.Fatalf("installed pack versions were lost: %s", rec.Body.String())
+	}
+	item := packages[0]
+	if item.InstalledAssetVers["colour.zip"] != "1.0.0" || item.InstalledAssetVers["mono.zip"] != "2.0.0" ||
+		!item.InstalledAssetUpdates["colour.zip"] || item.InstalledAssetUpdates["mono.zip"] {
+		t.Fatalf("per-pack update information = %+v", item)
+	}
+	if item.InstalledIconPackIDs["colour.zip"] != "zen-solar-colour" || item.InstalledIconPackIDs["mono.zip"] != "zen-solar-mono" {
+		t.Fatalf("per-asset icon pack IDs = %+v", item.InstalledIconPackIDs)
 	}
 }
 

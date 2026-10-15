@@ -168,7 +168,7 @@ function App:new(plugin)
             show_kindle_scriptlets = App.load_setting("show_kindle_scriptlets", false),
             show_readme_images = App.load_setting("show_readme_images", true),
             base_font_size = Theme.normalize_base_font_size(App.load_setting("base_font_size", Theme.get_base_font_size())),
-            filters = { search = "", categories = "", category = "", installed = "", source = "" },
+            filters = { search = "", categories = "", category = "", installed = "", source = "", readerbackdrop = "" },
             sorts = {
                 search = saved_sorts.search or "published_at_desc",
                 installed = saved_sorts.installed ~= "update_available" and saved_sorts.installed or "name_asc",
@@ -176,6 +176,7 @@ function App:new(plugin)
                 sources = saved_sorts.sources or "name_asc",
                 category = saved_sorts.category or "stars",
                 source = saved_sorts.source or "stars",
+                readerbackdrop = saved_sorts.readerbackdrop or "count",
             },
             scroll = {},
             packages = {},
@@ -888,7 +889,7 @@ function App:queue_all_updates()
     for _, entry in ipairs(self.state.queue) do
         queued[entry.key] = true
     end
-    local packages = self.state.packages or {}
+    local packages = Models.installed_packages(self.state.packages)
     local function finish()
         if added > 0 and self.state.advanced then
             local notice = _("Added to Queue")
@@ -907,7 +908,7 @@ function App:queue_all_updates()
             return
         end
         if pkg.installed and pkg.update_available and not pkg.update_ignored then
-            local key = queue_key(pkg.id or pkg.name, nil)
+            local key = queue_key(pkg.id or pkg.name, pkg.icon_pack_asset)
             if not queued[key] then
                 if is_zenpm_package(pkg) then
                     if self:queue_self_update(pkg, { silent = true }) then
@@ -918,7 +919,7 @@ function App:queue_all_updates()
                     return
                 end
                 if Models.is_direct_asset_package(pkg) then
-                    if self:queue_package_action(pkg, "update", nil, { silent = true }) then
+                    if self:queue_package_action(pkg, "update", pkg.icon_pack_asset, { silent = true }) then
                         added = added + 1
                         kindle_only_added = kindle_only_added or package_is_kindle_only(pkg)
                     end
@@ -968,12 +969,13 @@ function App:queue_entry_for(pkg, action, asset, opts)
     if not id then return nil end
     opts = opts or {}
     local is_patch = Models.is_patch_package(pkg)
+    local is_icon_pack = Models.is_icon_pack_package(pkg)
     local is_direct_asset = Models.is_direct_asset_package(pkg)
-    local display_name = is_patch and asset and asset ~= ""
-        and (_("patch") .. " " .. tostring(asset))
+    local display_name = (is_patch or is_icon_pack) and asset and asset ~= ""
+        and ((is_patch and (_("patch") .. " ") or "") .. tostring(asset))
         or package_title(pkg, id)
     return {
-        key = queue_key(id, is_patch and asset or nil),
+        key = queue_key(id, (is_patch or is_icon_pack) and asset or nil),
         id = id,
         pkg = pkg,
         name = display_name,
@@ -983,7 +985,8 @@ function App:queue_entry_for(pkg, action, asset, opts)
         -- incorrectly force GitHub release resolution.
         release = not package_is_kindle_only(pkg) and opts.release or nil,
         is_patch = is_patch,
-        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch)
+        is_icon_pack = is_icon_pack,
+        prompt_restart = (package_is_koreader_plugin(pkg) or is_patch or is_icon_pack)
             and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = action == "uninstall" and not is_patch and not is_direct_asset
             and resolve_plugin_settings_deleter(pkg) or nil,
@@ -1394,6 +1397,64 @@ function App:prompt_installed_images(ids, on_done)
     prompt(1)
 end
 
+function App:prompt_installed_icon_packs(operations, on_done)
+    local zen_pkg = Models.find_package(self.state.packages, "zen-ui")
+    local zen = zen_pkg and not self:package_disabled(zen_pkg)
+        and koreader_plugin_instance(zen_pkg) or nil
+    local IconPacks = package.loaded["common/icon_packs"]
+    if not (zen and type(zen.config) == "table" and type(zen.saveConfig) == "function"
+        and type(IconPacks) == "table" and type(IconPacks.scan) == "function") then
+        return false
+    end
+    local installed_packs = {}
+    for _, pack in ipairs(IconPacks.scan().packs or {}) do
+        installed_packs[pack.id] = pack
+    end
+    local packs = {}
+    for _, op in ipairs(operations or {}) do
+        local pkg = Models.find_package(self.state.packages, op.id)
+        if action_installs_package(op.action) and Models.is_icon_pack_package(pkg) then
+            local id = pkg.installed_icon_pack_ids and pkg.installed_icon_pack_ids[op.asset]
+            if installed_packs[id] then table.insert(packs, installed_packs[id]) end
+        end
+    end
+    if #packs == 0 then return false end
+    on_done = on_done or function() end
+    local function prompt(index)
+        local choice = packs[index]
+        if not choice then
+            on_done()
+            return
+        end
+        local continue = function() prompt(index + 1) end
+        Modals.close_status()
+        Modals.actions(string.format(_("Do you want to use %s now?"), choice.name), { {
+            text = _("Use icon pack"),
+            callback = function()
+                local previous_features, previous_custom = zen.config.features, zen.config.custom_icons
+                local features = type(previous_features) == "table" and previous_features or {}
+                local custom = type(previous_custom) == "table" and previous_custom or {}
+                local enabled, active_pack = features.custom_icons_enabled, custom.active_pack
+                features.custom_icons_enabled = true
+                custom.active_pack = choice.id
+                zen.config.features, zen.config.custom_icons = features, custom
+                local ok, err = pcall(zen.saveConfig, zen)
+                if not ok then
+                    features.custom_icons_enabled, custom.active_pack = enabled, active_pack
+                    zen.config.features, zen.config.custom_icons = previous_features, previous_custom
+                    Modals.actions(_("Could not activate icon pack: ") .. tostring(err), {
+                        { text = _("Continue"), callback = continue },
+                    }, { show_cancel = false })
+                    return
+                end
+                continue()
+            end,
+        } }, { cancel_callback = continue })
+    end
+    prompt(1)
+    return true
+end
+
 function App:clear_queue()
     if self.state.queue_running then return end
     self.state.queue = {}
@@ -1481,7 +1542,7 @@ function App:show_queue_entry_modify(entry)
         })
         return
     end
-    if entry.is_patch then
+    if entry.is_patch or entry.is_icon_pack then
         Modals.package_modify(pkg, {
             title_icon = self:package_icon_file(pkg),
             remove_queue = remove_queue,
@@ -1599,7 +1660,9 @@ function App:finish_queue_batch(batch)
             end)
             return
         end
-        self:prompt_installed_images(batch.image_installs, finish)
+        self:prompt_installed_images(batch.image_installs, function()
+            if not batch.icon_pack_installed or not self:prompt_installed_icon_packs(batch.succeeded, finish) then finish() end
+        end)
     end
     finish_prompts(1)
 end
@@ -1660,6 +1723,9 @@ function App:run_next_queue_operation(batch)
                 if entry.action == "install" and Models.is_image_asset_package(entry.pkg) then
                     batch.image_installs = batch.image_installs or {}
                     table.insert(batch.image_installs, entry.id)
+                end
+                if action_installs_package(entry.action) and Models.is_icon_pack_package(entry.pkg) then
+                    batch.icon_pack_installed = true
                 end
             else
                 table.insert(batch.failed, { entry = entry, detail = detail })
@@ -2282,7 +2348,7 @@ function App:package_icon_file(pkg)
         local icon = Images.asset("zenpm.svg")
         return icon, true, icon, "zenpm"
     end
-    local icon_value = Images.package_icon(pkg)
+    local icon_value, is_category_icon = Images.package_icon(pkg)
     local fallback_value = Images.package_fallback(pkg)
     local source = icon_value == fallback_value and "repo-fallback" or "package"
     if Models.is_image_asset_package(pkg) then
@@ -2298,7 +2364,7 @@ function App:package_icon_file(pkg)
     end
     local file = self:image_file_for(icon_value)
     if file then
-        return file, icon_value == fallback_value or tostring(file):lower():match("%.svg$") ~= nil, icon_value, source
+        return file, is_category_icon or icon_value == fallback_value or tostring(file):lower():match("%.svg$") ~= nil, icon_value, source
     end
     return self:image_file_for(fallback_value), true, fallback_value, "fallback"
 end
@@ -2315,6 +2381,9 @@ function App:repo_icon_file(repo)
 end
 
 function App:scroll_key()
+    if self.state.page == "readerbackdrop_groups" then
+        return "readerbackdrop:" .. self.state.readerbackdrop.groups.kind
+    end
     if self.state.page == "installed" and self.state.installed_folder then
         return "installed:" .. self.state.installed_folder
     end
@@ -2354,8 +2423,11 @@ function App:navigate(tab_id, full_refresh)
 end
 
 function App:reload_current_page()
-    if self.state.page == "package_details" and self.state.current_package then
-        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset)
+    if self.state.page == "readerbackdrop_groups" then
+        local groups = self.state.readerbackdrop.groups
+        self:show_readerbackdrop_groups(groups.kind, groups.page)
+    elseif self.state.page == "package_details" and self.state.current_package then
+        self:show_package_details(self.state.current_package.id or self.state.current_package.name, self.state.details_from, true, self.state.details_tab, self.state.current_package.patch_asset or self.state.current_package.icon_pack_asset)
     elseif self.state.page == "installed" and self.state.installed_folder then
         self:show_installed()
     elseif self.state.page == "category_details" and self.state.current_category then
@@ -2534,6 +2606,39 @@ local function readerbackdrop_tag(state)
     return ""
 end
 
+local function readerbackdrop_collection(state)
+    if state.page == "category_details" then return (state.readerbackdrop or {}).collection or "" end
+    return ""
+end
+
+local function readerbackdrop_sort(state)
+    -- ponytail: sort loaded collection images; use remote sorting if the API adds it.
+    if readerbackdrop_collection(state) ~= "" then return "downloads" end
+    local sort = (state.sorts or {})[state.page == "source_details" and "source" or "category"]
+    return sort == "published_at_desc" and "createdAt" or sort == "published_at_asc" and "oldest" or "downloads"
+end
+
+local function readerbackdrop_loaded(state, query)
+    local loaded = state.readerbackdrop or {}
+    return (readerbackdrop_collection(state) ~= "" or loaded.query == query)
+        and loaded.loaded_tag == readerbackdrop_tag(state)
+        and (loaded.loaded_collection or "") == readerbackdrop_collection(state)
+        and (loaded.loaded_sort or "downloads") == readerbackdrop_sort(state)
+end
+
+local function readerbackdrop_packages(packages, state)
+    local ids = (state.readerbackdrop or {}).package_ids
+    if not ids then return packages end
+    local collection = readerbackdrop_collection(state)
+    local out = {}
+    for _, pkg in ipairs(packages or {}) do
+        if ids[pkg.id] or collection == "" and pkg.repo ~= Constants.REPO_READERBACKDROP_NAME then
+            table.insert(out, pkg)
+        end
+    end
+    return out
+end
+
 function App:readerbackdrop_query()
     if self.state.page == "category_details" and self.state.current_category
             and (self.state.current_category.id == "screensavers"
@@ -2547,44 +2652,118 @@ function App:readerbackdrop_query()
 end
 
 function App:set_readerbackdrop_category(value)
+    local previous_page = self.state.page
+    self.state.page = "category_details"
     local state = self.state.readerbackdrop
     state.tag = value or ""
+    state.collection, state.collection_name = "", nil
     self:reset_scroll("category:screensavers")
     if self:load_readerbackdrop_page(1, self:readerbackdrop_query() or "") then
         self:show_category_details("screensavers")
+    else
+        self.state.page = previous_page
     end
 end
 
-function App:prompt_readerbackdrop_categories()
-    Modals.status(_("Loading categories..."))
-    local ok, data = self.client:readerbackdrop_categories()
-    Modals.close_status()
-    if not ok then
-        Modals.info_for(_("Could not load categories: ") .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
-        return
-    end
-    data = type(data) == "table" and data or {}
+function App:set_readerbackdrop_collection(collection)
+    local previous_page = self.state.page
+    self.state.page = "category_details"
     local state = self.state.readerbackdrop
-    state.tag = state.tag or ""
-    local rows = {
-        {
-            text = _("All"),
-            checked_func = function() return state.tag == "" end,
-            callback = function() self:set_readerbackdrop_category("") end,
-        },
-    }
-    for _, tag in ipairs(type(data.tags) == "table" and data.tags or {}) do
-        local item = tag
-        if type(item.name) == "string" and item.name ~= ""
-                and Util.trim(item.name):lower() ~= "zen-wallpaper" then
-            table.insert(rows, {
-                text = item.name .. (tonumber(item.count) and " (" .. tostring(item.count) .. ")" or ""),
-                checked_func = function() return state.tag == item.name end,
-                callback = function() self:set_readerbackdrop_category(item.name) end,
-            })
+    state.collection = collection and collection.id or ""
+    state.collection_name = collection and collection.name or nil
+    state.tag = ""
+    self.state.filters.category = ""
+    self:reset_scroll(self:scroll_key())
+    if self:load_readerbackdrop_page(1, "") then
+        self:show_category_details(self.state.current_category.id)
+    else
+        self.state.page = previous_page
+    end
+end
+
+function App:show_readerbackdrop_groups(kind, page)
+    page = page or 1
+    local groups = self.state.readerbackdrop.groups
+    if page > 1 then
+        if not groups or groups.kind ~= kind or page > groups.total_pages then return false end
+        if kind == "tags" then
+            groups.page = page
+            self:show_readerbackdrop_group_list()
+            return true
         end
     end
-    Modals.actions(_("Tags"), rows, { show_cancel = false, align = "left" })
+    Modals.status(kind == "tags" and _("Loading tags...") or _("Loading collections..."))
+    UIManager:forceRePaint()
+    local ok, data
+    if kind == "tags" then
+        ok, data = self.client:readerbackdrop_categories()
+    else
+        ok, data = self.client:readerbackdrop_collections(page)
+    end
+    Modals.close_status()
+    if not ok then
+        Modals.info_for((kind == "tags" and _("Could not load tags: ") or _("Could not load collections: "))
+            .. tostring(data), Constants.PACKAGE_ERROR_NOTICE_SECONDS)
+        return false
+    end
+    data = type(data) == "table" and data or {}
+    local items = page > 1 and groups.items or { { id = "", name = _("All"), readerbackdrop_group = kind } }
+    local seen = {}
+    for _, item in ipairs(items) do seen[item.id] = true end
+    local source = kind == "tags" and data.tags or data.collections
+    for _, item in ipairs(type(source) == "table" and source or {}) do
+        if type(item.name) == "string" and item.name ~= ""
+                and (kind ~= "tags" or Util.trim(item.name):lower() ~= "zen-wallpaper")
+                and (kind == "tags" or type(item.id) == "string" and item.id ~= "") then
+            local id = kind == "tags" and item.name or item.id
+            if not seen[id] then
+                seen[id] = true
+                table.insert(items, {
+                    id = id,
+                    name = item.name,
+                    count = kind == "tags" and item.count or item.imageCount,
+                    readerbackdrop_group = kind,
+                })
+            end
+        end
+    end
+    self.state.readerbackdrop.groups = { kind = kind, items = items, page = page,
+        total_pages = kind == "tags" and math.max(1, math.ceil((#items - 1) / 24)) or tonumber(data.total_pages) or 1 }
+    if page == 1 then
+        self.state.filters.readerbackdrop = ""
+        self:reset_scroll("readerbackdrop:" .. kind)
+    end
+    self:show_readerbackdrop_group_list()
+    return true
+end
+
+function App:show_readerbackdrop_group_list()
+    local groups = self.state.readerbackdrop.groups
+    self.state.page = "readerbackdrop_groups"
+    local items = Models.sort_packages(Models.filter_packages(groups.items, self.state.filters.readerbackdrop),
+        (self.state.sorts or {}).readerbackdrop or "count", "readerbackdrop")
+    for index, item in ipairs(items) do
+        if item.id == "" then
+            table.remove(items, index)
+            table.insert(items, 1, item)
+            break
+        end
+    end
+    local has_more = groups.page < groups.total_pages
+    if groups.kind == "tags" then
+        local limit = groups.page * 24 + (items[1] and items[1].id == "" and 1 or 0)
+        has_more = #items > limit
+        for index = #items, limit + 1, -1 do items[index] = nil end
+    end
+    if has_more then
+        table.insert(items, {
+            name = groups.kind == "tags" and _("Load more tags") or _("Load more collections"),
+            readerbackdrop_load_more = true,
+        })
+    end
+    self.state.visible_packages = items
+    self:clear_status()
+    self:refresh()
 end
 
 function App:load_readerbackdrop_page(page, query)
@@ -2592,7 +2771,9 @@ function App:load_readerbackdrop_page(page, query)
     query = Util.trim(query)
     local state = self.state.readerbackdrop
     local tag = readerbackdrop_tag(self.state)
-    if state.loading or (page > 1 and state.query == query and state.loaded_tag == tag
+    local collection = readerbackdrop_collection(self.state)
+    local sort_by = readerbackdrop_sort(self.state)
+    if state.loading or (page > 1 and readerbackdrop_loaded(self.state, query)
             and state.total_pages and page > state.total_pages) then
         return false
     end
@@ -2602,7 +2783,7 @@ function App:load_readerbackdrop_page(page, query)
         or wallpapers and _("Loading wallpapers...") or _("Loading screensavers..."))
         or wallpapers and _("Loading more wallpapers...") or _("Loading more screensavers..."))
     UIManager:forceRePaint()
-    local ok, data = self.client:load_readerbackdrop(page, query, tag)
+    local ok, data = self.client:load_readerbackdrop(page, query, tag, sort_by, collection)
     Modals.close_status()
     state.loading = false
     if not ok then
@@ -2614,10 +2795,18 @@ function App:load_readerbackdrop_page(page, query)
     local total_pages = tonumber(data.total_pages)
     local total = tonumber(data.total)
     state.total_pages = total_pages and total_pages > 0 and total_pages or nil
-    state.total = total and total > 0 and total or nil
+    state.total = total and total >= 0 and total or nil
     state.query = query
     state.loaded_tag = tag
-    if query == "" and state.total then
+    state.loaded_collection = collection
+    state.loaded_sort = sort_by
+    if type(data.package_ids) == "table" then
+        state.package_ids = page == 1 and {} or state.package_ids or {}
+        for _, id in ipairs(data.package_ids) do state.package_ids[id] = true end
+    else
+        state.package_ids = nil
+    end
+    if query == "" and collection == "" and state.total then
         if tag == "" then
             state.site_total = state.total
         elseif tag == "zen-wallpaper" then
@@ -2634,11 +2823,15 @@ function App:load_readerbackdrop_page(page, query)
 end
 
 function App:load_more_readerbackdrop()
+    if self.state.page == "readerbackdrop_groups" then
+        local groups = self.state.readerbackdrop.groups
+        if groups.page >= groups.total_pages then return false end
+        return self:show_readerbackdrop_groups(groups.kind, groups.page + 1)
+    end
     local query = self:readerbackdrop_query()
     if query == nil or not self:has_readerbackdrop() then return false end
     local state = self.state.readerbackdrop
-    local tag = readerbackdrop_tag(self.state)
-    local page = state.query == query and state.loaded_tag == tag
+    local page = readerbackdrop_loaded(self.state, query)
         and (tonumber(state.page) or 1) + 1 or 1
     if not self:load_readerbackdrop_page(page, query) then return false end
     self:reload_current_page()
@@ -2766,15 +2959,20 @@ function App:show_category_details(category_id)
     self.state.current_category = category
     if (category.id == "screensavers" or category.id == "wallpapers") and self:has_readerbackdrop() then
         local readerbackdrop = self.state.readerbackdrop
+        if category.id == "wallpapers" then
+            readerbackdrop.collection, readerbackdrop.collection_name = "", nil
+        end
         local query = self.state.filters.category or ""
-        local tag = readerbackdrop_tag(self.state)
-        if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= tag then
+        if readerbackdrop.total == nil or not readerbackdrop_loaded(self.state, query) then
             if self:load_readerbackdrop_page(1, query) then
                 packages = self.state.packages
             end
         end
     end
     local category_packages = Models.packages_in_category(packages, category)
+    if category.id == "screensavers" or category.id == "wallpapers" then
+        category_packages = readerbackdrop_packages(category_packages, self.state)
+    end
     if category.id == "screensavers" then
         category_packages = Models.filter_packages_by_tag(
             category_packages, (self.state.readerbackdrop or {}).tag)
@@ -2850,7 +3048,7 @@ function App:show_source_details(name)
     if repo.name == Constants.REPO_READERBACKDROP_NAME then
         local readerbackdrop = self.state.readerbackdrop
         local query = self.state.filters.source or ""
-        if readerbackdrop.total == nil or readerbackdrop.query ~= query or readerbackdrop.loaded_tag ~= "" then
+        if readerbackdrop.total == nil or not readerbackdrop_loaded(self.state, query) then
             if self:load_readerbackdrop_page(1, query) then
                 packages = self.state.packages
             end
@@ -2862,13 +3060,16 @@ function App:show_source_details(name)
             table.insert(visible, pkg)
         end
     end
+    if repo.name == Constants.REPO_READERBACKDROP_NAME then
+        visible = readerbackdrop_packages(visible, self.state)
+    end
     self.state.packages = packages
     self.state.visible_packages = self:sorted_packages("source", Models.filter_packages(visible, self.state.filters.source))
     self:clear_status()
     self:refresh()
 end
 
-function App:show_package_details(requested_id, from_tab, force_reload, details_tab, patch_asset)
+function App:show_package_details(requested_id, from_tab, force_reload, details_tab, package_asset)
     if self.state.page ~= "package_details" then
         self.state.details_origin = {
             page = self.state.page,
@@ -2927,8 +3128,12 @@ function App:show_package_details(requested_id, from_tab, force_reload, details_
     end
     -- For an installed patch item, show the patch itself (not its parent package):
     -- rebuild the single-asset item so the title, card and modify menu act on the patch.
-    if type(patch_asset) == "string" and patch_asset ~= "" and Models.is_patch_package(pkg) then
-        pkg = Models.installed_patch_item(pkg, patch_asset)
+    if type(package_asset) == "string" and package_asset ~= "" then
+        if Models.is_patch_package(pkg) then
+            pkg = Models.installed_patch_item(pkg, package_asset)
+        elseif Models.is_icon_pack_package(pkg) then
+            pkg = Models.installed_icon_pack_item(pkg, package_asset)
+        end
     end
     self.state.packages = packages
     local cache_key = tostring(pkg.id or pkg.name or "")
@@ -2964,8 +3169,8 @@ function App:show_package_details(requested_id, from_tab, force_reload, details_
     if details_tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
         selected_tab = "release_notes"
         self:load_package_release_notes(pkg)
-    elseif details_tab == "patches" and Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 then
-        selected_tab = "patches"
+    elseif details_tab and details_tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
+        selected_tab = details_tab
     end
     self.state.current_package = pkg
     self.state.details_tab = selected_tab
@@ -2979,8 +3184,8 @@ function App:set_package_details_tab(tab)
     local pkg = self.state.current_package or {}
     if tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
         self:load_package_release_notes(pkg)
-    elseif tab == "patches" and Models.is_patch_package(pkg) and #Models.package_assets(pkg) > 0 then
-        -- Keep the requested patch tab.
+    elseif tab and tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
+        -- Keep the requested asset tab.
     else
         tab = "readme"
     end
@@ -3051,7 +3256,18 @@ function App:go_back()
     if page == "installed" and self.state.installed_folder then
         self:close_installed_folder()
     elseif page == "category_details" then
-        self:show_categories()
+        local state = self.state.readerbackdrop or {}
+        local groups = state.groups
+        if groups and self.state.current_category
+                and (self.state.current_category.id == "screensavers" or self.state.current_category.id == "wallpapers")
+                and (groups.kind == "collections" and (state.collection or "") ~= ""
+                    or groups.kind == "tags" and self.state.current_category.id == "screensavers" and (state.tag or "") ~= "") then
+            self:show_readerbackdrop_group_list()
+        else
+            self:show_categories()
+        end
+    elseif page == "readerbackdrop_groups" then
+        self:set_readerbackdrop_collection(nil)
     elseif page == "source_details" then
         self:show_sources()
     elseif page == "package_details" then
@@ -3103,6 +3319,11 @@ end
 
 function App:set_filter(kind, value)
     self.state.filters[kind] = value or ""
+    if kind == "readerbackdrop" then
+        self:reset_scroll(self:scroll_key())
+        self:show_readerbackdrop_group_list()
+        return
+    end
     if kind == "categories" then
         self:reset_scroll("categories")
     elseif kind == "category" and self.state.current_category then
@@ -3117,7 +3338,9 @@ function App:set_filter(kind, value)
                 or self.state.current_category.id == "wallpapers"))
             or (kind == "source" and self.state.current_repo
                 and self.state.current_repo.name == Constants.REPO_READERBACKDROP_NAME) then
-        self:load_readerbackdrop_page(1, self.state.filters[kind])
+        if readerbackdrop_collection(self.state) == "" then
+            self:load_readerbackdrop_page(1, self.state.filters[kind])
+        end
     end
     if kind == "categories" then
         self:show_categories()
@@ -3131,10 +3354,12 @@ function App:set_filter(kind, value)
 end
 
 function App:set_sort(kind, value)
-    self.state.sorts[kind] = value or (kind == "search" and "published_at_desc" or "stars")
+    self.state.sorts[kind] = value or (kind == "readerbackdrop" and "count" or kind == "search" and "published_at_desc" or "stars")
     App.save_setting("sorts", self.state.sorts)
     self:reset_scroll(self:scroll_key())
-    if kind == "installed" or kind == "installed_images" then
+    if kind == "readerbackdrop" then
+        self:show_readerbackdrop_group_list()
+    elseif kind == "installed" or kind == "installed_images" then
         self:show_installed()
     elseif kind == "sources" then
         self:show_sources()
@@ -3177,12 +3402,15 @@ function App:prompt_installed_category_filter()
 end
 
 function App:prompt_sort(kind)
-    local current = self.state.sorts[kind] or (kind == "search" and "published_at_desc" or "stars")
+    local current = self.state.sorts[kind] or (kind == "readerbackdrop" and "count" or kind == "search" and "published_at_desc" or "stars")
     local title = kind == "sources" and _("Sort sources") or _("Sort packages")
+    if kind == "readerbackdrop" then
+        title = self.state.readerbackdrop.groups.kind == "tags" and _("Sort tags") or _("Sort collections")
+    end
     local function selected(key)
         return function() return current == key end
     end
-    if kind == "installed" or kind == "installed_images" or kind == "sources" then
+    if kind == "installed" or kind == "installed_images" or kind == "sources" or kind == "readerbackdrop" then
         local rows = {
             {
                 icon = "sort_asc",
@@ -3197,6 +3425,14 @@ function App:prompt_sort(kind)
                 callback = function() self:set_sort(kind, "name_desc") end,
             },
         }
+        if kind == "readerbackdrop" then
+            table.insert(rows, {
+                icon = "wallpaper",
+                text = _("Most images"),
+                checked_func = selected("count"),
+                callback = function() self:set_sort(kind, "count") end,
+            })
+        end
         if kind == "installed" or kind == "installed_images" then
             table.insert(rows, {
                 icon = "date",
@@ -3241,13 +3477,29 @@ function App:prompt_sort(kind)
             callback = function() self:set_sort(kind, "published_at_desc") end,
         })
     end
+    if downloads then
+        table.insert(rows, {
+            icon = "date",
+            text = _("Date added (newest first)"),
+            checked_func = selected("published_at_desc"),
+            callback = function() self:set_sort(kind, "published_at_desc") end,
+        })
+        table.insert(rows, {
+            icon = "date",
+            text = _("Date added (oldest first)"),
+            checked_func = selected("published_at_asc"),
+            callback = function() self:set_sort(kind, "published_at_asc") end,
+        })
+    end
     Modals.actions(title, rows, { show_cancel = false, align = "left" })
 end
 
 function App:prompt_filter(kind)
     local title = _("Search packages")
     local hint = _("Search...")
-    if kind == "categories" then
+    if kind == "readerbackdrop" then
+        title = self.state.readerbackdrop.groups.kind == "tags" and _("Search tags") or _("Search collections")
+    elseif kind == "categories" then
         title = _("Search categories")
         hint = _("Search categories...")
     elseif kind == "category" then
@@ -3343,6 +3595,28 @@ function App:perform_package_action(pkg, on_done)
     end
     if Models.is_installed_patch_item(pkg) then
         self:show_patch_modify(pkg, on_done)
+        return
+    end
+    if Models.is_icon_pack_package(pkg) then
+        local assets = Models.package_assets(pkg)
+        if pkg.icon_pack_asset then
+            Modals.package_modify(pkg, {
+                title_icon = self:package_icon_file(pkg),
+                update = pkg.update_available and function()
+                    self:queue_package_action(pkg, "update", pkg.icon_pack_asset, nil)
+                end or nil,
+                reinstall = function()
+                    self:queue_package_action(pkg, "reinstall", pkg.icon_pack_asset, nil)
+                end,
+                uninstall = function()
+                    self:queue_package_action(pkg, "uninstall", pkg.icon_pack_asset, nil)
+                end,
+            })
+        elseif #assets == 1 and not Models.patch_file_installed(pkg, assets[1].asset) then
+            self:confirm_package_asset_action(pkg, assets[1], on_done)
+        else
+            self:show_package_details(pkg.id or pkg.name, self.state.active_tab, false, "iconpacks")
+        end
         return
     end
     if Models.is_patch_package(pkg) then
@@ -3740,7 +4014,7 @@ function App:confirm_package_asset_action(pkg, asset, on_done)
         return
     end
     if not asset or not asset.asset or asset.asset == "" then
-        Modals.info(_("Patch has no file name."))
+        Modals.info(_("Package asset has no file name."))
         return
     end
     local patch_name = tostring(asset.asset)
@@ -3759,6 +4033,7 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         action = action,
     })
     local is_patch = Models.is_patch_package(pkg)
+    local is_icon_pack = Models.is_icon_pack_package(pkg)
     local font_reset = action == "uninstall" and Models.is_font_package(pkg)
         and reset_active_font_before_uninstall(pkg)
     if font_reset then
@@ -3796,11 +4071,12 @@ function App:run_package_action(pkg, action, asset, on_done, opts)
         action = action,
         asset = asset,
         is_patch = is_patch,
-        patch_was_installed = is_patch and Models.patch_file_installed(pkg, asset) or false,
+        is_icon_pack = is_icon_pack,
+        patch_was_installed = (is_patch or is_icon_pack) and Models.patch_file_installed(pkg, asset) or false,
         was_installed = pkg.installed and true or false,
         is_plugin = package_is_koreader_plugin(pkg),
         target_version = opts and opts.release or pkg.latest_version,
-        prompt_restart = font_reset or (package_is_koreader_plugin(pkg) or is_patch)
+        prompt_restart = font_reset or (package_is_koreader_plugin(pkg) or is_patch or is_icon_pack)
             and (action_installs_package(action) or action == "uninstall"),
         settings_deleter = opts and opts.settings_deleter or nil,
         failure_baseline = failure_baseline,
@@ -3838,7 +4114,7 @@ function App:package_action_failure_detail(op)
 end
 
 function App:package_action_succeeded(op, pkg)
-    if op.is_patch and op.asset and op.asset ~= "" then
+    if (op.is_patch or op.is_icon_pack) and op.asset and op.asset ~= "" then
         local now_installed = Models.patch_file_installed(pkg, op.asset)
         if op.action == "uninstall" then
             return op.patch_was_installed and not now_installed
@@ -3875,7 +4151,7 @@ function App:update_zenfm_android_companion(op, pkg)
 end
 
 function App:patch_action_succeeded_from_db(op)
-    if not (op.is_patch and op.asset and op.asset ~= "") then
+    if not ((op.is_patch or op.is_icon_pack) and op.asset and op.asset ~= "") then
         return false
     end
     local ok, data = self.client:list_packages(nil, false, nil, nil, PACKAGE_POLL_TIMEOUT)
@@ -4001,7 +4277,7 @@ function App:poll_package_action(op, attempt)
             local finish = function()
                 if op.prompt_restart then
                     local tail = _(" successfully.\n\nRestart KOReader to load the plugin.")
-                    if op.is_patch or op.action == "uninstall" then
+                    if op.is_patch or op.is_icon_pack or op.action == "uninstall" then
                         tail = _(" successfully.\n\nRestart KOReader to apply the change.")
                     end
                     if companion_warning then
@@ -4027,6 +4303,8 @@ function App:poll_package_action(op, attempt)
                 end)
                 return
             end
+            if op.is_icon_pack and action_installs_package(op.action)
+                and self:prompt_installed_icon_packs({ op }, finish) then return end
             finish()
         elseif attempt >= max_retries then
             self.busy = false

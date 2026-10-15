@@ -55,8 +55,8 @@ function Scroll.draw_scrollbar(view, bb, max_scroll, scroll)
         thumb_y = track_y + math.floor(travel * scroll / max_scroll)
     end
 
-    P.rounded_rect(bb, track_x, track_y, track_w, track_h, Theme.ink, math.floor(track_w / 2))
-    P.rounded_rect(bb, thumb_x, thumb_y, thumb_w, thumb_h, Theme.ink, math.floor(thumb_w / 2))
+    P.rounded_rect(bb, track_x, track_y, track_w, track_h, Theme.button_bg, math.floor(track_w / 2))
+    P.rounded_rect(bb, thumb_x, thumb_y, thumb_w, thumb_h, Theme.button_bg, math.floor(thumb_w / 2))
 
     -- Geometry captured for fluid pan-drag (see AppView:onPanZenPM). The touch
     -- zone is wider than the visible track so the thumb is easy to grab on e-ink.
@@ -87,7 +87,7 @@ function Scroll.draw_scrollbar(view, bb, max_scroll, scroll)
         view.app.state.scroll[view.app:scroll_key()] =
             snap_scroll(max_scroll * ratio, view.scroll_step, max_scroll)
         view:refresh()
-    end, "scrollbar")
+    end, "scrollbar", false)
 end
 
 -- Map an absolute screen Y to a scroll offset using the captured scrollbar
@@ -151,15 +151,13 @@ function Scroll.paint_drag_thumb(view, pos_y)
         table.insert(rects, thumb_rect(prev_y))
     end
 
-    -- A2 ("fast") is 1-bit, so keep every refreshed drag footprint pure B/W:
-    -- clear the wider thumb studs to white, then redraw the skinny rail and
-    -- current stud in black.
+    -- Clear both footprints before redrawing the rail and current thumb.
     for _i = 1, #rects do
         local rect = rects[_i]
         P.rect(Screen.bb, rect.x, rect.y, rect.w, rect.h, Theme.bg)
     end
-    P.rounded_rect(Screen.bb, sb.track_x, sb.track_y, sb.track_w, sb.track_h, Theme.ink, math.floor(sb.track_w / 2))
-    P.rounded_rect(Screen.bb, sb.thumb_x, thumb_y, sb.thumb_w, sb.thumb_h, Theme.ink, math.floor(sb.thumb_w / 2))
+    P.rounded_rect(Screen.bb, sb.track_x, sb.track_y, sb.track_w, sb.track_h, Theme.button_bg, math.floor(sb.track_w / 2))
+    P.rounded_rect(Screen.bb, sb.thumb_x, thumb_y, sb.thumb_w, sb.thumb_h, Theme.button_bg, math.floor(sb.thumb_w / 2))
     sb._thumb_y = thumb_y
 
     return rects

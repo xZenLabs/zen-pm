@@ -298,16 +298,22 @@ function Client:repo_refresh_status()
     return self:request("GET", "/repo/refresh", nil, { block = 1, total = 1 })
 end
 
-function Client:load_readerbackdrop(page, search, tag)
+function Client:load_readerbackdrop(page, search, tag, sort_by, collection)
     return self:request("POST", "/repo/refresh?readerbackdrop=1", {
         page = page,
         search = search or "",
         tag = tag or "",
+        sort_by = sort_by or "downloads",
+        collection = collection or "",
     }, REPO_REFRESH_TIMEOUT)
 end
 
 function Client:readerbackdrop_categories()
     return self:request("POST", "/repo/refresh?readerbackdrop=categories", nil, REPO_REFRESH_TIMEOUT)
+end
+
+function Client:readerbackdrop_collections(page)
+    return self:request("POST", "/repo/refresh?readerbackdrop=collections&page=" .. tostring(page or 1), nil, REPO_REFRESH_TIMEOUT)
 end
 
 function Client:scan_installed_plugins()

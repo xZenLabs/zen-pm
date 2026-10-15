@@ -150,8 +150,11 @@ package.preload["models"] = function()
         filter_packages = models.filter_packages,
         filter_categories = models.filter_categories,
         installed_packages = models.installed_packages,
+        installed_icon_pack_item = models.installed_icon_pack_item,
         visible_installed_packages = models.visible_installed_packages,
         filter_packages_by_category = models.filter_packages_by_category,
+        packages_in_category = models.packages_in_category,
+        filter_packages_by_tag = models.filter_packages_by_tag,
         has_release_notes = function(pkg, allow_prerelease)
             if allow_prerelease and pkg.prerelease_notes_url then return true end
             return pkg.release_notes_url ~= nil
@@ -162,6 +165,9 @@ package.preload["models"] = function()
             return pkg.release_notes_url
         end,
         is_patch_package = function(pkg) return pkg and pkg.is_patch == true end,
+        is_icon_pack_package = models.is_icon_pack_package,
+        asset_details_tab = models.asset_details_tab,
+        patch_file_installed = models.patch_file_installed,
         is_installed_patch_item = function() return false end,
         is_unmanaged_patch = function() return false end,
         is_font_package = function(pkg) return pkg and pkg.category == "fonts" end,
@@ -864,6 +870,50 @@ assert(logged_warnings[#logged_warnings]:find("could not load README", 1, true))
 assert(zenpm_versions[1].tag_name == "v1.2.3")
 
 do
+for _, case in ipairs({
+    { category = "plugins", tab = "readme" },
+    { category = "koreaderpatches", tab = "patches" },
+    { category = "iconpacks", tab = "iconpacks" },
+}) do
+    local pkg = {
+        id = "zenfm", category = case.category,
+        readme_url = "https://repo.example/zenfm/README.md",
+        assets = { { asset = "package.zip" } },
+    }
+    local details_app = {
+        state = { page = "search", active_tab = "search", readme_cache = {} },
+        ensure_backend = function() return true end,
+        load_packages = function() return true, { pkg } end,
+        client = {
+            get_package_readme = function(_, id)
+                assert(id == "zenfm")
+                return true, { readme = "Package README" }, 200
+            end,
+        },
+        reset_scroll = function(self, key)
+            if key then assert(key == "package:zenfm:" .. self.state.details_tab) end
+        end,
+        clear_status = function() end,
+        refresh = function() end,
+    }
+    App.show_package_details(details_app, "zenfm")
+    assert(details_app.state.details_tab == "readme")
+    assert(details_app.state.current_package.readme == "Package README")
+    App.show_package_details(details_app, "zenfm", "search", false, case.tab)
+    assert(details_app.state.details_tab == case.tab)
+    App.set_package_details_tab(details_app)
+    assert(details_app.state.details_tab == "readme")
+    App.set_package_details_tab(details_app, case.tab)
+    assert(details_app.state.details_tab == case.tab)
+    pkg.assets = {}
+    App.show_package_details(details_app, "zenfm", "search", false, case.tab)
+    assert(details_app.state.details_tab == "readme")
+    App.set_package_details_tab(details_app, case.tab)
+    assert(details_app.state.details_tab == "readme")
+end
+end
+
+do
 local catalog_pkg = {
     id = "reader", source = "https://github.com/owner/reader", version = "v1.0.0",
     platforms = { "koreader" }, installed = true, installed_version = "v1.0.0", update_available = false,
@@ -1171,6 +1221,8 @@ do
         list_app.state.current_category = { id = category }
         list_app:prompt_sort("category")
         assert(modal_rows[1].text == "Downloads" and modal_rows[1].icon == "download")
+        assert(#modal_rows == 4 and modal_rows[3].text == "Date added (newest first)"
+            and modal_rows[4].text == "Date added (oldest first)")
     end
     list_app.state.current_repo = { name = "ReaderBackdrop" }
     list_app:prompt_sort("source")
@@ -1908,6 +1960,10 @@ local bulk_app = {
             { id = "ignored", installed = true, update_available = true, update_ignored = true },
             { id = "active", installed = true, update_available = true },
             { id = "wallpaper", category = "wallpapers", installed = true, update_available = true },
+            { id = "solar", category = "iconpacks", installed = true, update_available = true,
+                installed_assets = { "colour.zip", "mono.zip" },
+                installed_asset_versions = { ["colour.zip"] = "1.0.0", ["mono.zip"] = "2.0.0" },
+                installed_asset_updates = { ["colour.zip"] = true, ["mono.zip"] = false } },
         },
     },
     client = {
@@ -1916,19 +1972,20 @@ local bulk_app = {
             return true, {}
         end,
     },
-    queue_package_action = function(_, pkg, action)
-        table.insert(bulk_queued, pkg.id .. ":" .. action)
+    queue_package_action = function(_, pkg, action, asset)
+        table.insert(bulk_queued, pkg.id .. ":" .. action .. (asset and ":" .. asset or ""))
         return true
     end,
     show_queue = function() bulk_queue_opened = bulk_queue_opened + 1 end,
     refresh = function() end,
 }
-assert(App.installed_update_count(bulk_app) == 2)
+assert(App.installed_update_count(bulk_app) == 3)
 modal_message = nil
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 2)
+assert(#bulk_queued == 3)
 assert(bulk_queued[1] == "active:update")
 assert(bulk_queued[2] == "wallpaper:update")
+assert(bulk_queued[3] == "solar:update:colour.zip")
 assert(bulk_asset_requests == 1)
 assert(bulk_queue_opened == 1)
 assert(modal_message == nil)
@@ -1937,7 +1994,7 @@ bulk_app.state.advanced = true
 bulk_queue_opened = 0
 bulk_queued = {}
 App.queue_all_updates(bulk_app)
-assert(#bulk_queued == 2)
+assert(#bulk_queued == 3)
 assert(bulk_asset_requests == 2)
 assert(bulk_queue_opened == 0)
 assert(modal_message == "Added to Queue")
@@ -2803,11 +2860,11 @@ local readerbackdrop_app = {
         packages = {},
     },
     client = {
-        load_readerbackdrop = function(_, page, query, tag)
+        load_readerbackdrop = function(_, page, query, tag, sort_by, collection)
             assert(#restart_actions == readerbackdrop_repaints + 1
                 and restart_actions[#restart_actions] == "paint")
-            table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag })
-            return true, { page = page, total = 2083, total_pages = 3 }
+            table.insert(readerbackdrop_requests, { page = page, query = query, tag = tag, sort_by = sort_by, collection = collection })
+            return true, { page = page, total = 2083, total_pages = 3, package_ids = { "readerbackdrop-page" .. page } }
         end,
     },
     has_readerbackdrop = App.has_readerbackdrop,
@@ -2830,6 +2887,20 @@ assert(App.load_more_readerbackdrop(readerbackdrop_app))
 assert(readerbackdrop_requests[2].page == 1 and readerbackdrop_requests[2].query == ""
     and readerbackdrop_requests[2].tag == "zen-wallpaper")
 assert(readerbackdrop_app.state.readerbackdrop.wallpaper_total == 2083)
+readerbackdrop_app.state.sorts = { category = "published_at_desc" }
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[3].page == 1 and readerbackdrop_requests[3].sort_by == "createdAt")
+assert(readerbackdrop_app.state.readerbackdrop.package_ids["readerbackdrop-page1"]
+    and not readerbackdrop_app.state.readerbackdrop.package_ids["readerbackdrop-page2"])
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[4].page == 2 and readerbackdrop_app.state.readerbackdrop.package_ids["readerbackdrop-page2"])
+assert(not App.load_readerbackdrop_page(readerbackdrop_app, 4, ""))
+readerbackdrop_app.state.sorts.category = "published_at_asc"
+readerbackdrop_repaints = #restart_actions
+assert(App.load_more_readerbackdrop(readerbackdrop_app))
+assert(readerbackdrop_requests[5].page == 1 and readerbackdrop_requests[5].sort_by == "oldest")
 
 local selected_readerbackdrop
 local readerbackdrop_category_app = {
@@ -2837,6 +2908,7 @@ local readerbackdrop_category_app = {
         page = "category_details",
         current_category = { id = "screensavers" },
         filters = { category = "" },
+        sorts = { readerbackdrop = "count" },
         readerbackdrop = { tag = "" },
     },
     client = {
@@ -2845,6 +2917,11 @@ local readerbackdrop_category_app = {
                 tags = { { name = "quote", count = 12 }, { name = "zen-wallpaper", count = 10 },
                     { name = "black and white", count = 8 } },
             }
+        end,
+        readerbackdrop_collections = function(_, page)
+            local items = { { id = "library", name = "Library", imageCount = 30 } }
+            if page == 2 then table.insert(items, { id = "art", name = "Art", imageCount = 5 }) end
+            return true, { collections = items, total_pages = 2, page = page }
         end,
     },
     reset_scroll = function() end,
@@ -2855,13 +2932,183 @@ local readerbackdrop_category_app = {
     end,
     show_category_details = function() end,
     set_readerbackdrop_category = App.set_readerbackdrop_category,
+    set_readerbackdrop_collection = App.set_readerbackdrop_collection,
+    show_readerbackdrop_groups = App.show_readerbackdrop_groups,
+    show_readerbackdrop_group_list = App.show_readerbackdrop_group_list,
+    set_sort = App.set_sort,
+    scroll_key = App.scroll_key,
+    clear_status = function() end,
+    refresh = function() end,
 }
-App.prompt_readerbackdrop_categories(readerbackdrop_category_app)
-assert(modal_title == "Tags" and #modal_rows == 3)
-assert(modal_rows[1].checked_func() and modal_rows[2].text == "quote (12)")
-modal_rows[3].callback()
+modal_title = "unchanged"
+App.show_readerbackdrop_groups(readerbackdrop_category_app, "tags")
+assert(modal_title == "unchanged" and readerbackdrop_category_app.state.page == "readerbackdrop_groups")
+assert(#readerbackdrop_category_app.state.visible_packages == 3
+    and readerbackdrop_category_app.state.visible_packages[2].name == "quote"
+    and readerbackdrop_category_app.state.visible_packages[2].count == 12)
+assert(App.scroll_key(readerbackdrop_category_app) == "readerbackdrop:tags")
+App.set_readerbackdrop_category(readerbackdrop_category_app, readerbackdrop_category_app.state.visible_packages[3].id)
 assert(readerbackdrop_category_app.state.readerbackdrop.tag == "black and white")
 assert(selected_readerbackdrop.page == 1 and selected_readerbackdrop.query == "")
+assert(readerbackdrop_category_app.state.page == "category_details")
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.page == "readerbackdrop_groups")
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.page == "category_details" and readerbackdrop_category_app.state.readerbackdrop.tag == "")
+
+App.show_readerbackdrop_groups(readerbackdrop_category_app, "collections")
+assert(modal_title == "unchanged" and #readerbackdrop_category_app.state.visible_packages == 3)
+assert(readerbackdrop_category_app.state.visible_packages[2].name == "Library"
+    and readerbackdrop_category_app.state.visible_packages[2].count == 30)
+App.set_readerbackdrop_collection(readerbackdrop_category_app, readerbackdrop_category_app.state.visible_packages[2])
+assert(readerbackdrop_category_app.state.readerbackdrop.collection == "library"
+    and readerbackdrop_category_app.state.readerbackdrop.tag == "")
+assert(selected_readerbackdrop.page == 1 and selected_readerbackdrop.query == "")
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.page == "readerbackdrop_groups")
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "Library")
+assert(#readerbackdrop_category_app.state.visible_packages == 2
+    and readerbackdrop_category_app.state.visible_packages[1].id == "library")
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "")
+assert(#readerbackdrop_category_app.state.visible_packages == 3 and #readerbackdrop_category_app.state.readerbackdrop.groups.items == 2)
+assert(readerbackdrop_category_app.state.visible_packages[3].readerbackdrop_load_more)
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "Library")
+do
+    local fetch = readerbackdrop_category_app.client.readerbackdrop_collections
+    readerbackdrop_category_app.client.readerbackdrop_collections = function() return false, "offline" end
+    assert(not App.load_more_readerbackdrop(readerbackdrop_category_app))
+    assert(readerbackdrop_category_app.state.readerbackdrop.groups.page == 1
+        and #readerbackdrop_category_app.state.readerbackdrop.groups.items == 2)
+    readerbackdrop_category_app.client.readerbackdrop_collections = fetch
+end
+assert(App.load_more_readerbackdrop(readerbackdrop_category_app))
+assert(readerbackdrop_category_app.state.filters.readerbackdrop == "Library"
+    and #readerbackdrop_category_app.state.visible_packages == 1)
+App.set_filter(readerbackdrop_category_app, "readerbackdrop", "")
+assert(readerbackdrop_category_app.state.visible_packages[3].id == "art"
+    and readerbackdrop_category_app.state.readerbackdrop.groups.page == 2)
+assert(#readerbackdrop_category_app.state.readerbackdrop.groups.items == 3)
+assert(not App.load_more_readerbackdrop(readerbackdrop_category_app))
+App.prompt_sort(readerbackdrop_category_app, "readerbackdrop")
+assert(modal_title == "Sort collections" and #modal_rows == 3 and modal_rows[3].checked_func())
+modal_rows[1].callback()
+assert(readerbackdrop_category_app.state.visible_packages[1].id == ""
+    and readerbackdrop_category_app.state.visible_packages[2].id == "art")
+modal_rows[2].callback()
+assert(readerbackdrop_category_app.state.visible_packages[1].id == ""
+    and readerbackdrop_category_app.state.visible_packages[2].id == "library")
+App.reload_current_page(readerbackdrop_category_app)
+assert(#readerbackdrop_category_app.state.visible_packages == 3 and readerbackdrop_category_app.state.readerbackdrop.groups.page == 2)
+App.go_back(readerbackdrop_category_app)
+assert(readerbackdrop_category_app.state.readerbackdrop.collection == "")
+readerbackdrop_category_app.state.readerbackdrop.collection = "library"
+App.set_readerbackdrop_category(readerbackdrop_category_app, "quote")
+assert(readerbackdrop_category_app.state.readerbackdrop.collection == "")
+readerbackdrop_category_app.client.readerbackdrop_categories = function() return false, "offline" end
+App.show_readerbackdrop_groups(readerbackdrop_category_app, "tags")
+assert(readerbackdrop_category_app.state.page == "category_details" and modal_message == "Could not load tags: offline")
+
+do
+    local browser = App:new({})
+    local requests = 0
+    browser.state.sorts.readerbackdrop = "count"
+    browser.clear_status = function() end
+    browser.refresh = function() end
+    browser.client.readerbackdrop_categories = function()
+        requests = requests + 1
+        local tags = { { name = "zen-wallpaper", count = 100 } }
+        for index = 1, 50 do table.insert(tags, { name = "Tag " .. index, count = index }) end
+        return true, { tags = tags }
+    end
+    browser:show_readerbackdrop_groups("tags")
+    assert(#browser.state.visible_packages == 26 and browser.state.visible_packages[2].count == 50)
+    assert(browser.state.visible_packages[26].name == "Load more tags")
+    browser:prompt_sort("readerbackdrop")
+    assert(modal_title == "Sort tags" and modal_rows[3].text == "Most images")
+    browser.state.scroll[browser:scroll_key()] = 400
+    assert(browser:load_more_readerbackdrop())
+    assert(#browser.state.visible_packages == 50 and browser.state.scroll[browser:scroll_key()] == 400)
+    assert(browser:load_more_readerbackdrop())
+    assert(#browser.state.visible_packages == 51 and not browser:load_more_readerbackdrop() and requests == 1)
+    browser:set_sort("readerbackdrop", "name_asc")
+    assert(browser.state.visible_packages[1].id == "" and browser.state.visible_packages[2].name == "Tag 1")
+    assert(App:new({}).state.sorts.readerbackdrop == "name_asc")
+    browser:set_filter("readerbackdrop", "Tag 50")
+    assert(#browser.state.visible_packages == 1 and browser.state.visible_packages[1].name == "Tag 50")
+    settings.sorts = nil
+end
+
+local collection_browser = App:new({})
+local collection_packages = {
+    { id = "old", name = "Old", category = "screensavers", repo = "ReaderBackdrop", tags = { "quote" }, published_at = "2026-09-01T00:00:00Z" },
+    { id = "new", name = "New", category = "screensavers", repo = "ReaderBackdrop", tags = { "quote" }, published_at = "2026-10-01T00:00:00Z" },
+    { id = "unrelated", name = "Unrelated", category = "screensavers", repo = "ReaderBackdrop" },
+    { id = "wallpaper", name = "Wallpaper", category = "wallpapers", repo = "ReaderBackdrop" },
+}
+collection_browser.state.readerbackdrop.enabled = true
+collection_browser.state.page = "category_details"
+collection_browser.ensure_backend = function() return true end
+collection_browser.set_loading = function() end
+collection_browser.clear_status = function() end
+collection_browser.refresh = function() end
+collection_browser.load_packages = function() return true, collection_packages end
+collection_browser.client = { load_readerbackdrop = function(_, _, _, tag, _, collection)
+    if tag == "zen-wallpaper" then
+        assert(collection == "")
+        return true, { page = 1, total = 1, total_pages = 1, package_ids = { "wallpaper" } }
+    end
+    assert(collection == "library")
+    return true, { page = 1, total = 3, total_pages = 1, package_ids = { "old", "new", "wallpaper" } }
+end }
+collection_browser.state.current_category = { id = "screensavers" }
+collection_browser:set_readerbackdrop_collection({ id = "library", name = "Library" })
+assert(#collection_browser.state.visible_packages == 2)
+collection_browser:set_sort("category", "published_at_desc")
+assert(collection_browser.state.visible_packages[1].id == "new")
+collection_browser:set_sort("category", "published_at_asc")
+assert(collection_browser.state.visible_packages[1].id == "old")
+collection_browser:set_filter("category", "New")
+assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "new")
+collection_browser.state.filters.category = ""
+collection_browser.client.readerbackdrop_collections = function()
+    return true, { collections = { { id = "library", name = "Library", imageCount = 3 } }, total_pages = 1 }
+end
+collection_browser:show_readerbackdrop_groups("collections")
+assert(collection_browser.state.page == "readerbackdrop_groups")
+collection_browser:set_readerbackdrop_collection(collection_browser.state.visible_packages[2])
+assert(collection_browser.state.page == "category_details" and #collection_browser.state.visible_packages == 2)
+collection_browser:go_back()
+assert(collection_browser.state.page == "readerbackdrop_groups" and #collection_browser.state.visible_packages == 2)
+collection_browser:show_category_details("wallpapers")
+assert(collection_browser.state.readerbackdrop.collection == "" and collection_browser.state.readerbackdrop.collection_name == nil)
+assert(#collection_browser.state.visible_packages == 1 and collection_browser.state.visible_packages[1].id == "wallpaper")
+assert(not collection_browser:load_more_readerbackdrop())
+do
+    local requests = {}
+    collection_browser.client.load_readerbackdrop = function(_, page, query, tag, sort_by, collection)
+        table.insert(requests, { page = page, query = query, tag = tag, sort_by = sort_by, collection = collection })
+        return true, { page = page, total = 3, total_pages = 2,
+            package_ids = page == 1 and { "old" } or { "new", "wallpaper" } }
+    end
+    collection_browser.state.current_category = { id = "screensavers" }
+    collection_browser:set_readerbackdrop_collection({ id = "library", name = "Library" })
+    assert(#collection_browser.state.visible_packages == 1)
+    collection_browser:set_sort("category", "published_at_desc")
+    assert(#requests == 1)
+    assert(collection_browser:load_more_readerbackdrop())
+    assert(#requests == 2 and requests[2].page == 2 and requests[2].collection == "library")
+    assert(#collection_browser.state.visible_packages == 2 and collection_browser.state.visible_packages[1].id == "new")
+    collection_browser:set_filter("category", "New")
+    assert(#requests == 2 and #collection_browser.state.visible_packages == 1)
+    assert(not collection_browser:load_more_readerbackdrop())
+    collection_browser.state.filters.category = ""
+    collection_browser:set_readerbackdrop_category("quote")
+    assert(requests[3].page == 1 and requests[3].tag == "quote" and requests[3].collection == "")
+    assert(collection_browser:load_more_readerbackdrop())
+    assert(requests[4].page == 2 and requests[4].tag == "quote" and requests[4].sort_by == "createdAt")
+    assert(#collection_browser.state.visible_packages == 2 and collection_browser.state.visible_packages[1].id == "new")
+    assert(not collection_browser:load_more_readerbackdrop())
+end
 
 local searched_page, searched_query
 local readerbackdrop_search_app = {
@@ -2887,5 +3134,230 @@ local detection_app = {
 assert(App.detect_repo_name(detection_app, "https://www.readerbackdrop.com/") == "ReaderBackdrop")
 assert(App.detect_repo_name(detection_app, "https://readerbackdrop.com") == "ReaderBackdrop")
 assert(detection_requests == 0)
+
+local icon_pack = {
+    id = "solar", category = "iconpacks", platforms = { "koreader" },
+    assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
+    installed_assets = { "colour.zip" },
+}
+do
+    (function()
+        local Images = require("ui/images")
+        local package_icon = Images.package_icon
+        Images.package_icon = function() return "/custom/fonts.png", true end
+        local file, is_icon = App.package_icon_file({
+            image_file_for = function(_, value) return value end,
+        }, { id = "fonts", category = "fonts" })
+        assert(file == "/custom/fonts.png" and is_icon)
+        Images.package_icon = package_icon
+    end)()
+end
+local colour_entry = App.queue_entry_for({ state = {} }, icon_pack, "uninstall", "colour.zip")
+local mono_entry = App.queue_entry_for({ state = {} }, icon_pack, "install", "mono.zip")
+assert(colour_entry.key ~= mono_entry.key and mono_entry.is_icon_pack and mono_entry.prompt_restart)
+assert(not mono_entry.is_patch and not colour_entry.settings_deleter)
+local icon_tab
+App.perform_package_action({
+    state = { active_tab = "category" },
+    show_package_details = function(_app, id, from_tab, force_reload, tab)
+        assert(id == "solar" and from_tab == "category" and not force_reload)
+        icon_tab = tab
+    end,
+}, icon_pack)
+assert(icon_tab == "iconpacks")
+do
+    (function()
+        local pack = { id = "solar", category = "iconpacks", assets = { { asset = "colour.zip" } } }
+        for _, advanced in ipairs({ false, true }) do
+            local queue_opened, refreshed = false, false
+            local app = setmetatable({
+                state = { active_tab = "category", advanced = advanced, queue = {} },
+                conflicting_packages = function() return {} end,
+                show_queue = function() queue_opened = true end,
+                refresh = function() refreshed = true end,
+                show_package_details = function() error("single icon packs must queue directly") end,
+            }, { __index = App })
+            app:perform_package_action(pack)
+            assert(#app.state.queue == 1)
+            local entry = app.state.queue[1]
+            assert(entry.action == "install" and entry.asset == "colour.zip")
+            assert(entry.key == "solar\0colour.zip" and entry.is_icon_pack and entry.prompt_restart)
+            assert(queue_opened == not advanced and refreshed == advanced)
+            app:perform_package_action(pack)
+            assert(#app.state.queue == 1, "repeated Get must not duplicate the queued pack")
+        end
+        for _, pkg in ipairs({
+            { id = "solar", category = "iconpacks" },
+            { id = "solar", category = "iconpacks", assets = {} },
+            { id = "solar", category = "iconpacks", assets = icon_pack.assets },
+            { id = "solar", category = "iconpacks", assets = pack.assets,
+                installed = true, installed_assets = { "colour.zip" } },
+        }) do
+            local selected_tab
+            App.perform_package_action({
+                state = { active_tab = "category" },
+                queue_package_action = function() error("this pack must keep the selection screen") end,
+                show_package_details = function(_, _, _, _, tab) selected_tab = tab end,
+            }, pkg)
+            assert(selected_tab == "iconpacks")
+        end
+    end)()
+end
+do
+    (function()
+        local actions = {}
+        local pack = require("models").installed_icon_pack_item(icon_pack, "colour.zip")
+        pack.update_available = true
+        App.perform_package_action({
+            state = {},
+            package_icon_file = function() return nil end,
+            queue_package_action = function(_, pkg, action, asset)
+                assert(pkg == pack and asset == "colour.zip")
+                table.insert(actions, action)
+            end,
+        }, pack)
+        assert(package_modify_callbacks.update and package_modify_callbacks.reinstall)
+        package_modify_callbacks.update()
+        package_modify_callbacks.reinstall()
+        assert(actions[1] == "update" and actions[2] == "reinstall")
+    end)()
+end
+assert(App.package_action_succeeded({}, {
+    is_icon_pack = true, action = "install", asset = "colour.zip",
+}, icon_pack))
+assert(not App.package_action_succeeded({}, {
+    is_icon_pack = true, action = "install", asset = "mono.zip",
+}, icon_pack))
+
+do
+    (function()
+        local loader = require("pluginloader")
+        local previous_plugins, previous_packs = loader.loaded_plugins, package.loaded["common/icon_packs"]
+        local packs = {
+            { id = "previous", name = "Previously Installed" },
+            { id = "zen-solar-colour", name = "Solar Colour" },
+            { id = "zen-solar-mono", name = "Solar Mono" },
+        }
+        icon_pack.installed_icon_pack_ids = {
+            ["colour.zip"] = "zen-solar-colour", ["mono.zip"] = "zen-solar-mono",
+        }
+        package.loaded["common/icon_packs"] = { scan = function() return { packs = packs } end }
+        local saved, saves = nil, 0
+        local zen = {
+            path = "/tmp/zenos.koplugin",
+            config = { features = { custom_icons_enabled = false, keep = true },
+                custom_icons = { active_pack = "previous", keep = true } },
+            saveConfig = function(self)
+                saves = saves + 1
+                saved = { enabled = self.config.features.custom_icons_enabled, id = self.config.custom_icons.active_pack }
+            end,
+        }
+        loader.loaded_plugins = { zen }
+        local app = setmetatable({
+            state = { packages = { { id = "zen-ui", plugin_module = "zenos", installed = true }, icon_pack } },
+            package_disabled = function() return false end,
+            refresh_queue_package_state = function() end,
+            refresh = function() end,
+            close_queue = function() end,
+            reload_current_page = function() end,
+        }, { __index = App })
+        local operations = {
+            { id = "solar", action = "install", asset = "colour.zip", pkg = icon_pack, prompt_restart = true },
+            { id = "solar", action = "install", asset = "mono.zip", pkg = icon_pack, prompt_restart = true },
+        }
+        local batch = { operations = operations, index = 1, succeeded = {}, failed = {}, settings_cleanup = {} }
+        local finished
+        app.run_package_action = function(_app, _pkg, _action, _asset, _done, options) options.on_result(true) end
+        app.remove_queue_entry = function() end
+        app.finish_queue_batch = function() finished = true end
+        App.run_next_queue_operation(app, batch)
+        assert(finished and batch.icon_pack_installed and #batch.succeeded == 2)
+        app.finish_queue_batch = nil
+        restart_message = nil
+        App.finish_queue_batch(app, batch)
+        assert(modal_title == "Do you want to use Solar Colour now?" and #modal_rows == 1)
+        assert(modal_rows[1].text == "Use icon pack")
+        assert(restart_message == nil and saves == 0)
+        modal_options.cancel_callback()
+        assert(modal_title == "Do you want to use Solar Mono now?" and #modal_rows == 1)
+        assert(restart_message == nil and saves == 0 and zen.config.custom_icons.active_pack == "previous")
+        modal_rows[1].callback()
+        assert(saved.enabled and saved.id == "zen-solar-mono")
+        assert(zen.config.features.keep and zen.config.custom_icons.keep)
+        assert(restart_message:find("Restart KOReader to apply the changes.", 1, true))
+
+        local continued = 0
+        local continue = function() continued = continued + 1 end
+        local colour_install = { operations[1] }
+        assert(app:prompt_installed_icon_packs(colour_install, continue))
+        assert(modal_title == "Do you want to use Solar Colour now?" and modal_rows[1].text == "Use icon pack")
+        modal_options.cancel_callback()
+        assert(continued == 1 and saves == 1 and saved.id == "zen-solar-mono")
+        assert(app:prompt_installed_icon_packs(colour_install, continue))
+        modal_rows[1].callback()
+        assert(continued == 2 and saved.enabled and saved.id == "zen-solar-colour")
+
+        packs = { packs[2] }
+        assert(app:prompt_installed_icon_packs(colour_install, continue))
+        assert(modal_title == "Do you want to use Solar Colour now?" and #modal_rows == 1)
+        modal_options.cancel_callback()
+        assert(continued == 3 and saves == 2)
+
+        zen.config.features.custom_icons_enabled = false
+        zen.saveConfig = function() error("settings write failed") end
+        packs = { { id = "zen-solar-mono", name = "Different" } }
+        assert(app:prompt_installed_icon_packs({ operations[2] }, continue))
+        modal_rows[1].callback()
+        assert(modal_title:find("Could not activate icon pack: ", 1, true))
+        assert(zen.config.custom_icons.active_pack == "zen-solar-colour" and saves == 2)
+        assert(zen.config.features.custom_icons_enabled == false)
+        assert(continued == 3)
+        modal_rows[1].callback()
+        assert(continued == 4)
+
+        -- Single operations use the same confirmation-before-restart flow.
+        app.load_packages = function() return true, app.state.packages end
+        app.package_action_succeeded = function() return true end
+        app.package_action_failure_detail = function() return nil end
+        app.client = {}
+        for _, action in ipairs({ "install", "update", "reinstall" }) do
+            restart_message = nil
+            App.poll_package_action(app, {
+                id = "solar", name = "Solar", action = action, asset = "mono.zip",
+                is_icon_pack = true, prompt_restart = true,
+            }, 1)
+            assert(modal_title == "Do you want to use Different now?" and restart_message == nil)
+            modal_options.cancel_callback()
+            assert(restart_message:find("Restart KOReader to apply the change.", 1, true))
+        end
+
+        for _i, action in ipairs({ "install", "uninstall" }) do
+            batch = { operations = { { id = "solar", action = action, pkg = icon_pack } },
+                index = 1, succeeded = {}, failed = {}, settings_cleanup = {} }
+            app.run_package_action = function(_app, _pkg, _action, _asset, _done, options)
+                options.on_result(action == "uninstall", action == "install" and "download failed" or nil)
+            end
+            app.finish_queue_batch = function() end
+            App.run_next_queue_operation(app, batch)
+            assert(not batch.icon_pack_installed, "failed installs and removals must not offer activation")
+            modal_title = nil
+            App.finish_queue_batch(app, batch)
+            assert(modal_title == nil, "failed installs and removals must not offer activation")
+        end
+        app.package_disabled = function() return true end
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
+        app.package_disabled = function() return false end
+        loader.loaded_plugins = {}
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
+        loader.loaded_plugins = { zen }
+        assert(not app:prompt_installed_icon_packs(colour_install, continue), "unrelated packs must not be offered")
+        assert(not app:prompt_installed_icon_packs({ { id = "solar", action = "install", asset = "missing.zip" } }, continue))
+        packs = {}
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
+        package.loaded["common/icon_packs"] = nil
+        assert(not app:prompt_installed_icon_packs(colour_install, continue))
+        loader.loaded_plugins, package.loaded["common/icon_packs"] = previous_plugins, previous_packs
+    end)()
+end
 
 print("app tests passed")

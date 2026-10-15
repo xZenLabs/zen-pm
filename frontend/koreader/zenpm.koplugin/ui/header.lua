@@ -43,12 +43,17 @@ function Header.page_title(view)
         return _("Discover") .. " (" .. filtered_count(state.visible_packages, state.discover_packages, state.filters.search) .. ")"
     elseif page == "categories" then
         return _("Categories") .. " (" .. filtered_count(state.visible_categories, state.categories, state.filters.categories) .. ")"
+    elseif page == "readerbackdrop_groups" then
+        return state.readerbackdrop.groups.kind == "tags" and _("Tags") or _("Collections")
     elseif page == "category_details" then
         local category = state.current_category or {}
         local readerbackdrop = state.readerbackdrop or {}
         if (category.id == "screensavers" or category.id == "wallpapers")
                 and readerbackdrop.enabled then
-            return I18n.dynamic_or(category.label, _("Category")) .. " ("
+            local selection = readerbackdrop.collection_name
+                or category.id == "screensavers" and readerbackdrop.tag ~= "" and readerbackdrop.tag
+            return I18n.dynamic_or(category.label, _("Category"))
+                .. (selection and ": " .. selection or "") .. " ("
                 .. tostring(readerbackdrop.total or (category.id == "wallpapers" and 10 or 2085)) .. ")"
         end
         return I18n.dynamic_or(category.label, _("Category")) .. " ("
@@ -92,15 +97,18 @@ end
 function Header.draw_actions(view, bb, x, y)
     local s = Theme.scale(42)
     P.box(bb, x, y, s, s, { border = false })
-    local dot = Theme.scale(6)
-    local cx = x + math.floor((s - dot) / 2)
-    local first_y = y + math.floor((s - Theme.scale(24)) / 2)
-    for i = 0, 2 do
-        P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, {
-            border = false,
-            background = Theme.ink,
-            radius = math.floor(dot / 2),
-        })
+    if not P.image(bb, Images.custom_icon("more_vertical"), x + Theme.scale(8), y + Theme.scale(8),
+            s - Theme.scale(16), s - Theme.scale(16), { is_icon = true }) then
+        local dot = Theme.scale(6)
+        local cx = x + math.floor((s - dot) / 2)
+        local first_y = y + math.floor((s - Theme.scale(24)) / 2)
+        for i = 0, 2 do
+            P.box(bb, cx, first_y + i * Theme.scale(9), dot, dot, {
+                border = false,
+                background = Theme.ink,
+                radius = math.floor(dot / 2),
+            })
+        end
     end
     local callback = function()
         view.app:show_actions(Geom:new{ x = x, y = y, w = s, h = s })
@@ -120,9 +128,9 @@ function Header.draw_sort_button(view, bb, x, y, kind)
     local icon = Theme.scale(24)
     local label = _("Sort")
     local w, label_size = icon_button_width(label, icon)
-    P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
-    P.center_text_box(bb, InlineIcons.icon("sort"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
-    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
+    P.box(bb, x, y, w, s, { border = false, background = Theme.button_bg, radius = math.floor(s / 2) })
+    InlineIcons.paint(bb, "sort", x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.button_text, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.button_text })
     local callback = function() view.app:prompt_sort(kind) end
     local id = "sort:" .. tostring(kind)
     P.hit(view, x, y, w, s, callback, id)
@@ -138,9 +146,9 @@ function Header.draw_installed_category_button(view, bb, x, y)
     local label = category and Models.category_label(category) or _("Filter")
     local label_size = P.text_size(label, Theme.scale(128), "small", { bold = true })
     local w = Theme.scale(10) + icon + Theme.scale(6) + label_size.w + Theme.scale(14)
-    P.box(bb, x, y, w, h, { border = false, background = Theme.ink, radius = math.floor(h / 2) })
-    P.center_text_box(bb, InlineIcons.icon("filter"), x + Theme.scale(10), y, icon, h, "small", { bold = true, color = Theme.bg })
-    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = Theme.bg })
+    P.box(bb, x, y, w, h, { border = false, background = Theme.button_bg, radius = math.floor(h / 2) })
+    InlineIcons.paint(bb, "filter", x + Theme.scale(10), y, icon, h, "small", { bold = true, color = Theme.button_text, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = Theme.button_text })
     local callback = function()
         view.app:prompt_installed_category_filter()
     end
@@ -149,14 +157,14 @@ function Header.draw_installed_category_button(view, bb, x, y)
     return w
 end
 
-function Header.draw_back(view, bb, x, y, callback, size)
+function Header.draw_back(view, bb, x, y, callback, size, hit_width)
     local s = size or Theme.scale(46)
     P.box(bb, x, y, s, s, { border = false })
     if not P.image(bb, Images.asset("chevron.left.svg"), x + Theme.scale(8), y + Theme.scale(8), s - Theme.scale(16), s - Theme.scale(16), { is_icon = true }) then
         P.center_text(bb, "<", x, y + Theme.scale(13), s, "title", { bold = true })
     end
-    P.hit(view, x, y, s, s, callback, "back")
-    focus_control(view, bb, "back", x, y, s, s, callback)
+    P.hit(view, x, y, hit_width or s, s, callback, "back")
+    focus_control(view, bb, "back", x, y, hit_width or s, s, callback)
     return s
 end
 
@@ -177,9 +185,9 @@ function Header.draw_search_button(view, bb, x, y, kind)
     local icon = Theme.scale(24)
     local label = _("Search")
     local w, label_size = icon_button_width(label, icon)
-    P.box(bb, x, y, w, s, { border = false, background = Theme.ink, radius = math.floor(s / 2) })
-    P.center_text_box(bb, InlineIcons.icon("search"), x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.bg })
-    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.bg })
+    P.box(bb, x, y, w, s, { border = false, background = Theme.button_bg, radius = math.floor(s / 2) })
+    InlineIcons.paint(bb, "search", x + Theme.scale(10), y, icon, s, "small", { bold = true, color = Theme.button_text, invert = true })
+    P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.button_text })
     local callback = function() view.app:prompt_filter(kind) end
     local id = "search:" .. kind
     P.hit(view, x, y, w, s, callback, id)
@@ -214,8 +222,8 @@ end
 local function page_back_callback(view, page)
     if page == "installed" and view.app.state.installed_folder then
         return function() view.app:close_installed_folder() end
-    elseif page == "category_details" then
-        return function() view.app:show_categories() end
+    elseif page == "category_details" or page == "readerbackdrop_groups" then
+        return function() view.app:go_back() end
     elseif page == "source_details" then
         return function() view.app:show_sources() end
     elseif page == "package_details" then
@@ -239,7 +247,7 @@ local function draw_queue_clear_button(view, bb, x, y)
         border_color = enabled and Theme.button_bg or Theme.soft,
         radius = math.floor(h / 2),
     })
-    P.center_text_box(bb, InlineIcons.icon("clear"), x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
+    InlineIcons.paint(bb, "clear", x + Theme.scale(7), y, icon, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted, invert = enabled })
     P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
         local callback = function() view.app:confirm_clear_queue() end
@@ -266,14 +274,9 @@ local function draw_title_bar(view, bb, x, y, w)
     local back_callback = page_back_callback(view, page)
     if back_callback then
         if settings_page then
-            local back_size = Theme.scale(44)
-            Header.draw_back(view, bb,
-                title_x + math.floor((settings_leading_w - back_size) / 2),
-                toolbar_y(y, h, back_size), back_callback, back_size)
             title_x = title_x + settings_leading_w + settings_title_gap
         else
-            title_x = title_x + Header.draw_back(view, bb, title_x,
-                toolbar_y(y, h, Theme.scale(46)), back_callback) + Theme.scale(6)
+            title_x = title_x + Theme.scale(46) + Theme.scale(6)
         end
     end
     if settings_page then
@@ -309,10 +312,14 @@ local function draw_title_bar(view, bb, x, y, w)
         P.vcenter_text(bb, _("Welcome") .. " " .. _("to") .. " " .. _("ZenPM"), title_x, y, math.max(0, title_right - title_x), h, "title", { bold = true })
     else
         local title_size = P.vcenter_text(bb, ellipsize(Header.page_title(view), 60), title_x, y, math.max(0, title_right - title_x), h, "heading", { bold = true })
-        if (page == "installed" and back_callback) or page == "category_details" or page == "package_details"
-                or page == "queue" or page == "advanced_settings" or page == "updates_settings"
-                or page == "about_settings" then
-            P.hit(view, title_x, y, title_size.w, h, back_callback, "back-title")
+        if back_callback then
+            local back_size = Theme.scale(settings_page and 44 or 46)
+            local back_x = settings_page
+                and x + settings_left + math.floor((settings_leading_w - back_size) / 2) or x + pad
+            local back_w = title_x - back_x
+                + math.min(math.max(0, title_right - title_x), title_size.w + Theme.scale(8))
+            Header.draw_back(view, bb, back_x, toolbar_y(y, h, back_size),
+                back_callback, back_size, back_w)
         end
     end
     if settings_page then
@@ -341,10 +348,12 @@ function Header.draw(view, bb, x, y, w)
         search = "search",
         category_details = "category",
         source_details = "source",
+        readerbackdrop_groups = "readerbackdrop",
     })[page]
     local sort_kind = ({
         search = "search",
         category_details = "category",
+        readerbackdrop_groups = "readerbackdrop",
         installed = view.app.state.installed_folder and "installed_images" or "installed",
         sources = "sources",
         source_details = "source",
@@ -378,11 +387,19 @@ function Header.draw(view, bb, x, y, w)
     end
     if page == "category_details" and view.app.state.current_category
             and view.app.state.current_category.id == "screensavers" then
+        local label = _("Collections")
+        right_x = right_x - title_button_width(label) - gap
+        draw_title_button(view, bb, right_x, button_y, label, function()
+            view.app:show_readerbackdrop_groups("collections")
+        end, "readerbackdrop-collections", true)
+    end
+    if page == "category_details" and view.app.state.current_category
+            and view.app.state.current_category.id == "screensavers" then
         local label = _("Tags")
         local button_w = title_button_width(label)
         right_x = right_x - button_w - gap
         draw_title_button(view, bb, right_x, button_y, label, function()
-            view.app:prompt_readerbackdrop_categories()
+            view.app:show_readerbackdrop_groups("tags")
         end, "readerbackdrop-categories", true)
     end
     if page == "queue" then

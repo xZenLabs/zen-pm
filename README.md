@@ -30,6 +30,12 @@ On Kindle, ZenPM has a native WAF interface. In KOReader, ZenPM appears in the
 KOReader menu and keeps its managed backend and state in KOReader's settings
 directory.
 
+The KOReader **Icon Packs** category lists ZenOS packs. Open a package's
+**Icon Packs** tab to install or remove each release ZIP independently. After
+installation, ZenPM offers to use an installed pack, enables Custom Icons,
+saves your selection, and prompts you to restart KOReader. Packs install under
+`koreader/icons/zen/<pack-id>/`.
+
 ## ZenPM in action
 
 <p align="center">
@@ -257,8 +263,8 @@ unsigned or plain-HTTP repositories accordingly. See the
 
 ## Build and develop
 
-Building requires Go 1.26.6+ and FontTools (pyftsubset). The 32-bit ARM
-e-reader binaries use a separately bootstrapped, patched Go 1.26.6 toolchain
+Building requires Go 1.26.9+ and FontTools (pyftsubset). The 32-bit ARM
+e-reader binaries use a separately bootstrapped, patched Go 1.26.9 toolchain
 for old-kernel compatibility. Builds use the SemVer version already in
 `VERSION` and overwrite the prior `dist/` artifacts. Update `VERSION` and
 `frontend/koreader/zenpm.koplugin/_meta.lua` together only when preparing a new

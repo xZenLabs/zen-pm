@@ -18,6 +18,7 @@ package.preload["datastorage"] = function()
         getSettingsDir = function()
             return cache_root
         end,
+        getFullDataDir = function() return cache_root end,
     }
 end
 package.preload["libs/libkoreader-lfs"] = function()
@@ -161,6 +162,34 @@ assert(image_count <= 256)
 
 assert(Images.file_for(client, "android", root .. "/assets/packages.svg")
     == root .. "/assets/packages.svg")
+
+assert(Images.asset("close.svg") == root .. "/assets/close.svg")
+local active_dir = cache_root .. "/icons/zen/solar"
+local custom = { close = active_dir .. "/close.png", ["star.full"] = active_dir .. "/star.full.svg" }
+package.loaded["common/icon_packs"] = {
+    getActivePackDirectory = function() return active_dir end,
+    resolve = function(name, dir)
+        return custom[name] or (dir and dir .. name .. ".svg") or "/resources/icons/" .. name .. ".svg"
+    end,
+}
+assert(Images.asset("close.svg") == custom.close)
+assert(Images.asset("star.filled.svg") == custom["star.full"])
+assert(Images.asset("verified.svg") == root .. "/assets/verified.svg")
+assert(Images.custom_icon("sort") == nil, "stock icons must not replace missing custom glyphs")
+assert(Images.package_icon({ icon_url = url }) == url)
+active_dir = cache_root .. "/icons/zen/other"
+custom = { close = active_dir .. "/close.svg" }
+assert(Images.asset("close.svg") == custom.close, "follow the selected pack")
+active_dir = nil
+custom = { close = cache_root .. "/icons/close.svg" }
+assert(Images.asset("close.svg") == custom.close, "support loose custom icons")
+require("zenpm_constants").CATEGORIES = { { id = "fonts", icon = "fonts.svg" } }
+custom.fonts = cache_root .. "/icons/fonts.png"
+local font_icon, is_icon = Images.package_icon({ category = "fonts" })
+assert(font_icon == custom.fonts and is_icon, "custom PNG category icons must retain icon rendering")
+custom = {}
+assert(Images.asset("close.svg") == root .. "/assets/close.svg", "disabled custom icons keep bundled assets")
+package.loaded["common/icon_packs"] = nil
 
 remove_tree(cache_root)
 print("images tests passed")

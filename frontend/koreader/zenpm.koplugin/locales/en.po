@@ -1079,3 +1079,21 @@ msgstr "ZenPM: Open"
 
 msgid "ZenPM: Update All"
 msgstr "ZenPM: Update All"
+
+msgid "Icon Packs"
+msgstr ""
+
+msgid "Package asset has no file name."
+msgstr ""
+
+msgid "Use icon pack"
+msgstr "Use icon pack"
+
+msgid "Do you want to use %s now?"
+msgstr "Do you want to use %s now?"
+
+msgid "Choose an icon pack to use now:"
+msgstr "Choose an icon pack to use now:"
+
+msgid "Could not activate icon pack: "
+msgstr "Could not activate icon pack: "

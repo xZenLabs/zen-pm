@@ -66,7 +66,11 @@ end
 local function queued_action(view, pkg)
     local id = pkg and (pkg.id or pkg.name)
     if not id then return nil end
-    local asset = Models.is_patch_package(pkg) and pkg.patch_asset or nil
+    local asset = pkg.patch_asset or pkg.icon_pack_asset
+    if not asset and Models.is_icon_pack_package(pkg) then
+        local assets = Models.package_assets(pkg)
+        if #assets == 1 then asset = assets[1].asset end
+    end
     local key = tostring(id) .. "\0" .. tostring(asset or "")
     for _, entry in ipairs(view.app.state.queue or {}) do
         local self_update = entry.self_update or entry.self_reinstall
@@ -185,13 +189,13 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
     local disabled = pkg.installed and view.app:package_disabled(pkg)
     local ink = disabled and Theme.muted or nil
     local id = tostring(pkg.id or pkg.name or "")
-    local asset = tostring(pkg.patch_asset or "")
+    local asset = tostring(pkg.patch_asset or pkg.icon_pack_asset or "")
     local focus_key = "package:" .. id .. ":" .. asset
     local action_focus_key = "package-action:" .. id .. ":" .. asset
     local function show_details()
         local details_tab = (view.app.state.page == "installed" or view.app.state.page == "search")
             and pkg.installed and pkg.update_available and not pkg.update_ignored and "release_notes" or nil
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, details_tab, pkg.patch_asset)
+        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab, false, details_tab, pkg.patch_asset or pkg.icon_pack_asset)
     end
 
     if icon_w > 0 then
@@ -327,6 +331,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
+    local focus_box = opts.focus_box or { x = x, y = y, w = w, h = h }
+    P.hit(view, focus_box.x, focus_box.y, focus_box.w, focus_box.h, show_details, focus_key)
     action_pill(view, bb, action_text, action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
@@ -340,9 +346,6 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         list_index = opts.focus_index,
         list_count = opts.focus_count,
     })
-    P.hit(view, x, y, action_x - x, h, show_details,
-        "package:" .. tostring(pkg.id or pkg.name) .. ":" .. tostring(pkg.patch_asset or ""))
-    local focus_box = opts.focus_box or { x = x, y = y, w = w, h = h }
     if P.focus_target(view, focus_key, focus_box.x, focus_box.y, focus_box.w, focus_box.h, show_details, {
         focus_type = "package",
         focus_column = "main",
@@ -372,9 +375,6 @@ function Cards.featured(view, bb, pkg, x, y, w, opts)
         P.center_text(bb, _("Featured"), x, y + math.floor(art_h / 2) - Theme.scale(14), w, "heading", { bold = true, color = Theme.muted })
     end
     P.rect(bb, x, y + art_h - Theme.scale(1), w, Theme.scale(1), Theme.border)
-    P.hit(view, x, y, w, h, function()
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab)
-    end, "featured:" .. tostring(pkg.id or pkg.name))
     Cards.package(view, bb, pkg, x + Theme.scale(2), y + art_h, w - Theme.scale(4), {
         compact = true,
         height = h - art_h - Theme.scale(3),

@@ -181,25 +181,27 @@ func (m *Manager) readerBackdropSource() (state.RepoEntry, error) {
 }
 
 // LoadReaderBackdropPage adds one public API page to the local catalog.
-func (m *Manager) LoadReaderBackdropPage(page int, search, tag string) (int, int, error) {
+func (m *Manager) LoadReaderBackdropPage(page int, search, tag, sortBy, collection string) (int, int, []string, error) {
 	source, err := m.readerBackdropSource()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 	entries, totalPages, total, err := fetchReaderBackdropPage(
-		source.Name, source.URL, source.Priority, m.st.CacheDir, page, search, tag)
+		source.Name, source.URL, source.Priority, m.st.CacheDir, page, search, tag, sortBy, collection)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 	m.catalogMu.Lock()
 	defer m.catalogMu.Unlock()
 	catalog, err := m.ReadCatalog()
 	if err != nil && !os.IsNotExist(err) {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 	fetched := make(map[string]bool, len(entries))
+	ids := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		fetched[entry.ID] = true
+		ids = append(ids, entry.ID)
 	}
 	all := make([]*CatalogEntry, 0, len(catalog)+len(entries))
 	for _, entry := range catalog {
@@ -209,10 +211,18 @@ func (m *Manager) LoadReaderBackdropPage(page int, search, tag string) (int, int
 	}
 	all = append(all, entries...)
 	if err := m.st.WriteCatalog(toStateCatalog(MergeCatalogs(all))); err != nil {
-		return 0, 0, fmt.Errorf("write ReaderBackdrop catalog page: %w", err)
+		return 0, 0, nil, fmt.Errorf("write ReaderBackdrop catalog page: %w", err)
 	}
 	// ponytail: requested pages stay cached; add eviction only if catalog growth becomes measurable.
-	return totalPages, total, nil
+	return totalPages, total, ids, nil
+}
+
+func (m *Manager) ReaderBackdropCollections(page int) ([]ReaderBackdropCollection, int, error) {
+	source, err := m.readerBackdropSource()
+	if err != nil {
+		return nil, 0, err
+	}
+	return fetchReaderBackdropCollections(source.URL, page)
 }
 
 func (m *Manager) ReaderBackdropTags() ([]ReaderBackdropTag, error) {

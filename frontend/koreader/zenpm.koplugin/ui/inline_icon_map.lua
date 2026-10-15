@@ -44,6 +44,15 @@ function M.icon(name)
     return nerd_icons[name]
 end
 
+function M.paint(bb, name, x, y, w, h, role, opts)
+    local P = require("ui/primitives")
+    local file = require("ui/images").custom_icon(name)
+    local size = math.min(w, h)
+    if file and P.image(bb, file, x + math.floor((w - size) / 2), y + math.floor((h - size) / 2),
+            size, size, { is_icon = true, invert = opts and opts.invert }) then return end
+    P.center_text_box(bb, M.icon(name), x, y, w, h, role, opts)
+end
+
 local spacers = { "\u{2003}", "\u{2002}", " ", "\u{2009}", "\u{200A}" }
 
 local function text_width(text, face)
@@ -87,7 +96,29 @@ end
 
 function M.label(name, text)
     local icon = nerd_icons[name]
+    if require("ui/images").custom_icon(name) then icon = " " end
     return icon and (padded_icon(icon, nerd_icons) .. text) or text
+end
+
+function M.apply_dialog(dialog)
+    local button_table = dialog.buttontable or dialog.button_table
+    if not button_table then return end
+    local size = require("device").screen:scaleBySize(22)
+    for i, row in ipairs(dialog.buttons) do
+        for j, entry in ipairs(row) do
+            local name = entry.zenpm_icon
+            if name and require("ui/images").custom_icon(name) then
+                local label = button_table.buttons_layout[i][j].label_widget
+                local paint = label.paintTo
+                function label:paintTo(bb, x, y)
+                    paint(self, bb, x, y)
+                    M.paint(bb, name, x, y, size, self:getSize().h, "small", {
+                        face = self.face, color = self.fgcolor, bold = self.bold,
+                    })
+                end
+            end
+        end
+    end
 end
 
 return M

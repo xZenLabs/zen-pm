@@ -352,6 +352,7 @@ function AppView:onZenPMFocusConfirm()
     if not target or type(target.callback) ~= "function" then
         return false
     end
+    P.flash(target)
     target.callback()
     return true
 end
@@ -380,6 +381,7 @@ function AppView:onTapZenPM(_, ges)
     for i = #self.hitboxes, 1, -1 do
         local box = self.hitboxes[i]
         if P.contains(box, x, y) then
+            P.flash(box)
             box.callback(x, y)
             return true
         end
@@ -434,6 +436,7 @@ function AppView:_scroll_list(steps, page_sized)
     local delta = self.scroll_page_step or self.scroll_step or math.floor(Screen:getHeight() * 0.45)
     local details_paged = self.app.state.page == "package_details"
         and self.app.state.details_tab ~= "patches"
+        and self.app.state.details_tab ~= "iconpacks"
     if details_paged and self.list_bounds then
         delta = math.floor(self.list_bounds.h * 0.9)
     elseif page_sized and not self.scroll_page_step and self.list_bounds then
@@ -517,14 +520,14 @@ function AppView:onPanZenPM(_, ges)
     end
 
     -- 1. Thumb follows the finger smoothly: paint just the track strip directly
-    --    to Screen.bb and push an A2 refresh over each changed thumb footprint
+    --    to Screen.bb and refresh each changed thumb footprint
     --    via setDirty(nil) — nil means "repaint no widgets", so the list items
     --    are left untouched. paint_drag_thumb returns only the small old/new
     --    thumb rects, never the span between, so no tall bar is refreshed.
     local rects = Scroll.paint_drag_thumb(self, ges.pos.y)
     if rects then
         for _i = 1, #rects do
-            UIManager:setDirty(nil, "fast", Geom:new(rects[_i]))
+            UIManager:setDirty(nil, Theme.has_color() and "ui" or "fast", Geom:new(rects[_i]))
         end
     end
 
@@ -600,6 +603,7 @@ function AppView:onClose()
 end
 
 function AppView:paintTo(bb, x, y)
+    Theme.update_accent()
     self._readme_visible_images = {}
     self.dithered = false
     self.hitboxes = {}
@@ -701,6 +705,8 @@ function AppView:draw_content(bb, x, y, w, h)
     elseif page == "category_details" then
         local category = state.current_category or {}
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, I18n.dynamic_or(category.label, _("Category")), "category", state.visible_packages, state.category_packages, state.filters.category)
+    elseif page == "readerbackdrop_groups" then
+        max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, "", "readerbackdrop", state.visible_packages, state.readerbackdrop.groups.items, state.filters.readerbackdrop)
     elseif page == "installed" then
         max_scroll = Pages.packages_page(self, bb, x, y, w, h, scroll, _("Installed"), "installed", state.visible_packages, state.installed_packages, state.filters.installed)
     elseif page == "queue" then

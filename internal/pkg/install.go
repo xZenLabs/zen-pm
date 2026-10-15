@@ -76,8 +76,8 @@ func (m *Manager) InstallGitHubRelease(id, tag, assetOverride string) error {
 	return m.installAssetRelease(id, assetOverride, tag, true, true)
 }
 
-// Reinstall removes an installed package before installing it again. When tag
-// is non-empty, it installs that specific release.
+// Reinstall installs a package again, replacing icon packs atomically. When
+// tag is non-empty, it installs that specific release.
 func (m *Manager) Reinstall(id, assetOverride, tag string) error {
 	return m.reinstall(id, assetOverride, tag, false)
 }
@@ -88,6 +88,9 @@ func (m *Manager) ReinstallGitHubRelease(id, assetOverride, tag string) error {
 }
 
 func (m *Manager) reinstall(id, assetOverride, tag string, directGitHub bool) error {
+	if IsIconPackPackage(m.findCatalogEntry(id)) {
+		return m.installAssetRelease(id, assetOverride, tag, false, directGitHub)
+	}
 	uninstallAsset := ""
 	if m.isPatchFileInstalled(id, assetOverride) {
 		uninstallAsset = assetOverride
@@ -204,10 +207,10 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 			}
 		}
 
-		if patchReason != "" {
+		if patchReason != "" || IsIconPackPackage(entry) {
 			asset := m.resolvePatchAsset(entry, override)
 			if asset == "" {
-				return fmt.Errorf("install %s: could not resolve patch file name", pkgID)
+				return fmt.Errorf("install %s: could not resolve asset name", pkgID)
 			}
 			_ = m.st.RemoveInstalled(pkgID)
 			if err := m.st.AppendInstalledPatchFile(state.PatchFileEntry{
@@ -215,7 +218,20 @@ func (m *Manager) installAssetRelease(id, assetOverride, releaseTag string, mark
 			}); err != nil {
 				return err
 			}
-			log.Infof("Installed patch file: %s / %s", pkgID, asset)
+			if IsIconPackPackage(entry) {
+				files, err := m.st.ReadInstalledPatchFiles()
+				if err != nil {
+					return err
+				}
+				for _, file := range files {
+					if strings.EqualFold(file.InstallPath, installedPath) && (file.PackageID != pkgID || file.Asset != asset) {
+						if err := m.st.RemoveInstalledPatchFile(file.PackageID, file.Asset); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			log.Infof("Installed package asset: %s / %s", pkgID, asset)
 			continue
 		}
 
@@ -483,7 +499,7 @@ func (m *Manager) SelectAsset(id string) (assets.Result, error) {
 	}
 	for _, e := range catalog {
 		if e.ID == id {
-			if isPatchPackage(e) {
+			if isAssetCollectionPackage(e) {
 				parsed := assets.Parse(e.Assets)
 				if len(parsed) > 1 {
 					return assets.Result{Candidates: parsed, NeedsChoice: true}, nil
@@ -800,7 +816,16 @@ func imagePackageKind(entry *repo.CatalogEntry) string {
 }
 
 func isDirectKOReaderAssetPackage(entry *repo.CatalogEntry) bool {
-	return isFontPackage(entry) || imagePackageKind(entry) != ""
+	return isFontPackage(entry) || imagePackageKind(entry) != "" || IsIconPackPackage(entry)
+}
+
+// IsIconPackPackage reports whether a catalog entry contains ZenOS icon packs.
+func IsIconPackPackage(entry *repo.CatalogEntry) bool {
+	return normalizedPackageCategory(entry) == "iconpacks"
+}
+
+func isAssetCollectionPackage(entry *repo.CatalogEntry) bool {
+	return isPatchPackage(entry) || IsIconPackPackage(entry)
 }
 
 func normalizedPackageCategory(entry *repo.CatalogEntry) string {
@@ -814,7 +839,7 @@ func normalizedPackageCategory(entry *repo.CatalogEntry) string {
 }
 
 func patchPackageReason(entry *repo.CatalogEntry) string {
-	if entry == nil {
+	if entry == nil || IsIconPackPackage(entry) {
 		return ""
 	}
 	category := normalizedPackageCategory(entry)
@@ -915,6 +940,10 @@ func (m *Manager) Update(id string) error {
 	for _, e := range catalog {
 		byID[e.ID] = e
 	}
+	iconPacks, err := m.st.ReadInstalledPatchFiles()
+	if err != nil {
+		return err
+	}
 
 	for _, e := range installed {
 		if id != "" && e.ID != id {
@@ -937,6 +966,19 @@ func (m *Manager) Update(id string) error {
 			}
 		} else {
 			log.Infof("Package %s is up to date (%s)", e.ID, e.Version)
+		}
+	}
+	for _, pack := range iconPacks {
+		if id != "" && pack.PackageID != id {
+			continue
+		}
+		latest := byID[pack.PackageID]
+		if !IsIconPackPackage(latest) || !releases.VersionGreater(latest.Version, pack.Version) {
+			continue
+		}
+		log.Infof("Updating %s / %s: %s -> %s", pack.PackageID, pack.Asset, pack.Version, latest.Version)
+		if err := m.InstallAsset(pack.PackageID, pack.Asset); err != nil {
+			return err
 		}
 	}
 	return nil

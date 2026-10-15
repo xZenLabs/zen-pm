@@ -317,7 +317,7 @@ build_go() {
     GOFLAGS="-trimpath -buildvcs=false"
     LDFLAGS="-s -w -buildid= -X main.version=$VERSION"
     LEGACY_PATCH_LEVEL='ZenPM Linux/ARM old-kernel patch 2'
-    LEGACY_GO=${ZENPM_LEGACY_GO:-$ROOT_DIR/.toolchains/go1.26.6-kindle-p2/bin/go}
+    LEGACY_GO=${ZENPM_LEGACY_GO:-$ROOT_DIR/.toolchains/go1.26.9-kindle-p2/bin/go}
     if [ ! -x "$LEGACY_GO" ] && [ -z "${ZENPM_LEGACY_GO:-}" ]; then
         "$ROOT_DIR/toolchains/legacy/bootstrap.sh"
     fi
@@ -332,8 +332,8 @@ build_go() {
         echo "Legacy ARM compiler patch level mismatch: expected $LEGACY_PATCH_LEVEL, found ${ACTUAL_PATCH_LEVEL:-none}." >&2
         exit 1
     }
-    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" "$LEGACY_GO" build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
-    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" "$LEGACY_GO" build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-sf" ./cmd/zenpm
+    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS="$GOFLAGS" "$LEGACY_GO" build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-hf" ./cmd/zenpm
+    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS="$GOFLAGS" "$LEGACY_GO" build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-sf" ./cmd/zenpm
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-arm64" ./cmd/zenpm
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-linux-amd64" ./cmd/zenpm
     GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o "$BUILD_DIR/zenpm-darwin-arm64" ./cmd/zenpm

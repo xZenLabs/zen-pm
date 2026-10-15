@@ -9,6 +9,9 @@ local scheduled
 local next_tick
 local dirty
 local header_y
+local flashed
+local accent_updates = 0
+local color_screen = false
 package.preload["device"] = function()
     return {
         hasKeys = function() return has_keys end,
@@ -52,6 +55,7 @@ package.preload["ui/nav"] = function() return { draw = function() end } end
 package.preload["ui/primitives"] = function()
     return {
         rect = function() end,
+        flash = function(box) flashed = box end,
         contains = function(box, x, y)
             return x >= box.x and x <= box.x + box.w and y >= box.y and y <= box.y + box.h
         end,
@@ -60,9 +64,15 @@ end
 local rendered_advanced_settings = false
 local rendered_updates_settings = false
 local rendered_about_settings = false
+local rendered_groups = false
 package.preload["ui/pages"] = function()
     return {
         featured = function() return 0 end,
+        packages_page = function(_, _, _, _, _, _, _, _, kind, visible)
+            assert(kind == "readerbackdrop" and visible[1].id == "quote")
+            rendered_groups = true
+            return 0
+        end,
         advanced_settings = function()
             rendered_advanced_settings = true
             return 0
@@ -77,9 +87,17 @@ package.preload["ui/pages"] = function()
         end,
     }
 end
-package.preload["ui/scroll"] = function() return { draw_scrollbar = function() end } end
+package.preload["ui/scroll"] = function()
+    return {
+        draw_scrollbar = function() end,
+        paint_drag_thumb = function() return { { x = 80, y = 40, w = 10, h = 20 } } end,
+        apply_y = function() return false end,
+    }
+end
 package.preload["ui/theme"] = function()
     return {
+        update_accent = function() accent_updates = accent_updates + 1 end,
+        has_color = function() return color_screen end,
         metrics = function()
             return { screen_w = 100, screen_h = 200, nav_h = 20, nav_bottom_margin = 0 }
         end,
@@ -108,6 +126,7 @@ local paint_view = setmetatable({
     draw_content = function(_, _, _, y) content_y = y end,
 }, { __index = AppView })
 AppView.paintTo(paint_view, {}, 3, 5)
+assert(accent_updates == 1)
 assert(status_y == 5)
 assert(header_y == 17)
 assert(content_y == 17)
@@ -119,6 +138,17 @@ AppView._zen_status_refresh(paint_view)
 assert(dirty.widget == paint_view and dirty.mode == "ui")
 assert(dirty.region == paint_view._zen_status_dimen)
 _G.__ZENOS_BUILD_STATUS_ROW = nil
+
+do
+    local drag_view = { _scroll_dragging = true }
+    for _i, has_color in ipairs({ false, true }) do
+        color_screen = has_color
+        assert(AppView.onPanZenPM(drag_view, nil, { pos = { x = 80, y = 60 } }))
+        assert(dirty.widget == nil and dirty.mode == (has_color and "ui" or "fast"))
+        assert(dirty.region.x == 80 and dirty.region.h == 20)
+    end
+    color_screen = false
+end
 
 local description_images
 local description_bounds = { x = 10, y = 40, w = 80, h = 100 }
@@ -191,6 +221,15 @@ AppView.draw_content({
 }, {}, 0, 0, 100, 100)
 assert(rendered_about_settings)
 
+AppView.draw_content({
+    app = {
+        state = { page = "readerbackdrop_groups", scroll = {}, visible_packages = { { id = "quote" } },
+            readerbackdrop = { groups = { items = {} } }, filters = { readerbackdrop = "" } },
+        scroll_key = function() return "readerbackdrop:tags" end,
+    },
+}, {}, 0, 0, 100, 100)
+assert(rendered_groups)
+
 has_keys = true
 has_dpad = false
 local key_view = setmetatable({}, { __index = AppView })
@@ -227,6 +266,22 @@ assert(hardware_backs == 1)
 assert(hardware_actions == 1)
 
 local status_gesture = { pos = { x = 50, y = 10 } }
+local tapped = false
+local tap_view
+tap_view = setmetatable({ hitboxes = {
+    { x = 10, y = 20, w = 80, h = 40, callback = function() error("covered hitbox must not fire") end },
+    { x = 60, y = 30, w = 20, h = 20, callback = function(x, y)
+        assert(flashed == tap_view.hitboxes[2], "flash the topmost control before its callback")
+        assert(x == 70 and y == 40)
+        tapped = true
+    end },
+} }, { __index = AppView })
+assert(AppView.onTapZenPM(tap_view, nil, { pos = { x = 70, y = 40 } }))
+assert(tapped)
+flashed = nil
+assert(AppView.onTapZenPM(tap_view, nil, { pos = { x = 0, y = 0 } }))
+assert(flashed == nil, "empty taps must not flash")
+
 assert(AppView.in_koreader_menu_zone(paint_view, status_gesture))
 local menu_taps, menu_swipes = 0, 0
 paint_view.app.plugin = { ui = { menu = {
@@ -335,6 +390,7 @@ assert(AppView.onZenPMFocusMove(focus_view, { 1, 0 }) == true)
 assert(focus_view.focus_key == "package-action:one")
 assert(AppView.onZenPMFocusConfirm(focus_view) == true)
 assert(focused.action == true)
+assert(flashed == focus_view.focus_targets[2], "keyboard activation must flash its control")
 assert(AppView.onZenPMFocusMove(focus_view, { 0, 1 }) == true)
 assert(focus_view.focus_key == "package-action:two")
 assert(AppView.onZenPMFocusMove(focus_view, { 0, 1 }) == true)
