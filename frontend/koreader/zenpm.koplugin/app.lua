@@ -971,8 +971,8 @@ function App:queue_entry_for(pkg, action, asset, opts)
     local is_patch = Models.is_patch_package(pkg)
     local is_icon_pack = Models.is_icon_pack_package(pkg)
     local is_direct_asset = Models.is_direct_asset_package(pkg)
-    local display_name = (is_patch or is_icon_pack) and asset and asset ~= ""
-        and ((is_patch and (_("patch") .. " ") or "") .. tostring(asset))
+    local display_name = is_patch and asset and asset ~= ""
+        and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
     return {
         key = queue_key(id, (is_patch or is_icon_pack) and asset or nil),

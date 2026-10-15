@@ -3145,7 +3145,7 @@ assert(App.detect_repo_name(detection_app, "https://readerbackdrop.com") == "Rea
 assert(detection_requests == 0)
 
 local icon_pack = {
-    id = "solar", category = "iconpacks", platforms = { "koreader" },
+    id = "solar", name = "Solar", category = "iconpacks", platforms = { "koreader" },
     assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
     installed_assets = { "colour.zip" },
 }
@@ -3165,6 +3165,7 @@ local colour_entry = App.queue_entry_for({ state = {} }, icon_pack, "uninstall",
 local mono_entry = App.queue_entry_for({ state = {} }, icon_pack, "install", "mono.zip")
 assert(colour_entry.key ~= mono_entry.key and mono_entry.is_icon_pack and mono_entry.prompt_restart)
 assert(not mono_entry.is_patch and not colour_entry.settings_deleter)
+assert(colour_entry.name == "Solar" and mono_entry.name == "Solar")
 local icon_tab
 App.perform_package_action({
     state = { active_tab = "category" },
@@ -3217,6 +3218,18 @@ do
         local actions = {}
         local pack = require("models").installed_icon_pack_item(icon_pack, "colour.zip")
         pack.update_available = true
+        local entry = App.queue_entry_for({ state = {} }, pack, "update", "colour.zip")
+        assert(entry.name == "Solar" and entry.key == colour_entry.key and entry.asset == "colour.zip")
+        App.run_package_action({
+            state = {},
+            package_action_failure_stats = function() return 0 end,
+            client = { package_action = function(_, id, action, asset)
+                assert(id == "solar" and action == "install" and asset == "colour.zip")
+                return true
+            end },
+            poll_package_action = function(_, op) assert(op.name == "Solar") end,
+        }, pack, "install", "colour.zip")
+        assert(status_message:find("Installing Solar\n", 1, true))
         App.perform_package_action({
             state = {},
             package_icon_file = function() return nil end,
