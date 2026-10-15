@@ -93,6 +93,24 @@ package.preload["ui/theme"] = function()
 end
 
 local P = require("ui/primitives")
+do
+    local TextWidget = require("ui/widget/textwidget")
+    local widget_options
+    TextWidget.new = function(_, opts)
+        widget_options = opts
+        return {
+            getSize = function() return { w = #opts.text, h = 20 + 2 * (opts.padding or 2) } end,
+            paintTo = function() end,
+            free = function() end,
+        }
+    end
+    assert(P.text_size("Category", 100, "heading", { padding = 0 }).h == 20)
+    assert(widget_options.padding == 0)
+    assert(P.text({}, "Category", 0, 0, 100, "heading", { padding = 0 }).h == 20)
+    assert(widget_options.padding == 0)
+    assert(P.text_size("Category", 100, "heading").h == 24)
+    assert(widget_options.padding == nil, "other text must retain the widget's default padding")
+end
 assert(P.image({}, "upgrade.svg", 0, 0, 24, 24, { is_icon = true, invert = true }))
 assert(painted)
 assert(image_options.invert == true)
