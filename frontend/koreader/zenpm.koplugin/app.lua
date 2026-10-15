@@ -971,8 +971,8 @@ function App:queue_entry_for(pkg, action, asset, opts)
     local is_patch = Models.is_patch_package(pkg)
     local is_icon_pack = Models.is_icon_pack_package(pkg)
     local is_direct_asset = Models.is_direct_asset_package(pkg)
-    local display_name = (is_patch or is_icon_pack) and asset and asset ~= ""
-        and ((is_patch and (_("patch") .. " ") or "") .. tostring(asset))
+    local display_name = is_patch and asset and asset ~= ""
+        and (_("patch") .. " " .. tostring(asset))
         or package_title(pkg, id)
     return {
         key = queue_key(id, (is_patch or is_icon_pack) and asset or nil),
@@ -3166,7 +3166,7 @@ function App:show_package_details(requested_id, from_tab, force_reload, details_
         end
     end
     local selected_tab = "readme"
-    if details_tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
+    if details_tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates or self.state.alpha_updates) then
         selected_tab = "release_notes"
         self:load_package_release_notes(pkg)
     elseif details_tab and details_tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
@@ -3182,7 +3182,7 @@ end
 
 function App:set_package_details_tab(tab)
     local pkg = self.state.current_package or {}
-    if tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates) then
+    if tab == "release_notes" and Models.has_release_notes(pkg, self.state.beta_updates or self.state.alpha_updates) then
         self:load_package_release_notes(pkg)
     elseif tab and tab == Models.asset_details_tab(pkg) and #Models.package_assets(pkg) > 0 then
         -- Keep the requested asset tab.
@@ -3200,9 +3200,9 @@ end
 function App:load_package_release_notes(pkg)
     local package_id = tostring(pkg and (pkg.id or pkg.name) or "")
     if package_id == "" then return end
-    local notes_url = Models.release_notes_url(pkg, self.state.beta_updates)
+    local prerelease = self.state.beta_updates or self.state.alpha_updates
+    local notes_url = Models.release_notes_url(pkg, prerelease)
     if notes_url == "" then return end
-    local prerelease = self.state.beta_updates and notes_url == tostring(pkg.prerelease_notes_url or "")
     self.state.release_notes_cache = self.state.release_notes_cache or {}
     local cache_key = package_id .. ":" .. notes_url
     local cached = self.state.release_notes_cache[cache_key]

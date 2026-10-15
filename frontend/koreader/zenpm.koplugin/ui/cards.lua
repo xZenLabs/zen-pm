@@ -129,9 +129,10 @@ local function action_pill(view, bb, text, x, y, w, h, callback, icon, icon_size
     else
         P.center_text_box(bb, text, x, y, w, h, "small", { bold = true, color = Theme.button_text })
     end
-    P.hit(view, x, y, w, h, callback, text)
+    P.hit(view, x, y, w, h, callback, text, nil, math.floor(h / 2))
     if focus then
         focus.inverse = true
+        focus.radius = math.floor(h / 2)
         P.focus_control(view, bb, focus.id, x, y, w, h, callback, focus)
     end
 end

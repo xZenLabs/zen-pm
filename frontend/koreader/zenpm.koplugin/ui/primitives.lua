@@ -543,12 +543,11 @@ function P.flash(box)
     local region = P.geom(box.x, box.y, box.w, box.h)
     local feedback = package.loaded["common/ui/button_feedback"]
     if feedback then
-        return feedback.flash(region)
+        return feedback.flash(region, box.radius)
     end
 
-    -- Match ZenOS's rounded feedback when it is not loaded.
     local x, y, w, h = region.x, region.y, region.w, region.h
-    local radius = math.min(Theme.metrics().radius, math.floor(math.min(w, h) / 2))
+    local radius = math.min(box.radius or Theme.metrics().radius, math.floor(math.min(w, h) / 2))
     local function invert()
         Screen.bb:invertRect(x, y + radius, w, h - 2 * radius)
         for row = 0, radius - 1 do
@@ -567,12 +566,13 @@ function P.flash(box)
     UIManager:setDirty(nil, mode, region)
 end
 
-function P.hit(app, x, y, w, h, callback, label, allow_flash)
+function P.hit(app, x, y, w, h, callback, label, allow_flash, radius)
     table.insert(app.hitboxes, {
         x = x, y = y, w = w, h = h,
         callback = callback,
         label = label,
         allow_flash = allow_flash,
+        radius = radius,
     })
 end
 

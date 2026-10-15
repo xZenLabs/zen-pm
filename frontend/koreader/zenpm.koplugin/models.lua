@@ -425,6 +425,7 @@ end
 
 function Models.installed_icon_pack_item(pkg, asset)
     local item = Models.installed_patch_item(pkg, asset)
+    item.name = pkg.name
     item.patch_asset = nil
     item.icon_pack_asset = asset
     if type(pkg.installed_asset_versions) == "table" then
@@ -571,7 +572,6 @@ local function github_repo_name(source)
 end
 
 function Models.package_display_name(pkg, fallback)
-    if pkg and pkg.icon_pack_asset then return pkg.icon_pack_asset end
     if Models.is_installed_patch_item(pkg) then
         return pkg.patch_asset
     end

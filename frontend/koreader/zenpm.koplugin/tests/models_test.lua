@@ -210,7 +210,7 @@ local patch = Models.installed_patch_item({
 assert(patch.installed_at == "2026-07-23T10:00:00Z")
 
 local icon_pack = {
-    id = "solar", category = "icon-packs", installed = true,
+    id = "solar", name = "Solar", category = "icon-packs", installed = true,
     version = "2.0.0", installed_version = "1.0.0", update_available = true,
     assets = { { asset = "colour.zip" }, { asset = "mono.zip" } },
     installed_assets = { "colour.zip", "mono.zip", "", false },
@@ -227,7 +227,11 @@ assert(installed_packs[2].installed_at == "2026-10-07T12:00:00Z")
 assert(installed_packs[1].installed_version == "1.0.0" and installed_packs[1].update_available)
 assert(installed_packs[2].installed_version == "2.0.0" and not installed_packs[2].update_available)
 assert(installed_packs[1].patch_asset == nil and installed_packs[1].assets == nil)
-assert(Models.package_display_name(installed_packs[2]) == "mono.zip")
+assert(Models.package_display_name(icon_pack) == "Solar")
+for _, pack in ipairs(installed_packs) do
+    assert(pack.name == "Solar" and Models.package_display_name(pack) == "Solar")
+end
+assert(Models.package_display_name(Models.installed_icon_pack_item({ id = "solar" }, "colour.zip")) == "solar")
 table.insert(require("zenpm_constants").CATEGORIES, { id = "iconpacks", label = "Icon Packs" })
 assert(Models.category_cards({ icon_pack }, false)[4].count == 1)
 

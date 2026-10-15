@@ -136,8 +136,8 @@ function Pages.error(view, bb, x, y, w, h, message)
     local retry_callback = function()
         view.app:start_backend_then_reload()
     end
-    P.hit(view, x + pad, button_y, button_w, button_h, retry_callback, "retry-backend")
-    P.focus_control(view, bb, "retry-backend", x + pad, button_y, button_w, button_h, retry_callback, { inverse = true })
+    P.hit(view, x + pad, button_y, button_w, button_h, retry_callback, "retry-backend", nil, math.floor(button_h / 2))
+    P.focus_control(view, bb, "retry-backend", x + pad, button_y, button_w, button_h, retry_callback, { inverse = true, radius = math.floor(button_h / 2) })
 
     local quit_x = x + pad + button_w + gap
     P.box(bb, quit_x, button_y, button_w, button_h, { background = Theme.button_bg, border_color = Theme.button_bg, radius = math.floor(button_h / 2) })
@@ -145,8 +145,8 @@ function Pages.error(view, bb, x, y, w, h, message)
     local quit_callback = function()
         view.app:quit()
     end
-    P.hit(view, quit_x, button_y, button_w, button_h, quit_callback, "quit")
-    P.focus_control(view, bb, "quit", quit_x, button_y, button_w, button_h, quit_callback, { inverse = true })
+    P.hit(view, quit_x, button_y, button_w, button_h, quit_callback, "quit", nil, math.floor(button_h / 2))
+    P.focus_control(view, bb, "quit", quit_x, button_y, button_w, button_h, quit_callback, { inverse = true, radius = math.floor(button_h / 2) })
     Scroll.set_list_bounds(view, x, y, w, h, h)
 end
 
@@ -783,7 +783,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local assets = Models.package_assets(pkg)
     local asset_tab = Models.asset_details_tab(pkg)
     local show_patch_tab = asset_tab ~= nil and #assets > 0
-    local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates)
+    local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates or view.app.state.alpha_updates)
     local details_tab = view.app.state.details_tab or "readme"
     if details_tab == "release_notes" and not show_release_notes_tab then
         details_tab = "readme"
@@ -819,11 +819,12 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
                 view.app:set_package_details_tab(id)
             end
             local focus_id = "details-tab:" .. id
-            P.hit(view, tx, iy, tw, tab_h, callback, focus_id)
+            P.hit(view, tx, iy, tw, tab_h, callback, focus_id, nil, math.floor(tab_h / 2))
             P.focus_control(view, bb, focus_id, tx, iy, tw, tab_h, callback, {
                 focus_type = "details_tab",
                 focus_column = index,
                 inverse = selected,
+                radius = math.floor(tab_h / 2),
             })
         end
         local tab_x = inner_x
