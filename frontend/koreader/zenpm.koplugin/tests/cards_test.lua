@@ -87,6 +87,7 @@ package.preload["ui/primitives"] = function()
             painted_images[file] = { w = w, h = h, zoom = zoom, is_icon = opts and opts.is_icon }
             return true
         end,
+        image_zoomed_masked = function() return true end,
         center_text_box = function() end,
         dim = function() end,
         hit = function(_, x, y, w, h, callback, id)
@@ -158,6 +159,38 @@ assert(package_hit.x == 0 and package_hit.y == 0 and package_hit.w == 300 and pa
     "package feedback must cover the full row, including the action area")
 assert(hit_order[1] == "package:zenpm-koreader:" and hit_order[2] == "Queued",
     "the action button must stay above the full-row hitbox")
+
+do
+    hit_order = {}
+    local opened_details, action_package, reloaded
+    local pkg = { id = "featured-reader", name = "Featured Reader" }
+    Cards.featured({
+        app = {
+            state = { page = "home", active_tab = "home", queue = {} },
+            package_featured_file = function() return "featured.jpg" end,
+            show_package_details = function(_, ...) opened_details = { ... } end,
+            perform_package_action = function(_, selected, callback)
+                action_package = selected
+                callback()
+            end,
+            reload_current_page = function() reloaded = true end,
+        },
+    }, {}, pkg, 10, 20, 300, { height = 304 })
+
+    local featured_hit = hit_boxes["package:featured-reader:"]
+    assert(featured_hit.x == 10 and featured_hit.y == 20 and featured_hit.w == 300 and featured_hit.h == 304,
+        "featured feedback must cover the artwork and full row, including the action area")
+    assert(#hit_order == 2 and hit_order[1] == "package:featured-reader:" and hit_order[2] == "Update",
+        "the action button must stay above a single full-card hitbox")
+    local action_hit = hit_boxes.Update
+    assert(action_hit.x > featured_hit.x and action_hit.y > featured_hit.y
+        and action_hit.x + action_hit.w < featured_hit.x + featured_hit.w
+        and action_hit.y + action_hit.h < featured_hit.y + featured_hit.h)
+    hit_callbacks["package:featured-reader:"]()
+    assert(opened_details[1] == pkg.id and opened_details[2] == "home" and opened_details[4] == nil)
+    hit_callbacks.Update()
+    assert(action_package == pkg and reloaded, "the featured action button must still perform its package action")
+end
 
 painted_text = {}
 Cards.package({

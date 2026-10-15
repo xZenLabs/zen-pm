@@ -109,6 +109,24 @@ package.loaded["common/ui/accent"] = { styleIcon = function(_, active)
 end }
 assert(P.image({}, "upgrade.svg", 0, 0, 24, 24, { is_icon = true, invert = true }))
 assert(image_options.alpha == true and not image_options.invert and styled_icons == 1)
+
+do
+    local icon_paints = 0
+    package.loaded["ui/widget/iconwidget"] = { new = function(_, options)
+        local widget = require("ui/widget/imagewidget"):new(options)
+        widget.paintTo = function() icon_paints = icon_paints + 1 end
+        return widget
+    end }
+    assert(P.image({}, "/custom/close.png", 0, 0, 24, 24, { is_icon = true }))
+    assert(icon_paints == 1 and image_options.alpha == true,
+        "custom icons must use the shared widget's dark-mode handling with transparency")
+    assert(P.image({}, "/custom/upgrade.svg", 0, 0, 24, 24, { is_icon = true, invert = true }))
+    assert(icon_paints == 2 and styled_icons == 2 and not image_options.invert,
+        "shared icon rendering must retain accent styling")
+    assert(P.image({}, "cover.jpg", 0, 0, 24, 24, { is_icon = false }))
+    assert(icon_paints == 2, "photos must retain image rendering")
+    package.loaded["ui/widget/iconwidget"] = nil
+end
 package.loaded["common/ui/accent"] = nil
 
 local drawn = {}

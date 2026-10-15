@@ -331,7 +331,8 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         end
     end
 
-    P.hit(view, x, y, w, h, show_details, focus_key)
+    local focus_box = opts.focus_box or { x = x, y = y, w = w, h = h }
+    P.hit(view, focus_box.x, focus_box.y, focus_box.w, focus_box.h, show_details, focus_key)
     action_pill(view, bb, action_text, action_x, action_y, action_w, action_h, function()
         view.app:perform_package_action(pkg, function()
             view.app:reload_current_page()
@@ -345,7 +346,6 @@ function Cards.package(view, bb, pkg, x, y, w, opts)
         list_index = opts.focus_index,
         list_count = opts.focus_count,
     })
-    local focus_box = opts.focus_box or { x = x, y = y, w = w, h = h }
     if P.focus_target(view, focus_key, focus_box.x, focus_box.y, focus_box.w, focus_box.h, show_details, {
         focus_type = "package",
         focus_column = "main",
@@ -375,9 +375,6 @@ function Cards.featured(view, bb, pkg, x, y, w, opts)
         P.center_text(bb, _("Featured"), x, y + math.floor(art_h / 2) - Theme.scale(14), w, "heading", { bold = true, color = Theme.muted })
     end
     P.rect(bb, x, y + art_h - Theme.scale(1), w, Theme.scale(1), Theme.border)
-    P.hit(view, x, y, w, h, function()
-        view.app:show_package_details(pkg.id or pkg.name, view.app.state.active_tab)
-    end, "featured:" .. tostring(pkg.id or pkg.name))
     Cards.package(view, bb, pkg, x + Theme.scale(2), y + art_h, w - Theme.scale(4), {
         compact = true,
         height = h - art_h - Theme.scale(3),

@@ -343,7 +343,9 @@ function P.image(bb, file, x, y, w, h, opts)
         if not exact_size_svg_icon(file, opts) then
             image_opts.scale_factor = opts.scale_factor or 0
         end
-        return ImageWidget:new(image_opts)
+        -- ZenOS hooks IconWidget to preserve custom colors while still inverting dark icons.
+        local Widget = opts.is_icon and package.loaded["ui/widget/iconwidget"] or ImageWidget
+        return Widget:new(image_opts)
     end)
     if not ok or not widget then
         return false
