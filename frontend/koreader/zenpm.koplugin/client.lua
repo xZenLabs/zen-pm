@@ -409,7 +409,7 @@ function Client:get_package_release_notes(id, prerelease)
     if prerelease then
         path = path .. "?prerelease=1"
     end
-    return self:request("GET", path, nil)
+    return self:request("GET", path, nil, PACKAGE_RELEASES_TIMEOUT)
 end
 
 function Client:get_package_releases(id, direct_github)

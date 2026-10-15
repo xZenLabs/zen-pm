@@ -1727,7 +1727,7 @@ func TestHandlePackageReadmeReturnsMarkdownAndBaseURL(t *testing.T) {
 	}
 }
 
-func TestHandlePackageReleaseNotesSelectsPrereleaseDocument(t *testing.T) {
+func TestHandlePackageReleaseNotesIncludesPrereleaseDocuments(t *testing.T) {
 	notesServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/RELEASE_NOTES.md":
@@ -1754,13 +1754,6 @@ func TestHandlePackageReleaseNotesSelectsPrereleaseDocument(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := New(st, repo.New(st), pkg.New(st, repo.New(st), "host"), 0)
-	stableURL, _, stableVersion, err := srv.packageReleaseNotesMetadata("reader", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stableURL != notesServer.URL+"/RELEASE_NOTES.md" || stableVersion != "1.0.0" {
-		t.Fatalf("stable metadata = %q / %q", stableURL, stableVersion)
-	}
 	rec := httptest.NewRecorder()
 	srv.handlePackageReleaseNotes(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/release-notes?prerelease=1", nil), "reader")
 	if rec.Code != http.StatusOK {
@@ -1774,8 +1767,45 @@ func TestHandlePackageReleaseNotesSelectsPrereleaseDocument(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.ReleaseNotes != "# Preview" || response.Version != "1.1.0-rc.1" || response.BaseURL != notesServer.URL+"/" {
+	if response.ReleaseNotes != "# Preview\n\n# Stable" || response.Version != "1.1.0-rc.1" || response.BaseURL != notesServer.URL+"/" {
 		t.Fatalf("response = %#v", response)
+	}
+
+	for _, prereleaseVersion := range []string{"1.40.1", "1.43.4", "1.43.4-rc.1"} {
+		t.Run(prereleaseVersion, func(t *testing.T) {
+			if err := st.WriteCatalog([]state.CatalogEntry{{
+				ID: "reader", Name: "Reader", Version: "1.43.4", Repo: "ZenLabs",
+				ReleaseNotesURL: notesServer.URL + "/RELEASE_NOTES.md", PrereleaseNotesURL: notesServer.URL + "/PRERELEASE_NOTES.md",
+				PrereleaseVersion: prereleaseVersion,
+			}}); err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			srv.handlePackageReleaseNotes(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/release-notes?prerelease=1", nil), "reader")
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.ReleaseNotes != "# Stable\n\n# Preview" || response.Version != "1.43.4" {
+				t.Fatalf("response = %#v, want stable and prerelease notes", response)
+			}
+		})
+	}
+
+	for _, query := range []string{"", "?prerelease=0"} {
+		rec := httptest.NewRecorder()
+		srv.handlePackageReleaseNotes(rec, httptest.NewRequest(http.MethodGet, "/packages/reader/release-notes"+query, nil), "reader")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.ReleaseNotes != "# Stable" || response.Version != "1.43.4" {
+			t.Fatalf("response = %#v, want only stable release notes", response)
+		}
 	}
 }
 

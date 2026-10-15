@@ -96,6 +96,7 @@ return {
         "Fix categories centering"
     },
     ["1.7.2"] = {
-        "Round button feedback"
+        "Round button feedback",
+        "Show all stable + beta release notes on betas"
     },
 }

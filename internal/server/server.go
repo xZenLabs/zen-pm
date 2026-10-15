@@ -1504,27 +1504,34 @@ func (s *Server) handlePackageReadme(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
-func (s *Server) packageReleaseNotesMetadata(id string, prerelease bool) (string, string, string, error) {
+func (s *Server) packageReleaseNotesMetadata(id string, prerelease bool) ([]string, string, string, error) {
 	catalog, err := s.repos.ReadCatalog()
 	if err != nil {
-		return "", "", "", err
+		return nil, "", "", err
 	}
 	for _, entry := range catalog {
 		if entry.ID != id {
 			continue
 		}
-		notesURL := entry.ReleaseNotesURL
+		var notesURLs []string
+		if entry.ReleaseNotesURL != "" {
+			notesURLs = append(notesURLs, entry.ReleaseNotesURL)
+		}
 		version := entry.Version
-		if prerelease && entry.PrereleaseNotesURL != "" {
-			notesURL = entry.PrereleaseNotesURL
-			version = entry.PrereleaseVersion
+		if prerelease && entry.PrereleaseNotesURL != "" && entry.PrereleaseNotesURL != entry.ReleaseNotesURL {
+			if len(notesURLs) == 0 || releases.VersionGreater(entry.PrereleaseVersion, entry.Version) {
+				notesURLs = append([]string{entry.PrereleaseNotesURL}, notesURLs...)
+				version = entry.PrereleaseVersion
+			} else {
+				notesURLs = append(notesURLs, entry.PrereleaseNotesURL)
+			}
 		}
-		if notesURL == "" {
-			return "", "", "", fmt.Errorf("package %q has no release notes URL", id)
+		if len(notesURLs) == 0 {
+			return nil, "", "", fmt.Errorf("package %q has no release notes URL", id)
 		}
-		return notesURL, repositoryImageBaseURL(entry.Source), version, nil
+		return notesURLs, repositoryImageBaseURL(entry.Source), version, nil
 	}
-	return "", "", "", fmt.Errorf("package %q not found", id)
+	return nil, "", "", fmt.Errorf("package %q not found", id)
 }
 
 func (s *Server) handlePackageReleaseNotes(w http.ResponseWriter, r *http.Request, id string) {
@@ -1533,19 +1540,27 @@ func (s *Server) handlePackageReleaseNotes(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	prerelease := r.URL.Query().Get("prerelease") == "1" || r.URL.Query().Get("prerelease") == "true"
-	notesURL, imageBaseURL, version, err := s.packageReleaseNotesMetadata(id, prerelease)
+	notesURLs, imageBaseURL, version, err := s.packageReleaseNotesMetadata(id, prerelease)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	document, err := releases.FetchReadmeDocument(notesURL)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+	var bodies []string
+	var baseURL string
+	for _, notesURL := range notesURLs {
+		document, err := releases.FetchReadmeDocument(notesURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if baseURL == "" {
+			baseURL = document.BaseURL
+		}
+		bodies = append(bodies, document.Readme)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
-		"release_notes":                document.Readme,
-		"release_notes_base_url":       document.BaseURL,
+		"release_notes":                strings.Join(bodies, "\n\n"),
+		"release_notes_base_url":       baseURL,
 		"release_notes_image_base_url": imageBaseURL,
 		"version":                      version,
 	})

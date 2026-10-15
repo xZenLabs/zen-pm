@@ -123,10 +123,11 @@ assert(unix_request.timeout == 1)
 assert(client:list_packages("kobo,koreader", false))
 assert(unix_request.timeout == 20)
 
-client.request = function(_, method, path, body)
+client.request = function(_, method, path, body, timeout)
     assert(method == "GET")
     assert(path == "/packages/example%20package/release-notes?prerelease=1")
     assert(body == nil)
+    assert(timeout.total == 35)
     return true, {}
 end
 assert(client:get_package_release_notes("example package", true))

@@ -2817,6 +2817,15 @@ App.set_package_details_tab(release_app, "readme")
 App.set_package_details_tab(release_app, "release_notes")
 assert(release_requests == 1)
 
+release_app.state.beta_updates = false
+release_app.state.alpha_updates = true
+release_app.state.release_notes_cache = {}
+App.set_package_details_tab(release_app, "readme")
+App.set_package_details_tab(release_app, "release_notes")
+assert(release_app.state.details_tab == "release_notes")
+assert(release_requests == 2)
+assert(release_app.state.current_package.release_notes == "Beta notes")
+
 local selected_category
 local category_app = {
     state = {

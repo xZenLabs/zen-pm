@@ -783,7 +783,7 @@ function Pages.package_details(view, bb, x, y, w, h, scroll)
     local assets = Models.package_assets(pkg)
     local asset_tab = Models.asset_details_tab(pkg)
     local show_patch_tab = asset_tab ~= nil and #assets > 0
-    local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates)
+    local show_release_notes_tab = Models.has_release_notes(pkg, view.app.state.beta_updates or view.app.state.alpha_updates)
     local details_tab = view.app.state.details_tab or "readme"
     if details_tab == "release_notes" and not show_release_notes_tab then
         details_tab = "readme"
