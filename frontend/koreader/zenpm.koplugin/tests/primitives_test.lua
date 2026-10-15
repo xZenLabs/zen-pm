@@ -13,6 +13,7 @@ package.preload["ui/geometry"] = function() return { new = function(_, value) re
 local pixels = {}
 local color_screen = false
 local feedback_box
+local feedback_inset
 local feedback_events = {}
 local screen = {
     isColorScreen = function() return color_screen end,
@@ -37,6 +38,9 @@ package.preload["ui/uimanager"] = function()
         forceRePaint = function() feedback_events[#feedback_events + 1] = "repaint" end,
         yieldToEPDC = function()
             assert(pixels[feedback_box.y * 40 + feedback_box.x] == 32, "corners must stay rounded")
+            local edge = feedback_box.y * 40 + feedback_box.x + feedback_inset
+            assert(pixels[edge] == 223 and pixels[edge - 1] == 32,
+                "feedback must follow the control's corner radius")
             local center = (feedback_box.y + math.floor(feedback_box.h / 2)) * 40
                 + feedback_box.x + math.floor(feedback_box.w / 2)
             assert(pixels[center] == 223, "the highlight must be visible before restoring")
@@ -224,8 +228,13 @@ end }
 for index = 0, 40 * 40 - 1 do pixels[index] = 32 end
 for _, color in ipairs({ false, true }) do
     color_screen = color
-    for _, size in ipairs({ { 24, 16 }, { 30, 20 }, { 4, 4 } }) do
-        feedback_box = { x = 8, y = 8, w = size[1], h = size[2] }
+    for _, size in ipairs({
+        { 24, 16, inset = 6 }, { 30, 20, inset = 6 }, { 4, 4, inset = 1 },
+        { 30, 20, radius = 10, inset = 7 }, { 30, 20, radius = 4, inset = 3 },
+        { 30, 20, radius = 99, inset = 7 }, { 20, 21, radius = 10, inset = 7 },
+    }) do
+        feedback_box = { x = 8, y = 8, w = size[1], h = size[2], radius = size.radius }
+        feedback_inset = size.inset
         feedback_events = {}
         P.flash(feedback_box)
         assert(table.concat(feedback_events, ",") == "dirty,repaint,yield,dirty")
@@ -245,13 +254,16 @@ assert(#feedback_events == 0)
 feedback_box.allow_flash = nil
 
 local zen_flashes = 0
-package.loaded["common/ui/button_feedback"] = { flash = function(region)
+package.loaded["common/ui/button_feedback"] = { flash = function(region, radius)
     assert(region.x == feedback_box.x and region.y == feedback_box.y)
     assert(region.w == feedback_box.w and region.h == feedback_box.h)
+    assert(radius == feedback_box.radius, "pass the control's radius to ZenOS")
     zen_flashes = zen_flashes + 1
 end }
 P.flash(feedback_box)
-assert(zen_flashes == 1 and #feedback_events == 0, "reuse ZenOS's feedback when loaded")
+feedback_box.radius = nil
+P.flash(feedback_box)
+assert(zen_flashes == 2 and #feedback_events == 0, "reuse ZenOS's feedback when loaded")
 package.loaded["common/ui/button_feedback"] = nil
 
 local borders = 0
@@ -264,5 +276,10 @@ P.focus_outline(border_buffer, 8, 8, 24, 16, true)
 assert(borders == 2)
 P.hit(view, 8, 8, 24, 16, function() end, "scrollbar", false)
 assert(view.hitboxes[#view.hitboxes].allow_flash == false)
+P.hit(view, 8, 8, 30, 20, function() end, "pill", nil, 10)
+assert(view.hitboxes[#view.hitboxes].radius == 10)
+view.focus_enabled, view.focus_targets = true, {}
+P.focus_control(view, {}, "pill", 8, 8, 30, 20, function() end, { radius = 10 })
+assert(view.focus_targets[1].radius == 10, "D-pad feedback must retain the button's radius")
 
 print("primitives tests passed")

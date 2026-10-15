@@ -13,8 +13,8 @@ local _ = require("gettext")
 
 local Header = {}
 
-local function focus_control(view, bb, id, x, y, w, h, callback, inverse)
-    P.focus_control(view, bb, id, x, y, w, h, callback, { inverse = inverse })
+local function focus_control(view, bb, id, x, y, w, h, callback, inverse, radius)
+    P.focus_control(view, bb, id, x, y, w, h, callback, { inverse = inverse, radius = radius })
 end
 
 local function ellipsize(value, limit)
@@ -133,8 +133,8 @@ function Header.draw_sort_button(view, bb, x, y, kind)
     P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.button_text })
     local callback = function() view.app:prompt_sort(kind) end
     local id = "sort:" .. tostring(kind)
-    P.hit(view, x, y, w, s, callback, id)
-    focus_control(view, bb, id, x, y, w, s, callback, true)
+    P.hit(view, x, y, w, s, callback, id, nil, math.floor(s / 2))
+    focus_control(view, bb, id, x, y, w, s, callback, true, math.floor(s / 2))
     return w
 end
 
@@ -152,8 +152,8 @@ function Header.draw_installed_category_button(view, bb, x, y)
     local callback = function()
         view.app:prompt_installed_category_filter()
     end
-    P.hit(view, x, y, w, h, callback, "filter-category:installed")
-    focus_control(view, bb, "filter-category:installed", x, y, w, h, callback, true)
+    P.hit(view, x, y, w, h, callback, "filter-category:installed", nil, math.floor(h / 2))
+    focus_control(view, bb, "filter-category:installed", x, y, w, h, callback, true, math.floor(h / 2))
     return w
 end
 
@@ -190,8 +190,8 @@ function Header.draw_search_button(view, bb, x, y, kind)
     P.vcenter_text(bb, label, x + Theme.scale(10) + icon + Theme.scale(6), y, label_size.w, s, "small", { bold = true, color = Theme.button_text })
     local callback = function() view.app:prompt_filter(kind) end
     local id = "search:" .. kind
-    P.hit(view, x, y, w, s, callback, id)
-    focus_control(view, bb, id, x, y, w, s, callback, true)
+    P.hit(view, x, y, w, s, callback, id, nil, math.floor(s / 2))
+    focus_control(view, bb, id, x, y, w, s, callback, true, math.floor(s / 2))
     return w
 end
 
@@ -213,8 +213,8 @@ local function draw_title_button(view, bb, x, y, label, callback, hit_id, enable
     })
     P.center_text_box(bb, label, x, y, w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
-        P.hit(view, x, y, w, h, callback, hit_id)
-        focus_control(view, bb, hit_id, x, y, w, h, callback, true)
+        P.hit(view, x, y, w, h, callback, hit_id, nil, math.floor(h / 2))
+        focus_control(view, bb, hit_id, x, y, w, h, callback, true, math.floor(h / 2))
     end
     return w
 end
@@ -251,8 +251,8 @@ local function draw_queue_clear_button(view, bb, x, y)
     P.vcenter_text(bb, label, x + Theme.scale(7) + icon + Theme.scale(6), y, label_size.w, h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
     if enabled then
         local callback = function() view.app:confirm_clear_queue() end
-        P.hit(view, x, y, w, h, callback, "clear-queue")
-        focus_control(view, bb, "clear-queue", x, y, w, h, callback, true)
+        P.hit(view, x, y, w, h, callback, "clear-queue", nil, math.floor(h / 2))
+        focus_control(view, bb, "clear-queue", x, y, w, h, callback, true, math.floor(h / 2))
     end
 end
 
@@ -417,8 +417,8 @@ function Header.draw(view, bb, x, y, w)
         P.center_text_box(bb, _("Confirm"), confirm_x, row_y, confirm_w, button_h, "small", { bold = true, color = enabled and Theme.button_text or Theme.muted })
         if enabled then
             local callback = function() view.app:prompt_queue_confirmation() end
-            P.hit(view, confirm_x, row_y, confirm_w, button_h, callback, "confirm-queue")
-            focus_control(view, bb, "confirm-queue", confirm_x, row_y, confirm_w, button_h, callback, true)
+            P.hit(view, confirm_x, row_y, confirm_w, button_h, callback, "confirm-queue", nil, math.floor(button_h / 2))
+            focus_control(view, bb, "confirm-queue", confirm_x, row_y, confirm_w, button_h, callback, true, math.floor(button_h / 2))
         end
         return y + toolbar_h
     end

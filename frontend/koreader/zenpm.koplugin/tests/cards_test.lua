@@ -92,13 +92,13 @@ package.preload["ui/primitives"] = function()
         image_zoomed_masked = function() return true end,
         center_text_box = function() end,
         dim = function() end,
-        hit = function(_, x, y, w, h, callback, id)
+        hit = function(_, x, y, w, h, callback, id, _allow_flash, radius)
             hit_callbacks[id] = callback
-            hit_boxes[id] = { x = x, y = y, w = w, h = h }
+            hit_boxes[id] = { x = x, y = y, w = w, h = h, radius = radius }
             table.insert(hit_order, id)
         end,
-        focus_control = function(_, _, id, x, y, w, h, callback)
-            focus_boxes[id] = { x = x, y = y, w = w, h = h, callback = callback }
+        focus_control = function(_, _, id, x, y, w, h, callback, opts)
+            focus_boxes[id] = { x = x, y = y, w = w, h = h, callback = callback, radius = opts and opts.radius }
         end,
         focus_target = function() return false end,
         focus_outline = function() end,
@@ -161,6 +161,10 @@ assert(package_hit.x == 0 and package_hit.y == 0 and package_hit.w == 300 and pa
     "package feedback must cover the full row, including the action area")
 assert(hit_order[1] == "package:zenpm-koreader:" and hit_order[2] == "Queued",
     "the action button must stay above the full-row hitbox")
+assert(package_hit.radius == nil, "rows must keep their existing feedback shape")
+assert(hit_boxes.Queued.radius == painted_boxes[#painted_boxes].opts.radius
+    and focus_boxes["package-action:zenpm-koreader:"].radius == painted_boxes[#painted_boxes].opts.radius,
+    "action feedback must match the pill for touch and D-pad presses")
 
 do
     hit_order = {}
@@ -858,6 +862,10 @@ do
         assert(painted_boxes[#painted_boxes].opts.background == accent)
         Header.draw_installed_category_button({ app = { state = { filters = { installed = "" } } } }, {}, 0, 0)
         assert(painted_boxes[#painted_boxes].opts.background == accent)
+        for _, id in ipairs({ "sort:category", "search:category", "filter-category:installed" }) do
+            assert(hit_boxes[id].radius == 21 and focus_boxes[id].radius == 21,
+                "toolbar feedback must match the pill for touch and D-pad presses")
+        end
         assert(labels[""].color == foreground)
 
         painted_boxes = {}
@@ -869,6 +877,8 @@ do
             if box.x == selected.x and box.y == selected.y then selected_background = box.opts.background end
         end
         assert(selected_background == accent)
+        assert(hit_boxes["details-tab:iconpacks"].radius == 19 and focus_boxes["details-tab:iconpacks"].radius == 19,
+            "details tab feedback must match its pill")
 
         require("zenpm_constants").TABS = { { id = "home" }, { id = "installed" } }
         P.center_text = function(_, label) return { w = #label, h = 1 } end

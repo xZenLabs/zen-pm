@@ -95,4 +95,7 @@ return {
     ["1.7.1"] = {
         "Fix categories centering"
     },
+    ["1.7.2"] = {
+        "Round button feedback"
+    },
 }
