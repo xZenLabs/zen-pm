@@ -366,7 +366,12 @@ end
 local function fetch_releases(daemon, force_refresh)
     local url = RELEASES_URL
     if force_refresh then url = url .. "&cache_bust=" .. tostring(os.time()) end
-    local response, err = request(url, nil, nil, github_token(daemon))
+    local token = github_token(daemon)
+    local response, err = request(url, nil, nil, token)
+    if response and response.code == 401 and token then
+        log_warn("GitHub token rejected; retrying anonymously")
+        response, err = request(url)
+    end
     if not response then
         log_warn("release request failed", err)
         return nil, err

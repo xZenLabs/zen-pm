@@ -6,8 +6,72 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestFetchGitHubReleasesAnonymousFallback(t *testing.T) {
+	for _, tt := range []struct {
+		name            string
+		token           string
+		status          int
+		anonymousStatus int
+		wantAttempts    int
+		wantError       string
+	}{
+		{"rejected token", "expired-token", 401, 200, 2, ""},
+		{"anonymous unauthorized", "expired-token", 401, 401, 2, "returned 401"},
+		{"anonymous rate limited", "expired-token", 401, 403, 2, "returned 403"},
+		{"token forbidden", "developer-token", 403, 200, 1, "returned 403"},
+		{"no token", "", 401, 200, 1, "returned 401"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tokenPath := filepath.Join(t.TempDir(), "github_token.txt")
+			if err := os.WriteFile(tokenPath, []byte(tt.token), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("ZENPM_GITHUB_TOKEN_FILE", tokenPath)
+			attempts := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				status, wantAuth := tt.anonymousStatus, ""
+				if attempts == 1 {
+					status = tt.status
+					if tt.token != "" {
+						wantAuth = "Bearer " + tt.token
+					}
+				}
+				if got := r.Header.Get("Authorization"); got != wantAuth {
+					t.Errorf("attempt %d: Authorization = %q, want %q", attempts, got, wantAuth)
+				}
+				if r.URL.RequestURI() != "/repos/owner/repo/releases?per_page=1" {
+					t.Errorf("unexpected request: %s", r.URL.RequestURI())
+				}
+				w.WriteHeader(status)
+				fmt.Fprint(w, `[{"tag_name":"v2.0","assets":[{"name":"plugin.zip","browser_download_url":"https://example.test/plugin.zip"}]}]`)
+			}))
+			defer srv.Close()
+			oldBase := githubAPIBaseURL
+			githubAPIBaseURL = srv.URL
+			t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+			got, err := FetchGitHubReleases("https://github.com/owner/repo", 1)
+			if tt.wantError == "" {
+				if err != nil || len(got) != 1 || got[0].TagName != "v2.0" {
+					t.Fatalf("releases = %#v, error = %v", got, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("error = %v, want %q", err, tt.wantError)
+			}
+			if attempts != tt.wantAttempts {
+				t.Fatalf("attempts = %d, want %d", attempts, tt.wantAttempts)
+			}
+			if data, err := os.ReadFile(tokenPath); err != nil || string(data) != tt.token {
+				t.Fatalf("saved token changed: %q, error = %v", data, err)
+			}
+		})
+	}
+}
 
 func TestFetchGitHubReleasesRetriesTransientFailure(t *testing.T) {
 	attempts := 0

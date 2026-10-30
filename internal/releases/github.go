@@ -283,6 +283,14 @@ func githubRequestOnce(path, accept string) ([]byte, bool, error) {
 	if err != nil {
 		return nil, retryableVersionsError(err), fmt.Errorf("GitHub request: %w", err)
 	}
+	if resp.StatusCode == http.StatusUnauthorized && req.Header.Get("Authorization") != "" {
+		resp.Body.Close()
+		req.Header.Del("Authorization")
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, retryableVersionsError(err), fmt.Errorf("GitHub request: %w", err)
+		}
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, retryableVersionsStatus(resp.StatusCode), fmt.Errorf("GitHub request: %w", httpdiag.ResponseError(resp))

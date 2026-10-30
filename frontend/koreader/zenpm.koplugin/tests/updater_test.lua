@@ -32,6 +32,8 @@ local releases = {
 local requested_url
 local requested_headers
 local request_count = 0
+local response_codes
+local authorizations = {}
 local resolver_refreshes = 0
 local resolver_ready = false
 local resolver_symbol = "res_init"
@@ -74,13 +76,14 @@ package.preload["ssl.https"] = function()
             request_count = request_count + 1
             requested_url = options.url
             requested_headers = options.headers
+            authorizations[#authorizations + 1] = options.headers.Authorization or ""
             if resolver_symbol and not resolver_ready then
                 return nil, "temporary failure in name resolution"
             end
             resolver_ready = false
             if request_count == 1 then return nil, "wantread" end
             options.sink("[]")
-            return 1, 200, {}, "OK"
+            return 1, response_codes and table.remove(response_codes, 1) or 200, {}, "OK"
         end,
     }
 end
@@ -135,7 +138,35 @@ local standalone_ok, standalone_err = Updater:install_kindle_standalone({
 assert(not standalone_ok)
 assert(standalone_err == "Kindle standalone is not supported on this device.")
 
+for _, case in ipairs({
+    { codes = { 401, 200 }, attempts = 2 },
+    { codes = { 401, 401 }, attempts = 2, err = "GitHub returned HTTP 401" },
+    { codes = { 401, 403 }, attempts = 2, err = "GitHub returned HTTP 403" },
+    { codes = { 403 }, attempts = 1, err = "GitHub returned HTTP 403" },
+}) do
+    response_codes = case.codes
+    local before = request_count
+    ok, version = Updater:check(daemon, true)
+    assert(request_count == before + case.attempts)
+    assert(authorizations[before + 1] == "Bearer developer-token")
+    if case.attempts == 2 then assert(authorizations[before + 2] == "") end
+    if case.err then
+        assert(not ok and version == case.err)
+    else
+        assert(ok and version == "1.0.1-beta1")
+    end
+end
+token_file = assert(io.open(token_home .. "/github_token.txt", "rb"))
+assert(token_file:read("*a") == "developer-token\n")
+token_file:close()
+
 os.remove(token_home .. "/github_token.txt")
+response_codes = { 401 }
+local before = request_count
+ok, version = Updater:check(daemon, true)
+assert(not ok and version == "GitHub returned HTTP 401")
+assert(request_count == before + 1)
+assert(authorizations[request_count] == "")
 os.execute("rmdir " .. token_home)
 
 print("updater tests passed")
