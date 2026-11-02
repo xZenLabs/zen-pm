@@ -520,6 +520,13 @@ assert(table.concat(painted_text, "\n"):find("ZenLabs", 1, true))
 assert(painted_images["screensaver.svg"] and painted_images["wallpaper.svg"])
 assert(hit_callbacks["installed-folder:screensavers"] and hit_callbacks["installed-folder:wallpapers"])
 assert(not hit_callbacks["package:clouds:"] and not hit_callbacks["package:books:"])
+assert(not table.concat(painted_text, "\n"):find("Update available", 1, true))
+installed_images[1].update_available = true
+painted_text = {}
+Pages.packages_page(installed_view, {}, 0, 0, 300, 300, 0, "Installed", "installed",
+    { installed_images[3] }, installed_images, "")
+assert(table.concat(painted_text, "\n"):find("1 packages · Update available", 1, true))
+installed_images[1].update_available = nil
 hit_callbacks["installed-folder:screensavers"]()
 assert(opened_folder == "screensavers")
 hit_callbacks["installed-folder:wallpapers"]()

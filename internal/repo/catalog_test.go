@@ -3,8 +3,10 @@ package repo
 import (
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -614,6 +616,25 @@ func TestAddTLSClockHintExplainsNotYetValidCertificate(t *testing.T) {
 	}
 }
 
+func TestAddDNSHintExplainsLookupTimeout(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "i/o timeout", Name: "github.com", Server: "192.168.1.1:53", IsTimeout: true}
+	err := addDNSHint(fmt.Errorf("Get \"https://github.com/x\": %w", dnsErr))
+
+	for _, want := range []string{"could not look up github.com", "check the Wi-Fi connection", "192.168.1.1:53"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
+	}
+	if !errors.As(err, &dnsErr) {
+		t.Fatalf("hint dropped wrapped DNS error: %v", err)
+	}
+
+	notFound := fmt.Errorf("lookup: %w", &net.DNSError{Err: "no such host", Name: "example.invalid", IsNotFound: true})
+	if got := addDNSHint(notFound); got != notFound {
+		t.Fatalf("not-found error changed to %q", got)
+	}
+}
+
 func TestAddTLSClockHintLeavesExpiredCertificateErrorUnchanged(t *testing.T) {
 	now := time.Date(2026, time.August, 4, 0, 0, 0, 0, time.UTC)
 	certErr := x509.CertificateInvalidError{
@@ -741,6 +762,39 @@ func TestRetryableFetchErrorIncludesResetAndEOF(t *testing.T) {
 		if !retryableFetchError(err) {
 			t.Errorf("retryableFetchError(%v) = false", err)
 		}
+	}
+}
+
+func TestFetchToFileRetriesThroughTransientFailures(t *testing.T) {
+	oldDelay := packageDownloadRetryDelay
+	packageDownloadRetryDelay = time.Millisecond
+	defer func() { packageDownloadRetryDelay = oldDelay }()
+
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests < packageDownloadAttempts {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Write([]byte("payload"))
+	}))
+	defer srv.Close()
+
+	file, err := os.CreateTemp(t.TempDir(), "asset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := FetchToFile(srv.URL, file); err != nil {
+		t.Fatalf("FetchToFile() error = %v", err)
+	}
+	if requests != packageDownloadAttempts {
+		t.Fatalf("requests = %d, want %d", requests, packageDownloadAttempts)
+	}
+	data, err := os.ReadFile(file.Name())
+	if err != nil || string(data) != "payload" {
+		t.Fatalf("file = %q, %v; want payload", data, err)
 	}
 }
 

@@ -187,9 +187,18 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
         for _, pkg in ipairs(rows) do table.insert(installed_rows, pkg) end
         for _, id in ipairs({ "screensavers", "wallpapers" }) do
             local category = Models.category_for_id(id)
+            local folder_packages = Models.filter_packages_by_category(total, id)
+            local has_update = false
+            for _, pkg in ipairs(folder_packages) do
+                if pkg.update_available and not pkg.update_ignored then
+                    has_update = true
+                    break
+                end
+            end
             table.insert(installed_rows, {
                 installed_folder = category,
-                count = #Models.filter_packages_by_category(total, id),
+                count = #folder_packages,
+                has_update = has_update,
             })
         end
         rows = installed_rows
@@ -251,7 +260,8 @@ function Pages.packages_page(view, bb, x, y, w, h, scroll, title, kind, visible,
                 height = card_h,
                 icon = Images.asset(category.icon),
                 title = Models.category_label(category),
-                subtitle = tostring(pkg.count) .. " " .. _("packages"),
+                subtitle = tostring(pkg.count) .. " " .. _("packages")
+                    .. (pkg.has_update and " · " .. _("Update available") or ""),
                 right_icon = Images.asset("chevron.right.svg"),
                 callback = callback,
                 hit_id = "installed-folder:" .. category.id,
