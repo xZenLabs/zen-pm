@@ -267,7 +267,7 @@ func githubRequest(path, accept string) ([]byte, error) {
 	return nil, lastErr
 }
 
-func githubRequestOnce(path, accept string) ([]byte, bool, error) {
+func githubRequestOnce(path, accept string) (data []byte, retry bool, err error) {
 	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(githubAPIBaseURL, "/")+path, nil)
 	if err != nil {
 		return nil, false, err
@@ -284,6 +284,12 @@ func githubRequestOnce(path, accept string) ([]byte, bool, error) {
 		return nil, retryableVersionsError(err), fmt.Errorf("GitHub request: %w", err)
 	}
 	if resp.StatusCode == http.StatusUnauthorized && req.Header.Get("Authorization") != "" {
+		initialStatus := resp.StatusCode
+		defer func() {
+			if err != nil {
+				err = fmt.Errorf("authenticated GitHub request returned HTTP %d; anonymous retry failed: %w", initialStatus, err)
+			}
+		}()
 		resp.Body.Close()
 		req.Header.Del("Authorization")
 		resp, err = client.Do(req)
@@ -295,7 +301,7 @@ func githubRequestOnce(path, accept string) ([]byte, bool, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, retryableVersionsStatus(resp.StatusCode), fmt.Errorf("GitHub request: %w", httpdiag.ResponseError(resp))
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
+	data, err = io.ReadAll(io.LimitReader(resp.Body, githubResponseLimit+1))
 	if err != nil {
 		return nil, retryableVersionsError(err), err
 	}

@@ -1,7 +1,9 @@
 package releases
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,8 +22,8 @@ func TestFetchGitHubReleasesAnonymousFallback(t *testing.T) {
 		wantError       string
 	}{
 		{"rejected token", "expired-token", 401, 200, 2, ""},
-		{"anonymous unauthorized", "expired-token", 401, 401, 2, "returned 401"},
-		{"anonymous rate limited", "expired-token", 401, 403, 2, "returned 403"},
+		{"anonymous unauthorized", "expired-token", 401, 401, 2, "authenticated GitHub request returned HTTP 401; anonymous retry failed: GitHub request:"},
+		{"anonymous rate limited", "expired-token", 401, 403, 2, "authenticated GitHub request returned HTTP 401; anonymous retry failed: GitHub request:"},
 		{"token forbidden", "developer-token", 403, 200, 1, "returned 403"},
 		{"no token", "", 401, 200, 1, "returned 401"},
 	} {
@@ -63,6 +65,9 @@ func TestFetchGitHubReleasesAnonymousFallback(t *testing.T) {
 			} else if err == nil || !strings.Contains(err.Error(), tt.wantError) {
 				t.Fatalf("error = %v, want %q", err, tt.wantError)
 			}
+			if err != nil && tt.wantAttempts == 2 && !strings.Contains(err.Error(), fmt.Sprintf("returned %d", tt.anonymousStatus)) {
+				t.Fatalf("error lost anonymous status: %v", err)
+			}
 			if attempts != tt.wantAttempts {
 				t.Fatalf("attempts = %d, want %d", attempts, tt.wantAttempts)
 			}
@@ -70,6 +75,40 @@ func TestFetchGitHubReleasesAnonymousFallback(t *testing.T) {
 				t.Fatalf("saved token changed: %q, error = %v", data, err)
 			}
 		})
+	}
+}
+
+func TestGitHubRequestAnonymousTransportFailure(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), "github_token.txt")
+	if err := os.WriteFile(tokenPath, []byte("expired-token"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENPM_GITHUB_TOKEN_FILE", tokenPath)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		conn.Close()
+	}))
+	defer srv.Close()
+	oldBase := githubAPIBaseURL
+	githubAPIBaseURL = srv.URL
+	t.Cleanup(func() { githubAPIBaseURL = oldBase })
+
+	_, retry, err := githubRequestOnce("/releases", "application/json")
+	if !retry || !errors.Is(err, io.EOF) {
+		t.Fatalf("retry = %v, error = %v; want retryable wrapped EOF", retry, err)
+	}
+	for _, want := range []string{"authenticated GitHub request returned HTTP 401", "anonymous retry failed: GitHub request:", "/releases"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %v, want %q", err, want)
+		}
 	}
 }
 
