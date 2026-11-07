@@ -620,7 +620,7 @@ func TestAddDNSHintExplainsLookupTimeout(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "i/o timeout", Name: "github.com", Server: "192.168.1.1:53", IsTimeout: true}
 	err := addDNSHint(fmt.Errorf("Get \"https://github.com/x\": %w", dnsErr))
 
-	for _, want := range []string{"could not look up github.com", "check the Wi-Fi connection", "192.168.1.1:53"} {
+	for _, want := range []string{"could not look up github.com", "check the network connection and DNS settings", "192.168.1.1:53"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %q, want %q", err, want)
 		}
@@ -632,6 +632,14 @@ func TestAddDNSHintExplainsLookupTimeout(t *testing.T) {
 	notFound := fmt.Errorf("lookup: %w", &net.DNSError{Err: "no such host", Name: "example.invalid", IsNotFound: true})
 	if got := addDNSHint(notFound); got != notFound {
 		t.Fatalf("not-found error changed to %q", got)
+	}
+}
+
+func TestAddDNSHintExplainsTemporaryFailure(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "server misbehaving", Name: "github.com", IsTemporary: true}
+	err := addDNSHint(dnsErr)
+	if !errors.Is(err, dnsErr) || !strings.Contains(err.Error(), "check the network connection and DNS settings") || strings.Contains(err.Error(), "did not respond") {
+		t.Fatalf("temporary DNS error hint = %v", err)
 	}
 }
 
@@ -770,10 +778,9 @@ func TestFetchToFileRetriesThroughTransientFailures(t *testing.T) {
 	packageDownloadRetryDelay = time.Millisecond
 	defer func() { packageDownloadRetryDelay = oldDelay }()
 
-	var requests int
+	var requests atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests++
-		if requests < packageDownloadAttempts {
+		if requests.Add(1) < packageDownloadAttempts {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -789,8 +796,8 @@ func TestFetchToFileRetriesThroughTransientFailures(t *testing.T) {
 	if err := FetchToFile(srv.URL, file); err != nil {
 		t.Fatalf("FetchToFile() error = %v", err)
 	}
-	if requests != packageDownloadAttempts {
-		t.Fatalf("requests = %d, want %d", requests, packageDownloadAttempts)
+	if requests.Load() != packageDownloadAttempts {
+		t.Fatalf("requests = %d, want %d", requests.Load(), packageDownloadAttempts)
 	}
 	data, err := os.ReadFile(file.Name())
 	if err != nil || string(data) != "payload" {

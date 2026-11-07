@@ -368,17 +368,20 @@ local function fetch_releases(daemon, force_refresh)
     if force_refresh then url = url .. "&cache_bust=" .. tostring(os.time()) end
     local token = github_token(daemon)
     local response, err = request(url, nil, nil, token)
+    local retry_context = ""
     if response and response.code == 401 and token then
+        retry_context = _("Authenticated GitHub request returned HTTP 401; anonymous retry failed: ")
         log_warn("GitHub token rejected; retrying anonymously")
         response, err = request(url)
     end
     if not response then
+        err = retry_context .. tostring(err)
         log_warn("release request failed", err)
         return nil, err
     end
     if response.code ~= 200 then
         log_warn("release request returned HTTP", response.code or response.status or "?")
-        return nil, _("GitHub returned HTTP ") .. tostring(response.code or response.status or "?")
+        return nil, retry_context .. _("GitHub returned HTTP ") .. tostring(response.code or response.status or "?")
     end
     local ok, releases = pcall(JSON.decode, response.body)
     if not ok or type(releases) ~= "table" or #releases == 0 then

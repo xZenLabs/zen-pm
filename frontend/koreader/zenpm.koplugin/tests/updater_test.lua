@@ -82,6 +82,9 @@ package.preload["ssl.https"] = function()
             end
             resolver_ready = false
             if request_count == 1 then return nil, "wantread" end
+            if response_codes and response_codes[1] == "network failure" then
+                return nil, "network failure"
+            end
             options.sink("[]")
             return 1, response_codes and table.remove(response_codes, 1) or 200, {}, "OK"
         end,
@@ -140,8 +143,10 @@ assert(standalone_err == "Kindle standalone is not supported on this device.")
 
 for _, case in ipairs({
     { codes = { 401, 200 }, attempts = 2 },
-    { codes = { 401, 401 }, attempts = 2, err = "GitHub returned HTTP 401" },
-    { codes = { 401, 403 }, attempts = 2, err = "GitHub returned HTTP 403" },
+    { codes = { 401, 401 }, attempts = 2, err = "Authenticated GitHub request returned HTTP 401; anonymous retry failed: GitHub returned HTTP 401" },
+    { codes = { 401, 403 }, attempts = 2, err = "Authenticated GitHub request returned HTTP 401; anonymous retry failed: GitHub returned HTTP 403" },
+    { codes = { 401, "network failure" }, attempts = 3,
+      err = "Authenticated GitHub request returned HTTP 401; anonymous retry failed: Could not connect to GitHub: network failure" },
     { codes = { 403 }, attempts = 1, err = "GitHub returned HTTP 403" },
 }) do
     response_codes = case.codes
@@ -149,7 +154,7 @@ for _, case in ipairs({
     ok, version = Updater:check(daemon, true)
     assert(request_count == before + case.attempts)
     assert(authorizations[before + 1] == "Bearer developer-token")
-    if case.attempts == 2 then assert(authorizations[before + 2] == "") end
+    if case.attempts >= 2 then assert(authorizations[before + 2] == "") end
     if case.err then
         assert(not ok and version == case.err)
     else

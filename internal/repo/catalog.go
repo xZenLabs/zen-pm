@@ -1178,7 +1178,7 @@ func addDNSHint(err error) error {
 	if !errors.As(err, &dnsErr) || !(dnsErr.IsTimeout || dnsErr.IsTemporary) {
 		return err
 	}
-	return fmt.Errorf("could not look up %s (DNS did not respond); check the Wi-Fi connection and try again: %w", dnsErr.Name, err)
+	return fmt.Errorf("could not look up %s; check the network connection and DNS settings, then try again: %w", dnsErr.Name, err)
 }
 
 func joinURL(base, path string) string {
