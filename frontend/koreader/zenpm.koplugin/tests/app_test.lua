@@ -1980,6 +1980,15 @@ local bulk_app = {
     refresh = function() end,
 }
 assert(App.installed_update_count(bulk_app) == 3)
+-- Badge must not count updates the Installed list cannot show.
+assert(App.installed_update_count({ state = { packages = {
+    { id = "stale-pack", category = "iconpacks", installed = true, update_available = true,
+        installed_assets = { "mono.zip" },
+        installed_asset_versions = { ["mono.zip"] = "2.0.0" },
+        installed_asset_updates = { ["mono.zip"] = false } },
+    { id = "patches", category = "koreaderpatches", installed = true, update_available = true,
+        installed_assets = { "a.lua", "b.lua" } },
+} } }) == 1)
 modal_message = nil
 App.queue_all_updates(bulk_app)
 assert(#bulk_queued == 3)

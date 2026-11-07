@@ -98,6 +98,10 @@ return {
     ["1.7.2"] = {
         "Round button feedback",
         "Show all stable + beta release notes on betas",
-        "Fix icon pack installed name"
+        "Fix icon pack installed name",
+    },
+    ["1.7.3"] = {
+        "Better DNS error handling",
+        "Show updates on folders (icons/wallpapers)"
     },
 }

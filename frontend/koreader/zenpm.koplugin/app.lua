@@ -871,11 +871,18 @@ function App:prompt_package_updates(pkg, ignored_callback)
     return true
 end
 
+-- Count the same items queue_all_updates would queue: icon packs use per-asset
+-- update flags, and patch files sharing a package count once.
 function App:installed_update_count()
     local count = 0
-    for _, pkg in ipairs(self.state.packages or {}) do
+    local seen = {}
+    for _, pkg in ipairs(Models.installed_packages(self.state.packages)) do
         if pkg.installed and pkg.update_available and not pkg.update_ignored then
-            count = count + 1
+            local key = queue_key(pkg.id or pkg.name, pkg.icon_pack_asset)
+            if not seen[key] then
+                seen[key] = true
+                count = count + 1
+            end
         end
     end
     return count

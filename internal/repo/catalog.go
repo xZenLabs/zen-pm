@@ -34,7 +34,11 @@ const (
 	packageFetchTimeout    = 10 * time.Minute
 	packageFetchAttempts   = 2
 	packageFetchRetryDelay = 250 * time.Millisecond
+	// User-initiated downloads ride out brief Wi-Fi/DNS drops (1s, 2s backoff).
+	packageDownloadAttempts = 3
 )
+
+var packageDownloadRetryDelay = time.Second
 
 // CatalogEntry is the internal merged-catalog representation.
 // Pipe-separated on disk:
@@ -1010,7 +1014,7 @@ func FetchToFile(rawURL string, file *os.File) error {
 	if err != nil {
 		return err
 	}
-	for attempt := 1; attempt <= packageFetchAttempts; attempt++ {
+	for attempt := 1; attempt <= packageDownloadAttempts; attempt++ {
 		if err := file.Truncate(0); err != nil {
 			return err
 		}
@@ -1021,12 +1025,12 @@ func FetchToFile(rawURL string, file *os.File) error {
 		if err == nil {
 			return nil
 		}
-		err = addTLSClockHint(err, time.Now())
-		if !retry || attempt == packageFetchAttempts {
+		err = addDNSHint(addTLSClockHint(err, time.Now()))
+		if !retry || attempt == packageDownloadAttempts {
 			return err
 		}
-		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, packageFetchAttempts, err)
-		time.Sleep(time.Duration(attempt) * packageFetchRetryDelay)
+		log.Warnf("Package fetch attempt %d/%d failed; retrying: %v", attempt, packageDownloadAttempts, err)
+		time.Sleep(time.Duration(attempt) * packageDownloadRetryDelay)
 	}
 	return nil
 }
@@ -1102,7 +1106,7 @@ func fetchHTTPBytes(url string, client *http.Client, attempts int, query ...stri
 		if err == nil {
 			return data, nil
 		}
-		lastErr = addTLSClockHint(err, time.Now())
+		lastErr = addDNSHint(addTLSClockHint(err, time.Now()))
 		if !retry || attempt == attempts {
 			return nil, lastErr
 		}
@@ -1167,6 +1171,14 @@ func addTLSClockHint(err error, now time.Time) error {
 		certErr.Cert.NotBefore.UTC().Format(time.RFC3339),
 		err,
 	)
+}
+
+func addDNSHint(err error) error {
+	var dnsErr *net.DNSError
+	if !errors.As(err, &dnsErr) || !(dnsErr.IsTimeout || dnsErr.IsTemporary) {
+		return err
+	}
+	return fmt.Errorf("could not look up %s; check the network connection and DNS settings, then try again: %w", dnsErr.Name, err)
 }
 
 func joinURL(base, path string) string {
