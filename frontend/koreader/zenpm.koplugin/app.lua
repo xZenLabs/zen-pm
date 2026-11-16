@@ -1015,7 +1015,7 @@ function App:queue_package_action(pkg, action, asset, opts)
         local zen_ui_warning = Models.is_patch_package(pkg) and self:zen_ui_installed()
         if zen_ui_warning or #conflicts > 0 then
             local names = {}
-            for _, conflict in ipairs(conflicts) do
+            for _i, conflict in ipairs(conflicts) do
                 table.insert(names, package_title(conflict, conflict.id or _("Package")))
             end
             local message = zen_ui_warning and _("ZenOS is installed. Most patches should not be used with ZenOS.") or ""
@@ -1386,7 +1386,7 @@ function App:prompt_installed_images(ids, on_done)
             return
         end
         local rows = {}
-        for _, pkg in ipairs(candidates) do
+        for _i, pkg in ipairs(candidates) do
             local candidate = pkg
             table.insert(rows, {
                 text = package_title(candidate, candidate.installed_asset or _("Image")),
@@ -1607,7 +1607,7 @@ function App:queue_result_text(batch)
         return string.format(_("Queue completed: %d succeeded."), succeeded)
     end
     local failures = {}
-    for _, failure in ipairs(batch.failed) do
+    for _i, failure in ipairs(batch.failed) do
         local entry = failure.entry or {}
         local name = entry.name or entry.id or _("Package")
         local detail = failure.detail

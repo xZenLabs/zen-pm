@@ -33,6 +33,7 @@ local requested_url
 local requested_headers
 local request_count = 0
 local response_codes
+local response_headers
 local authorizations = {}
 local resolver_refreshes = 0
 local resolver_ready = false
@@ -86,7 +87,7 @@ package.preload["ssl.https"] = function()
                 return nil, "network failure"
             end
             options.sink("[]")
-            return 1, response_codes and table.remove(response_codes, 1) or 200, {}, "OK"
+            return 1, response_codes and table.remove(response_codes, 1) or 200, response_headers or {}, "OK"
         end,
     }
 end
@@ -172,6 +173,33 @@ ok, version = Updater:check(daemon, true)
 assert(not ok and version == "GitHub returned HTTP 401")
 assert(request_count == before + 1)
 assert(authorizations[request_count] == "")
+
+-- A failed download probe reports its error instead of raising. The probe
+-- loop variable used to shadow gettext, so these paths called a number.
+package.preload["libs/libkoreader-lfs"] = function()
+    return { attributes = function(path) return path == token_home and { mode = "directory" } or nil end }
+end
+require("zenpm_constants").PLUGIN_DIR = token_home .. "/zenpm.koplugin"
+require("zenpm_util").sh_quote = function(value) return "'" .. tostring(value) .. "'" end
+local execute = os.execute
+os.execute = function() return 0 end
+for _, case in ipairs({
+    { codes = { 200, 504 }, err = "GitHub download returned HTTP 504" },
+    { codes = { 200, 302 }, err = "GitHub supplied an invalid download redirect." },
+    { codes = { 200, 302 }, location = "https://example.com/ZenPM.zip",
+      err = "GitHub supplied an untrusted download URL." },
+}) do
+    response_codes = case.codes
+    response_headers = { location = case.location }
+    before = request_count
+    local called, update_ok, update_err = pcall(Updater.update, Updater, daemon, true, true)
+    assert(called, update_ok)
+    assert(not update_ok and update_err == case.err)
+    assert(request_count == before + 2)
+    assert(requested_url == releases[1].assets[1].browser_download_url)
+end
+response_headers = nil
+os.execute = execute
 os.execute("rmdir " .. token_home)
 
 print("updater tests passed")

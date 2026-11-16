@@ -634,7 +634,7 @@ end
 
 function Daemon:ensure_runtime_dirs()
     local had_missing = false
-    for _, dir in ipairs(self:runtime_dirs()) do
+    for _i, dir in ipairs(self:runtime_dirs()) do
         if not path_exists(dir) then
             had_missing = true
         end
@@ -760,7 +760,7 @@ function Daemon:ensure_backend_files()
         return false, _("Could not install bundled ZenPM backend to: ") .. backend
     end
     os.execute("chmod +x " .. Util.sh_quote(backend))
-    for _, companion in ipairs(self:bundled_backend_companions(source)) do
+    for _i, companion in ipairs(self:bundled_backend_companions(source)) do
         if not path_exists(companion) then
             return false, self:backend_not_started_error()
         end
@@ -936,7 +936,7 @@ function Daemon:request_android_update(allow_prerelease)
     append_text(companion_log, log_timestamp() .. "  ZenPM companion update link result: called="
         .. tostring(called) .. " opened=" .. tostring(opened) .. "\n")
     if called and opened then
-        for _ = 1, 10 do
+        for _i = 1, 10 do
             local state, detail = read_all(status_path):match("^([^\n]*)\n?([^\n]*)")
             if state == "failed" then
                 return false, detail ~= "" and detail or _("ZenPM companion update failed.")
