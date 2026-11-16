@@ -228,7 +228,7 @@ end
 
 local function resolved_download_url(url)
     local resolved = url
-    for _ = 1, 5 do
+    for _i = 1, 5 do
         if not valid_download_url(resolved) then
             log_warn("download URL failed trust validation")
             return nil, _("GitHub supplied an untrusted download URL.")
